@@ -1,0 +1,28 @@
+version: '3.8'
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: gestao-backend
+    env_file:
+      - backend/.env.example
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/database:/app/database
+    expose:
+      - "3001"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: gestao-frontend
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    restart: unless-stopped
+
+# Nota: O frontend serve os arquivos estáticos via Nginx e encaminha /api para o serviço 'backend'.
