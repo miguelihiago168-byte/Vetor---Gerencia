@@ -48,6 +48,8 @@ function Usuarios() {
     setErro('');
     setSucesso('');
 
+    console.log('Vai inserir o usuario:', formData);
+
     if (!formData.nome) {
       setErro('Preencha o nome.');
       return;
@@ -95,12 +97,17 @@ function Usuarios() {
           nome: formData.nome,
           senha: formData.senha,
           pin: formData.pin || undefined,
-          is_gestor: formData.is_gestor
+          is_gestor: formData.is_gestor,
+          projeto_id: formData.projeto_id
         };
         if (loginGerado) payload.login = loginGerado;
+  
 
+      
         const res = await createUsuario(payload);
+       
         const novo = res.data?.usuario;
+
         const list = await getUsuarios();
         setUsuarios(list.data);
         setSucesso(`Usuário criado com sucesso! Login gerado: ${novo?.login || ''}`);
