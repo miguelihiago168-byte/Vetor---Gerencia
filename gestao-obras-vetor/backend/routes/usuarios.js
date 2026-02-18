@@ -34,6 +34,7 @@ router.get('/', auth, async (req, res) => {
     const usuarios = await allQuery(`
       SELECT id, login, nome, email, pin, is_gestor, ativo, criado_em 
       FROM usuarios 
+      WHERE deletado_em IS NULL
       ORDER BY nome
     `);
     
@@ -41,6 +42,23 @@ router.get('/', auth, async (req, res) => {
   } catch (error) {
     console.error('Erro ao listar usuários:', error);
     res.status(500).json({ erro: 'Erro ao listar usuários.' });
+  }
+});
+
+// Listar usuários deletados (soft delete)
+router.get('/deletados/lista', [auth, isGestor], async (req, res) => {
+  try {
+    const usuariosDeleted = await allQuery(`
+      SELECT id, login, nome, email, is_gestor, deletado_em, deletado_por
+      FROM usuarios 
+      WHERE deletado_em IS NOT NULL
+      ORDER BY deletado_em DESC
+    `);
+    
+    res.json(usuariosDeleted);
+  } catch (error) {
+    console.error('Erro ao listar usuários deletados:', error);
+    res.status(500).json({ erro: 'Erro ao listar usuários deletados.' });
   }
 });
 
@@ -203,23 +221,24 @@ router.put('/:id', [auth, isGestor], async (req, res) => {
   }
 });
 
-// Desativar usuário
+// Desativar usuário (Soft Delete)
 router.delete('/:id', [auth, isGestor], async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Soft delete: marcar como deletado em vez de apagar
     await runQuery(
-      'UPDATE usuarios SET ativo = 0, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
-      [id]
+      'UPDATE usuarios SET deletado_em = CURRENT_TIMESTAMP, deletado_por = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+      [req.usuario.id, id]
     );
 
-    await registrarAuditoria('usuarios', id, 'DELETE', null, { ativo: 0 }, req.usuario.id);
+    await registrarAuditoria('usuarios', id, 'DELETE', null, { deletado_em: new Date().toISOString(), deletado_por: req.usuario.id }, req.usuario.id);
 
-    res.json({ mensagem: 'Usuário desativado com sucesso.' });
+    res.json({ mensagem: 'Usuário movido para lista de excluídos com sucesso.' });
 
   } catch (error) {
-    console.error('Erro ao desativar usuário:', error);
-    res.status(500).json({ erro: 'Erro ao desativar usuário.' });
+    console.error('Erro ao excluir usuário:', error);
+    res.status(500).json({ erro: 'Erro ao excluir usuário.' });
   }
 });
 

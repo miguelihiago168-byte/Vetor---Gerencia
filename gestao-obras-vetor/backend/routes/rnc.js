@@ -74,6 +74,11 @@ router.put('/:id', auth, async (req, res) => {
       return res.status(404).json({ erro: 'RNC não encontrada.' });
     }
 
+    // Impedir edição se RNC está encerrada
+    if (rncAtual.status === 'Encerrada') {
+      return res.status(403).json({ erro: 'Não é possível editar uma RNC encerrada.' });
+    }
+
     if (rncAtual.criado_por !== req.usuario.id && !req.usuario.is_gestor) {
       return res.status(403).json({ erro: 'Sem permissão para editar esta RNC.' });
     }
@@ -175,6 +180,11 @@ router.delete('/:id', [auth, isGestor], async (req, res) => {
 
     if (!rncAtual) {
       return res.status(404).json({ erro: 'RNC não encontrada.' });
+    }
+
+    // Impedir deleção se RNC está encerrada
+    if (rncAtual.status === 'Encerrada') {
+      return res.status(403).json({ erro: 'Não é possível deletar uma RNC encerrada. Use a visualização para consultar.' });
     }
 
     await runQuery('DELETE FROM rnc WHERE id = ?', [id]);

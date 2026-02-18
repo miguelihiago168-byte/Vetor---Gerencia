@@ -17,10 +17,13 @@ const initDatabase = async () => {
           email TEXT,
           is_gestor INTEGER DEFAULT 0,
           ativo INTEGER DEFAULT 1,
+          deletado_em DATETIME,
+          deletado_por INTEGER,
           criado_por INTEGER,
           criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
           atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (criado_por) REFERENCES usuarios(id)
+          FOREIGN KEY (criado_por) REFERENCES usuarios(id),
+          FOREIGN KEY (deletado_por) REFERENCES usuarios(id)
         )
       `, (err) => {
         if (err) reject(err);
@@ -40,6 +43,7 @@ const initDatabase = async () => {
           prazo_termino DATE NOT NULL,
           cidade TEXT NOT NULL,
           ativo INTEGER DEFAULT 1,
+          arquivado INTEGER DEFAULT 0,
           criado_por INTEGER NOT NULL,
           criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
           atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -106,6 +110,7 @@ const initDatabase = async () => {
       db.run(`
         CREATE TABLE IF NOT EXISTS rdos (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
+          numero_rdo TEXT UNIQUE,
           projeto_id INTEGER NOT NULL,
           data_relatorio DATE NOT NULL,
           dia_semana TEXT NOT NULL,

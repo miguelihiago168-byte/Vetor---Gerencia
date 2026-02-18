@@ -41,6 +41,7 @@ export const login = (credentials) => api.post('/auth/login', credentials);
 export const getUsuarios = () => api.get('/usuarios');
 export const getUsuario = (id) => api.get(`/usuarios/${id}`);
 export const getNovoLogin = () => api.get('/usuarios/novo-login');
+export const getUsuariosDeletados = () => api.get('/usuarios/deletados/lista');
 export const createUsuario = (data) => api.post('/usuarios', data);
 export const updateUsuario = (id, data) => api.put(`/usuarios/${id}`, data);
 export const updateUsuarioGestor = (id, isGestor) => api.patch(`/usuarios/${id}/gestor`, { is_gestor: isGestor });
@@ -52,6 +53,8 @@ export const getProjeto = (id) => api.get(`/projetos/${id}`);
 export const createProjeto = (data) => api.post('/projetos', data);
 export const updateProjeto = (id, data) => api.put(`/projetos/${id}`, data);
 export const deleteProjeto = (id) => api.delete(`/projetos/${id}`);
+export const arquivarProjeto = (id) => api.patch(`/projetos/${id}/arquivar`);
+export const desarquivarProjeto = (id) => api.patch(`/projetos/${id}/desarquivar`);
 
 // EAP
 export const getAtividadesEAP = (projetoId) => api.get(`/eap/projeto/${projetoId}`);

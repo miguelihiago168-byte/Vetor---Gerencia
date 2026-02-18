@@ -295,4 +295,52 @@ router.delete('/:id', [auth, isGestor], async (req, res) => {
   }
 });
 
+// Arquivar projeto
+router.patch('/:id/arquivar', [auth, isGestor], async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const projetoAnterior = await getQuery('SELECT * FROM projetos WHERE id = ?', [id]);
+    if (!projetoAnterior) return res.status(404).json({ erro: 'Projeto não encontrado.' });
+
+    await runQuery(
+      'UPDATE projetos SET arquivado = 1, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+      [id]
+    );
+
+    const projetoNovo = await getQuery('SELECT * FROM projetos WHERE id = ?', [id]);
+    await registrarAuditoria('projetos', id, 'ARCHIVE', projetoAnterior, projetoNovo, req.usuario.id);
+
+    res.json({ mensagem: 'Projeto arquivado com sucesso.', projeto: projetoNovo });
+
+  } catch (error) {
+    console.error('Erro ao arquivar projeto:', error);
+    res.status(500).json({ erro: 'Erro ao arquivar projeto.' });
+  }
+});
+
+// Desarquivar projeto
+router.patch('/:id/desarquivar', [auth, isGestor], async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const projetoAnterior = await getQuery('SELECT * FROM projetos WHERE id = ?', [id]);
+    if (!projetoAnterior) return res.status(404).json({ erro: 'Projeto não encontrado.' });
+
+    await runQuery(
+      'UPDATE projetos SET arquivado = 0, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+      [id]
+    );
+
+    const projetoNovo = await getQuery('SELECT * FROM projetos WHERE id = ?', [id]);
+    await registrarAuditoria('projetos', id, 'UNARCHIVE', projetoAnterior, projetoNovo, req.usuario.id);
+
+    res.json({ mensagem: 'Projeto desarchivado com sucesso.', projeto: projetoNovo });
+
+  } catch (error) {
+    console.error('Erro ao desarquivar projeto:', error);
+    res.status(500).json({ erro: 'Erro ao desarquivar projeto.' });
+  }
+});
+
 module.exports = router;

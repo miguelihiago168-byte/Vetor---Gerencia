@@ -6,6 +6,26 @@ const { registrarAuditoria } = require('../middleware/auditoria');
 
 const router = express.Router();
 
+// Gerar número único para RDO (formato: RDO-YYYYMMDD-XXXXXX)
+const gerarNumeroRDO = async (projetoId) => {
+  const hoje = new Date();
+  const ano = hoje.getFullYear();
+  const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+  const dia = String(hoje.getDate()).padStart(2, '0');
+  const data = `${ano}${mes}${dia}`;
+  
+  // Contar RDOs do dia
+  const resultado = await getQuery(
+    'SELECT COUNT(*) as contador FROM rdos WHERE projeto_id = ? AND DATE(data_relatorio) = DATE(?)',
+    [projetoId, new Date().toISOString().split('T')[0]]
+  );
+  
+  const contador = (resultado?.contador || 0) + 1;
+  const sequencia = String(contador).padStart(6, '0');
+  
+  return `RDO-${data}-${sequencia}`;
+};
+
 // Atualizar status da atividade EAP
 const atualizarStatusAtividade = async (atividadeId) => {
   const atividade = await getQuery(
@@ -262,14 +282,8 @@ router.post('/', auth, [
       return res.status(400).json({ erro: 'Já existe um RDO para esta data.' });
     }
 
-    // Gerar numero_relatorio sequencial por projeto (se a coluna existir)
-    let numero_relatorio = 1;
-    try {
-      const ultimo = await getQuery('SELECT MAX(numero_relatorio) as max_num FROM rdos WHERE projeto_id = ?', [projeto_id]);
-      if (ultimo && ultimo.max_num) numero_relatorio = ultimo.max_num + 1;
-    } catch (err) {
-      console.warn('numero_relatorio não disponível no DB (execute migração).');
-    }
+    // Gerar número único para RDO
+    const numero_rdo = await gerarNumeroRDO(projeto_id);
 
     // Calcular dia da semana em pt-BR
     const dias = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
@@ -313,7 +327,7 @@ router.post('/', auth, [
 
     const result = await runQuery(`
       INSERT INTO rdos (
-        projeto_id, numero_relatorio, data_relatorio, dia_semana, 
+        numero_rdo, projeto_id, data_relatorio, dia_semana, 
         entrada_saida_inicio, entrada_saida_fim, intervalo_almoco_inicio, intervalo_almoco_fim, horas_trabalhadas,
         clima_manha, tempo_manha, praticabilidade_manha,
         clima_tarde, tempo_tarde, praticabilidade_tarde,
@@ -321,7 +335,7 @@ router.post('/', auth, [
         mao_obra_detalhada, equipamentos, ocorrencias, comentarios, criado_por, historico_status, status
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
-      projeto_id, numero_relatorio, data_relatorio, dia_semana_calc,
+      numero_rdo, projeto_id, data_relatorio, dia_semana_calc,
       entrada_saida_inicio || '07:00', entrada_saida_fim || '17:00', 
       intervalo_almoco_inicio || '12:00', intervalo_almoco_fim || '13:00', horas_calc,
       clima_manha || 'Claro', tempo_manha || '★', praticabilidade_manha || 'Praticável',
