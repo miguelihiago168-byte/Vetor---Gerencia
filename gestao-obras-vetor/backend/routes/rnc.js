@@ -144,6 +144,11 @@ router.post('/', auth, [
 
     await registrarAuditoria('rnc', result.lastID, 'CREATE', null, req.body, req.usuario.id);
 
+    // Notificação simples (stub): logar que o responsável deve ser notificado
+    if (responsavel_id) {
+      console.log(`[NOTIF] Nova RNC #${result.lastID} criada no projeto ${projeto_id}. Notificar responsável ${responsavel_id}.`);
+    }
+
     res.status(201).json({ mensagem: 'RNC criada com sucesso.', id: result.lastID });
   } catch (error) {
     console.error('Erro ao criar RNC:', error);

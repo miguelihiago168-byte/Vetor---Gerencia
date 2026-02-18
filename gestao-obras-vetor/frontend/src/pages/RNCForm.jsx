@@ -58,7 +58,11 @@ function RNCForm() {
       };
 
       await createRNC(dataToSend);
-      success('RNC criada com sucesso!');
+      if (dataToSend.responsavel_id) {
+        success('RNC criada e responsável notificado!');
+      } else {
+        success('RNC criada com sucesso!');
+      }
       navigate(`/projeto/${projetoId}/rnc`);
     } catch (error) {
       console.error('Erro ao criar RNC:', error);

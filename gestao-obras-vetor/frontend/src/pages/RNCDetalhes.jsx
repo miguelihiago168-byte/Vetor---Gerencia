@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getRNCs, updateStatusRNC, getAnexosRNC, uploadAnexoRNC } from '../services/api';
+import { getRNCs, updateStatusRNC, getAnexosRNC, uploadAnexoRNC, submitCorrecaoRNC, enviarRncParaAprovacao } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { AlertTriangle, ArrowLeft, Download } from 'lucide-react';
+import { AlertTriangle, ArrowLeft } from 'lucide-react';
 
 function RNCDetalhes() {
   const { projetoId, rncId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { isGestor, usuario } = useAuth();
   const [rnc, setRnc] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -15,10 +16,21 @@ function RNCDetalhes() {
   const [anexos, setAnexos] = useState([]);
   const [fotoFile, setFotoFile] = useState(null);
   const [fotoDesc, setFotoDesc] = useState('');
+  const [mostrarResposta, setMostrarResposta] = useState(false);
+  const [acaoCorretiva, setAcaoCorretiva] = useState('');
 
   useEffect(() => {
     carregarRNC();
   }, [rncId]);
+
+  useEffect(() => {
+    // Se vier ?responder=1 e o usuário puder responder, abrir o formulário
+    const params = new URLSearchParams(location.search);
+    const mustOpen = params.get('responder') === '1';
+    if (mustOpen && rnc && (usuario?.id === rnc.responsavel_id || isGestor) && rnc.status !== 'Encerrada') {
+      setMostrarResposta(true);
+    }
+  }, [location.search, rnc, usuario, isGestor]);
 
   const carregarRNC = async () => {
     try {
@@ -67,6 +79,31 @@ function RNCDetalhes() {
     }
   };
 
+  const reprovarRNC = async () => {
+    try {
+      await updateStatusRNC(rncId, 'Reprovada');
+      setRnc(prev => ({ ...prev, status: 'Reprovada' }));
+    } catch (error) {
+      alert('Falha ao reprovar RNC: ' + (error.response?.data?.erro || error.message));
+    }
+  };
+
+  const enviarParaAprovacao = async () => {
+    try {
+      // Se o usuário digitou uma correção nova, salva antes de enviar para aprovação
+      const texto = (acaoCorretiva || '').trim();
+      if (texto && texto !== (rnc.acao_corretiva || '')) {
+        await submitCorrecaoRNC(rncId, { acao_corretiva: texto });
+        setRnc(prev => ({ ...prev, acao_corretiva: texto, status: 'Em andamento' }));
+      }
+      await enviarRncParaAprovacao(rncId);
+      setRnc(prev => ({ ...prev, status: 'Em análise' }));
+      setMostrarResposta(false);
+    } catch (error) {
+      alert('Falha ao enviar para aprovação: ' + (error.response?.data?.erro || error.message));
+    }
+  };
+
   if (loading) {
     return (
       <>
@@ -101,28 +138,18 @@ function RNCDetalhes() {
             <ArrowLeft size={16} />
           </button>
           <h1>RNC: {rnc.titulo}</h1>
-          <span style={{
-            padding: '6px 10px',
-            background: (function(){
-              // Em aprovação (Em análise) -> amarelo; Encerrada -> verde; Aberta/Em andamento -> azul
-              if (rnc.status === 'Encerrada') return '#2E7D32';
-              if (rnc.status === 'Em análise') return '#F9A825';
-              return '#2962FF';
-            })(),
-            color: 'white',
-            borderRadius: '16px',
-            fontSize: '12px'
-          }}>
-            {statusLabel(rnc.status)}
-          </span>
+          {/* Removido: chip de status e botão de abrir/fechar resposta no cabeçalho */}
           {isGestor && rnc.status === 'Em análise' && (
-            <button className="btn btn-success" onClick={aprovarRNC} style={{ marginLeft: '8px' }}>
-              Aprovar
-            </button>
+            <>
+              <button className="btn btn-success" onClick={aprovarRNC} style={{ marginLeft: '8px' }}>
+                Aprovar
+              </button>
+              <button className="btn btn-danger" onClick={reprovarRNC} style={{ marginLeft: '8px' }}>
+                Reprovar
+              </button>
+            </>
           )}
-          <button className="btn btn-primary" onClick={() => window.open(`/api/rnc/${rncId}/pdf`, '_blank')} style={{ marginLeft: '8px' }}>
-            <Download size={16} /> PDF
-          </button>
+          {/* Removido: botão de gerar PDF no cabeçalho */}
         </div>
 
         <div className="card" style={{ padding: '24px' }}>
@@ -138,7 +165,7 @@ function RNCDetalhes() {
               <strong>Status:</strong> {statusLabel(rnc.status)}
             </div>
             <div>
-              <strong>Data de Criação:</strong> {formatLocalDate(rnc.data_criacao)}
+              <strong>Data de Criação:</strong> {formatLocalDate(rnc.criado_em)}
             </div>
             <div>
               <strong>Data prevista para encerramento:</strong> {formatLocalDate(rnc.data_prevista_encerramento)}
@@ -156,6 +183,18 @@ function RNCDetalhes() {
             <div style={{ marginTop: '16px' }}>
               <strong>Registros fotográficos:</strong>
               <p style={{ marginTop: '8px', whiteSpace: 'pre-wrap' }}>{rnc.registros_fotograficos}</p>
+            </div>
+          )}
+
+          {mostrarResposta && (usuario?.id === rnc.responsavel_id || usuario?.id === rnc.criado_por || isGestor) && rnc.status !== 'Encerrada' && (
+            <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #eee' }}>
+              <h3>Resposta do Responsável</h3>
+              <p style={{ color: 'var(--gray-600)', marginTop: '4px' }}>Descreva o que foi corrigido. Fotos poderão ser adicionadas depois.</p>
+              <div className="form-group" style={{ marginTop: '12px' }}>
+                <label className="form-label">Descrição da correção</label>
+                <textarea className="form-input" rows={4} value={acaoCorretiva} onChange={(e) => setAcaoCorretiva(e.target.value)} placeholder="O que foi feito para corrigir a não conformidade?" />
+              </div>
+              {/* Botões removidos aqui; Enviar para aprovação ficará ao final da tela */}
             </div>
           )}
           <div style={{ marginTop: '24px' }}>
@@ -197,6 +236,17 @@ function RNCDetalhes() {
                     }
                   }}>Enviar foto</button>
                 </div>
+              </div>
+            )}
+            {/* Botão final: Enviar para aprovação */}
+            {(rnc.status !== 'Encerrada' && rnc.status !== 'Em análise') && (isGestor || usuario?.id === rnc.criado_por || usuario?.id === rnc.responsavel_id) && (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+                <button
+                  className="btn btn-warning"
+                  onClick={enviarParaAprovacao}
+                >
+                  Enviar para aprovação
+                </button>
               </div>
             )}
           </div>

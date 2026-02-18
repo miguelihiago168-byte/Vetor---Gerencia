@@ -106,23 +106,19 @@ function RNC() {
           <div style={{ display: 'grid', gap: '20px', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))' }}>
             {rncs.map(rnc => (
               <div key={rnc.id} className="card" style={{ padding: '20px' }}>
-                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
-                  <div>
-                    <h3 style={{ marginBottom: '6px' }}>
-                      {rnc.titulo || `RNC #${rnc.id}`}
-                    </h3>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', fontSize: '14px', color: 'var(--gray-600)' }}>
-                      <span>Data: {formatLocalDate(rnc.data_criacao)}</span>
-                      <span>Prevista: {formatLocalDate(rnc.data_prevista_encerramento)}</span>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center', justifyContent: 'flex-end' }}>
+                {/* Top row: título à esquerda, status+ações no topo à direita */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+                  <h3 style={{ marginBottom: 0 }}>
+                    {rnc.titulo || `RNC #${rnc.id}`}
+                  </h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'nowrap', alignSelf: 'flex-start', whiteSpace: 'nowrap', flexShrink: 0 }}>
                     <span style={{
-                      padding: '6px 10px',
+                      padding: '10px 12px',
                       background: statusColor(rnc.status),
                       color: 'white',
                       borderRadius: '16px',
-                      fontSize: '12px'
+                      fontSize: '12px',
+                      lineHeight: '16px'
                     }}>
                       {statusLabel(rnc.status)}
                     </span>
@@ -140,16 +136,25 @@ function RNC() {
                     >
                       PDF
                     </button>
-                    {/* Aprovação apenas na tela de detalhes para evitar duplicidade de botões */}
+                  </div>
+                </div>
+
+                {/* Bottom row: datas à esquerda, responder/deletar à direita */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginTop: '10px', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', fontSize: '14px', color: 'var(--gray-600)' }}>
+                    <span>Data: {formatLocalDate(rnc.criado_em)}</span>
+                    <span>Prevista: {formatLocalDate(rnc.data_prevista_encerramento)}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto', flexShrink: 0 }}>
                     {rnc.status !== 'Encerrada' && (
                       <>
                         <button
-                          className="btn btn-outline"
-                          onClick={() => navigate(`/projeto/${projetoId}/rnc/${rnc.id}/editar`)}
-                          title="Editar RNC"
+                          className="btn btn-warning"
+                          onClick={() => navigate(`/projeto/${projetoId}/rnc/${rnc.id}?responder=1`)}
+                          title="Responder RNC"
                           disabled={rnc.status === 'Encerrada'}
                         >
-                          <Edit size={16} />
+                          <Edit size={16} /> Responder
                         </button>
                         {isGestor && (
                           <button
@@ -163,7 +168,6 @@ function RNC() {
                         )}
                       </>
                     )}
-                    {/* Removido informativo duplicado de ENCERRADA */}
                   </div>
                 </div>
               </div>

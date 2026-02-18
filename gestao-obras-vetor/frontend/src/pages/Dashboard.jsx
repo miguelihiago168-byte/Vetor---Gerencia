@@ -333,7 +333,7 @@ function Dashboard() {
                           {rnc.titulo || `RNC #${rnc.id}`}
                         </strong>
                         <small style={{ color: 'var(--gray-600)' }}>
-                          {rnc.data_criacao ? new Date(rnc.data_criacao).toLocaleDateString('pt-BR') : 'Data não definida'}
+                          {rnc.criado_em ? new Date(rnc.criado_em).toLocaleDateString('pt-BR') : 'Data não definida'}
                         </small>
                       </div>
                       <span
