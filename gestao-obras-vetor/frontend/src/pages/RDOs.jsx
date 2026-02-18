@@ -68,6 +68,19 @@ function RDOs() {
     }
   };
 
+  const reprovarRDO = async (rdoId, e) => {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+    try {
+      const { updateStatusRDO } = await import('../services/api');
+      await updateStatusRDO(rdoId, 'Reprovado');
+      setRdos(prev => prev.map(r => r.id === rdoId ? { ...r, status: 'Reprovado' } : r));
+      setSucesso('RDO reprovado.');
+    } catch (error) {
+      alert('Falha ao reprovar RDO: ' + (error.response?.data?.erro || error.message));
+    }
+  };
+
   const handleVoltarEdicao = async (rdoId, e) => {
     if (e) e.stopPropagation();
     if (!isGestor) {
@@ -225,13 +238,22 @@ function RDOs() {
                     </span>
                     {/* Botão de visualizar removido: clique no card abre o formulário de edição */}
                     {isGestor && rdo.status === 'Em análise' && (
-                      <button
-                        className="btn btn-success"
-                        onClick={(e) => aprovarRDO(rdo.id, e)}
-                        title="Aprovar RDO"
-                      >
-                        Aprovar
-                      </button>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          className="btn btn-success"
+                          onClick={(e) => aprovarRDO(rdo.id, e)}
+                          title="Aprovar RDO"
+                        >
+                          Aprovar
+                        </button>
+                        <button
+                          className="btn btn-danger"
+                          onClick={(e) => reprovarRDO(rdo.id, e)}
+                          title="Reprovar RDO"
+                        >
+                          Reprovar
+                        </button>
+                      </div>
                     )}
                     <button
                       className="btn btn-primary"

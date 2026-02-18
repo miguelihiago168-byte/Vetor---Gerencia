@@ -91,6 +91,8 @@ export const addRdoOcorrencia = (rdoId, data) => api.post(`/rdo/${rdoId}/ocorren
 export const addRdoAssinatura = (rdoId, data) => api.post(`/rdo/${rdoId}/assinatura`, data);
 // Backend espera o campo 'arquivo' no upload
 export const uploadRdoFoto = (rdoId, formData) => api.post(`/rdo/${rdoId}/foto`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+// Execução acumulada de atividades (somatório de quantidade_executada em RDOs aprovados)
+export const getExecucaoAcumulada = (projetoId) => api.get(`/rdo/projeto/${projetoId}/execucao-atividades`);
 
 // Anexos
 export const uploadAnexo = (rdoId, formData) => api.post(`/anexos/upload/${rdoId}`, formData, {
@@ -117,6 +119,10 @@ export const updateStatusRNC = (id, status) => api.patch(`/rnc/${id}/status`, { 
 export const submitCorrecaoRNC = (id, data) => api.post(`/rnc/${id}/corrigir`, data);
 export const deleteRNC = (id) => api.delete(`/rnc/${id}`);
 export const enviarRncParaAprovacao = (id) => api.post(`/rnc/${id}/enviar-aprovacao`);
+
+// Notificações
+export const getNotificacoes = () => api.get('/notificacoes');
+export const marcarNotificacaoLida = (id) => api.patch(`/notificacoes/${id}/read`);
 
 // Compras (Pedidos e Cotações)
 export const criarPedidoCompra = (data) => api.post('/pedidos-compra', data);

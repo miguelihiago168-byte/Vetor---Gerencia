@@ -18,6 +18,25 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 
+// Execução acumulada por atividade (somatório de quantidade_executada em RDOs aprovados)
+router.get('/projeto/:projetoId/execucao-atividades', auth, async (req, res) => {
+  try {
+    const { projetoId } = req.params;
+    const rows = await allQuery(`
+      SELECT ra.atividade_eap_id AS atividade_eap_id,
+             COALESCE(SUM(COALESCE(ra.quantidade_executada, 0)), 0) AS total_executado
+      FROM rdo_atividades ra
+      INNER JOIN rdos r ON ra.rdo_id = r.id
+      WHERE r.projeto_id = ? AND r.status = 'Aprovado'
+      GROUP BY ra.atividade_eap_id
+    `, [projetoId]);
+    res.json(rows);
+  } catch (err) {
+    console.error('Erro ao calcular execução acumulada de atividades', err);
+    res.status(500).json({ erro: 'Erro ao calcular execução acumulada.' });
+  }
+});
+
 // Adicionar mão de obra a um RDO (registro de horário)
 router.post('/:rdoId/mao_obra', auth, async (req, res) => {
   try {
@@ -96,6 +115,21 @@ router.post('/:rdoId/comentario', auth, async (req, res) => {
     const { comentario } = req.body;
     if (!comentario) return res.status(400).json({ erro: 'Comentario vazio.' });
     const result = await runQuery('INSERT INTO rdo_comentarios (rdo_id, usuario_id, comentario) VALUES (?, ?, ?)', [rdoId, req.usuario.id, comentario]);
+
+    // Notificar o criador do RDO (sem duplicar e sem notificar o próprio autor)
+    try {
+      const rdo = await getQuery('SELECT criado_por, numero_rdo FROM rdos WHERE id = ?', [rdoId]);
+      if (rdo && rdo.criado_por && rdo.criado_por !== req.usuario.id) {
+        const numero = rdo.numero_rdo ? String(rdo.numero_rdo) : `RDO-${String(rdoId).padStart(3,'0')}`;
+        await runQuery(
+          'INSERT OR IGNORE INTO notificacoes (usuario_id, tipo, mensagem, referencia_tipo, referencia_id) VALUES (?, ?, ?, ?, ?)',
+          [rdo.criado_por, 'rdo_comentario', `Novo comentário no ${numero}.`, 'rdo', Number(rdoId)]
+        );
+      }
+    } catch (e) {
+      console.warn('Falha ao notificar comentário de RDO:', e?.message || e);
+    }
+
     res.status(201).json({ mensagem: 'Comentário adicionado.', id: result.lastID });
   } catch (err) {
     console.error('Erro ao adicionar comentario', err);

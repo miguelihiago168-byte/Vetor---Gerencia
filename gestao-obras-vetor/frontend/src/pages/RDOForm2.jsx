@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getAtividadesEAP, getRDO, createRDO, updateRDO, addRdoClima, addRdoComentario, addRdoOcorrencia, addRdoMaterial, uploadRdoFoto, updateStatusRDO } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { getAtividadesEAP, getRDO, createRDO, updateRDO, addRdoClima, addRdoComentario, addRdoOcorrencia, addRdoMaterial, uploadRdoFoto, updateStatusRDO, getExecucaoAcumulada } from '../services/api';
 import { Plus, Trash2 } from 'lucide-react';
 import { useLeaveGuard } from '../context/LeaveGuardContext';
 
@@ -21,11 +22,13 @@ function RDOForm2() {
   const { projetoId, rdoId } = useParams();
   const navigate = useNavigate();
   const { setDirty } = useLeaveGuard();
+  const { usuario } = useAuth();
 
   const [atividadesEap, setAtividadesEap] = useState([]);
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [execucaoAcum, setExecucaoAcum] = useState({}); // { atividade_eap_id: total_executado }
 
   const [formData, setFormData] = useState({
     data_relatorio: '',
@@ -46,11 +49,28 @@ function RDOForm2() {
   const [draftAtividade, setDraftAtividade] = useState({ atividade_eap_id: '', quantidade_executada: '', unidade_medida: '', percentual_executada: '', observacao: '' });
   const [atividadeFotosQueue, setAtividadeFotosQueue] = useState({}); // {atividade_eap_id: { file, descricao }}
 
+  // Helpers de formatação (pt-BR)
+  const nf0 = useMemo(() => new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }), []);
+  const nf2 = useMemo(() => new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), []);
+  const pf = useMemo(() => new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }), []);
+  const formatQtd = (n) => {
+    const num = Number(n || 0);
+    return Number.isInteger(num) ? nf0.format(num) : nf2.format(num);
+  };
+  const formatPerc = (p) => `${pf.format(Math.min(Math.max(Number(p || 0), 0), 100))}%`;
+
   useEffect(() => {
     const carregar = async () => {
       try {
         const eapRes = await getAtividadesEAP(projetoId);
         setAtividadesEap(eapRes.data || []);
+        // carregar execução acumulada das atividades com base em RDOs aprovados
+        try {
+          const exRes = await getExecucaoAcumulada(projetoId);
+          const map = {};
+          (exRes.data || []).forEach(row => { map[String(row.atividade_eap_id)] = Number(row.total_executado || 0); });
+          setExecucaoAcum(map);
+        } catch {}
         if (rdoId) {
           let rdo;
           try {
@@ -84,6 +104,7 @@ function RDOForm2() {
             ocorrencias_lista: [],
             comentarios_lista: []
           });
+          setComentariosExistentes((rdo.comentarios || []).map(c => ({ id: c.id, comentario: c.comentario, autor_nome: c.autor_nome, criado_em: c.criado_em })));
 
           // Não exibir último avanço/recalculado no formulário; manter somente avanço do dia
         } else {
@@ -278,16 +299,34 @@ function RDOForm2() {
   };
 
   const [draftComentario, setDraftComentario] = useState('');
-  const addComentario = () => {
-    if (!draftComentario.trim()) return;
-    setFormData({ ...formData, comentarios_lista: [...formData.comentarios_lista, draftComentario.trim()] });
-    setDraftComentario('');
-    setDirty(true);
+  const [comentariosExistentes, setComentariosExistentes] = useState([]);
+  const addComentario = async () => {
+    const texto = draftComentario.trim();
+    if (!texto) return;
+    if (rdoId) {
+      try {
+        const { addRdoComentario } = await import('../services/api');
+        const resp = await addRdoComentario(rdoId, { comentario: texto });
+        const novo = { id: resp.data?.id || Math.random(), comentario: texto, autor_nome: usuario?.nome || 'Você', criado_em: new Date().toISOString() };
+        setComentariosExistentes(prev => [novo, ...prev]);
+        setDraftComentario('');
+      } catch (e) {
+        alert('Falha ao comentar: ' + (e.response?.data?.erro || e.message));
+      }
+    } else {
+      setFormData({ ...formData, comentarios_lista: [...formData.comentarios_lista, texto] });
+      setDraftComentario('');
+      setDirty(true);
+    }
   };
   const removeComentario = (idx) => {
-    const arr = [...formData.comentarios_lista];
-    arr.splice(idx, 1);
-    setFormData({ ...formData, comentarios_lista: arr });
+    if (rdoId) {
+      const arr = [...comentariosExistentes]; arr.splice(idx,1); setComentariosExistentes(arr);
+    } else {
+      const arr = [...formData.comentarios_lista];
+      arr.splice(idx, 1);
+      setFormData({ ...formData, comentarios_lista: arr });
+    }
   };
   const salvar = async () => {
     try {
@@ -607,7 +646,10 @@ function RDOForm2() {
                 const sel = atividadesEap.find(a => String(a.id) === String(draftAtividade.atividade_eap_id));
                 const acum = sel ? Number(sel.percentual_executado || 0) : 0;
                 const status = sel ? (sel.percentual_executado >= 100 ? 'Concluída' : (sel.percentual_executado > 0 ? 'Em andamento' : 'Não iniciada')) : 'N/A';
-                return `Acumulado: ${acum}% — Status: ${status}`;
+                const total = sel ? Number(sel.quantidade_total || 0) : 0;
+                const exec = total ? Number(execucaoAcum[String(sel.id)] || 0) : 0;
+                const unidade = sel ? (sel.unidade_medida || '') : '';
+                return `Acumulado: ${acum}% — Quant.: ${total ? `${exec}/${total} ${unidade}` : '—'} — Status: ${status}`;
               })()}</small>
             </div>
           </div>
@@ -648,6 +690,16 @@ function RDOForm2() {
                         <td>
                           <div style={{ fontWeight: 600 }}>{sel?.descricao || 'Atividade'}</div>
                           <div style={{ color: 'var(--gray-600)', fontSize: '12px' }}>{sel?.codigo_eap || ''}</div>
+                          <div style={{ color: 'var(--gray-600)', fontSize: '12px', marginTop: '2px' }}>{(function(){
+                            const total = sel ? Number(sel.quantidade_total || 0) : 0;
+                            const unidade = sel ? (sel.unidade_medida || '') : '';
+                            const execAprov = total ? Number(execucaoAcum[String(sel?.id)] || 0) : 0;
+                            const execDia = (a.quantidade_executada !== '' ? Number(a.quantidade_executada) : 0);
+                            const execComDia = execAprov + execDia;
+                            if (!total) return 'Total não definido';
+                            const percComDia = total ? Math.min(Math.round((execComDia / total) * 10000) / 100, 100) : 0;
+                            return `Realizado: ${formatQtd(execComDia)}/${formatQtd(total)} ${unidade} (${formatPerc(percComDia)})`;
+                          })()}</div>
                         </td>
                         <td>
                           <input className="form-input" type="number" value={a.quantidade_executada} onChange={(e) => {
@@ -678,7 +730,13 @@ function RDOForm2() {
                           })()} readOnly />
                         </td>
                         <td>
-                          <input className="form-input" type="number" value={acumulado} readOnly />
+                          <input className="form-input" type="number" value={(function(){
+                            const total = sel ? Number(sel.quantidade_total || 0) : 0;
+                            const execAprov = total ? Number(execucaoAcum[String(sel?.id)] || 0) : 0;
+                            const q = a.quantidade_executada !== '' ? Number(a.quantidade_executada) : 0;
+                            const acumVirt = total ? Math.min(Math.round(((execAprov + q) / total) * 10000) / 100, 100) : acumulado;
+                            return acumVirt;
+                          })()} readOnly />
                         </td>
                         <td>
                           <span style={{ padding: '4px 8px', borderRadius: '12px', whiteSpace: 'nowrap', background: (function(){
@@ -691,7 +749,8 @@ function RDOForm2() {
                             const total = sel ? Number(sel.quantidade_total || 0) : 0;
                             const q = a.quantidade_executada !== '' ? Number(a.quantidade_executada) : 0;
                             const auto = (total && q) ? Math.min(Math.round((q / total) * 10000) / 100, 100) : 0;
-                            const acumVirt = Math.min(acumulado + auto, 100);
+                            const execAprov = total ? Number(execucaoAcum[String(sel?.id)] || 0) : 0;
+                            const acumVirt = total ? Math.min(Math.round(((execAprov + q) / total) * 10000) / 100, 100) : (acumulado + auto);
                             return acumVirt >= 100 ? 'Concluída' : (acumVirt > 0 ? 'Em andamento' : 'Não iniciada');
                           })()}</span>
                         </td>
@@ -819,26 +878,32 @@ function RDOForm2() {
               <button className="btn btn-primary" onClick={addComentario}><Plus size={16} /> Adicionar</button>
             </div>
           </div>
-          {formData.comentarios_lista.length === 0 ? (
-            <div className="card" style={{ padding: '12px', background: 'var(--gray-50)' }}>Nenhum comentário.</div>
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Comentário</th>
-                  <th style={{ width: '80px' }}>Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {formData.comentarios_lista.map((c, idx) => (
-                  <tr key={idx}>
-                    <td>{c}</td>
-                    <td style={{ textAlign: 'right' }}><button className="btn btn-danger" onClick={() => removeComentario(idx)} title="Remover"><Trash2 size={16} /></button></td>
+          {(() => {
+            const lista = rdoId ? comentariosExistentes : (formData.comentarios_lista || []).map((c, i) => ({ id: i, comentario: c, autor_nome: usuario?.nome || 'Você', criado_em: new Date().toISOString() }));
+            if (!lista || lista.length === 0) return (<div className="card" style={{ padding: '12px', background: 'var(--gray-50)' }}>Nenhum comentário.</div>);
+            return (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Comentário</th>
+                    <th>Autor</th>
+                    <th>Data/Hora</th>
+                    <th style={{ width: '80px' }}>Ações</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                </thead>
+                <tbody>
+                  {lista.map((c, idx) => (
+                    <tr key={c.id || idx}>
+                      <td>{c.comentario}</td>
+                      <td style={{ color: 'var(--gray-600)' }}>{c.autor_nome || '-'}</td>
+                      <td style={{ color: 'var(--gray-600)' }}>{new Date(c.criado_em).toLocaleString('pt-BR')}</td>
+                      <td style={{ textAlign: 'right' }}><button className="btn btn-danger" onClick={() => removeComentario(idx)} title="Remover"><Trash2 size={16} /></button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            );
+          })()}
         </div>
 
         <div className="card">

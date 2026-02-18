@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { login as loginAPI } from '../services/api';
-import { ShieldCheck, ArrowRight, Lock } from 'lucide-react';
+import { ShieldCheck, ArrowRight, Lock, ClipboardList, ShoppingCart, AlertTriangle, CheckCircle } from 'lucide-react';
 import './Login.css';
 
 function Login() {
@@ -42,31 +42,56 @@ function Login() {
         <div className="login-hero">
           <div className="hero-badge">Vetor · Gestão de Obras</div>
           <h1>
-            Painel de obras com foco na operação em campo.
+            Gestão de obras com controle total e rastreabilidade.
           </h1>
           <p>
-            Registre RDOs, envie evidências e acompanhe aprovações com simplicidade.
+            RDO digital, compras automatizadas e controle de não conformidades em um único sistema.
           </p>
+
+          {/* Feature blocks */}
+          <div className="features-grid">
+            <div className="feature-card">
+              <div className="feature-icon"><ClipboardList size={22} /></div>
+              <div className="feature-content">
+                <strong>RDO Digital</strong>
+                <span>Registro diário com fotos, evidências e aprovações rápidas.</span>
+              </div>
+            </div>
+            <div className="feature-card">
+              <div className="feature-icon"><ShoppingCart size={22} /></div>
+              <div className="feature-content">
+                <strong>Compras Automatizadas</strong>
+                <span>Solicitações e aprovações em fluxo digital.</span>
+              </div>
+            </div>
+            <div className="feature-card">
+              <div className="feature-icon"><AlertTriangle size={22} /></div>
+              <div className="feature-content">
+                <strong>RNC e Qualidade</strong>
+                <span>Registro e tratamento de não conformidades.</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Impact metrics */}
           <div className="hero-grid">
-            <div className="hero-card">
-              <strong>1.8d</strong>
-              <span>Aprovação média</span>
+            <div className="hero-card hero-metric">
+              <div className="metric-line"><CheckCircle size={18} /> <span>-40% retrabalho</span></div>
             </div>
-            <div className="hero-card">
-              <strong>98%</strong>
-              <span>Conformidade</span>
+            <div className="hero-card hero-metric">
+              <div className="metric-line"><CheckCircle size={18} /> <span>Aprovações 2x mais rápidas</span></div>
             </div>
-            <div className="hero-card">
-              <strong>3.0</strong>
-              <span>Evidências / RDO</span>
+            <div className="hero-card hero-metric">
+              <div className="metric-line"><CheckCircle size={18} /> <span>100% rastreabilidade</span></div>
             </div>
           </div>
         </div>
 
         <div className="login-panel">
           <div className="panel-header">
-            <div className="brand-mark">VT</div>
+            <img src="/logo.svg" alt="Vetor" className="panel-logo" />
             <div>
+              <p className="brand-title">Vetor</p>
               <p className="eyebrow">Gestão de Obras</p>
               <h2>Acesso ao Sistema</h2>
             </div>
@@ -114,6 +139,10 @@ function Login() {
 
             <div className="login-hint">
               <span><strong>Demo:</strong> Login 000001 · Senha 123456</span>
+            </div>
+
+            <div className="login-notes">
+              <small className="text-muted">Ambiente seguro para dados de obra e documentos.</small>
             </div>
           </form>
         </div>

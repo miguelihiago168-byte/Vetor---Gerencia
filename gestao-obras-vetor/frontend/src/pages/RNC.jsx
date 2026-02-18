@@ -4,6 +4,7 @@ import Navbar from '../components/Navbar';
 import { getRNCs, deleteRNC } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { AlertTriangle, Plus, Eye, Edit, Trash2 } from 'lucide-react';
+import './RNC.css';
 
 function RNC() {
   const { projetoId } = useParams();
@@ -83,8 +84,8 @@ function RNC() {
   return (
     <>
       <Navbar />
-      <div className="container" style={{ paddingTop: '24px', paddingBottom: '40px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+      <div className="container rnc-container">
+        <div className="rnc-header">
           <h1>RNCs do Projeto</h1>
           <button className="btn btn-primary" onClick={() => navigate(`/projeto/${projetoId}/rnc/novo`)}>
             <Plus size={16} />
@@ -92,36 +93,23 @@ function RNC() {
           </button>
         </div>
 
-        {erro && <div className="alert alert-error" style={{ marginBottom: '16px' }}>{erro}</div>}
+        {erro && <div className="alert alert-error rnc-alert">{erro}</div>}
 
         {rncs.length === 0 ? (
-          <div className="card text-center" style={{ padding: '60px' }}>
-            <AlertTriangle size={48} style={{ color: 'var(--gray-400)', marginBottom: '16px' }} />
-            <h3 style={{ color: 'var(--gray-500)' }}>Nenhuma RNC encontrada</h3>
-            <p style={{ color: 'var(--gray-400)', marginTop: '8px' }}>
-              Crie a primeira RNC para este projeto.
-            </p>
+          <div className="card rnc-empty">
+            <AlertTriangle size={48} className="rnc-empty-icon" />
+            <h3 className="rnc-empty-title">Nenhuma RNC encontrada</h3>
+            <p className="rnc-empty-sub">Crie a primeira RNC para este projeto.</p>
           </div>
         ) : (
-          <div style={{ display: 'grid', gap: '20px', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))' }}>
+          <div className="rnc-grid">
             {rncs.map(rnc => (
-              <div key={rnc.id} className="card" style={{ padding: '20px' }}>
-                {/* Top row: título à esquerda, status+ações no topo à direita */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
-                  <h3 style={{ marginBottom: 0 }}>
-                    {rnc.titulo || `RNC #${rnc.id}`}
-                  </h3>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'nowrap', alignSelf: 'flex-start', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                    <span style={{
-                      padding: '10px 12px',
-                      background: statusColor(rnc.status),
-                      color: 'white',
-                      borderRadius: '16px',
-                      fontSize: '12px',
-                      lineHeight: '16px'
-                    }}>
-                      {statusLabel(rnc.status)}
-                    </span>
+              <div key={rnc.id} className="card rnc-card">
+                <div className="rnc-card-header">
+                  <div className="rnc-status" style={{ background: statusColor(rnc.status) }}>
+                    {statusLabel(rnc.status)}
+                  </div>
+                  <div className="rnc-top-actions">
                     <button
                       className="btn btn-secondary"
                       onClick={() => navigate(`/projeto/${projetoId}/rnc/${rnc.id}`)}
@@ -139,37 +127,35 @@ function RNC() {
                   </div>
                 </div>
 
-                {/* Bottom row: datas à esquerda, responder/deletar à direita */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginTop: '10px', flexWrap: 'wrap' }}>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', fontSize: '14px', color: 'var(--gray-600)' }}>
-                    <span>Data: {formatLocalDate(rnc.criado_em)}</span>
-                    <span>Prevista: {formatLocalDate(rnc.data_prevista_encerramento)}</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: 'auto', flexShrink: 0 }}>
-                    {rnc.status !== 'Encerrada' && (
-                      <>
-                        <button
-                          className="btn btn-warning"
-                          onClick={() => navigate(`/projeto/${projetoId}/rnc/${rnc.id}?responder=1`)}
-                          title="Responder RNC"
-                          disabled={rnc.status === 'Encerrada'}
-                        >
-                          <Edit size={16} /> Responder
-                        </button>
-                        {isGestor && (
-                          <button
-                            className="btn btn-danger"
-                            onClick={() => handleDelete(rnc.id)}
-                            title="Deletar RNC"
-                            disabled={rnc.status === 'Encerrada'}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-                      </>
+                <h3 className="rnc-title">{rnc.titulo || `RNC #${rnc.id}`}</h3>
+
+                <div className="rnc-dates">
+                  <span>Data: {formatLocalDate(rnc.criado_em)}</span>
+                  <span>Prevista: {formatLocalDate(rnc.data_prevista_encerramento)}</span>
+                </div>
+
+                {rnc.status !== 'Encerrada' && (
+                  <div className="rnc-actions">
+                    <button
+                      className="btn btn-warning"
+                      onClick={() => navigate(`/projeto/${projetoId}/rnc/${rnc.id}?responder=1`)}
+                      title="Responder RNC"
+                      disabled={rnc.status === 'Encerrada'}
+                    >
+                      <Edit size={16} /> Responder
+                    </button>
+                    {isGestor && (
+                      <button
+                        className="btn btn-danger"
+                        onClick={() => handleDelete(rnc.id)}
+                        title="Deletar RNC"
+                        disabled={rnc.status === 'Encerrada'}
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     )}
                   </div>
-                </div>
+                )}
               </div>
             ))}
           </div>

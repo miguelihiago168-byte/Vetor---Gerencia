@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" aria-labelledby="title" role="img">
+  <title>Vetor</title>
+  <!-- Stylized V: left navy arm + right cyan arm -->
+  <path d="M80 40 L140 212" stroke="#1E3A8A" stroke-width="28" stroke-linecap="square"/>
+  <path d="M176 40 L140 128" stroke="#43C5D3" stroke-width="28" stroke-linecap="square"/>
+</svg>

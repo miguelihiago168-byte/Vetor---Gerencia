@@ -27,6 +27,29 @@ const rdoRelatedRoutes = require('./routes/rdo_related');
 const dashboardRoutes = require('./routes/dashboard');
 const rncRoutes = require('./routes/rnc');
 const pedidosCompraRoutes = require('./routes/pedidos_compra');
+const notificacoesRoutes = require('./routes/notificacoes');
+// Garantir esquema de notificações e índice único para evitar duplicidades
+try {
+  const { db } = require('./config/database');
+  db.run(`
+    CREATE TABLE IF NOT EXISTS notificacoes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      usuario_id INTEGER NOT NULL,
+      tipo TEXT NOT NULL,
+      mensagem TEXT NOT NULL,
+      referencia_tipo TEXT,
+      referencia_id INTEGER,
+      lido INTEGER DEFAULT 0,
+      criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  db.run(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_notif_unique
+    ON notificacoes (usuario_id, tipo, referencia_tipo, referencia_id)
+  `);
+} catch (e) {
+  console.warn('Aviso: não foi possível garantir índice único de notificações:', e?.message || e);
+}
 
 app.use('/api/auth', authRoutes);
 app.use('/api/usuarios', usuariosRoutes);
@@ -39,6 +62,7 @@ app.use('/api/rdo', rdoRelatedRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/rnc', rncRoutes);
 app.use('/api/pedidos-compra', pedidosCompraRoutes);
+app.use('/api/notificacoes', notificacoesRoutes);
 
 // Rota de teste
 app.get('/api/health', (req, res) => {

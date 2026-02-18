@@ -3,7 +3,8 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LogOut, User } from 'lucide-react';
 import { useLeaveGuard } from '../context/LeaveGuardContext';
-import { listarPedidosPorProjeto, getRDOs } from '../services/api';
+import { listarPedidosPorProjeto, getRDOs, getRNCs, getNotificacoes, marcarNotificacaoLida } from '../services/api';
+import { useNotification } from '../context/NotificationContext';
 
 function Navbar() {
   const { usuario, logout } = useAuth();
@@ -18,6 +19,8 @@ function Navbar() {
   const [pendCompras, setPendCompras] = useState(0);
   const [pendComprasAdm, setPendComprasAdm] = useState(0);
   const [pendRdos, setPendRdos] = useState(0);
+  const [pendRnc, setPendRnc] = useState(0);
+  const { info } = useNotification();
 
   useEffect(() => {
     const loadCounts = async () => {
@@ -39,12 +42,36 @@ function Navbar() {
         const rdos = rdosRes.data || [];
         const rdosCount = rdos.filter(r => (r.status === 'Em análise' || r.status === 'Em analise')).length;
         setPendRdos(rdosCount);
+
+        const rncRes = await getRNCs(projetoId);
+        const rncs = rncRes.data || [];
+        const rncCount = rncs.filter(r => (r.status === 'Em análise' || r.status === 'Em analise')).length;
+        setPendRnc(rncCount);
       } catch (e) {
         // Silencia erros de contagem no navbar
       }
     };
     loadCounts();
   }, [usuario, projetoId, location.pathname]);
+
+  // Buscar notificações e exibir como toast; marcar como lidas após exibir
+  useEffect(() => {
+    const fetchNotifs = async () => {
+      if (!usuario?.id) return;
+      try {
+        const res = await getNotificacoes();
+        const notifs = res.data || [];
+        for (const n of notifs) {
+          const idShown = info(n.mensagem, 7000);
+          // marcar como lida para não repetir
+          try { await marcarNotificacaoLida(n.id); } catch {}
+        }
+      } catch (e) {
+        // silenciar falhas de notificação
+      }
+    };
+    fetchNotifs();
+  }, [usuario?.id, location.pathname]);
 
   const confirmNav = (e, to) => {
     if (isDirty) {
@@ -81,7 +108,7 @@ function Navbar() {
                   RDOs {usuario?.is_gestor === 1 && pendRdos > 0 && (<span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendRdos}</span>)}
                 </NavLink>
                 <NavLink to={`/projeto/${projetoId}/rnc`} onClick={(e) => confirmNav(e, `/projeto/${projetoId}/rnc`)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-                  RNC
+                  RNC {usuario?.is_gestor === 1 && pendRnc > 0 && (<span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendRnc}</span>)}
                 </NavLink>
                 <NavLink to={`/projeto/${projetoId}/pedidos`} onClick={(e) => confirmNav(e, `/projeto/${projetoId}/pedidos`)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
                   Compras

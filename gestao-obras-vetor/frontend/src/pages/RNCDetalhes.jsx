@@ -4,6 +4,8 @@ import Navbar from '../components/Navbar';
 import { getRNCs, updateStatusRNC, getAnexosRNC, uploadAnexoRNC, submitCorrecaoRNC, enviarRncParaAprovacao } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { AlertTriangle, ArrowLeft } from 'lucide-react';
+import { useNotification } from '../context/NotificationContext';
+import './RNCDetalhes.css';
 
 function RNCDetalhes() {
   const { projetoId, rncId } = useParams();
@@ -18,6 +20,8 @@ function RNCDetalhes() {
   const [fotoDesc, setFotoDesc] = useState('');
   const [mostrarResposta, setMostrarResposta] = useState(false);
   const [acaoCorretiva, setAcaoCorretiva] = useState('');
+  const [enviando, setEnviando] = useState(false);
+  const { success, error } = useNotification();
 
   useEffect(() => {
     carregarRNC();
@@ -54,6 +58,13 @@ function RNCDetalhes() {
     }
   };
 
+  // Preencher o textarea com a correção realizada já registrada
+  useEffect(() => {
+    if (rnc && typeof rnc.descricao_correcao === 'string') {
+      setAcaoCorretiva(rnc.descricao_correcao);
+    }
+  }, [rnc?.descricao_correcao]);
+
   const formatLocalDate = (dstr) => {
     if (!dstr) return 'N/A';
     const m = dstr.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -89,18 +100,23 @@ function RNCDetalhes() {
   };
 
   const enviarParaAprovacao = async () => {
+    if (enviando) return;
+    setEnviando(true);
     try {
       // Se o usuário digitou uma correção nova, salva antes de enviar para aprovação
       const texto = (acaoCorretiva || '').trim();
-      if (texto && texto !== (rnc.acao_corretiva || '')) {
-        await submitCorrecaoRNC(rncId, { acao_corretiva: texto });
-        setRnc(prev => ({ ...prev, acao_corretiva: texto, status: 'Em andamento' }));
+      if (texto && texto !== (rnc.descricao_correcao || '')) {
+        await submitCorrecaoRNC(rncId, { descricao_correcao: texto });
+        setRnc(prev => ({ ...prev, descricao_correcao: texto, status: 'Em andamento' }));
       }
       await enviarRncParaAprovacao(rncId);
       setRnc(prev => ({ ...prev, status: 'Em análise' }));
       setMostrarResposta(false);
+      success('Resposta enviada para aprovação.', 5000);
     } catch (error) {
-      alert('Falha ao enviar para aprovação: ' + (error.response?.data?.erro || error.message));
+      error('Falha ao enviar resposta: ' + (error.response?.data?.erro || error.message), 7000);
+    } finally {
+      setEnviando(false);
     }
   };
 
@@ -108,7 +124,7 @@ function RNCDetalhes() {
     return (
       <>
         <Navbar />
-        <div className="container" style={{ textAlign: 'center', padding: '40px' }}>
+        <div className="container rnc-det-container center">
           <div className="spinner"></div>
         </div>
       </>
@@ -119,7 +135,7 @@ function RNCDetalhes() {
     return (
       <>
         <Navbar />
-        <div className="container">
+        <div className="container rnc-det-container">
           <div className="alert alert-error">{erro || 'RNC não encontrada'}</div>
           <button className="btn btn-secondary" onClick={() => navigate(`/projeto/${projetoId}/rnc`)}>
             <ArrowLeft size={16} /> Voltar
@@ -132,50 +148,57 @@ function RNCDetalhes() {
   return (
     <>
       <Navbar />
-      <div className="container" style={{ paddingTop: '24px', paddingBottom: '40px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '32px' }}>
+      <div className="container rnc-det-container">
+        <div className="rnc-det-header">
           <button className="btn btn-secondary" onClick={() => navigate(`/projeto/${projetoId}/rnc`)}>
             <ArrowLeft size={16} />
           </button>
           <h1>RNC: {rnc.titulo}</h1>
-          {/* Removido: chip de status e botão de abrir/fechar resposta no cabeçalho */}
           {isGestor && rnc.status === 'Em análise' && (
-            <>
-              <button className="btn btn-success" onClick={aprovarRNC} style={{ marginLeft: '8px' }}>
+            <div className="rnc-det-approve">
+              <button className="btn btn-success" onClick={aprovarRNC}>
                 Aprovar
               </button>
-              <button className="btn btn-danger" onClick={reprovarRNC} style={{ marginLeft: '8px' }}>
+              <button className="btn btn-danger" onClick={reprovarRNC}>
                 Reprovar
               </button>
-            </>
+            </div>
           )}
-          {/* Removido: botão de gerar PDF no cabeçalho */}
         </div>
 
-        <div className="card" style={{ padding: '24px' }}>
+        <div className="card rnc-det-card">
           <h2>Detalhes da RNC</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginTop: '16px' }}>
-            <div>
-              <strong>ID:</strong> {rnc.id}
-            </div>
-            <div>
-              <strong>Título:</strong> {rnc.titulo}
-            </div>
-            <div>
-              <strong>Status:</strong> {statusLabel(rnc.status)}
-            </div>
-            <div>
-              <strong>Data de Criação:</strong> {formatLocalDate(rnc.criado_em)}
-            </div>
-            <div>
-              <strong>Data prevista para encerramento:</strong> {formatLocalDate(rnc.data_prevista_encerramento)}
-            </div>
+          <div className="rnc-det-info-grid">
+            <div className="rnc-det-info"><span className="label">ID:</span><span className="value">{rnc.id}</span></div>
+            <div className="rnc-det-info"><span className="label">Título:</span><span className="value">{rnc.titulo}</span></div>
+            <div className="rnc-det-info"><span className="label">Status:</span><span className="value">{statusLabel(rnc.status)}</span></div>
+            <div className="rnc-det-info"><span className="label">Data de Criação:</span><span className="value">{formatLocalDate(rnc.criado_em)}</span></div>
+            <div className="rnc-det-info"><span className="label">Prevista p/ encerramento:</span><span className="value">{formatLocalDate(rnc.data_prevista_encerramento)}</span></div>
+            <div className="rnc-det-info"><span className="label">Gravidade:</span><span className="value">{rnc.gravidade || 'N/A'}</span></div>
+            <div className="rnc-det-info"><span className="label">Responsável:</span><span className="value">{rnc.responsavel_nome || 'N/A'}</span></div>
+            <div className="rnc-det-info"><span className="label">RDO Relacionado:</span><span className="value">{rnc.rdo_id ? `${rnc.rdo_id} ${rnc.rdo_data ? '(' + formatLocalDate(rnc.rdo_data) + ')' : ''}` : 'N/A'}</span></div>
+            <div className="rnc-det-info"><span className="label">Norma/Referência:</span><span className="value">{rnc.norma_referencia || 'N/A'}</span></div>
+            <div className="rnc-det-info"><span className="label">Área/Local afetado:</span><span className="value">{rnc.area_afetada || 'N/A'}</span></div>
           </div>
 
           {rnc.descricao && (
-            <div style={{ marginTop: '24px' }}>
-              <strong>Descrição:</strong>
-              <p style={{ marginTop: '8px', whiteSpace: 'pre-wrap' }}>{rnc.descricao}</p>
+            <div className="rnc-det-section">
+              <h3>Descrição</h3>
+              <p className="text-prewrap">{rnc.descricao}</p>
+            </div>
+          )}
+
+          {rnc.acao_corretiva && (
+            <div className="rnc-det-section">
+              <h3>Ação Corretiva</h3>
+              <p className="text-prewrap">{rnc.acao_corretiva}</p>
+            </div>
+          )}
+
+          {rnc.descricao_correcao && (
+            <div className="rnc-det-section">
+              <h3>Correção realizada</h3>
+              <p className="text-prewrap">{rnc.descricao_correcao}</p>
             </div>
           )}
 
@@ -187,31 +210,33 @@ function RNCDetalhes() {
           )}
 
           {mostrarResposta && (usuario?.id === rnc.responsavel_id || usuario?.id === rnc.criado_por || isGestor) && rnc.status !== 'Encerrada' && (
-            <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid #eee' }}>
+            <div className="rnc-det-section rnc-det-response">
               <h3>Resposta do Responsável</h3>
-              <p style={{ color: 'var(--gray-600)', marginTop: '4px' }}>Descreva o que foi corrigido. Fotos poderão ser adicionadas depois.</p>
-              <div className="form-group" style={{ marginTop: '12px' }}>
+              <p className="muted">Descreva o que foi corrigido. Fotos poderão ser adicionadas depois.</p>
+              <div className="form-group">
                 <label className="form-label">Descrição da correção</label>
                 <textarea className="form-input" rows={4} value={acaoCorretiva} onChange={(e) => setAcaoCorretiva(e.target.value)} placeholder="O que foi feito para corrigir a não conformidade?" />
               </div>
-              {/* Botões removidos aqui; Enviar para aprovação ficará ao final da tela */}
+              <div className="rnc-det-actions">
+                <button className="btn btn-warning" disabled={enviando} onClick={enviarParaAprovacao}>{enviando ? 'Enviando...' : 'Enviar resposta'}</button>
+              </div>
             </div>
           )}
-          <div style={{ marginTop: '24px' }}>
+          <div className="rnc-det-section">
             <h3>Anexos (Fotos)</h3>
-            <div style={{ display: 'grid', gap: '8px', marginTop: '8px' }}>
+            <div className="rnc-det-attachments">
               {anexos.map((anexo) => (
-                <div key={anexo.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px', border: '1px solid #eee', borderRadius: '4px' }}>
+                <div key={anexo.id} className="rnc-det-attach-item">
                   <AlertTriangle size={16} />
-                  <div style={{ flex: 1, fontSize: '14px' }}>{anexo.nome_arquivo}</div>
+                  <div className="attach-name">{anexo.nome_arquivo}</div>
                 </div>
               ))}
               {anexos.length === 0 && (
-                <div style={{ color: '#666' }}>Nenhum anexo.</div>
+                <div className="muted">Nenhum anexo.</div>
               )}
             </div>
             {(isGestor || usuario?.id === rnc.criado_por || usuario?.id === rnc.responsavel_id) && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 160px', gap: '12px', marginTop: '12px' }}>
+              <div className="rnc-det-upload-grid">
                 <div className="form-group">
                   <label className="form-label">Foto</label>
                   <input className="form-input" type="file" accept="image/*" onChange={(e) => setFotoFile(e.target.files?.[0] || null)} />
@@ -220,7 +245,7 @@ function RNCDetalhes() {
                   <label className="form-label">Descrição</label>
                   <input className="form-input" type="text" value={fotoDesc} onChange={(e) => setFotoDesc(e.target.value)} placeholder="Descrição opcional" />
                 </div>
-                <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                <div className="rnc-det-actions">
                   <button className="btn btn-secondary" disabled={!fotoFile} onClick={async () => {
                     try {
                       const fd = new FormData();
@@ -236,17 +261,6 @@ function RNCDetalhes() {
                     }
                   }}>Enviar foto</button>
                 </div>
-              </div>
-            )}
-            {/* Botão final: Enviar para aprovação */}
-            {(rnc.status !== 'Encerrada' && rnc.status !== 'Em análise') && (isGestor || usuario?.id === rnc.criado_por || usuario?.id === rnc.responsavel_id) && (
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
-                <button
-                  className="btn btn-warning"
-                  onClick={enviarParaAprovacao}
-                >
-                  Enviar para aprovação
-                </button>
               </div>
             )}
           </div>

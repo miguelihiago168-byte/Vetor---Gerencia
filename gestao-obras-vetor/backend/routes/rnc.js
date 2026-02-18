@@ -57,6 +57,12 @@ router.get('/:id/pdf', auth, async (req, res) => {
       doc.moveDown();
     }
 
+    if (rnc.descricao_correcao) {
+      doc.text('Correção realizada:', { underline: true });
+      doc.text(rnc.descricao_correcao);
+      doc.moveDown();
+    }
+
     if (rnc.registros_fotograficos) {
       doc.text('Registros fotográficos:', { underline: true });
       doc.text(rnc.registros_fotograficos);
@@ -144,9 +150,16 @@ router.post('/', auth, [
 
     await registrarAuditoria('rnc', result.lastID, 'CREATE', null, req.body, req.usuario.id);
 
-    // Notificação simples (stub): logar que o responsável deve ser notificado
+    // Notificar responsável, se definido
     if (responsavel_id) {
-      console.log(`[NOTIF] Nova RNC #${result.lastID} criada no projeto ${projeto_id}. Notificar responsável ${responsavel_id}.`);
+      try {
+        await runQuery(
+          'INSERT OR IGNORE INTO notificacoes (usuario_id, tipo, mensagem, referencia_tipo, referencia_id) VALUES (?, ?, ?, ?, ?)',
+          [responsavel_id, 'rnc_atribuida', `Você foi atribuído como responsável da RNC #${result.lastID}.`, 'rnc', result.lastID]
+        );
+      } catch (e) {
+        console.warn('Falha ao registrar notificação de responsável RNC:', e?.message || e);
+      }
     }
 
     res.status(201).json({ mensagem: 'RNC criada com sucesso.', id: result.lastID });
@@ -181,6 +194,7 @@ router.put('/:id', auth, async (req, res) => {
       gravidade,
       status,
       acao_corretiva,
+      descricao_correcao,
       responsavel_id,
       rdo_id,
       data_prevista_encerramento,
@@ -190,6 +204,9 @@ router.put('/:id', auth, async (req, res) => {
       registros_fotograficos
     } = req.body;
 
+    // Detectar mudança de responsável para notificar
+    const novoResponsavel = responsavel_id ?? rncAtual.responsavel_id;
+
     await runQuery(`
       UPDATE rnc SET
         titulo = ?,
@@ -197,6 +214,7 @@ router.put('/:id', auth, async (req, res) => {
         gravidade = ?,
         status = ?,
         acao_corretiva = ?,
+        descricao_correcao = ?,
         responsavel_id = ?,
         rdo_id = ?,
         data_prevista_encerramento = ?,
@@ -212,6 +230,7 @@ router.put('/:id', auth, async (req, res) => {
       gravidade,
       status,
       acao_corretiva || null,
+      descricao_correcao || rncAtual.descricao_correcao || null,
       responsavel_id || null,
       rdo_id || null,
       data_prevista_encerramento || null,
@@ -224,6 +243,18 @@ router.put('/:id', auth, async (req, res) => {
 
     const novo = await getQuery('SELECT * FROM rnc WHERE id = ?', [id]);
     await registrarAuditoria('rnc', id, 'UPDATE', rncAtual, novo, req.usuario.id);
+
+    // Se responsável mudou, notificar novo responsável
+    if (rncAtual.responsavel_id !== novo.responsavel_id && novo.responsavel_id) {
+      try {
+        await runQuery(
+          'INSERT OR IGNORE INTO notificacoes (usuario_id, tipo, mensagem, referencia_tipo, referencia_id) VALUES (?, ?, ?, ?, ?)',
+          [novo.responsavel_id, 'rnc_atribuida', `Você foi atribuído como responsável da RNC #${id}.`, 'rnc', id]
+        );
+      } catch (e) {
+        console.warn('Falha ao registrar notificação de mudança de responsável:', e?.message || e);
+      }
+    }
 
     res.json({ mensagem: 'RNC atualizada.' });
   } catch (error) {
@@ -281,6 +312,19 @@ router.post('/:id/enviar-aprovacao', auth, async (req, res) => {
     await runQuery('UPDATE rnc SET status = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?', ['Em análise', id]);
     await registrarAuditoria('rnc', id, 'ENVIADO_APROVACAO', rncAtual, { por: req.usuario.id }, req.usuario.id);
 
+    // Notificar gestor(es) que há RNC para aprovação (opcional simples: todos gestores)
+    try {
+      const gestores = await allQuery('SELECT id FROM usuarios WHERE is_gestor = 1');
+      for (const g of gestores) {
+        await runQuery(
+          'INSERT OR IGNORE INTO notificacoes (usuario_id, tipo, mensagem, referencia_tipo, referencia_id) VALUES (?, ?, ?, ?, ?)',
+          [g.id, 'rnc_para_aprovacao', `RNC #${id} foi enviada para aprovação.`, 'rnc', id]
+        );
+      }
+    } catch (e) {
+      console.warn('Falha ao notificar gestores sobre aprovação de RNC:', e?.message || e);
+    }
+
     res.json({ mensagem: 'RNC enviada para aprovação.' });
   } catch (error) {
     console.error('Erro ao enviar RNC para aprovação:', error);
@@ -317,7 +361,7 @@ router.delete('/:id', [auth, isGestor], async (req, res) => {
 router.post('/:id/corrigir', auth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { acao_corretiva } = req.body;
+    const { descricao_correcao } = req.body;
 
     const rncAtual = await getQuery('SELECT * FROM rnc WHERE id = ?', [id]);
     if (!rncAtual) return res.status(404).json({ erro: 'RNC não encontrada.' });
@@ -328,11 +372,11 @@ router.post('/:id/corrigir', auth, async (req, res) => {
     }
 
     await runQuery(
-      'UPDATE rnc SET acao_corretiva = ?, status = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
-      [acao_corretiva || null, 'Em andamento', id]
+      'UPDATE rnc SET descricao_correcao = ?, status = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+      [descricao_correcao || null, 'Em andamento', id]
     );
 
-    await registrarAuditoria('rnc', id, 'CORRECAO_SUBMETIDA', rncAtual, { acao_corretiva }, req.usuario.id);
+    await registrarAuditoria('rnc', id, 'CORRECAO_SUBMETIDA', rncAtual, { descricao_correcao }, req.usuario.id);
 
     res.json({ mensagem: 'Correção registrada e RNC marcada como Em andamento.' });
   } catch (error) {

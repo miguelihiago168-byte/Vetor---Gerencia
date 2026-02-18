@@ -39,6 +39,18 @@ router.post('/', auth, async (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, 'SOLICITADO')
     `, [projeto_id, req.usuario.id, descricao, quantidade, unidade || null, aplicacao_local || null]);
     const pedido = await getQuery('SELECT * FROM pedidos_compra WHERE id = ?', [result.lastID]);
+    // Notificar gestores sobre nova solicitação
+    try {
+      const gestores = await allQuery('SELECT id FROM usuarios WHERE is_gestor = 1');
+      for (const g of gestores) {
+        await runQuery(
+          'INSERT OR IGNORE INTO notificacoes (usuario_id, tipo, mensagem, referencia_tipo, referencia_id) VALUES (?, ?, ?, ?, ?)',
+          [g.id, 'pedido_solicitado', `Nova solicitação de compra #${result.lastID}.`, 'pedido', result.lastID]
+        );
+      }
+    } catch (e) {
+      console.warn('Falha ao notificar nova solicitação de compra:', e?.message || e);
+    }
     res.json({ pedido });
   } catch (e) {
     res.status(500).json({ erro: 'Erro ao criar solicitação.' });

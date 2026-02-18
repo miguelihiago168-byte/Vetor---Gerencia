@@ -731,6 +731,21 @@ router.patch('/:id/status', auth, async (req, res) => {
       }
     }
 
+    // Notificar criador em caso de reprovação (sem ressalvas)
+    if (status === 'Reprovado') {
+      try {
+        const criadorId = rdoAtual.criado_por;
+        if (criadorId) {
+          await runQuery(
+            'INSERT OR IGNORE INTO notificacoes (usuario_id, tipo, mensagem, referencia_tipo, referencia_id) VALUES (?, ?, ?, ?, ?)',
+            [criadorId, 'rdo_reprovado', `Seu RDO #${id} foi reprovado.`, 'rdo', id]
+          );
+        }
+      } catch (e) {
+        console.warn('Falha ao notificar reprovação de RDO:', e?.message || e);
+      }
+    }
+
     await registrarAuditoria('rdos', id, 'STATUS_CHANGE', rdoAtual, { status, aprovado_por: aprovadoPor }, req.usuario.id);
 
     res.json({ mensagem: `RDO ${status.toLowerCase()} com sucesso.` });

@@ -15,6 +15,7 @@ function PedidosCompra() {
   const [erro, setErro] = useState('');
   const [search, setSearch] = useState('');
   const [comparativos, setComparativos] = useState({});
+  const [vencedoras, setVencedoras] = useState({});
 
   useEffect(() => {
     const load = async () => {
@@ -33,6 +34,19 @@ function PedidosCompra() {
   const refresh = async () => {
     const res = await listarPedidosPorProjeto(projetoId);
     setPedidos(res.data);
+    try {
+      const lista = res.data || [];
+      const comVencedora = lista.filter(p => p.cotacao_vencedora_id);
+      const next = { ...vencedoras };
+      for (const p of comVencedora) {
+        try {
+          const det = await detalharPedido(p.id);
+          const cot = (det.data.cotacoes || []).find(c => c.id === p.cotacao_vencedora_id);
+          if (cot) next[p.id] = cot;
+        } catch {}
+      }
+      setVencedoras(next);
+    } catch {}
   };
 
   const [showNovaModal, setShowNovaModal] = useState(false);
@@ -78,6 +92,11 @@ function PedidosCompra() {
   const [cotacoesPedidoId, setCotacoesPedidoId] = useState(null);
   const [cotacoesQtdPedido, setCotacoesQtdPedido] = useState(0);
   const [cotacoesPedidoInfo, setCotacoesPedidoInfo] = useState(null);
+  // Modal de seleção de cotação (substitui window.prompt)
+  const [showSelecionarModal, setShowSelecionarModal] = useState(false);
+  const [selecionarPedidoId, setSelecionarPedidoId] = useState(null);
+  const [selecionarLista, setSelecionarLista] = useState([]);
+  const [selecionarEscolha, setSelecionarEscolha] = useState('');
 
   const abrirModalCotacoes = async (id) => {
     setCotacoesPedidoId(id);
@@ -165,13 +184,38 @@ function PedidosCompra() {
     try {
       const detalhe = await detalharPedido(id);
       const cotas = detalhe.data.cotacoes || [];
-      if (cotas.length !== 3) { alert('Pedido não possui 3 cotações.'); return; }
-      const escolha = window.prompt(`Escolha a cotação (IDs): ${cotas.map(c=>c.id).join(', ')}`);
-      if (!escolha) return;
-      await selecionarCotacao(id, parseInt(escolha, 10));
-      await refresh();
+      if (cotas.length !== 3) { setErro('Pedido não possui 3 cotações.'); return; }
+      setSelecionarPedidoId(id);
+      setSelecionarLista(cotas);
+      setSelecionarEscolha('');
+      setShowSelecionarModal(true);
     } catch (e) {
-      setErro('Erro ao selecionar cotação.');
+      setErro('Erro ao abrir seleção de cotação.');
+    }
+  };
+
+  const confirmarSelecionarCotacao = async () => {
+    if (!selecionarPedidoId || !selecionarEscolha) { setErro('Selecione uma cotação.'); return; }
+    try {
+      await selecionarCotacao(selecionarPedidoId, parseInt(selecionarEscolha, 10));
+      setShowSelecionarModal(false);
+      setSelecionarPedidoId(null);
+      setSelecionarLista([]);
+      setSelecionarEscolha('');
+      await refresh();
+      try {
+        const det = await detalharPedido(selecionarPedidoId);
+        const cot = (det.data.cotacoes || []).find(c => c.id === parseInt(selecionarEscolha, 10));
+        const qtd = det.data?.pedido?.quantidade || 0;
+        const totalProduto = Number(cot?.valor_unitario || 0) * Number(qtd || 0);
+        const freteVal = Number(String(cot?.frete || 0).replace(',','.')) || 0;
+        const totalComFrete = totalProduto + freteVal;
+        info(`Cotação #${cot?.id} selecionada. Total: R$ ${totalProduto.toFixed(2)}${freteVal ? ` + frete R$ ${freteVal.toFixed(2)} = R$ ${totalComFrete.toFixed(2)}` : ''}.`, 7000);
+      } catch {
+        info('Cotação selecionada com sucesso.', 4000);
+      }
+    } catch (e) {
+      setErro('Erro ao confirmar seleção de cotação.');
     }
   };
 
@@ -290,6 +334,30 @@ function PedidosCompra() {
                 <p>Qtd: {p.quantidade} {p.unidade || ''}</p>
                 {p.aplicacao_local && (
                   <p style={{ color: 'var(--gray-600)' }}>Aplicação: {p.aplicacao_local}</p>
+                )}
+                {p.cotacao_vencedora_id && (
+                  <div className="card" style={{ padding: '8px', marginTop: '8px', background: 'var(--gray-50)' }}>
+                    <p className="eyebrow">Cotação escolhida #{p.cotacao_vencedora_id}</p>
+                    {vencedoras[p.id] ? (
+                      <div>
+                        <p><strong>{vencedoras[p.id].fornecedor}</strong></p>
+                        <p>
+                          Valor unitário: R$ {Number(vencedoras[p.id].valor_unitario || 0).toFixed(2)}
+                          {p?.quantidade != null ? ` — Total produto: R$ ${(Number(vencedoras[p.id].valor_unitario || 0) * Number(p.quantidade || 0)).toFixed(2)}` : ''}
+                        </p>
+                        {vencedoras[p.id].frete && String(vencedoras[p.id].frete).trim() !== '' && (
+                          <p>
+                            Frete: R$ {Number(String(vencedoras[p.id].frete).replace(',','.')).toFixed(2)}
+                            {p?.quantidade != null ? ` — Total c/ frete: R$ ${(
+                              (Number(vencedoras[p.id].valor_unitario || 0) * Number(p.quantidade || 0)) + Number(String(vencedoras[p.id].frete).replace(',','.'))
+                            ).toFixed(2)}` : ''}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <p style={{ color: 'var(--gray-600)' }}>Carregando detalhes da cotação selecionada…</p>
+                    )}
+                  </div>
                 )}
                 <div className="flex" style={{ gap: '8px', marginTop: '10px' }}>
                   {usuario?.is_gestor === 1 && p.status === 'SOLICITADO' && (
@@ -439,6 +507,33 @@ function PedidosCompra() {
             <div className="flex-between mt-2">
               <button className="btn btn-secondary" onClick={() => { setShowCotacaoModal(false); setCotacoesPedidoId(null); }}>Cancelar</button>
               <button className="btn btn-primary" onClick={salvarCotacoes}>Salvar 3 Cotações</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSelecionarModal && (
+        <div className="modal-overlay">
+          <div className="modal-card" style={{ maxWidth: '560px' }}>
+            <div className="flex-between mb-2">
+              <h2>Escolher Cotação</h2>
+              <button className="btn btn-secondary" onClick={() => { setShowSelecionarModal(false); setSelecionarPedidoId(null); setSelecionarLista([]); setSelecionarEscolha(''); }}>Fechar</button>
+            </div>
+            {erro && <div className="alert alert-error">{erro}</div>}
+            <div className="card" style={{ padding: '16px' }}>
+              <div className="form-group">
+                <label className="form-label">Selecione uma das cotações</label>
+                <select className="form-select" value={selecionarEscolha} onChange={(e)=> setSelecionarEscolha(e.target.value)}>
+                  <option value="">Selecione...</option>
+                  {selecionarLista.map(c => (
+                    <option key={c.id} value={c.id}>#{c.id} - {c.fornecedor} — R$ {Number(c.valor_unitario || 0).toFixed(2)}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="flex-between mt-2">
+              <button className="btn btn-secondary" onClick={() => { setShowSelecionarModal(false); setSelecionarPedidoId(null); setSelecionarLista([]); setSelecionarEscolha(''); }}>Cancelar</button>
+              <button className="btn btn-primary" onClick={confirmarSelecionarCotacao}>Confirmar Seleção</button>
             </div>
           </div>
         </div>

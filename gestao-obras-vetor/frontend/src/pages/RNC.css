@@ -1,0 +1,107 @@
+/* Layout container */
+.rnc-container {
+  padding-top: 24px;
+  padding-bottom: 40px;
+}
+
+.rnc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 32px;
+}
+
+.rnc-alert {
+  margin-bottom: 16px;
+}
+
+/* Empty state */
+.rnc-empty {
+  padding: 60px;
+}
+
+.rnc-empty-icon {
+  color: var(--gray-400);
+  margin-bottom: 16px;
+}
+
+.rnc-empty-title {
+  color: var(--gray-500);
+}
+
+.rnc-empty-sub {
+  color: var(--gray-400);
+  margin-top: 8px;
+}
+
+/* Grid responsivo de cards */
+.rnc-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+
+/* Card */
+.rnc-card {
+  width: 100%;
+  height: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.rnc-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rnc-status {
+  padding: 8px 12px;
+  color: #ffffff;
+  border-radius: 16px;
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.rnc-top-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rnc-title {
+  margin: 0;
+}
+
+.rnc-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--gray-600);
+}
+
+.rnc-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+  .rnc-card {
+    padding: 16px;
+  }
+  .rnc-grid {
+    gap: 16px;
+  }
+}

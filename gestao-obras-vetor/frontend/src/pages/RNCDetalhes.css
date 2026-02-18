@@ -1,0 +1,106 @@
+.rnc-det-container {
+  padding-top: 24px;
+  padding-bottom: 40px;
+}
+
+.rnc-det-container.center {
+  text-align: center;
+}
+
+.rnc-det-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+}
+
+.rnc-det-approve {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.rnc-det-card {
+  padding: 24px;
+}
+
+.rnc-det-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.rnc-det-info .label {
+  display: block;
+  font-weight: 600;
+  color: var(--gray-600);
+}
+
+.rnc-det-info .value {
+  display: block;
+  margin-top: 4px;
+}
+
+.rnc-det-section {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #eee;
+}
+
+.rnc-det-section h3 {
+  margin: 0 0 8px 0;
+}
+
+.text-prewrap {
+  white-space: pre-wrap;
+}
+
+.muted {
+  color: var(--gray-600);
+}
+
+.rnc-det-response .form-group {
+  margin-top: 12px;
+}
+
+.rnc-det-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.rnc-det-attachments {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.rnc-det-attach-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid #eee;
+  border-radius: 6px;
+}
+
+.rnc-det-attach-item .attach-name {
+  flex: 1;
+  font-size: 14px;
+}
+
+.rnc-det-upload-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 160px;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+@media (max-width: 768px) {
+  .rnc-det-upload-grid {
+    grid-template-columns: 1fr;
+  }
+}
