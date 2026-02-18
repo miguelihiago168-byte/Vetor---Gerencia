@@ -227,7 +227,7 @@ router.get('/:id', auth, async (req, res) => {
     // Buscar colaboradores vinculados à obra (se existir tabela projeto_usuarios)
     try {
       const colaboradores = await allQuery(`
-        SELECT u.id, u.nome, pu.funcao, pu.classificacao, pu.entrada_hora as entrada, pu.saida_hora as saida, pu.intervalo_inicio, pu.intervalo_fim
+        SELECT u.id, u.nome, pu.criado_em
         FROM projeto_usuarios pu
         INNER JOIN usuarios u ON pu.usuario_id = u.id
         WHERE pu.projeto_id = ?
@@ -280,6 +280,25 @@ router.post('/', auth, [
       comentarios,
       atividades
     } = req.body;
+
+    // Integridade: projeto precisa ter EAP e criação deve trazer ao menos uma atividade
+    const eapCountRow = await getQuery('SELECT COUNT(*) AS c FROM atividades_eap WHERE projeto_id = ?', [projeto_id]);
+    if (!eapCountRow || eapCountRow.c === 0) {
+      return res.status(400).json({ erro: 'Projeto sem EAP: crie a EAP antes do RDO.' });
+    }
+    if (!Array.isArray(atividades) || atividades.length === 0) {
+      return res.status(400).json({ erro: 'RDO deve conter ao menos uma atividade executada.' });
+    }
+    // Validar que todas as atividades pertencem ao mesmo projeto
+    for (const atividade of atividades) {
+      const rowProj = await getQuery('SELECT projeto_id FROM atividades_eap WHERE id = ?', [atividade.atividade_eap_id]);
+      if (!rowProj) {
+        return res.status(400).json({ erro: 'Atividade EAP inexistente no banco.' });
+      }
+      if (rowProj.projeto_id !== projeto_id) {
+        return res.status(400).json({ erro: 'Atividade EAP pertence a outro projeto.' });
+      }
+    }
 
     // Data efetiva do RDO baseada na data real de criação do sistema
     // Data do relatório deve respeitar o valor escolhido no formulário.
@@ -461,26 +480,9 @@ router.put('/:id', auth, async (req, res) => {
       return res.status(403).json({ erro: 'Você não tem permissão para editar este RDO.' });
     }
 
-    // Se RDO aprovado: criar snapshot/version antes de permitir edição (apenas gestor)
+    // Se RDO aprovado: não permitir edição via PUT. É necessário reverter status via PATCH (gestor).
     if (rdoAtual.status === 'Aprovado') {
-      if (!req.usuario.is_gestor) {
-        return res.status(403).json({ erro: 'Apenas gestores podem editar um RDO aprovado.' });
-      }
-
-      try {
-        // buscar snapshot das atividades e anexos
-        const atividadesSnapshot = await allQuery('SELECT * FROM rdo_atividades WHERE rdo_id = ?', [id]);
-        const anexosSnapshot = await allQuery('SELECT * FROM anexos WHERE rdo_id = ?', [id]);
-        const snapshot = { rdo: rdoAtual, atividades: atividadesSnapshot, anexos: anexosSnapshot };
-
-        // salvar snapshot na tabela rdos_versions (migração deve garantir existência)
-        await runQuery('INSERT INTO rdos_versions (rdo_id, snapshot_json, criado_por) VALUES (?, ?, ?)', [id, JSON.stringify(snapshot), req.usuario.id]);
-
-        // marcar RDO como em preenchimento para editar (mantendo histórico da versão anterior)
-        await runQuery("UPDATE rdos SET status = 'Em preenchimento', atualizado_em = CURRENT_TIMESTAMP WHERE id = ?", [id]);
-      } catch (err) {
-        console.warn('Falha ao criar versão/backup do RDO aprovado:', err);
-      }
+      return res.status(403).json({ erro: 'RDO aprovado. Solicite ao gestor para voltar à edição.' });
     }
 
     const {
@@ -597,6 +599,14 @@ router.patch('/:id/status', auth, async (req, res) => {
     // Se RDO já estava aprovado, somente gestor pode revertê-lo
     if (rdoAtual.status === 'Aprovado' && status !== 'Aprovado' && !req.usuario.is_gestor) {
       return res.status(403).json({ erro: 'Apenas gestores podem reverter um RDO aprovado.' });
+    }
+
+    // Integridade: não permitir mudar status sem atividades vinculadas
+    if (status !== 'Em preenchimento') {
+      const cnt = await getQuery('SELECT COUNT(*) AS c FROM rdo_atividades WHERE rdo_id = ?', [id]);
+      if (!cnt || cnt.c === 0) {
+        return res.status(400).json({ erro: 'RDO sem atividades: não é permitido alterar status.' });
+      }
     }
 
     const aprovadoPor = (status === 'Aprovado' || status === 'Reprovado') ? req.usuario.id : null;
@@ -733,6 +743,8 @@ router.patch('/:id/status', auth, async (req, res) => {
 
 // Deletar RDO
 router.delete('/:id', auth, async (req, res) => {
+  // Exclusão desativada por política do sistema
+  return res.status(403).json({ erro: 'Exclusão de RDO desativada.' });
   try {
     const { id } = req.params;
 
@@ -810,7 +822,14 @@ router.get('/:id/pdf', auth, async (req, res) => {
 
     // Buscar RDO com detalhes
     const rdo = await getQuery(`
-      SELECT r.*, p.nome AS projeto_nome, u.nome AS criado_por_nome
+      SELECT r.*, 
+             p.nome AS projeto_nome,
+             p.cidade AS projeto_cidade,
+             p.empresa_responsavel AS projeto_contratante,
+             p.empresa_executante AS projeto_executante,
+             p.prazo_termino AS projeto_prazo_termino,
+             p.criado_em AS projeto_criado_em,
+             u.nome AS criado_por_nome
       FROM rdos r
       JOIN projetos p ON r.projeto_id = p.id
       LEFT JOIN usuarios u ON r.criado_por = u.id
@@ -865,23 +884,10 @@ router.get('/:id/pdf', auth, async (req, res) => {
 
     doc.pipe(res);
 
-    // Cabeçalho estilizado (cores e elementos alinhados à UI)
-    const logoPath = path.join(uploadsDir, 'logo.png');
-    const headerY = 40;
-    const headerH = 90;
-    doc.save();
-    doc.roundedRect(32, headerY, doc.page.width - 64, headerH, 12).fill('#F5F7FB');
-    doc.restore();
-    if (fs.existsSync(logoPath)) {
-      doc.image(logoPath, 48, headerY + 20, { width: 56 });
-    }
-    // Nome do sistema
-    doc.fontSize(12).fillColor('#334155').text('Gestão de Obras - Vetor', fs.existsSync(logoPath) ? 120 : 48, headerY + 4);
-    doc.fontSize(18).fillColor('#0F172A').text(displayId, fs.existsSync(logoPath) ? 120 : 48, headerY + 20);
-    const statusLabel = (s) => {
-      if (s === 'Em análise') return 'Em aprovação';
-      if (s === 'Em preenchimento') return 'Aguardando aprovação';
-      return s || 'N/A';
+    // Funções auxiliares para datas e prazos
+    const diaSemanaPt = (d) => {
+      const dias = ['Domingo', 'Segunda-Feira', 'Terça-Feira', 'Quarta-Feira', 'Quinta-Feira', 'Sexta-Feira', 'Sábado'];
+      return dias[d.getDay()];
     };
     const statusColor = (s) => {
       if (s === 'Aprovado') return '#2E7D32';
@@ -890,21 +896,100 @@ router.get('/:id/pdf', auth, async (req, res) => {
       if (s === 'Reprovado') return '#C62828';
       return '#6B7280';
     };
-    doc.fontSize(11).fillColor('#475569').text(`Data: ${new Date(rdo.data_relatorio).toLocaleDateString('pt-BR')}`,
-      fs.existsSync(logoPath) ? 120 : 48, headerY + 48);
-    // Status chip
-    const chipX = doc.page.width - 180;
-    const chipY = headerY + 28;
-    const chipW = 120;
-    const chipH = 24;
+    const msDia = 24 * 60 * 60 * 1000;
+    const calcPrazos = () => {
+      const criadoEm = rdo.projeto_criado_em ? new Date(rdo.projeto_criado_em) : null;
+      const termino = rdo.projeto_prazo_termino ? new Date(rdo.projeto_prazo_termino) : null;
+      const hoje = new Date(rdo.data_relatorio || Date.now());
+      if (criadoEm && termino) {
+        const contratual = Math.max(0, Math.round((termino - criadoEm) / msDia));
+        const decorrido = Math.max(0, Math.round((hoje - criadoEm) / msDia));
+        const aVencer = contratual - decorrido;
+        return { contratual, decorrido, aVencer };
+      }
+      return { contratual: null, decorrido: null, aVencer: null };
+    };
+
+    // Cabeçalho no estilo da referência (grid com dados do relatório)
+    const logoPath = path.join(uploadsDir, 'logo.png');
+    const marginX = 32;
+    const headerTop = 40;
+    const headerWidth = doc.page.width - marginX * 2;
+    const leftW = Math.round(headerWidth * 0.55);
+    const rightW = headerWidth - leftW;
+
+    // Top row containers
+    const topH = 62;
+    // Left: logo + empresa
     doc.save();
-    doc.roundedRect(chipX, chipY, chipW, chipH, 12).fill(statusColor(rdo.status));
-    doc.fillColor('#FFFFFF').fontSize(11).text(statusLabel(rdo.status), chipX, chipY + 6, { width: chipW, align: 'center' });
+    doc.rect(marginX, headerTop, leftW, topH).stroke('#CBD5E1');
+    if (fs.existsSync(logoPath)) {
+      doc.image(logoPath, marginX + 10, headerTop + 12, { width: 38 });
+    }
+    doc.fontSize(16).fillColor('#0F172A').text(rdo.projeto_contratante || 'Gestão de Obras', marginX + (fs.existsSync(logoPath) ? 60 : 12), headerTop + 14, { width: leftW - 72 });
+    doc.fontSize(10).fillColor('#475569').text('Relatório Diário de Obra (RDO)', marginX + (fs.existsSync(logoPath) ? 60 : 12), headerTop + 34, { width: leftW - 72 });
     doc.restore();
-    doc.moveDown(2);
-    doc.fontSize(12).fillColor('#1F2937').text(`Projeto: ${rdo.projeto_nome}`);
-    doc.fillColor('#6B7280').text(`Criado por: ${rdo.criado_por_nome || 'N/A'}`);
-    doc.moveDown();
+
+    // Right: caixa com dados do relatório
+    const prazos = calcPrazos();
+    doc.save();
+    doc.rect(marginX + leftW, headerTop, rightW, topH).stroke('#CBD5E1');
+    const rightPad = 8;
+    const linhaAlt = 18;
+    let yy = headerTop + 8;
+    doc.fontSize(9).fillColor('#334155').text('Relatório nº', marginX + leftW + rightPad, yy);
+    doc.fontSize(11).fillColor('#0F172A').text(displayId.replace('RDO-', ''), marginX + leftW + rightW - 70, yy, { width: 60, align: 'right' });
+    yy += linhaAlt;
+    const dataRel = rdo.data_relatorio ? new Date(rdo.data_relatorio) : new Date();
+    doc.fontSize(9).fillColor('#334155').text('Data do relatório', marginX + leftW + rightPad, yy);
+    doc.fontSize(11).fillColor('#0F172A').text(dataRel.toLocaleDateString('pt-BR'), marginX + leftW + rightW - 120, yy, { width: 110, align: 'right' });
+    yy += linhaAlt;
+    doc.fontSize(9).fillColor('#334155').text('Dia da semana', marginX + leftW + rightPad, yy);
+    doc.fontSize(11).fillColor('#0F172A').text(diaSemanaPt(dataRel), marginX + leftW + rightW - 120, yy, { width: 110, align: 'right' });
+    doc.restore();
+
+    // Segunda linha: contrato e prazos
+    const contractH = 54;
+    const secondTop = headerTop + topH;
+    doc.save();
+    doc.rect(marginX + leftW, secondTop, rightW, contractH).stroke('#CBD5E1');
+    let cy = secondTop + 8;
+    doc.fontSize(9).fillColor('#334155').text('Contrato', marginX + leftW + 8, cy);
+    cy += linhaAlt;
+    doc.fontSize(9).fillColor('#334155').text('Prazo contratual', marginX + leftW + 8, cy);
+    doc.fontSize(11).fillColor('#0F172A').text(prazos.contratual != null ? `${prazos.contratual} dias` : '—', marginX + leftW + rightW - 120, cy, { width: 110, align: 'right' });
+    cy += linhaAlt;
+    doc.fontSize(9).fillColor('#334155').text('Prazo decorrido', marginX + leftW + 8, cy);
+    doc.fontSize(11).fillColor('#0F172A').text(prazos.decorrido != null ? `${prazos.decorrido} dias` : '—', marginX + leftW + rightW - 120, cy, { width: 110, align: 'right' });
+    cy += linhaAlt;
+    doc.fontSize(9).fillColor('#334155').text('Prazo a vencer', marginX + leftW + 8, cy);
+    doc.fontSize(11).fillColor('#0F172A').text(prazos.aVencer != null ? `${prazos.aVencer} dias` : '—', marginX + leftW + rightW - 120, cy, { width: 110, align: 'right' });
+    doc.restore();
+
+    // Linha central com título
+    const titleH = 28;
+    doc.save();
+    doc.rect(marginX, secondTop, leftW, titleH).stroke('#CBD5E1');
+    doc.fontSize(12).fillColor('#0F172A').text('Relatório Diário de Obra (RDO)', marginX, secondTop + 6, { width: leftW, align: 'center' });
+    doc.restore();
+
+    // Bloco com dados da obra
+    const obraH = 76;
+    const obraTop = secondTop + titleH;
+    doc.save();
+    doc.rect(marginX, obraTop, leftW, obraH).stroke('#CBD5E1');
+    let ox = marginX + 8;
+    let oy = obraTop + 8;
+    const label = (t, y) => doc.fontSize(9).fillColor('#334155').text(t, ox, y, { width: 90 });
+    const val = (t, y) => doc.fontSize(11).fillColor('#0F172A').text(t, ox + 92, y, { width: leftW - 110 });
+    label('Obra'); val(rdo.projeto_nome || '—', oy); oy += linhaAlt;
+    label('Local'); val(rdo.projeto_cidade || '—', oy); oy += linhaAlt;
+    label('Contratante'); val(rdo.projeto_contratante || '—', oy); oy += linhaAlt;
+    label('Responsável'); val(rdo.criado_por_nome || '—', oy);
+    doc.restore();
+
+    // Avançar abaixo do cabeçalho
+    doc.y = obraTop + obraH + 12;
 
     // Condições climáticas
     if (rdo.condicoes_climaticas) {
@@ -1069,6 +1154,8 @@ router.get('/projeto/:projetoId/excel', auth, async (req, res) => {
 
     // Adicionar dados
     rdos.forEach(rdo => {
+      const condicoesClima = `Manhã: ${rdo.clima_manha || ''} ${rdo.tempo_manha || ''} (${rdo.praticabilidade_manha || ''}) | Tarde: ${rdo.clima_tarde || ''} ${rdo.tempo_tarde || ''} (${rdo.praticabilidade_tarde || ''})`;
+      const observacoes = rdo.comentarios || '';
       worksheet.addRow({
         numero_rdo: rdo.numero_rdo || `RDO-${rdo.id}`,
         data_relatorio: new Date(rdo.data_relatorio).toLocaleDateString('pt-BR'),
@@ -1077,8 +1164,8 @@ router.get('/projeto/:projetoId/excel', auth, async (req, res) => {
         mao_obra_direta: rdo.mao_obra_direta || 0,
         mao_obra_indireta: rdo.mao_obra_indireta || 0,
         mao_obra_terceiros: rdo.mao_obra_terceiros || 0,
-        condicoes_climaticas: rdo.condicoes_climaticas || '',
-        observacoes: rdo.observacoes || '',
+        condicoes_climaticas: condicoesClima,
+        observacoes: observacoes,
         criado_por_nome: rdo.criado_por_nome || '',
         criado_em: new Date(rdo.criado_em).toLocaleDateString('pt-BR')
       });
@@ -1099,6 +1186,8 @@ router.get('/projeto/:projetoId/excel', auth, async (req, res) => {
 
 // Excluir TODOS os RDOs de um projeto (apenas gestor) e reverter avanço
 router.delete('/projeto/:projetoId/todos', [auth, isGestor], async (req, res) => {
+  // Exclusão desativada por política do sistema
+  return res.status(403).json({ erro: 'Exclusão de RDOs do projeto desativada.' });
   try {
     const { projetoId } = req.params;
 

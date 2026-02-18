@@ -28,6 +28,13 @@ function RNC() {
     return s || 'N/A';
   };
 
+  const statusColor = (s) => {
+    // Consistência visual com RDO: Em aprovação (amarelo), Encerrada (verde), Aberta/Em andamento (azul)
+    if (s === 'Encerrada') return '#2E7D32';
+    if (s === 'Em análise') return '#F9A825';
+    return '#2962FF';
+  };
+
   // Aprovação foi movida para a tela de detalhes (RNCDetalhes)
 
   useEffect(() => {
@@ -96,28 +103,26 @@ function RNC() {
             </p>
           </div>
         ) : (
-          <div style={{ display: 'grid', gap: '16px' }}>
+          <div style={{ display: 'grid', gap: '20px', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))' }}>
             {rncs.map(rnc => (
               <div key={rnc.id} className="card" style={{ padding: '20px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
                   <div>
-                    <h3 style={{ marginBottom: '8px' }}>
+                    <h3 style={{ marginBottom: '6px' }}>
                       {rnc.titulo || `RNC #${rnc.id}`}
                     </h3>
-                    <div style={{ display: 'flex', gap: '16px', fontSize: '14px', color: 'var(--gray-600)' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', fontSize: '14px', color: 'var(--gray-600)' }}>
                       <span>Data: {formatLocalDate(rnc.data_criacao)}</span>
                       <span>Prevista: {formatLocalDate(rnc.data_prevista_encerramento)}</span>
-                      <span>Status: {statusLabel(rnc.status)}</span>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center', justifyContent: 'flex-end' }}>
                     <span style={{
                       padding: '6px 10px',
-                      background: rnc.status === 'Em análise' ? '#2962FF' : (rnc.status === 'Encerrada' ? '#2E7D32' : '#F9A825'),
+                      background: statusColor(rnc.status),
                       color: 'white',
                       borderRadius: '16px',
-                      fontSize: '12px',
-                      alignSelf: 'center'
+                      fontSize: '12px'
                     }}>
                       {statusLabel(rnc.status)}
                     </span>
@@ -126,7 +131,7 @@ function RNC() {
                       onClick={() => navigate(`/projeto/${projetoId}/rnc/${rnc.id}`)}
                       title="Ver detalhes"
                     >
-                      <Eye size={16} />
+                      <Eye size={16} /> Detalhes
                     </button>
                     <button
                       className="btn btn-primary"

@@ -3,13 +3,16 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { createRNC, getUsuarios, getRDOs } from '../services/api';
 import { ArrowLeft, Save } from 'lucide-react';
+import { useNotification } from '../context/NotificationContext';
 
 function RNCForm() {
   const { projetoId } = useParams();
   const navigate = useNavigate();
+  const { success, error: notifyError } = useNotification();
   const [loading, setLoading] = useState(false);
   const [usuarios, setUsuarios] = useState([]);
   const [rdos, setRdos] = useState([]);
+  const [erro, setErro] = useState('');
   const [formData, setFormData] = useState({
     titulo: '',
     descricao: '',
@@ -44,6 +47,7 @@ function RNCForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setErro('');
 
     try {
       const dataToSend = {
@@ -54,10 +58,13 @@ function RNCForm() {
       };
 
       await createRNC(dataToSend);
+      success('RNC criada com sucesso!');
       navigate(`/projeto/${projetoId}/rnc`);
     } catch (error) {
       console.error('Erro ao criar RNC:', error);
-      alert('Erro ao criar RNC: ' + (error.response?.data?.erro || error.message));
+      const msg = error.response?.data?.erro || error.message || 'Erro ao criar RNC.';
+      setErro(msg);
+      notifyError(msg);
     } finally {
       setLoading(false);
     }
@@ -81,78 +88,70 @@ function RNCForm() {
           </button>
           <h1>Nova RNC</h1>
         </div>
+        {erro && <div className="alert alert-error" style={{ marginBottom: '16px' }}>{erro}</div>}
 
-        <div className="card" style={{ padding: '24px', maxWidth: '600px' }}>
+        <div className="card" style={{ padding: '24px' }}>
           <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                Título *
-              </label>
+            <div className="form-group">
+              <label className="form-label">Título</label>
               <input
+                className="form-input"
                 type="text"
                 name="titulo"
                 value={formData.titulo}
                 onChange={handleChange}
                 required
-                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                placeholder="Ex.: Falha de execução em estacas"
               />
             </div>
 
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                Descrição *
-              </label>
+            <div className="form-group">
+              <label className="form-label">Descrição</label>
               <textarea
+                className="form-input"
                 name="descricao"
                 value={formData.descricao}
                 onChange={handleChange}
                 rows={5}
                 required
-                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                placeholder="Descreva a não conformidade observada"
               />
             </div>
 
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                Gravidade *
-              </label>
-              <select
-                name="gravidade"
-                value={formData.gravidade}
-                onChange={handleChange}
-                required
-                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-              >
-                <option value="Baixa">Baixa</option>
-                <option value="Média">Média</option>
-                <option value="Alta">Alta</option>
-                <option value="Crítica">Crítica</option>
-              </select>
-            </div>
-
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                  Data prevista para encerramento *
-                </label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+              <div className="form-group">
+                <label className="form-label">Gravidade</label>
+                <select
+                  className="form-input"
+                  name="gravidade"
+                  value={formData.gravidade}
+                  onChange={handleChange}
+                  required
+                >
+                  <option value="Baixa">Baixa</option>
+                  <option value="Média">Média</option>
+                  <option value="Alta">Alta</option>
+                  <option value="Crítica">Crítica</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Data prevista para encerramento</label>
                 <input
+                  className="form-input"
                   type="date"
                   name="data_prevista_encerramento"
                   value={formData.data_prevista_encerramento}
                   onChange={handleChange}
                   required
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
                 />
               </div>
-
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                  Origem
-                </label>
+              <div className="form-group">
+                <label className="form-label">Origem</label>
                 <select
+                  className="form-input"
                   name="origem"
                   value={formData.origem}
                   onChange={handleChange}
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
                 >
                   <option value="Execução">Execução</option>
                   <option value="Projeto">Projeto</option>
@@ -162,99 +161,86 @@ function RNCForm() {
                   <option value="Administrativo">Administrativo</option>
                 </select>
               </div>
-
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                  Área/Local afetado
-                </label>
-                <input
-                  type="text"
-                  name="area_afetada"
-                  value={formData.area_afetada}
+              <div className="form-group">
+                <label className="form-label">Responsável</label>
+                <select
+                  className="form-input"
+                  name="responsavel_id"
+                  value={formData.responsavel_id}
                   onChange={handleChange}
-                  placeholder="Ex.: Bloco A - Pavimento 2"
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-                />
+                >
+                  <option value="">Selecione um responsável</option>
+                  {usuarios.map((usuario) => (
+                    <option key={usuario.id} value={usuario.id}>
+                      {usuario.nome}
+                    </option>
+                  ))}
+                </select>
               </div>
-
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                  Norma/Referência aplicável
-                </label>
-                <input
-                  type="text"
-                  name="norma_referencia"
-                  value={formData.norma_referencia}
+              <div className="form-group">
+                <label className="form-label">RDO Relacionado</label>
+                <select
+                  className="form-input"
+                  name="rdo_id"
+                  value={formData.rdo_id}
                   onChange={handleChange}
-                  placeholder="Ex.: NR-18, Projeto Executivo v3"
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-                />
+                >
+                  <option value="">Selecione um RDO</option>
+                  {rdos.map((rdo) => (
+                    <option key={rdo.id} value={rdo.id}>
+                      {rdo.data_relatorio} - {rdo.dia_semana}
+                    </option>
+                  ))}
+                </select>
               </div>
+            </div>
 
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                  Registros fotográficos
-                </label>
-                <textarea
-                  name="registros_fotograficos"
-                  value={formData.registros_fotograficos}
-                  onChange={handleChange}
-                  rows={3}
-                  placeholder="Links ou descrição dos registros fotográficos relacionados"
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-                />
-              </div>
+            <div className="form-group">
+              <label className="form-label">Área/Local afetado</label>
+              <input
+                className="form-input"
+                type="text"
+                name="area_afetada"
+                value={formData.area_afetada}
+                onChange={handleChange}
+                placeholder="Ex.: Bloco A - Pavimento 2"
+              />
+            </div>
 
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                Ação Corretiva
-              </label>
+            <div className="form-group">
+              <label className="form-label">Norma/Referência aplicável</label>
+              <input
+                className="form-input"
+                type="text"
+                name="norma_referencia"
+                value={formData.norma_referencia}
+                onChange={handleChange}
+                placeholder="Ex.: NR-18, Projeto Executivo v3"
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Registros fotográficos</label>
               <textarea
+                className="form-input"
+                name="registros_fotograficos"
+                value={formData.registros_fotograficos}
+                onChange={handleChange}
+                rows={3}
+                placeholder="Links ou descrição dos registros fotográficos relacionados"
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Ação Corretiva</label>
+              <textarea
+                className="form-input"
                 name="acao_corretiva"
                 value={formData.acao_corretiva}
                 onChange={handleChange}
                 rows={3}
-                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
                 placeholder="Descreva a ação corretiva proposta"
               />
-            </div>
-
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                Responsável
-              </label>
-              <select
-                name="responsavel_id"
-                value={formData.responsavel_id}
-                onChange={handleChange}
-                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-              >
-                <option value="">Selecione um responsável</option>
-                {usuarios.map((usuario) => (
-                  <option key={usuario.id} value={usuario.id}>
-                    {usuario.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div style={{ marginBottom: '24px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                RDO Relacionado
-              </label>
-              <select
-                name="rdo_id"
-                value={formData.rdo_id}
-                onChange={handleChange}
-                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-              >
-                <option value="">Selecione um RDO (opcional)</option>
-                {rdos.map((rdo) => (
-                  <option key={rdo.id} value={rdo.id}>
-                    {rdo.data_relatorio} - {rdo.dia_semana}
-                  </option>
-                ))}
-              </select>
             </div>
 
             <div style={{ display: 'flex', gap: '8px' }}>

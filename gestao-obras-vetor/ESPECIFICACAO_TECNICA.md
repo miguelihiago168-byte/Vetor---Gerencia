@@ -1483,3 +1483,18 @@ Este documento apresenta a especificação técnica completa do sistema **Gestã
 **Documentação criada em:** 10 de dezembro de 2025  
 **Versão:** 1.0.0  
 **Sistema:** Gestão de Obras - Vetor
+
+---
+
+## 🔒 Regras de Integridade Projeto–EAP–RDO (Atualização 2026-02-17)
+
+### Regras
+- EAP requer Projeto: `atividades_eap.projeto_id` obrigatório com FK para `projetos(id)`.
+- RDO requer EAP: bloqueia criação de `rdos` quando o projeto não possui nenhuma atividade EAP.
+- RDO precisa de atividades para avançar: mudança de `status` para além de `Em preenchimento` é bloqueada se não houver registros em `rdo_atividades`.
+- Consistência de projeto: `rdo_atividades(atividade_eap_id)` deve pertencer ao mesmo `projeto_id` do `rdos(rdo_id)`.
+
+### Implementação Técnica
+- Banco (SQLite): triggers `trg_rdos_require_eap_on_project`, `trg_rdo_atividades_project_consistency`, `trg_rdo_atividades_project_consistency_upd`, `trg_rdos_status_require_atividade`.
+- API (Express): validações em `POST /api/rdos` exigindo EAP e atividades; `PATCH /api/rdos/:id/status` impedindo avanço sem atividades.
+- Índices: adicionados para performance em `atividades_eap(projeto_id,pai_id)`, `rdos(projeto_id,data_relatorio)`, `rdo_atividades(rdo_id)` e `rdo_atividades(atividade_eap_id)`.

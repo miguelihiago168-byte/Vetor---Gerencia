@@ -4,11 +4,13 @@ import Navbar from '../components/Navbar';
 import { getRDOs, deleteRDO, deleteRDOsProjetoTodos, recalcularEapProjeto, getRdoPDF } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { FileText, Download, Plus, Eye, Trash2 } from 'lucide-react';
+import { useNotification } from '../context/NotificationContext';
 
 function RDOs() {
   const { projetoId } = useParams();
   const navigate = useNavigate();
   const { isGestor } = useAuth();
+  const { info, warning, actionNotify } = useNotification();
   const [sucesso, setSucesso] = useState('');
     const formatLocalDate = (dstr) => {
       if (!dstr) return 'N/A';
@@ -66,6 +68,23 @@ function RDOs() {
     }
   };
 
+  const handleVoltarEdicao = async (rdoId, e) => {
+    if (e) e.stopPropagation();
+    if (!isGestor) {
+      alert('Apenas gestores podem voltar o RDO para edição.');
+      return;
+    }
+    try {
+      const { updateStatusRDO } = await import('../services/api');
+      await updateStatusRDO(rdoId, 'Em preenchimento');
+      setRdos(prev => prev.map(r => r.id === rdoId ? { ...r, status: 'Em preenchimento' } : r));
+      setSucesso('RDO revertido para edição.');
+      navigate(`/projeto/${projetoId}/rdos/${rdoId}/editar`);
+    } catch (error) {
+      alert('Falha ao voltar para edição: ' + (error.response?.data?.erro || error.message));
+    }
+  };
+
   const handleDownloadPDF = async (rdoId, e) => {
     if (e) e.stopPropagation();
     try {
@@ -86,32 +105,14 @@ function RDOs() {
 
   const handleDeleteRDO = async (rdoId, e) => {
     if (e) e.stopPropagation();
-    if (!window.confirm('Tem certeza que deseja excluir este RDO? Essa ação não pode ser desfeita.')) return;
-    try {
-      await deleteRDO(rdoId);
-      setSucesso('RDO excluído com sucesso.');
-      setRdos(prev => prev.filter(r => r.id !== rdoId));
-    } catch (error) {
-      alert('Erro ao excluir RDO: ' + (error.response?.data?.erro || error.message));
-    }
+    alert('A exclusão de RDO está desativada pelo sistema.');
+    return;
   };
 
   const handleDeleteTodos = async () => {
     if (!isGestor) return;
-    if (!window.confirm('Gestor: deseja realmente excluir TODOS os RDOs deste projeto e reverter o avanço? Esta ação não pode ser desfeita.')) return;
-    try {
-      const resp = await deleteRDOsProjetoTodos(projetoId);
-      alert(resp.data?.mensagem || 'RDOs excluídos.');
-      setRdos([]);
-      try {
-        const rec = await recalcularEapProjeto(projetoId);
-        console.log(rec.data);
-      } catch (err) {
-        console.warn('Falha ao recalcular EAP após apagar todos os RDOs:', err);
-      }
-    } catch (error) {
-      alert('Erro ao excluir todos os RDOs: ' + (error.response?.data?.erro || error.message));
-    }
+    alert('A exclusão de RDOs do projeto está desativada.');
+    return;
   };
 
   if (loading) {
@@ -137,7 +138,7 @@ function RDOs() {
             Novo RDO
           </button>
           {isGestor && (
-            <button className="btn btn-danger" onClick={handleDeleteTodos} title="Excluir todos os RDOs do projeto">
+            <button className="btn btn-danger" disabled title="Exclusão desativada">
               <Trash2 size={16} /> Apagar todos
             </button>
           )}
@@ -173,9 +174,19 @@ function RDOs() {
               <div
                 key={rdo.id}
                 className="card"
-                style={{ padding: '20px', cursor: 'pointer' }}
-                onClick={() => navigate(`/projeto/${projetoId}/rdos/${rdo.id}/editar`)}
-                title="Editar RDO"
+                style={{ padding: '20px', cursor: rdo.status === 'Aprovado' ? 'default' : 'pointer' }}
+                onClick={() => {
+                  if (rdo.status === 'Aprovado') {
+                    if (isGestor) {
+                      actionNotify('RDO aprovado. Deseja voltar para edição?', 'Voltar para edição', () => handleVoltarEdicao(rdo.id), 'warning', 7000);
+                    } else {
+                      info('RDO aprovado. Solicite ao gestor para voltar à edição.', 6000);
+                    }
+                    return;
+                  }
+                  navigate(`/projeto/${projetoId}/rdos/${rdo.id}/editar`);
+                }}
+                title={rdo.status === 'Aprovado' ? 'RDO aprovado' : 'Editar RDO'}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
@@ -230,10 +241,19 @@ function RDOs() {
                       <Download size={16} />
                       PDF
                     </button>
+                    {isGestor && rdo.status === 'Aprovado' && (
+                      <button
+                        className="btn btn-warning"
+                        onClick={(e) => handleVoltarEdicao(rdo.id, e)}
+                        title="Voltar para edição"
+                      >
+                        Voltar para edição
+                      </button>
+                    )}
                     <button
                       className="btn btn-danger"
-                      onClick={(e) => handleDeleteRDO(rdo.id, e)}
-                      title="Excluir RDO"
+                      disabled
+                      title="Exclusão desativada"
                     >
                       <Trash2 size={16} />
                     </button>

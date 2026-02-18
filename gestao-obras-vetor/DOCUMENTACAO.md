@@ -42,6 +42,17 @@ Boas práticas e próximos passos sugeridos
 - Melhorar feedback visual para ações longas (upload de fotos / assinaturas) com skeletons ou toasts.
 - Implementar testes automatizados (e2e com Playwright ou Cypress) cobrindo criação de RDO e fluxo de assinatura.
 
+Regras de Integridade (Projeto ↔ EAP ↔ RDO)
+- EAP requer Projeto: `atividades_eap.projeto_id` é obrigatório (FK com `ON DELETE CASCADE`).
+- RDO requer EAP: criação de RDO é bloqueada se o projeto não tiver nenhuma atividade EAP.
+- RDO deve conter atividades: não é permitido alterar status de um RDO sem atividades vinculadas.
+- Consistência de Projeto: cada `rdo_atividades` deve referenciar uma `atividade_eap` do mesmo `projeto_id` do RDO.
+
+Implementação técnica
+- Banco: triggers SQLite garantem as regras acima.
+- API: validações adicionais em `POST /api/rdos` e `PATCH /api/rdos/:id/status` reforçam a integridade.
+- Índices: adicionados em `atividades_eap(projeto_id,pai_id)`, `rdos(projeto_id,data_relatorio)` e `rdo_atividades(rdo_id, atividade_eap_id)` para consultas e relatórios.
+
 Se desejar, posso:
 - Gerar screenshots automáticos das telas (usando Puppeteer) para documentação visual.
 - Criar `docker-compose.yml` para facilitar execução local.
