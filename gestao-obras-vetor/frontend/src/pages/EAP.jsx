@@ -1,29 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getAtividadesEAP, createAtividade, updateAtividade, deleteAtividade, getHistoricoAtividade } from '../services/api';
-import { Plus, Edit, Trash2, ChevronRight, ChevronDown, History } from 'lucide-react';
+import { getAtividadesEAP, recalcularEapProjeto } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { Activity, Plus, Eye, ChevronRight, ChevronDown } from 'lucide-react';
 
 function EAP() {
   const { projetoId } = useParams();
+  const navigate = useNavigate();
+  const { isGestor } = useAuth();
   const [atividades, setAtividades] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [showHistorico, setShowHistorico] = useState(false);
-  const [historico, setHistorico] = useState([]);
-  const [editando, setEditando] = useState(null);
-  const [expandidos, setExpandidos] = useState({});
-  const [formData, setFormData] = useState({
-    codigo_eap: '',
-    descricao: '',
-    percentual_previsto: 0,
-    pai_id: null,
-    eh_atividade_principal: false,
-    unidade_medida: '',
-    quantidade_total: 0
-  });
   const [erro, setErro] = useState('');
-  const [sucesso, setSucesso] = useState('');
+  const [expandedItems, setExpandedItems] = useState(new Set());
 
   useEffect(() => {
     carregarAtividades();
@@ -31,490 +20,223 @@ function EAP() {
 
   const carregarAtividades = async () => {
     try {
+      setLoading(true);
+      console.log('Carregando EAP para projeto:', projetoId);
       const response = await getAtividadesEAP(projetoId);
-      setAtividades(response.data);
+      console.log('EAP carregada:', response.data);
+      setAtividades(response.data || []);
     } catch (error) {
-      setErro('Erro ao carregar atividades.');
+      console.error('Erro ao carregar EAP:', error);
+      setErro('Erro ao carregar EAP: ' + (error.response?.data?.erro || error.message));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setErro('');
-    setSucesso('');
-
-    try {
-      const dados = {
-        ...formData,
-        projeto_id: parseInt(projetoId),
-        ordem: atividades.length
-      };
-
-      if (editando) {
-        await updateAtividade(editando.id, dados);
-        setSucesso('Atividade atualizada com sucesso!');
-      } else {
-        await createAtividade(dados);
-        setSucesso('Atividade criada com sucesso!');
-      }
-      
-      await carregarAtividades();
-      fecharModal();
-      setTimeout(() => setSucesso(''), 3000);
-    } catch (error) {
-      setErro(error.response?.data?.erro || 'Erro ao salvar atividade.');
-    }
-  };
-
-  const abrirModal = (atividade = null) => {
-    if (atividade) {
-      setEditando(atividade);
-      setFormData({
-        codigo_eap: atividade.codigo_eap,
-        descricao: atividade.descricao,
-        percentual_previsto: atividade.percentual_previsto,
-        pai_id: atividade.pai_id,
-        eh_atividade_principal: !atividade.pai_id,
-        unidade_medida: atividade.unidade_medida || '',
-        quantidade_total: atividade.quantidade_total || 0
-      });
+  const toggleExpanded = (id) => {
+    const newExpanded = new Set(expandedItems);
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id);
     } else {
-      setEditando(null);
-      setFormData({
-        codigo_eap: '',
-        descricao: '',
-        percentual_previsto: 0,
-        pai_id: null,
-        eh_atividade_principal: true,
-        unidade_medida: '',
-        quantidade_total: 0
-      });
+      newExpanded.add(id);
     }
-    setShowModal(true);
+    setExpandedItems(newExpanded);
   };
 
-  const fecharModal = () => {
-    setShowModal(false);
-    setEditando(null);
-    setErro('');
-  };
+  const buildHierarchy = (atividades) => {
+    const byId = {};
+    const roots = [];
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Deseja realmente deletar esta atividade? Isso afetará sub-atividades e RDOs vinculados.')) return;
-
-    try {
-      await deleteAtividade(id);
-      setSucesso('Atividade deletada com sucesso!');
-      await carregarAtividades();
-      setTimeout(() => setSucesso(''), 3000);
-    } catch (error) {
-      setErro('Erro ao deletar atividade.');
-    }
-  };
-
-  const vincularSubAtividade = (atividade) => {
-    // Abre modal para criar sub-atividade já vinculada à atividade fornecida
-    setEditando(null);
-    setFormData({
-      codigo_eap: '',
-      descricao: '',
-      percentual_previsto: 0,
-      pai_id: atividade.id,
-      eh_atividade_principal: false,
-      unidade_medida: '',
-      quantidade_total: 0
+    // Indexar todas as atividades por ID
+    atividades.forEach(atividade => {
+      byId[atividade.id] = { ...atividade, children: [] };
     });
-    setShowModal(true);
+
+    // Construir hierarquia
+    atividades.forEach(atividade => {
+      if (atividade.pai_id) {
+        if (byId[atividade.pai_id]) {
+          byId[atividade.pai_id].children.push(byId[atividade.id]);
+        }
+      } else {
+        roots.push(byId[atividade.id]);
+      }
+    });
+
+    // Ordenar raízes por código EAP (numérico)
+    roots.sort((a, b) => {
+      const aNum = parseFloat(a.codigo_eap) || 0;
+      const bNum = parseFloat(b.codigo_eap) || 0;
+      return aNum - bNum;
+    });
+
+    // Ordenar filhos recursivamente por código EAP (numérico)
+    const ordenarFilhos = (atividade) => {
+      if (atividade.children && atividade.children.length > 0) {
+        atividade.children.sort((a, b) => {
+          const aNum = parseFloat(a.codigo_eap) || 0;
+          const bNum = parseFloat(b.codigo_eap) || 0;
+          return aNum - bNum;
+        });
+        atividade.children.forEach(ordenarFilhos);
+      }
+    };
+
+    roots.forEach(ordenarFilhos);
+
+    return roots;
   };
 
-  const verHistorico = async (atividadeId) => {
-    try {
-      const response = await getHistoricoAtividade(atividadeId);
-      setHistorico(response.data);
-      setShowHistorico(true);
-    } catch (error) {
-      setErro('Erro ao carregar histórico.');
-    }
-  };
-
-  const toggleExpand = (id) => {
-    setExpandidos(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  const getCorStatus = (status) => {
-    switch (status) {
-      case 'Concluída': return 'var(--success)';
-      case 'Em andamento': return 'var(--warning)';
-      default: return 'var(--secondary)';
-    }
-  };
-
-  const renderAtividade = (atividade, nivel = 0) => {
-    const filhos = atividades.filter(a => a.pai_id === atividade.id);
-    const temFilhos = filhos.length > 0;
-    const expandido = expandidos[atividade.id];
+  const renderAtividade = (atividade, level = 0) => {
+    const hasChildren = atividade.children && atividade.children.length > 0;
+    const isExpanded = expandedItems.has(atividade.id);
 
     return (
       <div key={atividade.id}>
-            <div style={{
-              backgroundColor: !atividade.pai_id ? 'linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%)' : 'white',
-              padding: '12px',
-              borderLeft: `4px solid ${getCorStatus(atividade.status)}`,
-              marginBottom: '8px',
-              borderRadius: '8px',
-              marginLeft: `${nivel * 32}px`,
-              boxShadow: 'var(--shadow-soft)'
-            }}>
-              <div className="flex-between">
-                <div style={{ flex: 1 }}>
-                  <div className="flex" style={{ alignItems: 'center', gap: '12px' }}>
-                    {temFilhos && (
-                      <button
-                        onClick={() => toggleExpand(atividade.id)}
-                        style={{
-                          border: 'none',
-                          background: 'none',
-                          cursor: 'pointer',
-                          padding: '4px'
-                        }}
-                      >
-                        {expandido ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
-                      </button>
-                    )}
-                    
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '4px' }}>
-                        <strong style={{ fontSize: '16px', color: 'var(--primary)' }}>
-                          {atividade.codigo_eap}
-                        </strong>
-                        <span style={{ fontSize: '14px', fontWeight: !atividade.pai_id ? '700' : '500' }}>{atividade.descricao}</span>
-                        {!atividade.pai_id && <span className="badge badge-blue">Principal</span>}
-                        <span className={
-                          atividade.status === 'Concluída' ? 'badge badge-green' :
-                          atividade.status === 'Em andamento' ? 'badge badge-yellow' :
-                          'badge badge-gray'
-                        }>
-                          {atividade.status}
-                        </span>
-                      </div>
-                      
-                      <div style={{ fontSize: '13px', color: 'var(--gray-600)' }}>
-                        {atividade.percentual_previsto > 0 && (
-                          <>Previsto: {atividade.percentual_previsto}% | </>
-                        )}
-                        Executado: <strong style={{ color: getCorStatus(atividade.status) }}>
-                          {atividade.percentual_executado?.toFixed(1)}%
-                        </strong>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-            <div className="flex gap-1">
-              <button
-                onClick={() => verHistorico(atividade.id)}
-                className="btn btn-secondary"
-                style={{ padding: '6px 12px' }}
-                title="Ver histórico"
-              >
-                <History size={16} />
-              </button>
-              { !atividade.pai_id && (
+        <div 
+          className="card" 
+          style={{ 
+            padding: '15px', 
+            marginBottom: '8px',
+            marginLeft: `${level * 20}px`,
+            borderLeft: `4px solid ${getStatusColor(atividade.status)}`
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+              {hasChildren && (
                 <button
-                  onClick={() => vincularSubAtividade(atividade)}
-                  className="btn btn-primary"
-                  style={{ padding: '6px 12px' }}
-                  title="Vincular sub-atividade"
+                  onClick={() => toggleExpanded(atividade.id)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
                 >
-                  <Plus size={16} />
+                  {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                 </button>
               )}
+              {!hasChildren && <div style={{ width: '20px' }}></div>}
+              
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+                  <strong>{atividade.codigo_eap}</strong>
+                  <span style={{ fontSize: '14px', color: 'var(--gray-600)' }}>
+                    {atividade.descricao}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '15px', fontSize: '13px', color: 'var(--gray-600)' }}>
+                  {/* Para atividades mãe, não exibir previsto */}
+                  {!hasChildren && (
+                    <span>Previsto: {atividade.quantidade_total || 0} {atividade.unidade_medida || ''}</span>
+                  )}
+                  <span>Executado: {atividade.percentual_executado || 0}%</span>
+                  <span>Status: {atividade.status}</span>
+                </div>
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', gap: '8px' }}>
               <button
-                onClick={() => abrirModal(atividade)}
                 className="btn btn-secondary"
-                style={{ padding: '6px 12px' }}
+                onClick={() => navigate(`/projeto/${projetoId}/eap/${atividade.id}`)}
+                title="Editar"
               >
-                <Edit size={16} />
+                <Eye size={16} />
               </button>
               <button
-                onClick={() => handleDelete(atividade.id)}
-                className="btn btn-danger"
-                style={{ padding: '6px 12px' }}
+                className="btn btn-outline"
+                onClick={() => navigate(`/projeto/${projetoId}/eap/novo?pai=${atividade.id}`)}
+                title="Adicionar filha"
               >
-                <Trash2 size={16} />
+                +
               </button>
             </div>
           </div>
-
+          
           {/* Barra de progresso */}
-          <div style={{
-            marginTop: '8px',
-            height: '8px',
-            backgroundColor: 'var(--gray-200)',
-            borderRadius: '4px',
-            overflow: 'hidden'
-          }}>
-            <div style={{
-              height: '100%',
-              width: `${Math.min(atividade.percentual_executado || 0, 100)}%`,
-              backgroundColor: getCorStatus(atividade.status),
-              transition: 'width 0.3s'
-            }} />
+          <div style={{ marginTop: '10px' }}>
+            <div className="progress-bar" style={{ height: '6px' }}>
+              <div 
+                className="progress-fill"
+                style={{ 
+                  width: `${atividade.percentual_executado || 0}%`,
+                  backgroundColor: getStatusColor(atividade.status)
+                }}
+              ></div>
+            </div>
           </div>
         </div>
-
+        
         {/* Renderizar filhos se expandido */}
-        {temFilhos && expandido && filhos.map(filho => renderAtividade(filho, nivel + 1))}
+        {hasChildren && isExpanded && (
+          <div>
+            {atividade.children.map(child => renderAtividade(child, level + 1))}
+          </div>
+        )}
       </div>
     );
   };
 
-  const atividadesRaiz = atividades.filter(a => !a.pai_id);
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'Concluída': return '#4CAF50';
+      case 'Em andamento': return '#2196F3';
+      case 'Não iniciada': return '#FF9800';
+      default: return '#9E9E9E';
+    }
+  };
 
   if (loading) {
     return (
       <>
         <Navbar />
-        <div className="loading"><div className="spinner"></div></div>
+        <div className="container" style={{ textAlign: 'center', padding: '40px' }}>
+          <div className="spinner"></div>
+        </div>
       </>
     );
   }
 
+  const hierarchy = buildHierarchy(atividades);
+
   return (
     <>
       <Navbar />
-      <div className="container">
-        <div className="flex-between mb-4">
-          <h1>📊 Estrutura Analítica do Projeto (EAP)</h1>
-          <button onClick={() => abrirModal()} className="btn btn-primary">
-            <Plus size={20} />
-            Nova Atividade
-          </button>
-        </div>
-
-        {sucesso && <div className="alert alert-success">{sucesso}</div>}
-        {erro && <div className="alert alert-error">{erro}</div>}
-
-        <div className="card">
-          {atividadesRaiz.length === 0 ? (
-            <div className="text-center" style={{ padding: '60px' }}>
-              <h3 style={{ color: 'var(--gray-500)' }}>Nenhuma atividade cadastrada</h3>
-              <p style={{ color: 'var(--gray-400)', marginTop: '8px' }}>
-                Clique em "Nova Atividade" para começar
-              </p>
-            </div>
-          ) : (
-            atividadesRaiz.map(atividade => renderAtividade(atividade))
-          )}
-        </div>
-
-        {/* Modal de Atividade */}
-        {showModal && (
-          <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000
-          }}>
-            <div style={{
-              backgroundColor: 'white',
-              borderRadius: '8px',
-              padding: '32px',
-              maxWidth: '500px',
-              width: '90%'
-            }}>
-              <h2 className="mb-3">{editando ? 'Editar Atividade' : 'Nova Atividade'}</h2>
-              <p className="eyebrow" style={{ marginBottom: '16px' }}>
-                {formData.eh_atividade_principal ? '📁 Atividade Principal (Categoria)' : '📋 Sub-atividade (Com percentual)'}
-              </p>
-
-              {erro && <div className="alert alert-error mb-3">{erro}</div>}
-
-              <form onSubmit={handleSubmit}>
-                <div className="form-group">
-                  <label className="form-label">Código EAP * <small style={{color: 'var(--gray-500)'}}>Ex: 1.0 (principal), 1.1 (sub)</small></label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={formData.codigo_eap}
-                    onChange={(e) => setFormData({ ...formData, codigo_eap: e.target.value })}
-                    placeholder="Ex: 1.0, 1.1, 2.0"
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Descrição * <small style={{color: 'var(--gray-500)'}}>Nome da atividade</small></label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={formData.descricao}
-                    onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
-                    placeholder="Ex: Documentação, Elétrica, Escavação"
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <input
-                      type="checkbox"
-                      checked={formData.eh_atividade_principal}
-                      onChange={(e) => setFormData({ ...formData, eh_atividade_principal: e.target.checked, pai_id: null, percentual_previsto: e.target.checked ? 0 : formData.percentual_previsto })}
-                    />
-                    <span className="form-label" style={{ margin: 0 }}>Atividade Principal (sem percentual)</span>
-                  </label>
-                </div>
-
-                {!formData.eh_atividade_principal && (
-                  <>
-                    <div className="form-group">
-                      <label className="form-label">Atividade Pai (principal) *</label>
-                      <select
-                        className="form-select"
-                        value={formData.pai_id || ''}
-                        onChange={(e) => setFormData({ ...formData, pai_id: e.target.value ? parseInt(e.target.value) : null })}
-                        required
-                      >
-                        <option value="">Selecione atividade principal</option>
-                        {atividades.filter(a => !a.pai_id).map(atividade => (
-                          <option key={atividade.id} value={atividade.id}>
-                            {atividade.codigo_eap} - {atividade.descricao}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">Percentual Previsto (%) *</label>
-                      <input
-                        type="number"
-                        className="form-input"
-                        value={formData.percentual_previsto}
-                        onChange={(e) => setFormData({ ...formData, percentual_previsto: parseFloat(e.target.value) })}
-                        min="0"
-                        max="100"
-                        step="0.1"
-                        required
-                      />
-                    </div>
-
-                    <div className="grid grid-2">
-                      <div className="form-group">
-                        <label className="form-label">Unidade de Medida * <small style={{color: 'var(--gray-500)'}}>Ex: estacas, m², kg</small></label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          value={formData.unidade_medida}
-                          onChange={(e) => setFormData({ ...formData, unidade_medida: e.target.value })}
-                          placeholder="estacas"
-                          required
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Quantidade Total * <small style={{color: 'var(--gray-500)'}}>Ex: 559</small></label>
-                        <input
-                          type="number"
-                          className="form-input"
-                          value={formData.quantidade_total}
-                          onChange={(e) => setFormData({ ...formData, quantidade_total: parseFloat(e.target.value) })}
-                          min="0"
-                          step="0.1"
-                          required
-                        />
-                      </div>
-                    </div>
-                  </>
-                )}
-
-                <div className="flex gap-2 mt-4">
-                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
-                    {editando ? 'Atualizar' : 'Criar'}
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={fecharModal} 
-                    className="btn btn-secondary"
-                    style={{ flex: 1 }}
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Modal de Histórico */}
-        {showHistorico && (
-          <div style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000
-          }}>
-            <div style={{
-              backgroundColor: 'white',
-              borderRadius: '8px',
-              padding: '32px',
-              maxWidth: '700px',
-              width: '90%',
-              maxHeight: '80vh',
-              overflow: 'auto'
-            }}>
-              <h2 className="mb-3">📋 Histórico de Execuções</h2>
-
-              {historico.length === 0 ? (
-                <p className="text-center" style={{ padding: '20px', color: 'var(--gray-500)' }}>
-                  Nenhum histórico de execução encontrado.
-                </p>
-              ) : (
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Data</th>
-                      <th>Usuário</th>
-                      <th>% Anterior</th>
-                      <th>% Executado</th>
-                      <th>% Novo</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {historico.map(h => (
-                      <tr key={h.id}>
-                        <td>{new Date(h.data_execucao).toLocaleDateString('pt-BR')}</td>
-                        <td>{h.usuario_nome}</td>
-                        <td>{h.percentual_anterior.toFixed(1)}%</td>
-                        <td><strong>+{h.percentual_executado.toFixed(1)}%</strong></td>
-                        <td><strong>{h.percentual_novo.toFixed(1)}%</strong></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-
-              <button 
-                onClick={() => setShowHistorico(false)} 
-                className="btn btn-secondary mt-3"
-                style={{ width: '100%' }}
-              >
-                Fechar
+      <div className="container" style={{ paddingTop: '24px', paddingBottom: '40px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+          <h1>EAP do Projeto</h1>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button className="btn btn-primary" onClick={() => navigate(`/projeto/${projetoId}/eap/novo`)}>
+              <Plus size={16} />
+              Nova Atividade
+            </button>
+            {isGestor && (
+              <button className="btn btn-secondary" onClick={async () => {
+                if (!window.confirm('Recalcular avanço da EAP para este projeto?')) return;
+                try {
+                  const resp = await recalcularEapProjeto(projetoId);
+                  alert(resp.data?.mensagem || 'EAP recalculada.');
+                  carregarAtividades();
+                } catch (error) {
+                  alert('Erro ao recalcular EAP: ' + (error.response?.data?.erro || error.message));
+                }
+              }}>
+                Recalcular EAP
               </button>
-            </div>
+            )}
+          </div>
+        </div>
+
+        {erro && <div className="alert alert-error" style={{ marginBottom: '16px' }}>{erro}</div>}
+
+        {hierarchy.length === 0 ? (
+          <div className="card text-center" style={{ padding: '60px' }}>
+            <Activity size={48} style={{ color: 'var(--gray-400)', marginBottom: '16px' }} />
+            <h3 style={{ color: 'var(--gray-500)' }}>Nenhuma atividade encontrada</h3>
+            <p style={{ color: 'var(--gray-400)', marginTop: '8px' }}>
+              Crie a primeira atividade para este projeto.
+            </p>
+          </div>
+        ) : (
+          <div>
+            {hierarchy.map(atividade => renderAtividade(atividade))}
           </div>
         )}
       </div>

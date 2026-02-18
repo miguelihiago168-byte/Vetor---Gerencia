@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getUsuarios, getUsuario, createUsuario, updateUsuario, updateUsuarioGestor, deleteUsuario, getNovoLogin, getProjetos } from '../services/api';
+import { getUsuarios, getUsuario, createUsuario, updateUsuario, updateUsuarioGestor, updateUsuarioAdm, deleteUsuario, getNovoLogin, getProjetos } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Shield, Crown, UserPlus, Trash2 } from 'lucide-react';
+import { Shield, Crown, UserPlus, Trash2, RotateCcw, Eye, EyeOff, UserX } from 'lucide-react';
 
 function Usuarios() {
   const { isGestor } = useAuth();
+  const navigate = useNavigate();
   const [usuarios, setUsuarios] = useState([]);
   const [projetos, setProjetos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -18,9 +20,11 @@ function Usuarios() {
     email: '', 
     senha: '',
     pin: '',
-    is_gestor: 0 
+    is_gestor: 0,
+    is_adm: 0 
   });
   const [loginGerado, setLoginGerado] = useState('');
+  const [showDeletedUsers, setShowDeletedUsers] = useState(false);
 
   useEffect(() => {
     const carregar = async () => {
@@ -42,6 +46,13 @@ function Usuarios() {
     };
     carregar();
   }, []);
+
+  // Gerar login automaticamente quando o modal é aberto
+  useEffect(() => {
+    if (showModal && !editingUserId) {
+      handleGerarLogin();
+    }
+  }, [showModal, editingUserId]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -81,6 +92,7 @@ function Usuarios() {
           nome: formData.nome,
           pin: formData.pin || undefined,
           is_gestor: formData.is_gestor,
+          is_adm: formData.is_adm,
           ativo: formData.ativo
         };
         if (formData.senha && formData.senha.length === 6) payload.senha = formData.senha;
@@ -90,7 +102,7 @@ function Usuarios() {
         setSucesso('Usuário atualizado com sucesso.');
         setShowModal(false);
         setEditingUserId(null);
-        setFormData({ nome: '', email: '', senha: '', pin: '', is_gestor: 0 });
+        setFormData({ nome: '', email: '', senha: '', pin: '', is_gestor: 0, is_adm: 0 });
         setLoginGerado('');
       } else {
         const payload = {
@@ -98,6 +110,7 @@ function Usuarios() {
           senha: formData.senha,
           pin: formData.pin || undefined,
           is_gestor: formData.is_gestor,
+          is_adm: formData.is_adm,
           projeto_id: formData.projeto_id
         };
         if (loginGerado) payload.login = loginGerado;
@@ -112,7 +125,7 @@ function Usuarios() {
         setUsuarios(list.data);
         setSucesso(`Usuário criado com sucesso! Login gerado: ${novo?.login || ''}`);
         setShowModal(false);
-        setFormData({ nome: '', email: '', senha: '', pin: '', is_gestor: 0 });
+        setFormData({ nome: '', email: '', senha: '', pin: '', is_gestor: 0, is_adm: 0 });
         setLoginGerado('');
       }
     } catch (error) {
@@ -126,7 +139,7 @@ function Usuarios() {
         const res = await getUsuario(u.id);
         const dados = res.data;
         setEditingUserId(dados.id);
-        setFormData({ nome: dados.nome || '', email: dados.email || '', senha: '', pin: dados.pin || '', is_gestor: dados.is_gestor ? 1 : 0, ativo: dados.ativo, projeto_id: dados.projeto_id });
+        setFormData({ nome: dados.nome || '', email: dados.email || '', senha: '', pin: dados.pin || '', is_gestor: dados.is_gestor ? 1 : 0, is_adm: dados.is_adm ? 1 : 0, ativo: dados.ativo, projeto_id: dados.projeto_id });
         setLoginGerado(dados.login || '');
         setShowModal(true);
       } catch (err) {
@@ -154,13 +167,35 @@ function Usuarios() {
     }
   };
 
+  const toggleAdm = async (id, atual) => {
+    try {
+      await updateUsuarioAdm(id, atual ? 0 : 1);
+      const res = await getUsuarios();
+      setUsuarios(res.data);
+    } catch (error) {
+      setErro('Erro ao atualizar ADM.');
+    }
+  };
+
   const desativar = async (id) => {
     if (!window.confirm('Deseja desativar este usuário?')) return;
     try {
       await deleteUsuario(id);
       setUsuarios(usuarios.map((u) => u.id === id ? { ...u, ativo: 0 } : u));
+      setSucesso('Usuário desativado com sucesso.');
     } catch (error) {
       setErro('Erro ao desativar usuário.');
+    }
+  };
+
+  const reativar = async (id) => {
+    if (!window.confirm('Deseja reativar este usuário?')) return;
+    try {
+      await updateUsuario(id, { ativo: 1 });
+      setUsuarios(usuarios.map((u) => u.id === id ? { ...u, ativo: 1 } : u));
+      setSucesso('Usuário reativado com sucesso.');
+    } catch (error) {
+      setErro('Erro ao reativar usuário.');
     }
   };
 
@@ -193,21 +228,48 @@ function Usuarios() {
       <div className="container">
         <div className="flex-between mb-3">
           <div>
-            <p className="eyebrow">Equipe</p>
+            <p className="eyebrow">Administração</p>
             <h1 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <Shield size={24} /> Usuários
             </h1>
           </div>
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-            <UserPlus size={18} /> Novo usuário
-          </button>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <button 
+              className="btn btn-outline"
+              onClick={() => navigate('/usuarios-deleted')}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+              title="Ver usuários deletados (soft delete)"
+            >
+              <UserX size={18} />
+              Usuários Deletados
+            </button>
+            <button 
+              className={`btn ${showDeletedUsers ? 'btn-secondary' : 'btn-outline'}`}
+              onClick={() => setShowDeletedUsers(!showDeletedUsers)}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              {showDeletedUsers ? <Eye size={18} /> : <EyeOff size={18} />}
+              {showDeletedUsers ? 'Mostrar ativos' : 'Mostrar desativados'}
+            </button>
+            <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+              <UserPlus size={18} /> Novo usuário
+            </button>
+          </div>
         </div>
 
         {sucesso && <div className="alert alert-success">{sucesso}</div>}
         {erro && <div className="alert alert-error">{erro}</div>}
 
+        {showDeletedUsers && (
+          <div className="alert" style={{ backgroundColor: '#fff3cd', borderLeft: '4px solid #ffc107', marginBottom: '20px', color: '#856404' }}>
+            ⚠️ Mostrando usuários <strong>desativados</strong>. Clique no botão acima para retornar aos usuários ativos.
+          </div>
+        )}
+
         <div className="grid grid-3">
-          {usuarios.map((u) => (
+          {usuarios
+            .filter((u) => showDeletedUsers ? u.ativo === 0 : u.ativo === 1)
+            .map((u) => (
             <div key={u.id} className="card" style={{ border: u.ativo ? '1px solid #e2e8f0' : '1px dashed #fca5a5' }}>
               <div className="flex-between mb-1">
                 <div>
@@ -217,21 +279,39 @@ function Usuarios() {
                   {u.pin && <p style={{ color: 'var(--gray-400)', fontSize: '0.85rem' }}>PIN: {u.pin}</p>}
                   <p style={{ color: 'var(--gray-500)', fontSize: '0.9rem' }}>{u.email || 'sem e-mail'}</p>
                 </div>
-                {u.is_gestor === 1 && (
-                  <span className="badge badge-blue" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                    <Crown size={14} /> Gestor
-                  </span>
-                )}
+                <div className="flex" style={{ gap: '6px', alignItems: 'center' }}>
+                  {u.is_gestor === 1 && (
+                    <span className="badge badge-blue" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <Crown size={14} /> Gestor
+                    </span>
+                  )}
+                  {u.is_adm === 1 && (
+                    <span className="badge" style={{ backgroundColor: '#6b7280', color: 'white', display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 8px', borderRadius: '6px' }}>
+                      <Shield size={14} /> ADM
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="flex gap-1">
-                <button className="btn btn-secondary" onClick={() => abrirEdicao(u)}>Editar</button>
-                <button className="btn btn-secondary" onClick={() => toggleGestor(u.id, u.is_gestor === 1)}>
-                  {u.is_gestor === 1 ? 'Remover gestor' : 'Promover a gestor'}
-                </button>
-                <button className="btn btn-danger" onClick={() => desativar(u.id)} disabled={u.ativo === 0}>
-                  <Trash2 size={16} />
-                </button>
+                {u.ativo === 1 ? (
+                  <>
+                    <button className="btn btn-secondary" onClick={() => abrirEdicao(u)}>Editar</button>
+                    <button className="btn btn-secondary" onClick={() => toggleGestor(u.id, u.is_gestor === 1)}>
+                      {u.is_gestor === 1 ? 'Remover gestor' : 'Promover a gestor'}
+                    </button>
+                    <button className="btn btn-secondary" onClick={() => toggleAdm(u.id, u.is_adm === 1)}>
+                      {u.is_adm === 1 ? 'Remover ADM' : 'Promover a ADM'}
+                    </button>
+                    <button className="btn btn-danger" onClick={() => desativar(u.id)}>
+                      <Trash2 size={16} />
+                    </button>
+                  </>
+                ) : (
+                  <button className="btn btn-success" onClick={() => reativar(u.id)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <RotateCcw size={16} /> Reativar
+                  </button>
+                )}
               </div>
 
               <p style={{ marginTop: '10px', color: u.ativo ? 'var(--success)' : 'var(--danger)' }}>
@@ -281,12 +361,15 @@ function Usuarios() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Login gerado</label>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <input type="text" className="form-input" value={loginGerado || 'Ainda não gerado'} readOnly />
-                  <button type="button" className="btn btn-secondary" onClick={handleGerarLogin}>Gerar ID</button>
-                </div>
-                <small style={{ color: 'var(--gray-500)' }}>O sistema gera um login único de 6 dígitos. Gere antes de criar se quiser ver o ID.</small>
+                <label className="form-label">Login (Gerado Automaticamente)</label>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  value={loginGerado || '...gerando...'} 
+                  readOnly
+                  style={{ backgroundColor: '#f0f0f0', cursor: 'not-allowed' }}
+                />
+                <small style={{ color: 'var(--gray-500)' }}>Sistema gera automaticamente um login único sequencial (000001, 000002, etc.)</small>
               </div>
 
               <div className="form-group">
@@ -324,6 +407,20 @@ function Usuarios() {
                   <span className="form-label" style={{ margin: 0 }}>
                     <Crown size={16} style={{ display: 'inline', marginRight: '6px' }} />
                     Permitir acesso como gestor
+                  </span>
+                </label>
+              </div>
+
+              <div className="form-group">
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                  <input
+                    type="checkbox"
+                    checked={formData.is_adm === 1}
+                    onChange={(e) => setFormData({ ...formData, is_adm: e.target.checked ? 1 : 0 })}
+                  />
+                  <span className="form-label" style={{ margin: 0 }}>
+                    <Shield size={16} style={{ display: 'inline', marginRight: '6px' }} />
+                    Permitir acesso como ADM
                   </span>
                 </label>
               </div>

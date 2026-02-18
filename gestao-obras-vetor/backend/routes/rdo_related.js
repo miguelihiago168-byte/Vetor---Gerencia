@@ -19,7 +19,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 
 // Adicionar mão de obra a um RDO (registro de horário)
-router.post('/rdo/:rdoId/mao_obra', auth, async (req, res) => {
+router.post('/:rdoId/mao_obra', auth, async (req, res) => {
   try {
     const { rdoId } = req.params;
     const { mao_obra_id, horario_entrada, horario_saida_almoco, horario_retorno_almoco, horario_saida_final } = req.body;
@@ -56,7 +56,7 @@ router.post('/rdo/:rdoId/mao_obra', auth, async (req, res) => {
 });
 
 // Listar mao_obra vinculada a um RDO
-router.get('/rdo/:rdoId/mao_obra', auth, async (req, res) => {
+router.get('/:rdoId/mao_obra', auth, async (req, res) => {
   try {
     const { rdoId } = req.params;
     const rows = await allQuery('SELECT rmo.*, mo.nome, mo.funcao FROM rdo_mao_obra rmo LEFT JOIN mao_obra mo ON rmo.mao_obra_id = mo.id WHERE rmo.rdo_id = ? ORDER BY rmo.id', [rdoId]);
@@ -68,7 +68,7 @@ router.get('/rdo/:rdoId/mao_obra', auth, async (req, res) => {
 });
 
 // Clima: criar/atualizar
-router.post('/rdo/:rdoId/clima', auth, async (req, res) => {
+router.post('/:rdoId/clima', auth, async (req, res) => {
   try {
     const { rdoId } = req.params;
     const { periodo, condicao_tempo, condicao_trabalho, pluviometria_mm } = req.body;
@@ -90,7 +90,7 @@ router.post('/rdo/:rdoId/clima', auth, async (req, res) => {
 });
 
 // Comentários
-router.post('/rdo/:rdoId/comentario', auth, async (req, res) => {
+router.post('/:rdoId/comentario', auth, async (req, res) => {
   try {
     const { rdoId } = req.params;
     const { comentario } = req.body;
@@ -104,7 +104,7 @@ router.post('/rdo/:rdoId/comentario', auth, async (req, res) => {
 });
 
 // Materiais
-router.post('/rdo/:rdoId/material', auth, async (req, res) => {
+router.post('/:rdoId/material', auth, async (req, res) => {
   try {
     const { rdoId } = req.params;
     const { nome_material, quantidade, unidade } = req.body;
@@ -118,7 +118,7 @@ router.post('/rdo/:rdoId/material', auth, async (req, res) => {
 });
 
 // Ocorrências
-router.post('/rdo/:rdoId/ocorrencia', auth, async (req, res) => {
+router.post('/:rdoId/ocorrencia', auth, async (req, res) => {
   try {
     const { rdoId } = req.params;
     const { titulo, descricao, gravidade } = req.body;
@@ -132,7 +132,7 @@ router.post('/rdo/:rdoId/ocorrencia', auth, async (req, res) => {
 });
 
 // Assinaturas (registro simples)
-router.post('/rdo/:rdoId/assinatura', auth, async (req, res) => {
+router.post('/:rdoId/assinatura', auth, async (req, res) => {
   try {
     const { rdoId } = req.params;
     const { tipo, arquivo_assinatura } = req.body;
@@ -146,7 +146,7 @@ router.post('/rdo/:rdoId/assinatura', auth, async (req, res) => {
 });
 
 // Upload de fotos vinculadas a atividade do RDO
-router.post('/rdo/:rdoId/foto', auth, upload.single('arquivo'), async (req, res) => {
+router.post('/:rdoId/foto', auth, upload.single('arquivo'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ erro: 'Nenhum arquivo enviado.' });
     const { rdoId } = req.params;

@@ -7,11 +7,18 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const usuarioStorage = localStorage.getItem('usuario');
-    
-    if (token && usuarioStorage) {
-      setUsuario(JSON.parse(usuarioStorage));
+    try {
+      const token = localStorage.getItem('token');
+      const usuarioStorage = localStorage.getItem('usuario');
+      
+      if (token && usuarioStorage) {
+        setUsuario(JSON.parse(usuarioStorage));
+      }
+    } catch (error) {
+      console.error('Erro ao carregar dados do usuário:', error);
+      // Limpar dados corrompidos
+      localStorage.removeItem('token');
+      localStorage.removeItem('usuario');
     }
     setLoading(false);
   }, []);

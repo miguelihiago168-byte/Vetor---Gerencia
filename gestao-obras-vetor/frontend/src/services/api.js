@@ -45,6 +45,7 @@ export const getUsuariosDeletados = () => api.get('/usuarios/deletados/lista');
 export const createUsuario = (data) => api.post('/usuarios', data);
 export const updateUsuario = (id, data) => api.put(`/usuarios/${id}`, data);
 export const updateUsuarioGestor = (id, isGestor) => api.patch(`/usuarios/${id}/gestor`, { is_gestor: isGestor });
+export const updateUsuarioAdm = (id, isAdm) => api.patch(`/usuarios/${id}/adm`, { is_adm: isAdm });
 export const deleteUsuario = (id) => api.delete(`/usuarios/${id}`);
 
 // Projetos
@@ -63,6 +64,7 @@ export const updateAtividade = (id, data) => api.put(`/eap/${id}`, data);
 export const deleteAtividade = (id) => api.delete(`/eap/${id}`);
 export const recalcularAvanco = (id) => api.post(`/eap/${id}/recalcular`);
 export const getHistoricoAtividade = (id) => api.get(`/eap/${id}/historico`);
+export const recalcularEapProjeto = (projetoId) => api.post(`/eap/projeto/${projetoId}/recalcular-tudo`);
 
 // RDOs
 export const getRDOs = (projetoId) => api.get(`/rdos/projeto/${projetoId}`);
@@ -71,6 +73,9 @@ export const createRDO = (data) => api.post('/rdos', data);
 export const updateRDO = (id, data) => api.put(`/rdos/${id}`, data);
 export const updateStatusRDO = (id, status) => api.patch(`/rdos/${id}/status`, { status });
 export const deleteRDO = (id) => api.delete(`/rdos/${id}`);
+export const deleteRDOsProjetoTodos = (projetoId) => api.delete(`/rdos/projeto/${projetoId}/todos`);
+// PDF
+export const getRdoPDF = (id) => api.get(`/rdos/${id}/pdf`, { responseType: 'blob' });
 
 // Mão de obra (catálogo)
 export const getMaoObra = () => api.get('/mao_obra');
@@ -84,6 +89,7 @@ export const addRdoComentario = (rdoId, data) => api.post(`/rdo/${rdoId}/comenta
 export const addRdoMaterial = (rdoId, data) => api.post(`/rdo/${rdoId}/material`, data);
 export const addRdoOcorrencia = (rdoId, data) => api.post(`/rdo/${rdoId}/ocorrencia`, data);
 export const addRdoAssinatura = (rdoId, data) => api.post(`/rdo/${rdoId}/assinatura`, data);
+// Backend espera o campo 'arquivo' no upload
 export const uploadRdoFoto = (rdoId, formData) => api.post(`/rdo/${rdoId}/foto`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 
 // Anexos
@@ -92,6 +98,11 @@ export const uploadAnexo = (rdoId, formData) => api.post(`/anexos/upload/${rdoId
 });
 export const getAnexos = (rdoId) => api.get(`/anexos/rdo/${rdoId}`);
 export const deleteAnexo = (id) => api.delete(`/anexos/${id}`);
+// Anexos da RNC
+export const uploadAnexoRNC = (rncId, formData) => api.post(`/anexos/upload-rnc/${rncId}`, formData, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+});
+export const getAnexosRNC = (rncId) => api.get(`/anexos/rnc/${rncId}`);
 
 // Dashboard
 export const getDashboardAvanco = (projetoId) => api.get(`/dashboard/projeto/${projetoId}/avanco`);
@@ -106,5 +117,19 @@ export const updateStatusRNC = (id, status) => api.patch(`/rnc/${id}/status`, { 
 export const submitCorrecaoRNC = (id, data) => api.post(`/rnc/${id}/corrigir`, data);
 export const deleteRNC = (id) => api.delete(`/rnc/${id}`);
 export const enviarRncParaAprovacao = (id) => api.post(`/rnc/${id}/enviar-aprovacao`);
+
+// Compras (Pedidos e Cotações)
+export const criarPedidoCompra = (data) => api.post('/pedidos-compra', data);
+export const aprovarInicialPedido = (id) => api.patch(`/pedidos-compra/${id}/aprovar-inicial`);
+export const inserirCotacao = (id, dataOrForm) => {
+  // aceita JSON ou FormData com 'pdf'
+  const headers = (dataOrForm instanceof FormData) ? { 'Content-Type': 'multipart/form-data' } : undefined;
+  return api.post(`/pedidos-compra/${id}/cotacoes`, dataOrForm, { headers });
+};
+export const selecionarCotacao = (id, cotacaoId) => api.patch(`/pedidos-compra/${id}/selecionar/${cotacaoId}`);
+export const marcarComprado = (id) => api.patch(`/pedidos-compra/${id}/comprado`);
+export const reprovarPedido = (id, motivo) => api.patch(`/pedidos-compra/${id}/reprovar`, { motivo });
+export const listarPedidosPorProjeto = (projetoId) => api.get(`/pedidos-compra/projeto/${projetoId}`);
+export const detalharPedido = (id) => api.get(`/pedidos-compra/${id}`);
 
 export default api;

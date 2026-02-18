@@ -23,4 +23,11 @@ const isGestor = (req, res, next) => {
   next();
 };
 
-module.exports = { auth, isGestor };
+const isAdm = (req, res, next) => {
+  if (!req.usuario.is_adm) {
+    return res.status(403).json({ erro: 'Acesso negado. Apenas ADM podem realizar esta ação.' });
+  }
+  next();
+};
+
+module.exports = { auth, isGestor, isAdm };

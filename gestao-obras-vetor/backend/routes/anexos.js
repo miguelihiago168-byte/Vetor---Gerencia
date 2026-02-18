@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { runQuery, allQuery } = require('../config/database');
+const { runQuery, allQuery, getQuery } = require('../config/database');
 const { auth } = require('../middleware/auth');
 
 const router = express.Router();
@@ -70,6 +70,36 @@ router.post('/upload/:rdoId', auth, upload.single('arquivo'), async (req, res) =
   }
 });
 
+// Upload de arquivo para RNC
+router.post('/upload-rnc/:rncId', auth, upload.single('arquivo'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ erro: 'Nenhum arquivo enviado.' });
+    }
+
+    const { rncId } = req.params;
+    const { originalname, filename, mimetype, size } = req.file;
+
+    const result = await runQuery(`
+      INSERT INTO anexos (rnc_id, tipo, nome_arquivo, caminho_arquivo, tamanho)
+      VALUES (?, ?, ?, ?, ?)
+    `, [rncId, mimetype, originalname, filename, size]);
+
+    res.status(201).json({
+      mensagem: 'Arquivo enviado com sucesso.',
+      anexo: {
+        id: result.lastID,
+        nome_arquivo: originalname,
+        tipo: mimetype
+      }
+    });
+
+  } catch (error) {
+    console.error('Erro ao fazer upload (RNC):', error);
+    res.status(500).json({ erro: 'Erro ao fazer upload do arquivo (RNC).' });
+  }
+});
+
 // Listar anexos de um RDO
 router.get('/rdo/:rdoId', auth, async (req, res) => {
   try {
@@ -88,12 +118,27 @@ router.get('/rdo/:rdoId', auth, async (req, res) => {
   }
 });
 
+// Listar anexos de uma RNC
+router.get('/rnc/:rncId', auth, async (req, res) => {
+  try {
+    const { rncId } = req.params;
+    const anexos = await allQuery(
+      'SELECT * FROM anexos WHERE rnc_id = ? ORDER BY criado_em DESC',
+      [rncId]
+    );
+    res.json(anexos);
+  } catch (error) {
+    console.error('Erro ao listar anexos (RNC):', error);
+    res.status(500).json({ erro: 'Erro ao listar anexos da RNC.' });
+  }
+});
+
 // Download de arquivo
 router.get('/download/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const anexo = await runQuery(
+    const anexo = await getQuery(
       'SELECT * FROM anexos WHERE id = ?',
       [id]
     );

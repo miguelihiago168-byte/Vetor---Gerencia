@@ -26,6 +26,7 @@ const maoObraRoutes = require('./routes/mao_obra');
 const rdoRelatedRoutes = require('./routes/rdo_related');
 const dashboardRoutes = require('./routes/dashboard');
 const rncRoutes = require('./routes/rnc');
+const pedidosCompraRoutes = require('./routes/pedidos_compra');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/usuarios', usuariosRoutes);
@@ -37,6 +38,7 @@ app.use('/api/mao_obra', maoObraRoutes);
 app.use('/api/rdo', rdoRelatedRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/rnc', rncRoutes);
+app.use('/api/pedidos-compra', pedidosCompraRoutes);
 
 // Rota de teste
 app.get('/api/health', (req, res) => {

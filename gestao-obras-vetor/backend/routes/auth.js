@@ -38,7 +38,8 @@ router.post('/login', [
         id: usuario.id, 
         login: usuario.login, 
         nome: usuario.nome,
-        is_gestor: usuario.is_gestor 
+        is_gestor: usuario.is_gestor,
+        is_adm: usuario.is_adm || 0
       },
       process.env.JWT_SECRET,
       { expiresIn: '8h' }
@@ -51,7 +52,8 @@ router.post('/login', [
         login: usuario.login,
         nome: usuario.nome,
         email: usuario.email,
-        is_gestor: usuario.is_gestor
+        is_gestor: usuario.is_gestor,
+        is_adm: usuario.is_adm || 0
       }
     });
 

@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getProjeto, getDashboardAvanco, getRDOStats } from '../services/api';
-import { BarChart, Activity, FileText, AlertTriangle, Users as UsersIcon } from 'lucide-react';
+import { getProjeto, getRDOStats, getRDOs, getAnexos } from '../services/api';
+import { FileText, AlertTriangle, Image as ImageIcon, Activity } from 'lucide-react';
 
 function ProjetoDetalhes() {
   const { projetoId } = useParams();
   const navigate = useNavigate();
   const [projeto, setProjeto] = useState(null);
-  const [avanco, setAvanco] = useState(null);
   const [stats, setStats] = useState(null);
+  const [galeria, setGaleria] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -18,15 +18,35 @@ function ProjetoDetalhes() {
 
   const carregarDados = async () => {
     try {
-      const [projetoRes, avancoRes, statsRes] = await Promise.all([
+      const [projetoRes, statsRes] = await Promise.all([
         getProjeto(projetoId),
-        getDashboardAvanco(projetoId),
         getRDOStats(projetoId)
       ]);
-      
+
       setProjeto(projetoRes.data);
-      setAvanco(avancoRes.data);
       setStats(statsRes.data);
+
+      // Carregar galeria geral de fotos do projeto (anexos dos RDOs)
+      try {
+        const rdosRes = await getRDOs(projetoId);
+        const rdos = rdosRes.data || [];
+        const anexosList = [];
+        for (const rdo of rdos) {
+          try {
+            const ax = await getAnexos(rdo.id);
+            const imgs = (ax.data || []).filter(a => String(a.tipo).startsWith('image/'));
+            imgs.forEach(img => anexosList.push({
+              id: img.id,
+              nome: img.nome_arquivo,
+              tipo: img.tipo,
+              url: `/api/anexos/download/${img.id}`,
+              rdo_id: rdo.id,
+              criado_em: img.criado_em
+            }));
+          } catch {}
+        }
+        setGaleria(anexosList);
+      } catch {}
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
     } finally {
@@ -86,42 +106,39 @@ function ProjetoDetalhes() {
           </div>
         )}
 
-        {/* Métricas Principais */}
-        {avanco && (
+        {/* Métricas de RDOs (preenchidos, iniciados, aprovados, em aprovação) */}
+        {stats && (
           <div className="grid grid-4 mb-4">
             <div className="card" style={{ textAlign: 'center' }}>
               <div style={{ fontSize: '14px', color: 'var(--gray-600)', marginBottom: '8px' }}>
-                Avanço Físico Geral
+                Relatórios preenchidos (total)
               </div>
               <div style={{ fontSize: '42px', fontWeight: 'bold', color: 'var(--primary)' }}>
-                {avanco.avanco_geral.avanco_medio?.toFixed(1) || 0}%
+                {stats.total_rdos || 0}
               </div>
             </div>
-            
             <div className="card" style={{ textAlign: 'center' }}>
               <div style={{ fontSize: '14px', color: 'var(--gray-600)', marginBottom: '8px' }}>
-                ✅ Concluídas
-              </div>
-              <div style={{ fontSize: '42px', fontWeight: 'bold', color: 'var(--success)' }}>
-                {avanco.avanco_geral.concluidas || 0}
-              </div>
-            </div>
-            
-            <div className="card" style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '14px', color: 'var(--gray-600)', marginBottom: '8px' }}>
-                🔄 Em Andamento
+                🟡 Iniciados (em preenchimento)
               </div>
               <div style={{ fontSize: '42px', fontWeight: 'bold', color: 'var(--warning)' }}>
-                {avanco.avanco_geral.em_andamento || 0}
+                {stats.em_preenchimento || 0}
               </div>
             </div>
-            
             <div className="card" style={{ textAlign: 'center' }}>
               <div style={{ fontSize: '14px', color: 'var(--gray-600)', marginBottom: '8px' }}>
-                ⏸️ Não Iniciadas
+                🟢 Aprovados
               </div>
-              <div style={{ fontSize: '42px', fontWeight: 'bold', color: 'var(--secondary)' }}>
-                {avanco.avanco_geral.nao_iniciadas || 0}
+              <div style={{ fontSize: '42px', fontWeight: 'bold', color: 'var(--success)' }}>
+                {stats.aprovados || 0}
+              </div>
+            </div>
+            <div className="card" style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '14px', color: 'var(--gray-600)', marginBottom: '8px' }}>
+                🔵 Em aprovação (análise)
+              </div>
+              <div style={{ fontSize: '42px', fontWeight: 'bold', color: 'var(--info)' }}>
+                {stats.em_analise || 0}
               </div>
             </div>
           </div>
@@ -152,6 +169,29 @@ function ProjetoDetalhes() {
             </div>
           </div>
         )}
+
+        {/* Galeria de Fotos Geral (movida para cima, logo após métricas) */}
+        <div className="card mt-2 mb-4">
+          <h2 className="card-header" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <ImageIcon size={20} /> Galeria de Fotos do Projeto
+          </h2>
+          {galeria.length === 0 ? (
+            <div className="card" style={{ padding: '16px', background: 'var(--gray-50)' }}>
+              Nenhuma foto enviada nos RDOs deste projeto.
+            </div>
+          ) : (
+            <div className="grid grid-4" style={{ gap: '12px' }}>
+              {galeria.slice(0, 24).map(item => (
+                <div key={item.id} className="card" style={{ padding: '8px' }}>
+                  <div style={{ width: '100%', aspectRatio: '1/1', overflow: 'hidden', borderRadius: '6px', background: 'var(--gray-100)' }}>
+                    <img src={item.url} alt={item.nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--gray-600)', marginTop: '6px' }}>{item.nome}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Ações Principais */}
         <div className="grid grid-2">
@@ -238,72 +278,9 @@ function ProjetoDetalhes() {
               </div>
             </div>
           </div>
-
-          <div 
-            className="card" 
-            onClick={() => navigate(`/projeto/${projetoId}/usuarios`)}
-            style={{ cursor: 'pointer', transition: 'transform 0.2s' }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{
-                width: '60px',
-                height: '60px',
-                borderRadius: '12px',
-                background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <UsersIcon size={32} color="white" />
-              </div>
-              <div>
-                <h3>Equipe do Projeto</h3>
-                <p style={{ fontSize: '14px', color: 'var(--gray-600)', margin: '4px 0 0 0' }}>
-                  {projeto?.usuarios?.length || 0} usuários vinculados
-                </p>
-              </div>
-            </div>
-          </div>
         </div>
 
-        {/* Atividades Principais */}
-        {avanco && avanco.atividades_principais && avanco.atividades_principais.length > 0 && (
-          <div className="card mt-4">
-            <h2 className="card-header">📋 Atividades Principais</h2>
-            <div style={{ overflowX: 'auto' }}>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Código</th>
-                    <th>Descrição</th>
-                    <th>Previsto</th>
-                    <th>Executado</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {avanco.atividades_principais.map((atividade, idx) => (
-                    <tr key={idx}>
-                      <td><strong>{atividade.codigo_eap}</strong></td>
-                      <td>{atividade.descricao}</td>
-                      <td>{atividade.percentual_previsto}%</td>
-                      <td><strong>{atividade.percentual_executado?.toFixed(1)}%</strong></td>
-                      <td>
-                        <span className={
-                          atividade.status === 'Concluída' ? 'badge badge-green' :
-                          atividade.status === 'Em andamento' ? 'badge badge-yellow' :
-                          'badge badge-gray'
-                        }>
-                          {atividade.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+        {/* (fim) Galeria de Fotos foi movida para cima */}
       </div>
     </>
   );

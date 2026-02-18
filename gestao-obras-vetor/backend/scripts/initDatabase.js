@@ -264,12 +264,65 @@ const initDatabase = async () => {
     });
     console.log('✓ Tabela auditoria criada');
 
+    // Tabela de Pedidos de Compra
+    await new Promise((resolve, reject) => {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS pedidos_compra (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          projeto_id INTEGER NOT NULL,
+          solicitante_id INTEGER NOT NULL,
+          descricao TEXT NOT NULL,
+          quantidade REAL NOT NULL,
+          unidade TEXT,
+          aplicacao_local TEXT,
+          status TEXT NOT NULL DEFAULT 'SOLICITADO',
+          gestor_aprovador_id INTEGER,
+          adm_responsavel_id INTEGER,
+          cotacao_vencedora_id INTEGER,
+          reprovado_motivo TEXT,
+          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+          atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (projeto_id) REFERENCES projetos(id) ON DELETE CASCADE,
+          FOREIGN KEY (solicitante_id) REFERENCES usuarios(id),
+          FOREIGN KEY (gestor_aprovador_id) REFERENCES usuarios(id),
+          FOREIGN KEY (adm_responsavel_id) REFERENCES usuarios(id)
+        )
+      `, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+    console.log('✓ Tabela pedidos_compra criada');
+
+    // Tabela de Cotações
+    await new Promise((resolve, reject) => {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS cotacoes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          pedido_id INTEGER NOT NULL,
+          fornecedor TEXT NOT NULL,
+          valor_unitario REAL NOT NULL,
+          marca TEXT,
+          modelo TEXT,
+          prazo_entrega TEXT,
+          status TEXT DEFAULT 'NAO_SELECIONADA',
+          pdf_path TEXT,
+          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (pedido_id) REFERENCES pedidos_compra(id) ON DELETE CASCADE
+        )
+      `, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+    console.log('✓ Tabela cotacoes criada');
+
     // Criar usuário gestor padrão
     const senhaHash = await bcrypt.hash('123456', 10);
     await new Promise((resolve, reject) => {
       db.run(`
-        INSERT OR IGNORE INTO usuarios (login, senha, nome, email, is_gestor)
-        VALUES ('000001', ?, 'Administrador', 'admin@vetor.com', 1)
+        INSERT OR IGNORE INTO usuarios (login, senha, nome, email, is_gestor, is_adm)
+        VALUES ('000001', ?, 'Administrador', 'admin@vetor.com', 1, 1)
       `, [senhaHash], (err) => {
         if (err) reject(err);
         else resolve();

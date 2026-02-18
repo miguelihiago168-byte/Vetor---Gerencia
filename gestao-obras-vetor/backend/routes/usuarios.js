@@ -32,7 +32,7 @@ const gerarLogin = async (preferencia) => {
 router.get('/', auth, async (req, res) => {
   try {
     const usuarios = await allQuery(`
-      SELECT id, login, nome, email, pin, is_gestor, ativo, criado_em 
+      SELECT id, login, nome, email, pin, is_gestor, is_adm, ativo, criado_em 
       FROM usuarios 
       WHERE deletado_em IS NULL
       ORDER BY nome
@@ -77,7 +77,7 @@ router.get('/novo-login', [auth, isGestor], async (req, res) => {
 router.get('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
-    const usuario = await getQuery('SELECT id, login, nome, email, pin, is_gestor, ativo, criado_em, atualizado_em FROM usuarios WHERE id = ?', [id]);
+    const usuario = await getQuery('SELECT id, login, nome, email, pin, is_gestor, is_adm, ativo, criado_em, atualizado_em FROM usuarios WHERE id = ?', [id]);
     if (!usuario) return res.status(404).json({ erro: 'Usuário não encontrado.' });
 
     const proj = await getQuery('SELECT projeto_id FROM projeto_usuarios WHERE usuario_id = ? LIMIT 1', [id]);
@@ -97,7 +97,8 @@ router.post('/', [auth, isGestor], [
   body('senha').isLength({ min: 6, max: 6 }).isNumeric(),
   body('pin').optional().isLength({ min: 6, max: 6 }).isNumeric(),
   body('email').optional({ checkFalsy: true }).isEmail(),
-  body('is_gestor').optional().isInt()
+  body('is_gestor').optional().isInt(),
+  body('is_adm').optional().isInt()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -105,7 +106,7 @@ router.post('/', [auth, isGestor], [
       return res.status(400).json({ erro: 'Dados inválidos. Verifique os campos.' });
     }
 
-    const { nome, senha, pin, email, is_gestor, projeto_id } = req.body;
+    const { nome, senha, pin, email, is_gestor, is_adm, projeto_id } = req.body;
     // aceitar login fornecido (gerado pelo front) quando presente e único
     const preferenciaLogin = req.body.login;
     const login = await gerarLogin(preferenciaLogin);
@@ -119,9 +120,9 @@ router.post('/', [auth, isGestor], [
     }
 
     const result = await runQuery(`
-      INSERT INTO usuarios (login, senha, pin, nome, email, is_gestor, criado_por)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `, [login, senhaHash, pinFinal, nome, (email && email.length) ? email : null, is_gestor ? 1 : 0, req.usuario.id]);
+      INSERT INTO usuarios (login, senha, pin, nome, email, is_gestor, is_adm, criado_por)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `, [login, senhaHash, pinFinal, nome, (email && email.length) ? email : null, is_gestor ? 1 : 0, is_adm ? 1 : 0, req.usuario.id]);
 
     // Vincular ao projeto se informado (requisito: usuário deve ser vinculado a um projeto ao criar)
     if (projeto_id) {
@@ -132,11 +133,11 @@ router.post('/', [auth, isGestor], [
       }
     }
 
-    await registrarAuditoria('usuarios', result.lastID, 'CREATE', null, { login, nome, email, is_gestor }, req.usuario.id);
+    await registrarAuditoria('usuarios', result.lastID, 'CREATE', null, { login, nome, email, is_gestor, is_adm }, req.usuario.id);
 
     res.status(201).json({
       mensagem: 'Usuário criado com sucesso.',
-      usuario: { id: result.lastID, login, nome, email, pin: pinFinal, is_gestor, projeto_id: projeto_id || null }
+      usuario: { id: result.lastID, login, nome, email, pin: pinFinal, is_gestor, is_adm, projeto_id: projeto_id || null }
     });
 
   } catch (error) {
@@ -170,6 +171,31 @@ router.patch('/:id/gestor', [auth, isGestor], async (req, res) => {
   }
 });
 
+// Tornar usuário ADM
+router.patch('/:id/adm', [auth, isGestor], async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { is_adm } = req.body;
+
+    const usuarioAnterior = await getQuery('SELECT * FROM usuarios WHERE id = ?', [id]);
+
+    await runQuery(
+      'UPDATE usuarios SET is_adm = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+      [is_adm ? 1 : 0, id]
+    );
+
+    const usuarioNovo = await getQuery('SELECT * FROM usuarios WHERE id = ?', [id]);
+
+    await registrarAuditoria('usuarios', id, 'UPDATE', usuarioAnterior, usuarioNovo, req.usuario.id);
+
+    res.json({ mensagem: 'Permissões ADM atualizadas com sucesso.' });
+
+  } catch (error) {
+    console.error('Erro ao atualizar ADM:', error);
+    res.status(500).json({ erro: 'Erro ao atualizar ADM.' });
+  }
+});
+
 // Atualizar usuário (gestor)
 router.put('/:id', [auth, isGestor], async (req, res) => {
   try {
@@ -178,6 +204,7 @@ router.put('/:id', [auth, isGestor], async (req, res) => {
     if (!usuarioAnterior) return res.status(404).json({ erro: 'Usuário não encontrado.' });
 
     const { nome, senha, pin, is_gestor, ativo } = req.body;
+    const { is_adm } = req.body;
 
     const updates = [];
     const params = [];
@@ -185,6 +212,7 @@ router.put('/:id', [auth, isGestor], async (req, res) => {
     if (nome !== undefined) { updates.push('nome = ?'); params.push(nome); }
     if (pin !== undefined) { updates.push('pin = ?'); params.push(pin); }
     if (is_gestor !== undefined) { updates.push('is_gestor = ?'); params.push(is_gestor ? 1 : 0); }
+    if (is_adm !== undefined) { updates.push('is_adm = ?'); params.push(is_adm ? 1 : 0); }
     if (ativo !== undefined) { updates.push('ativo = ?'); params.push(ativo ? 1 : 0); }
     if (senha !== undefined && senha !== '') {
       const senhaHash = await bcrypt.hash(senha, 10);
@@ -211,7 +239,7 @@ router.put('/:id', [auth, isGestor], async (req, res) => {
       }
     }
 
-    const usuarioNovo = await getQuery('SELECT id, login, nome, email, pin, is_gestor, ativo, criado_em, atualizado_em FROM usuarios WHERE id = ?', [id]);
+    const usuarioNovo = await getQuery('SELECT id, login, nome, email, pin, is_gestor, is_adm, ativo, criado_em, atualizado_em FROM usuarios WHERE id = ?', [id]);
     await registrarAuditoria('usuarios', id, 'UPDATE', usuarioAnterior, usuarioNovo, req.usuario.id);
 
     res.json({ mensagem: 'Usuário atualizado com sucesso.', usuario: usuarioNovo });

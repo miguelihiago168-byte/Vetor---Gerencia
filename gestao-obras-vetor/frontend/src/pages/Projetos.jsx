@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getProjetos, createProjeto, updateProjeto, deleteProjeto, getUsuarios } from '../services/api';
+import { getProjetos, createProjeto, updateProjeto, deleteProjeto, getUsuarios, arquivarProjeto, desarquivarProjeto, getDashboardAvanco } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Plus, Edit, Trash2, Users, Calendar, Building } from 'lucide-react';
+import { Plus, Edit, Trash2, Users, Calendar, Building, Archive, RotateCcw, Eye, EyeOff } from 'lucide-react';
 
 function Projetos() {
   const [projetos, setProjetos] = useState([]);
@@ -21,9 +21,12 @@ function Projetos() {
   });
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
+  const [showArquivados, setShowArquivados] = useState(false);
   
   const { isGestor } = useAuth();
   const navigate = useNavigate();
+
+  const projetosFiltrados = projetos.filter((p) => showArquivados ? p.arquivado === 1 : p.arquivado === 0);
 
   useEffect(() => {
     carregarDados();
@@ -35,12 +38,33 @@ function Projetos() {
         getProjetos(),
         getUsuarios()
       ]);
-      setProjetos(projetosRes.data);
+      
+      // Carregar avanço para cada projeto
+      const projetosComAvanco = await Promise.all(
+        projetosRes.data.map(async (projeto) => {
+          try {
+            const avancoRes = await getDashboardAvanco(projeto.id);
+            return {
+              ...projeto,
+              percentual_progresso: avancoRes.data?.avanco_geral?.avanco_medio || 0
+            };
+          } catch (error) {
+            console.error(`Erro ao carregar avanço do projeto ${projeto.id}:`, error);
+            return {
+              ...projeto,
+              percentual_progresso: projeto.percentual_progresso || 0
+            };
+          }
+        })
+      );
+      
+      setProjetos(projetosComAvanco);
       setUsuarios(usuariosRes.data);
-      if (isGestor && projetosRes.data.length === 0) {
+      if (isGestor && projetosComAvanco.length === 0) {
         setShowModal(true);
       }
     } catch (error) {
+      console.error('Erro ao carregar dados:', error);
       setErro('Erro ao carregar dados.');
     } finally {
       setLoading(false);
@@ -114,6 +138,32 @@ function Projetos() {
     }
   };
 
+  const handleArquivar = async (id) => {
+    if (!window.confirm('Deseja arquivar este projeto? Ele ficará inacessível até ser desarchivado.')) return;
+
+    try {
+      await arquivarProjeto(id);
+      setSucesso('Projeto arquivado com sucesso!');
+      await carregarDados();
+      setTimeout(() => setSucesso(''), 3000);
+    } catch (error) {
+      setErro('Erro ao arquivar projeto.');
+    }
+  };
+
+  const handleDesarquivar = async (id) => {
+    if (!window.confirm('Deseja restaurar este projeto?')) return;
+
+    try {
+      await desarquivarProjeto(id);
+      setSucesso('Projeto restaurado com sucesso!');
+      await carregarDados();
+      setTimeout(() => setSucesso(''), 3000);
+    } catch (error) {
+      setErro('Erro ao restaurar projeto.');
+    }
+  };
+
   const handleUsuarioChange = (usuarioId) => {
     const usuariosSelecionados = formData.usuarios.includes(usuarioId)
       ? formData.usuarios.filter(id => id !== usuarioId)
@@ -137,75 +187,124 @@ function Projetos() {
       <div className="container">
         <div className="flex-between mb-4">
           <h1>Projetos</h1>
-          {isGestor && (
-            <button onClick={() => abrirModal()} className="btn btn-primary">
-              <Plus size={20} />
-              Novo Projeto
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <button 
+              className={`btn ${showArquivados ? 'btn-secondary' : 'btn-outline'}`}
+              onClick={() => setShowArquivados(!showArquivados)}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              {showArquivados ? <Eye size={18} /> : <EyeOff size={18} />}
+              {showArquivados ? 'Mostrar ativos' : 'Mostrar arquivados'}
             </button>
-          )}
+            {isGestor && (
+              <button onClick={() => abrirModal()} className="btn btn-primary">
+                <Plus size={20} />
+                Novo Projeto
+              </button>
+            )}
+          </div>
         </div>
 
         {sucesso && <div className="alert alert-success">{sucesso}</div>}
         {erro && <div className="alert alert-error">{erro}</div>}
 
-        <div className="grid grid-3">
-          {projetos.map(projeto => (
-            <div key={projeto.id} className="card" style={{ cursor: 'pointer' }}>
-              <div onClick={() => navigate(`/projeto/${projeto.id}`)}>
-                <h3 style={{ marginBottom: '12px', color: 'var(--primary)' }}>
-                  {projeto.nome}
-                </h3>
-                
-                <div style={{ fontSize: '14px', color: 'var(--gray-600)', marginBottom: '8px' }}>
-                  <Building size={16} style={{ display: 'inline', marginRight: '6px' }} />
-                  <strong>Responsável:</strong> {projeto.empresa_responsavel}
+        <div className="grid grid-1 md:grid-2 lg:grid-3 gap-4">
+          {projetosFiltrados.map((projeto) => (
+            <div key={projeto.id} className="card">
+              <div className="card-header">
+                <div className="flex-between">
+                  <h3 className="card-title">{projeto.nome}</h3>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => abrirModal(projeto)} 
+                      className="btn btn-icon btn-secondary"
+                      title="Editar"
+                    >
+                      <Edit size={16} />
+                    </button>
+                    {isGestor && (
+                      <>
+                        <button 
+                          onClick={() => showArquivados ? handleDesarquivar(projeto.id) : handleArquivar(projeto.id)} 
+                          className="btn btn-icon btn-warning"
+                          title={showArquivados ? 'Desarquivar' : 'Arquivar'}
+                        >
+                          {showArquivados ? <RotateCcw size={16} /> : <Archive size={16} />}
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(projeto.id)} 
+                          className="btn btn-icon btn-danger"
+                          title="Excluir"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
-                
-                <div style={{ fontSize: '14px', color: 'var(--gray-600)', marginBottom: '8px' }}>
-                  <Building size={16} style={{ display: 'inline', marginRight: '6px' }} />
-                  <strong>Executante:</strong> {projeto.empresa_executante}
+                <div className="card-meta">
+                  <span className="badge badge-primary">#{projeto.id}</span>
+                  {projeto.cidade && <span className="badge badge-secondary">{projeto.cidade}</span>}
                 </div>
-                
-                <div style={{ fontSize: '14px', color: 'var(--gray-600)', marginBottom: '8px' }}>
-                  <Calendar size={16} style={{ display: 'inline', marginRight: '6px' }} />
-                  <strong>Prazo:</strong> {new Date(projeto.prazo_termino).toLocaleDateString('pt-BR')}
-                </div>
-                
-                <div style={{ fontSize: '14px', color: 'var(--gray-600)', marginBottom: '12px' }}>
-                  📍 <strong>{projeto.cidade}</strong>
-                </div>
-                {/* Layout simplificado: retornado ao estado anterior sem colunas Previsto/Executado */}
               </div>
-
-              {isGestor && (
-                <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                  <button 
-                    onClick={() => abrirModal(projeto)}
-                    className="btn btn-secondary"
-                    style={{ flex: 1, padding: '8px' }}
-                  >
-                    <Edit size={16} />
-                    Editar
-                  </button>
-                  <button 
-                    onClick={() => handleDelete(projeto.id)}
-                    className="btn btn-danger"
-                    style={{ flex: 1, padding: '8px' }}
-                  >
-                    <Trash2 size={16} />
-                    Desativar
-                  </button>
+              
+              <div className="card-body">
+                <div className="project-info">
+                  <div className="info-item">
+                    <Building size={16} />
+                    <span>{projeto.empresa_executante || 'Não informado'}</span>
+                  </div>
+                  <div className="info-item">
+                    <Calendar size={16} />
+                    <span>
+                      {projeto.prazo_termino 
+                        ? new Date(projeto.prazo_termino).toLocaleDateString('pt-BR')
+                        : 'Sem prazo'
+                      }
+                    </span>
+                  </div>
+                  <div className="info-item">
+                    <Users size={16} />
+                    <span>{projeto.usuarios?.length || 0} usuários</span>
+                  </div>
                 </div>
-              )}
+                
+                <div className="progress-bar mt-3">
+                  <div 
+                    className="progress-fill"
+                    style={{ width: `${projeto.percentual_progresso || 0}%` }}
+                  ></div>
+                </div>
+                <div className="progress-text">
+                  {Math.round(projeto.percentual_progresso || 0)}% concluído
+                </div>
+              </div>
+              <div className="card-footer">
+                <button 
+                  onClick={() => navigate(`/projeto/${projeto.id}`)} 
+                  className="btn btn-primary btn-block"
+                >
+                  Ver Detalhes
+                </button>
+              </div>
             </div>
           ))}
         </div>
+
+        {sucesso && <div className="alert alert-success">{sucesso}</div>}
+        {erro && <div className="alert alert-error">{erro}</div>}
+
+        {showArquivados && (
+          <div className="alert" style={{ backgroundColor: '#fff3cd', borderLeft: '4px solid #ffc107', marginBottom: '20px', color: '#856404' }}>
+            ⚠️ Mostrando projetos <strong>arquivados</strong>. Clique no botão acima para retornar aos projetos ativos.
+          </div>
+        )}
 
         {projetos.length === 0 && (
           <div className="card text-center" style={{ padding: '60px' }}>
             <h3 style={{ color: 'var(--gray-500)' }}>Nenhum projeto cadastrado</h3>
             <p style={{ color: 'var(--gray-400)', marginTop: '8px' }}>
-              {isGestor ? 'Crie o primeiro projeto e vincule a equipe.' : 'Você não está vinculado a nenhum projeto.'}
+              {isGestor ? 'Crie o primeiro projeto para começar.' : 'Você não está vinculado a nenhum projeto.'}
             </p>
             {isGestor && (
               <button className="btn btn-primary mt-2" onClick={() => setShowModal(true)}>

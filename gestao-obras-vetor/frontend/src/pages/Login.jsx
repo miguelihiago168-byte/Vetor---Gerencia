@@ -28,7 +28,7 @@ function Login() {
     try {
       const response = await loginAPI({ login: loginValue, senha });
       loginAuth(response.data.token, response.data.usuario);
-      navigate('/dashboard');
+      navigate('/projetos');
     } catch (error) {
       setErro(error.response?.data?.erro || 'Erro ao fazer login.');
     } finally {

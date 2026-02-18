@@ -1,7 +1,7 @@
 const { db } = require('../config/database');
 
 const migrate = async () => {
-  console.log('Iniciando migração: Adicionando campos numero_relatorio e historico_status à tabela rdos...');
+  console.log('Iniciando migração: Adicionando campos numero_rdo e historico_status à tabela rdos...');
 
   try {
     await new Promise((resolve, reject) => {
@@ -9,7 +9,9 @@ const migrate = async () => {
         if (err) return reject(err);
 
         const fieldMap = {
-          'numero_relatorio': 'INTEGER',
+          // numero_rdo: identificador textual do RDO (ex.: RDO-YYYYMMDD-000001)
+          'numero_rdo': 'TEXT',
+          // historico_status: JSON com histórico de mudanças de status
           'historico_status': 'TEXT'
         };
 

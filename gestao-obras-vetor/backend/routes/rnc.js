@@ -5,6 +5,71 @@ const { auth, isGestor } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
 
 const router = express.Router();
+// Gerar PDF da RNC
+router.get('/:id/pdf', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const rnc = await getQuery(`
+      SELECT r.*, p.nome AS projeto_nome, u.nome AS criado_por_nome, g.nome AS responsavel_nome, rd.data_relatorio AS rdo_data
+      FROM rnc r
+      LEFT JOIN projetos p ON r.projeto_id = p.id
+      LEFT JOIN usuarios u ON r.criado_por = u.id
+      LEFT JOIN usuarios g ON r.responsavel_id = g.id
+      LEFT JOIN rdos rd ON r.rdo_id = rd.id
+      WHERE r.id = ?
+    `, [id]);
+
+    if (!rnc) return res.status(404).json({ erro: 'RNC não encontrada.' });
+
+    const PDFDocument = require('pdfkit');
+    const doc = new PDFDocument({ size: 'A4', layout: 'portrait', margin: 40 });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="RNC-${id}.pdf"`);
+    doc.pipe(res);
+
+    doc.fontSize(20).text('RELATÓRIO DE NÃO CONFORMIDADE', { align: 'center' });
+    doc.moveDown();
+    doc.fontSize(16).text(`Projeto: ${rnc.projeto_nome || rnc.projeto_id}`, { align: 'center' });
+    doc.moveDown();
+
+    doc.fontSize(14).text(`Título: ${rnc.titulo}`);
+    doc.text(`Status: ${rnc.status}`);
+    doc.text(`Gravidade: ${rnc.gravidade}`);
+    if (rnc.data_prevista_encerramento) doc.text(`Data prevista para encerramento: ${new Date(rnc.data_prevista_encerramento).toLocaleDateString('pt-BR')}`);
+    if (rnc.origem) doc.text(`Origem: ${rnc.origem}`);
+    if (rnc.area_afetada) doc.text(`Área afetada: ${rnc.area_afetada}`);
+    if (rnc.norma_referencia) doc.text(`Norma/Referência: ${rnc.norma_referencia}`);
+    doc.text(`Responsável: ${rnc.responsavel_nome || 'N/A'}`);
+    if (rnc.rdo_id) doc.text(`RDO Relacionado: ${rnc.rdo_id} (${rnc.rdo_data ? new Date(rnc.rdo_data).toLocaleDateString('pt-BR') : 'N/A'})`);
+    doc.text(`Criado por: ${rnc.criado_por_nome || 'N/A'}`);
+    doc.text(`Criado em: ${rnc.criado_em ? new Date(rnc.criado_em).toLocaleString('pt-BR') : 'N/A'}`);
+    if (rnc.resolvido_em) doc.text(`Encerrado em: ${new Date(rnc.resolvido_em).toLocaleString('pt-BR')}`);
+    doc.moveDown();
+
+    doc.fontSize(12).text('Descrição:', { underline: true });
+    doc.text(rnc.descricao || '—');
+    doc.moveDown();
+
+    if (rnc.acao_corretiva) {
+      doc.text('Ação Corretiva:', { underline: true });
+      doc.text(rnc.acao_corretiva);
+      doc.moveDown();
+    }
+
+    if (rnc.registros_fotograficos) {
+      doc.text('Registros fotográficos:', { underline: true });
+      doc.text(rnc.registros_fotograficos);
+      doc.moveDown();
+    }
+
+    doc.fontSize(10).text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, { align: 'center' });
+    doc.end();
+  } catch (error) {
+    console.error('Erro ao gerar PDF da RNC:', error);
+    res.status(500).json({ erro: 'Erro ao gerar PDF.' });
+  }
+});
 
 // Listar RNC por projeto
 router.get('/projeto/:projetoId', auth, async (req, res) => {
@@ -47,13 +112,35 @@ router.post('/', auth, [
       descricao,
       gravidade,
       acao_corretiva,
-      responsavel_id
+      responsavel_id,
+      data_prevista_encerramento,
+      origem,
+      area_afetada,
+      norma_referencia,
+      registros_fotograficos
     } = req.body;
 
     const result = await runQuery(`
-      INSERT INTO rnc (projeto_id, rdo_id, titulo, descricao, gravidade, status, acao_corretiva, responsavel_id, criado_por)
-      VALUES (?, ?, ?, ?, ?, 'Aberta', ?, ?, ?)
-    `, [projeto_id, rdo_id || null, titulo, descricao, gravidade, acao_corretiva || null, responsavel_id || null, req.usuario.id]);
+      INSERT INTO rnc (
+        projeto_id, rdo_id, titulo, descricao, gravidade, status, acao_corretiva, responsavel_id,
+        data_prevista_encerramento, origem, area_afetada, norma_referencia, registros_fotograficos, criado_por
+      )
+      VALUES (?, ?, ?, ?, ?, 'Aberta', ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      projeto_id,
+      rdo_id || null,
+      titulo,
+      descricao,
+      gravidade,
+      acao_corretiva || null,
+      responsavel_id || null,
+      data_prevista_encerramento || null,
+      origem || null,
+      area_afetada || null,
+      norma_referencia || null,
+      registros_fotograficos || null,
+      req.usuario.id
+    ]);
 
     await registrarAuditoria('rnc', result.lastID, 'CREATE', null, req.body, req.usuario.id);
 
@@ -90,7 +177,12 @@ router.put('/:id', auth, async (req, res) => {
       status,
       acao_corretiva,
       responsavel_id,
-      rdo_id
+      rdo_id,
+      data_prevista_encerramento,
+      origem,
+      area_afetada,
+      norma_referencia,
+      registros_fotograficos
     } = req.body;
 
     await runQuery(`
@@ -102,9 +194,28 @@ router.put('/:id', auth, async (req, res) => {
         acao_corretiva = ?,
         responsavel_id = ?,
         rdo_id = ?,
+        data_prevista_encerramento = ?,
+        origem = ?,
+        area_afetada = ?,
+        norma_referencia = ?,
+        registros_fotograficos = ?,
         atualizado_em = CURRENT_TIMESTAMP
       WHERE id = ?
-    `, [titulo, descricao, gravidade, status, acao_corretiva || null, responsavel_id || null, rdo_id || null, id]);
+    `, [
+      titulo,
+      descricao,
+      gravidade,
+      status,
+      acao_corretiva || null,
+      responsavel_id || null,
+      rdo_id || null,
+      data_prevista_encerramento || null,
+      origem || null,
+      area_afetada || null,
+      norma_referencia || null,
+      registros_fotograficos || null,
+      id
+    ]);
 
     const novo = await getQuery('SELECT * FROM rnc WHERE id = ?', [id]);
     await registrarAuditoria('rnc', id, 'UPDATE', rncAtual, novo, req.usuario.id);

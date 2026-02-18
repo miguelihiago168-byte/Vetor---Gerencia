@@ -6,24 +6,32 @@ const { registrarAuditoria } = require('../middleware/auditoria');
 
 const router = express.Router();
 
-// Gerar número único para RDO (formato: RDO-YYYYMMDD-XXXXXX)
-const gerarNumeroRDO = async (projetoId) => {
-  const hoje = new Date();
-  const ano = hoje.getFullYear();
-  const mes = String(hoje.getMonth() + 1).padStart(2, '0');
-  const dia = String(hoje.getDate()).padStart(2, '0');
-  const data = `${ano}${mes}${dia}`;
-  
-  // Contar RDOs do dia
-  const resultado = await getQuery(
-    'SELECT COUNT(*) as contador FROM rdos WHERE projeto_id = ? AND DATE(data_relatorio) = DATE(?)',
-    [projetoId, new Date().toISOString().split('T')[0]]
-  );
-  
-  const contador = (resultado?.contador || 0) + 1;
-  const sequencia = String(contador).padStart(6, '0');
-  
-  return `RDO-${data}-${sequencia}`;
+// Gerar número sequencial e único no formato RDO-XXX, baseado em TODOS os RDOs existentes
+const gerarNumeroRDO = async () => {
+  // 1) Buscar todos os IDs já existentes
+  const existentes = await allQuery('SELECT numero_rdo FROM rdos WHERE numero_rdo IS NOT NULL', []);
+
+  // 2) Extrair parte numérica, converter para inteiro e encontrar o maior
+  let maior = 0;
+  if (Array.isArray(existentes)) {
+    for (const row of existentes) {
+      const idStr = String(row.numero_rdo || '');
+      const m = idStr.match(/(\d{1,})$/);
+      const n = m ? parseInt(m[1], 10) : NaN;
+      if (!isNaN(n) && n > maior) maior = n;
+    }
+  }
+
+  // 3) Próximo = maior + 1 (ou 1 se não existir nenhum)
+  let nextNum = maior > 0 ? (maior + 1) : 1;
+
+  // 4) Garantir unicidade: validar se já existe; se existir, incrementar novamente
+  while (true) {
+    const candidate = `RDO-${String(nextNum).padStart(3, '0')}`;
+    const exists = await getQuery('SELECT id FROM rdos WHERE numero_rdo = ?', [candidate]);
+    if (!exists) return candidate;
+    nextNum++;
+  }
 };
 
 // Atualizar status da atividade EAP
@@ -102,7 +110,7 @@ router.get('/projeto/:projetoId', auth, async (req, res) => {
       LEFT JOIN usuarios u ON r.criado_por = u.id
       LEFT JOIN usuarios g ON r.aprovado_por = g.id
       WHERE r.projeto_id = ?
-      ORDER BY r.data_relatorio DESC
+      ORDER BY r.criado_em DESC, r.id DESC
     `, [projetoId]);
 
     res.json(rdos);
@@ -241,7 +249,8 @@ router.get('/:id', auth, async (req, res) => {
 // Criar RDO
 router.post('/', auth, [
   body('projeto_id').isInt(),
-  body('data_relatorio').isDate()
+  body('data_relatorio').optional().isDate(),
+  body('dia_semana').optional().isString()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -272,10 +281,44 @@ router.post('/', auth, [
       atividades
     } = req.body;
 
-    // Verificar se já existe RDO para esta data
+    // Data efetiva do RDO baseada na data real de criação do sistema
+    // Data do relatório deve respeitar o valor escolhido no formulário.
+    // Mantemos uma política de fim de semana apenas como "fallback" caso não venha data.
+    const polSat = (process.env.WEEKEND_POLICY_SAT || process.env.WEEKEND_POLICY || 'keep').toLowerCase();
+    const polSun = (process.env.WEEKEND_POLICY_SUN || process.env.WEEKEND_POLICY || 'keep').toLowerCase();
+    const now = new Date();
+    const createdDay = now.getDay(); // 0=Domingo .. 6=Sábado
+    const effectiveDateObj = (() => {
+      if (createdDay === 6) { // Sábado
+        if (polSat === 'shift') {
+          const d = new Date(now); d.setDate(d.getDate() + 2); return d; // próxima segunda
+        }
+        return now;
+      }
+      if (createdDay === 0) { // Domingo
+        if (polSun === 'shift') {
+          const d = new Date(now); d.setDate(d.getDate() + 1); return d; // próxima segunda
+        }
+        return now;
+      }
+      return now;
+    })();
+    const effectiveDateStr = `${effectiveDateObj.getFullYear()}-${String(effectiveDateObj.getMonth()+1).padStart(2,'0')}-${String(effectiveDateObj.getDate()).padStart(2,'0')}`;
+
+    const normalizeInputDate = (val) => {
+      if (!val) return null;
+      const m = String(val).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+      const d = new Date(val);
+      if (isNaN(d.getTime())) return null;
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    };
+    const dataRelatorioStr = normalizeInputDate(data_relatorio) || effectiveDateStr;
+
+    // Verificar se já existe RDO para a data informada (ou fallback)
     const rdoExistente = await getQuery(
       'SELECT id FROM rdos WHERE projeto_id = ? AND data_relatorio = ?',
-      [projeto_id, data_relatorio]
+      [projeto_id, dataRelatorioStr]
     );
 
     if (rdoExistente) {
@@ -283,17 +326,12 @@ router.post('/', auth, [
     }
 
     // Gerar número único para RDO
-    const numero_rdo = await gerarNumeroRDO(projeto_id);
+    const numero_rdo = await gerarNumeroRDO();
 
-    // Calcular dia da semana em pt-BR
+    // Calcular dia da semana em pt-BR a partir da data escolhida
     const dias = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
-    const dia_semana_calc = (() => {
-      try {
-        const d = new Date(data_relatorio);
-        if (isNaN(d.getTime())) return '';
-        return dias[d.getDay()];
-      } catch (e) { return ''; }
-    })();
+    const dataRelObj = new Date(`${dataRelatorioStr}T00:00:00`);
+    const dia_semana_calc = dias[dataRelObj.getDay()];
 
     // Calcular horas trabalhadas a partir de horários (HH:MM)
     const toMinutes = (t) => {
@@ -318,31 +356,28 @@ router.post('/', auth, [
 
     const horas_calc = (horas_trabalhadas || calcHoras());
 
-    // Aceitar mao_obra_detalhada (array) se enviado
-    const mao_obra_detalhada_json = req.body.mao_obra_detalhada ? JSON.stringify(req.body.mao_obra_detalhada) : null;
+    // Número RDO sequencial e único (RDO-XXX)
+    const numeroRdoFinal = numero_rdo;
 
     const initialStatus = req.body.status && ['Em preenchimento','Em análise','Aprovado','Reprovado'].includes(req.body.status) ? req.body.status : 'Em preenchimento';
 
-    const historicoInicial = [{ status: initialStatus, por: req.usuario.id, em: new Date().toISOString() }];
-
     const result = await runQuery(`
       INSERT INTO rdos (
-        numero_rdo, projeto_id, data_relatorio, dia_semana, 
+        numero_rdo, projeto_id, data_relatorio, dia_semana,
         entrada_saida_inicio, entrada_saida_fim, intervalo_almoco_inicio, intervalo_almoco_fim, horas_trabalhadas,
         clima_manha, tempo_manha, praticabilidade_manha,
         clima_tarde, tempo_tarde, praticabilidade_tarde,
         mao_obra_direta, mao_obra_indireta, mao_obra_terceiros,
-        mao_obra_detalhada, equipamentos, ocorrencias, comentarios, criado_por, historico_status, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        equipamentos, ocorrencias, comentarios, mao_obra_detalhada, criado_por, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
-      numero_rdo, projeto_id, data_relatorio, dia_semana_calc,
-      entrada_saida_inicio || '07:00', entrada_saida_fim || '17:00', 
+      numeroRdoFinal, projeto_id, dataRelatorioStr, dia_semana_calc,
+      entrada_saida_inicio || '07:00', entrada_saida_fim || '17:00',
       intervalo_almoco_inicio || '12:00', intervalo_almoco_fim || '13:00', horas_calc,
       clima_manha || 'Claro', tempo_manha || '★', praticabilidade_manha || 'Praticável',
       clima_tarde || 'Claro', tempo_tarde || '★', praticabilidade_tarde || 'Praticável',
       mao_obra_direta || 0, mao_obra_indireta || 0, mao_obra_terceiros || 0,
-      mao_obra_detalhada_json,
-      equipamentos, ocorrencias, comentarios, req.usuario.id, JSON.stringify(historicoInicial), initialStatus
+      equipamentos, ocorrencias, comentarios, (req.body.mao_obra_detalhada ? JSON.stringify(req.body.mao_obra_detalhada) : null), req.usuario.id, initialStatus
     ]);
 
     const rdoId = result.lastID;
@@ -401,7 +436,7 @@ router.post('/', auth, [
 
     res.status(201).json({
       mensagem: 'RDO criado com sucesso.',
-      rdo: { id: rdoId, data_relatorio }
+      rdo: { id: rdoId, data_relatorio: dataRelatorioStr }
     });
 
   } catch (error) {
@@ -477,8 +512,9 @@ router.put('/:id', auth, async (req, res) => {
         intervalo_almoco_inicio = ?, intervalo_almoco_fim = ?, horas_trabalhadas = ?,
         clima_manha = ?, tempo_manha = ?, praticabilidade_manha = ?,
         clima_tarde = ?, tempo_tarde = ?, praticabilidade_tarde = ?,
-        mao_obra_direta = ?, mao_obra_indireta = ?, mao_obra_terceiros = ?, mao_obra_detalhada = ?,
+        mao_obra_direta = ?, mao_obra_indireta = ?, mao_obra_terceiros = ?,
         equipamentos = ?, ocorrencias = ?, comentarios = ?,
+        mao_obra_detalhada = ?,
         atualizado_em = CURRENT_TIMESTAMP
       WHERE id = ?
     `, [
@@ -487,21 +523,41 @@ router.put('/:id', auth, async (req, res) => {
       intervalo_almoco_inicio || '12:00', intervalo_almoco_fim || '13:00', horas_trabalhadas || 0,
       clima_manha || 'Claro', tempo_manha || '★', praticabilidade_manha || 'Praticável',
       clima_tarde || 'Claro', tempo_tarde || '★', praticabilidade_tarde || 'Praticável',
-      mao_obra_direta, mao_obra_indireta, mao_obra_terceiros, JSON.stringify(req.body.mao_obra_detalhada || []),
-      equipamentos, ocorrencias, comentarios, id
+      mao_obra_direta, mao_obra_indireta, mao_obra_terceiros,
+      equipamentos, ocorrencias, comentarios,
+      (typeof req.body.mao_obra_detalhada !== 'undefined'
+        ? (req.body.mao_obra_detalhada ? JSON.stringify(req.body.mao_obra_detalhada) : null)
+        : rdoAtual.mao_obra_detalhada // se não veio no payload, preserva o valor atual
+      ),
+      id
     ]);
 
-    // Atualizar atividades
+    // Atualizar atividades preservando IDs (para manter fotos vinculadas)
     if (atividades) {
-      // Remover atividades antigas
-      await runQuery('DELETE FROM rdo_atividades WHERE rdo_id = ?', [id]);
+      const existentes = await allQuery('SELECT id, atividade_eap_id FROM rdo_atividades WHERE rdo_id = ?', [id]);
+      const mapExist = new Map();
+      existentes.forEach(row => mapExist.set(row.atividade_eap_id, row.id));
 
-      // Inserir novas atividades
+      const enviadosIds = new Set();
       for (const atividade of atividades) {
-        await runQuery(`
-          INSERT INTO rdo_atividades (rdo_id, atividade_eap_id, percentual_executado, quantidade_executada, observacao)
-          VALUES (?, ?, ?, ?, ?)
-        `, [id, atividade.atividade_eap_id, atividade.percentual_executado, atividade.quantidade_executada || null, atividade.observacao || null]);
+        enviadosIds.add(atividade.atividade_eap_id);
+        const existenteId = mapExist.get(atividade.atividade_eap_id);
+        if (existenteId) {
+          await runQuery(`
+            UPDATE rdo_atividades SET percentual_executado = ?, quantidade_executada = ?, observacao = ? WHERE id = ?
+          `, [atividade.percentual_executado, atividade.quantidade_executada || null, atividade.observacao || null, existenteId]);
+        } else {
+          await runQuery(`
+            INSERT INTO rdo_atividades (rdo_id, atividade_eap_id, percentual_executado, quantidade_executada, observacao)
+            VALUES (?, ?, ?, ?, ?)
+          `, [id, atividade.atividade_eap_id, atividade.percentual_executado, atividade.quantidade_executada || null, atividade.observacao || null]);
+        }
+      }
+
+      // Remover atividades que não estão mais presentes (pode remover fotos vinculadas por FK)
+      const toDelete = existentes.filter(row => !enviadosIds.has(row.atividade_eap_id));
+      for (const row of toDelete) {
+        await runQuery('DELETE FROM rdo_atividades WHERE id = ?', [row.id]);
       }
     }
 
@@ -586,7 +642,7 @@ router.patch('/:id/status', auth, async (req, res) => {
             SELECT COALESCE(SUM(COALESCE(ra.quantidade_executada,0)), 0) as total_executado_qt
             FROM rdo_atividades ra
             INNER JOIN rdos r ON ra.rdo_id = r.id
-            WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
+            WHERE ra.atividade_eap_id = ? AND r.status IN ('Aprovado', 'Em análise', 'Em preenchimento')
           `, [atividadeId]);
 
           let percentualExecutado = 0;
@@ -598,7 +654,7 @@ router.patch('/:id/status', auth, async (req, res) => {
               SELECT COALESCE(SUM(ra.percentual_executado), 0) as total_executado
               FROM rdo_atividades ra
               INNER JOIN rdos r ON ra.rdo_id = r.id
-              WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
+              WHERE ra.atividade_eap_id = ? AND r.status IN ('Aprovado', 'Em análise', 'Em preenchimento')
             `, [atividadeId]);
             percentualExecutado = Math.min(resultado.total_executado || 0, 100);
           }
@@ -606,7 +662,7 @@ router.patch('/:id/status', auth, async (req, res) => {
           await runQuery('UPDATE atividades_eap SET percentual_executado = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?', [percentualExecutado, atividadeId]);
 
           await atualizarStatusAtividade(atividadeId);
-          await recalcularPercentualPai(atividadeId);
+          // Não recalcular árvore da EAP em avanço de atividade; só quando métricas mudarem
 
           // Atualizar histórico para este RDO/atividade
           await runQuery(`
@@ -633,7 +689,7 @@ router.patch('/:id/status', auth, async (req, res) => {
             SELECT COALESCE(SUM(COALESCE(ra.quantidade_executada,0)),0) as total_executado_qt
             FROM rdo_atividades ra
             INNER JOIN rdos r ON ra.rdo_id = r.id
-            WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
+            WHERE ra.atividade_eap_id = ? AND r.status IN ('Aprovado', 'Em análise', 'Em preenchimento')
           `, [atividadeId]);
 
           let percentualExecutado = 0;
@@ -644,15 +700,14 @@ router.patch('/:id/status', auth, async (req, res) => {
               SELECT COALESCE(SUM(ra.percentual_executado), 0) as total_executado
               FROM rdo_atividades ra
               INNER JOIN rdos r ON ra.rdo_id = r.id
-              WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
+              WHERE ra.atividade_eap_id = ? AND r.status IN ('Aprovado', 'Em análise', 'Em preenchimento')
             `, [atividadeId]);
             percentualExecutado = Math.min(resultado.total_executado || 0, 100);
           }
 
           await runQuery('UPDATE atividades_eap SET percentual_executado = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?', [percentualExecutado, atividadeId]);
           await atualizarStatusAtividade(atividadeId);
-
-          await recalcularPercentualPai(atividadeId);
+          // Não recalcular árvore da EAP aqui (reversão). Recalcular apenas quando métricas mudarem.
 
           // Atualizar historico para os registros correspondentes
           await runQuery(`
@@ -692,19 +747,413 @@ router.delete('/:id', auth, async (req, res) => {
       return res.status(403).json({ erro: 'Você não tem permissão para deletar este RDO.' });
     }
 
-    // RDO aprovado não pode ser deletado
-    if (rdo.status === 'Aprovado') {
-      return res.status(400).json({ erro: 'RDO aprovado não pode ser deletado.' });
-    }
-
+    // Remover dependências e o RDO, mesmo se aprovado
+    await runQuery('DELETE FROM rdo_atividades WHERE rdo_id = ?', [id]);
+    await runQuery('DELETE FROM rdo_mao_obra WHERE rdo_id = ?', [id]);
+    await runQuery('DELETE FROM rdo_clima WHERE rdo_id = ?', [id]);
+    await runQuery('DELETE FROM rdo_ocorrencias WHERE rdo_id = ?', [id]);
+    await runQuery('DELETE FROM rdo_comentarios WHERE rdo_id = ?', [id]);
+    await runQuery('DELETE FROM rdo_assinaturas WHERE rdo_id = ?', [id]);
+    await runQuery('DELETE FROM rdo_fotos WHERE rdo_id = ?', [id]);
+    await runQuery('DELETE FROM rdos_versions WHERE rdo_id = ?', [id]);
+    await runQuery('DELETE FROM rdo_materiais WHERE rdo_id = ?', [id]);
+    await runQuery('DELETE FROM anexos WHERE rdo_id = ?', [id]);
+    await runQuery('DELETE FROM historico_atividades WHERE rdo_id = ?', [id]);
     await runQuery('DELETE FROM rdos WHERE id = ?', [id]);
     await registrarAuditoria('rdos', id, 'DELETE', rdo, null, req.usuario.id);
+
+    // Recalcular avanço das atividades impactadas
+    try {
+      const atividades = await allQuery('SELECT DISTINCT atividade_eap_id FROM rdo_atividades WHERE rdo_id = ?', [id]);
+      for (const row of atividades) {
+        const atividadeId = row.atividade_eap_id;
+        const infoAtividade = await getQuery('SELECT quantidade_total FROM atividades_eap WHERE id = ?', [atividadeId]);
+        const quantidadeTotal = infoAtividade ? (infoAtividade.quantidade_total || 0) : 0;
+        const resultadoQt = await getQuery(`
+          SELECT COALESCE(SUM(COALESCE(ra.quantidade_executada,0)),0) as total_executado_qt
+          FROM rdo_atividades ra
+          INNER JOIN rdos r ON ra.rdo_id = r.id
+          WHERE ra.atividade_eap_id = ?
+        `, [atividadeId]);
+        let percentualExecutado = 0;
+        if (quantidadeTotal && resultadoQt && resultadoQt.total_executado_qt) {
+          percentualExecutado = Math.min(Math.round((resultadoQt.total_executado_qt / quantidadeTotal) * 10000) / 100, 100);
+        } else {
+          const resultado = await getQuery(`
+            SELECT COALESCE(SUM(ra.percentual_executado), 0) as total_executado
+            FROM rdo_atividades ra
+            INNER JOIN rdos r ON ra.rdo_id = r.id
+            WHERE ra.atividade_eap_id = ?
+          `, [atividadeId]);
+          percentualExecutado = Math.min(resultado.total_executado || 0, 100);
+        }
+        await runQuery('UPDATE atividades_eap SET percentual_executado = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?', [percentualExecutado, atividadeId]);
+        await atualizarStatusAtividade(atividadeId);
+        // Evitar recálculo da árvore da EAP ao excluir RDO; recalcular somente em alteração de métricas
+      }
+    } catch (err) {
+      console.warn('Falha ao recalcular avanço após deleção do RDO:', err);
+    }
 
     res.json({ mensagem: 'RDO deletado com sucesso.' });
 
   } catch (error) {
     console.error('Erro ao deletar RDO:', error);
     res.status(500).json({ erro: 'Erro ao deletar RDO.' });
+  }
+});
+
+// Gerar PDF do RDO
+router.get('/:id/pdf', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Buscar RDO com detalhes
+    const rdo = await getQuery(`
+      SELECT r.*, p.nome AS projeto_nome, u.nome AS criado_por_nome
+      FROM rdos r
+      JOIN projetos p ON r.projeto_id = p.id
+      LEFT JOIN usuarios u ON r.criado_por = u.id
+      WHERE r.id = ?
+    `, [id]);
+
+    if (!rdo) {
+      return res.status(404).json({ erro: 'RDO não encontrado.' });
+    }
+
+    // Totais de mão de obra a partir do próprio RDO
+    const maoObraTotais = {
+      direta: rdo.mao_obra_direta || 0,
+      indireta: rdo.mao_obra_indireta || 0,
+      terceiros: rdo.mao_obra_terceiros || 0
+    };
+
+    // Equipamentos: o campo rdo.equipamentos pode ser JSON; tentar parsear
+    let equipamentos = [];
+    try {
+      equipamentos = rdo.equipamentos && rdo.equipamentos.startsWith('[') ? JSON.parse(rdo.equipamentos) : [];
+    } catch {
+      equipamentos = [];
+    }
+
+    // Buscar atividades EAP
+    const atividades = await allQuery(`
+      SELECT a.*, e.descricao AS atividade_descricao, e.codigo_eap, e.unidade_medida, e.quantidade_total, e.percentual_executado AS percentual_eap
+      FROM rdo_atividades a
+      JOIN atividades_eap e ON a.atividade_eap_id = e.id
+      WHERE a.rdo_id = ?
+      ORDER BY e.codigo_eap
+    `, [id]);
+
+    // Gerar PDF com estilo semelhante à UI
+    const PDFDocument = require('pdfkit');
+    const path = require('path');
+    const fs = require('fs');
+    const doc = new PDFDocument({ size: 'A4', layout: 'portrait', margin: 32 });
+    const uploadsDir = path.join(__dirname, '..', 'uploads');
+
+    // Configurar headers para download
+    res.setHeader('Content-Type', 'application/pdf');
+    const normalizeNumero = () => {
+      const raw = String(rdo.numero_rdo || '');
+      const m = raw.match(/(\d{1,})$/);
+      const seq = m ? parseInt(m[1], 10) : (rdo.id ? Number(rdo.id) : 1);
+      return `RDO-${String(seq).padStart(3, '0')}`;
+    };
+    const displayId = normalizeNumero();
+    res.setHeader('Content-Disposition', `attachment; filename="${displayId}.pdf"`);
+
+    doc.pipe(res);
+
+    // Cabeçalho estilizado (cores e elementos alinhados à UI)
+    const logoPath = path.join(uploadsDir, 'logo.png');
+    const headerY = 40;
+    const headerH = 90;
+    doc.save();
+    doc.roundedRect(32, headerY, doc.page.width - 64, headerH, 12).fill('#F5F7FB');
+    doc.restore();
+    if (fs.existsSync(logoPath)) {
+      doc.image(logoPath, 48, headerY + 20, { width: 56 });
+    }
+    // Nome do sistema
+    doc.fontSize(12).fillColor('#334155').text('Gestão de Obras - Vetor', fs.existsSync(logoPath) ? 120 : 48, headerY + 4);
+    doc.fontSize(18).fillColor('#0F172A').text(displayId, fs.existsSync(logoPath) ? 120 : 48, headerY + 20);
+    const statusLabel = (s) => {
+      if (s === 'Em análise') return 'Em aprovação';
+      if (s === 'Em preenchimento') return 'Aguardando aprovação';
+      return s || 'N/A';
+    };
+    const statusColor = (s) => {
+      if (s === 'Aprovado') return '#2E7D32';
+      if (s === 'Em análise') return '#F9A825';
+      if (s === 'Em preenchimento') return '#2962FF';
+      if (s === 'Reprovado') return '#C62828';
+      return '#6B7280';
+    };
+    doc.fontSize(11).fillColor('#475569').text(`Data: ${new Date(rdo.data_relatorio).toLocaleDateString('pt-BR')}`,
+      fs.existsSync(logoPath) ? 120 : 48, headerY + 48);
+    // Status chip
+    const chipX = doc.page.width - 180;
+    const chipY = headerY + 28;
+    const chipW = 120;
+    const chipH = 24;
+    doc.save();
+    doc.roundedRect(chipX, chipY, chipW, chipH, 12).fill(statusColor(rdo.status));
+    doc.fillColor('#FFFFFF').fontSize(11).text(statusLabel(rdo.status), chipX, chipY + 6, { width: chipW, align: 'center' });
+    doc.restore();
+    doc.moveDown(2);
+    doc.fontSize(12).fillColor('#1F2937').text(`Projeto: ${rdo.projeto_nome}`);
+    doc.fillColor('#6B7280').text(`Criado por: ${rdo.criado_por_nome || 'N/A'}`);
+    doc.moveDown();
+
+    // Condições climáticas
+    if (rdo.condicoes_climaticas) {
+      doc.fontSize(12).text('Condições Climáticas:', { underline: true });
+      doc.text(rdo.condicoes_climaticas);
+      doc.moveDown();
+    }
+
+    // Observações
+    if (rdo.observacoes) {
+      doc.text('Observações:', { underline: true });
+      doc.text(rdo.observacoes);
+      doc.moveDown();
+    }
+
+    // Mão de obra (totais)
+    doc.fontSize(13).fillColor('#0F172A').text('Mão de Obra (totais)');
+    doc.moveTo(32, doc.y + 2).lineTo(doc.page.width - 32, doc.y + 2).stroke('#E5E7EB');
+    doc.moveDown(0.5);
+    doc.fontSize(11).fillColor('#1F2937').text(`Direta: ${maoObraTotais.direta} pessoa(s)`);
+    doc.fontSize(11).fillColor('#1F2937').text(`Indireta: ${maoObraTotais.indireta} pessoa(s)`);
+    doc.fontSize(11).fillColor('#1F2937').text(`Terceiros: ${maoObraTotais.terceiros} pessoa(s)`);
+    doc.moveDown();
+
+    // Equipamentos
+    if (equipamentos.length > 0) {
+      doc.fontSize(13).fillColor('#0F172A').text('Equipamentos');
+      doc.moveTo(32, doc.y + 2).lineTo(doc.page.width - 32, doc.y + 2).stroke('#E5E7EB');
+      doc.moveDown(0.5);
+      equipamentos.forEach(eq => {
+        const nome = eq.nome || eq.equipamento || 'Equipamento';
+        const qtd = eq.quantidade || 0;
+        doc.fontSize(11).fillColor('#1F2937').text(`${nome} — ${qtd} unidade(s)`);
+      });
+      doc.moveDown();
+    }
+
+    // Atividades (tabela com mesma semântica da UI)
+    if (atividades.length > 0) {
+      // Cabeçalho da seção
+      doc.fontSize(13).fillColor('#0F172A').text('Atividades Executadas');
+      doc.moveTo(32, doc.y + 2).lineTo(doc.page.width - 32, doc.y + 2).stroke('#E5E7EB');
+      doc.moveDown(0.5);
+
+      // Cabeçalho da tabela
+      const startX = 32; const col1 = 220; const col2 = 120; const col3 = 90; const col4 = 110; const col5 = 110; const col6 = 90;
+      doc.fontSize(10).fillColor('#64748B');
+      doc.text('Atividade', startX, doc.y, { width: col1 });
+      doc.text('Qtd. Executada', startX + col1, doc.y, { width: col2, align: 'right' });
+      doc.text('Unidade', startX + col1 + col2 + 8, doc.y, { width: col3 });
+      doc.text('% Exec. (auto)', startX + col1 + col2 + col3 + 16, doc.y, { width: col4, align: 'right' });
+      doc.text('% Acumulado', startX + col1 + col2 + col3 + col4 + 24, doc.y, { width: col5, align: 'right' });
+      doc.text('Status', startX + col1 + col2 + col3 + col4 + col5 + 32, doc.y, { width: col6 });
+      doc.moveDown(0.5);
+      doc.moveTo(32, doc.y).lineTo(doc.page.width - 32, doc.y).stroke('#E5E7EB');
+
+      atividades.forEach(at => {
+        const unidade = at.unidade_medida || '';
+        const qtExec = (at.quantidade_executada != null) ? at.quantidade_executada : 0;
+        const total = (at.quantidade_total != null) ? at.quantidade_total : 0;
+        const percAuto = (total && qtExec) ? Math.min(Math.round((qtExec / total) * 10000) / 100, 100) : (at.percentual_executado || 0);
+        const acum = (at.percentual_eap != null) ? at.percentual_eap : (at.percentual_executado || 0);
+        const acumVirt = Math.min(acum + percAuto, 100);
+        const status = acumVirt >= 100 ? 'Concluída' : (acumVirt > 0 ? 'Em andamento' : 'Não iniciada');
+        doc.fontSize(11).fillColor('#1F2937');
+        doc.text(`${at.codigo_eap} — ${at.atividade_descricao}`, startX, doc.y, { width: col1 });
+        doc.text(String(qtExec), startX + col1, doc.y, { width: col2, align: 'right' });
+        doc.text(unidade, startX + col1 + col2 + 8, doc.y, { width: col3 });
+        doc.text(String(percAuto), startX + col1 + col2 + col3 + 16, doc.y, { width: col4, align: 'right' });
+        doc.text(String(acum), startX + col1 + col2 + col3 + col4 + 24, doc.y, { width: col5, align: 'right' });
+        // status chip
+        const chipW = 70; const chipH = 18; const chipX = startX + col1 + col2 + col3 + col4 + col5 + 32; const chipY = doc.y - 2;
+        doc.save();
+        doc.roundedRect(chipX, chipY, chipW, chipH, 9).fill(statusColor(status === 'Concluída' ? 'Aprovado' : (status === 'Em andamento' ? 'Em análise' : 'Em preenchimento')));
+        doc.fillColor('#FFFFFF').fontSize(9).text(status, chipX, chipY + 4, { width: chipW, align: 'center' });
+        doc.restore();
+        doc.moveDown(0.8);
+        // Observação
+        if (at.observacao) {
+          doc.fontSize(10).fillColor('#6B7280').text(`Observação: ${at.observacao}`, startX, doc.y);
+          doc.moveDown(0.3);
+        }
+        doc.moveTo(32, doc.y).lineTo(doc.page.width - 32, doc.y).stroke('#F1F5F9');
+      });
+      doc.moveDown();
+    }
+
+    // Se houver fotos, adicionar seção específica
+    const fotos = await allQuery('SELECT nome_arquivo, caminho_arquivo, descricao FROM rdo_fotos WHERE rdo_id = ? ORDER BY criado_em ASC', [id]);
+    if (fotos.length > 0) {
+      doc.addPage();
+      doc.fontSize(16).fillColor('#0F172A').text('Fotos do Dia');
+      doc.moveTo(32, doc.y + 2).lineTo(doc.page.width - 32, doc.y + 2).stroke('#E5E7EB');
+      doc.moveDown(0.5);
+      fotos.forEach(f => {
+        const filePath = path.join(uploadsDir, f.caminho_arquivo);
+        if (fs.existsSync(filePath)) {
+          doc.image(filePath, { fit: [500, 300], align: 'center' });
+          if (f.descricao) doc.fontSize(10).fillColor('#6B7280').text(f.descricao, { align: 'center' });
+          else doc.fontSize(10).fillColor('#6B7280').text(f.nome_arquivo, { align: 'center' });
+          doc.moveDown();
+        }
+      });
+    }
+
+    // Rodapé
+    doc.fontSize(10).fillColor('#6B7280').text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, { align: 'center' });
+
+    doc.end();
+
+  } catch (error) {
+    console.error('Erro ao gerar PDF:', error);
+    res.status(500).json({ erro: 'Erro ao gerar PDF.' });
+  }
+});
+
+// Exportar RDOs para Excel
+router.get('/projeto/:projetoId/excel', auth, async (req, res) => {
+  try {
+    const { projetoId } = req.params;
+
+    // Buscar RDOs com detalhes
+    const rdos = await allQuery(`
+      SELECT r.*, u.nome AS criado_por_nome, p.nome AS projeto_nome
+      FROM rdos r
+      JOIN projetos p ON r.projeto_id = p.id
+      LEFT JOIN usuarios u ON r.criado_por = u.id
+      WHERE r.projeto_id = ?
+      ORDER BY r.data_relatorio DESC
+    `, [projetoId]);
+
+    if (rdos.length === 0) {
+      return res.status(404).json({ erro: 'Nenhum RDO encontrado para este projeto.' });
+    }
+
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('RDOs');
+
+    // Cabeçalhos
+    worksheet.columns = [
+      { header: 'Número RDO', key: 'numero_rdo', width: 15 },
+      { header: 'Data', key: 'data_relatorio', width: 12 },
+      { header: 'Dia da Semana', key: 'dia_semana', width: 15 },
+      { header: 'Status', key: 'status', width: 15 },
+      { header: 'Mão de Obra Direta', key: 'mao_obra_direta', width: 18 },
+      { header: 'Mão de Obra Indireta', key: 'mao_obra_indireta', width: 20 },
+      { header: 'Mão de Obra Terceiros', key: 'mao_obra_terceiros', width: 20 },
+      { header: 'Condições Climáticas', key: 'condicoes_climaticas', width: 25 },
+      { header: 'Observações', key: 'observacoes', width: 30 },
+      { header: 'Criado por', key: 'criado_por_nome', width: 15 },
+      { header: 'Data Criação', key: 'criado_em', width: 15 }
+    ];
+
+    // Estilo dos cabeçalhos
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE6E6FA' }
+    };
+
+    // Adicionar dados
+    rdos.forEach(rdo => {
+      worksheet.addRow({
+        numero_rdo: rdo.numero_rdo || `RDO-${rdo.id}`,
+        data_relatorio: new Date(rdo.data_relatorio).toLocaleDateString('pt-BR'),
+        dia_semana: rdo.dia_semana,
+        status: rdo.status,
+        mao_obra_direta: rdo.mao_obra_direta || 0,
+        mao_obra_indireta: rdo.mao_obra_indireta || 0,
+        mao_obra_terceiros: rdo.mao_obra_terceiros || 0,
+        condicoes_climaticas: rdo.condicoes_climaticas || '',
+        observacoes: rdo.observacoes || '',
+        criado_por_nome: rdo.criado_por_nome || '',
+        criado_em: new Date(rdo.criado_em).toLocaleDateString('pt-BR')
+      });
+    });
+
+    // Configurar headers para download
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="RDOs-${rdos[0].projeto_nome}.xlsx"`);
+
+    await workbook.xlsx.write(res);
+    res.end();
+
+  } catch (error) {
+    console.error('Erro ao gerar Excel:', error);
+    res.status(500).json({ erro: 'Erro ao gerar Excel.' });
+  }
+});
+
+// Excluir TODOS os RDOs de um projeto (apenas gestor) e reverter avanço
+router.delete('/projeto/:projetoId/todos', [auth, isGestor], async (req, res) => {
+  try {
+    const { projetoId } = req.params;
+
+    // Coletar IDs dos RDOs do projeto
+    const rdosProjeto = await allQuery('SELECT id FROM rdos WHERE projeto_id = ?', [projetoId]);
+    const ids = rdosProjeto.map(r => r.id);
+
+    if (ids.length === 0) {
+      return res.json({ mensagem: 'Nenhum RDO para excluir neste projeto.', removidos: 0 });
+    }
+
+    const idPlaceholders = ids.map(() => '?').join(',');
+
+    // Remover dependências
+    await runQuery(`DELETE FROM rdo_atividades WHERE rdo_id IN (${idPlaceholders})`, ids);
+    await runQuery(`DELETE FROM rdo_mao_obra WHERE rdo_id IN (${idPlaceholders})`, ids);
+    await runQuery(`DELETE FROM rdo_clima WHERE rdo_id IN (${idPlaceholders})`, ids);
+    await runQuery(`DELETE FROM rdo_ocorrencias WHERE rdo_id IN (${idPlaceholders})`, ids);
+    await runQuery(`DELETE FROM rdo_comentarios WHERE rdo_id IN (${idPlaceholders})`, ids);
+    await runQuery(`DELETE FROM rdo_assinaturas WHERE rdo_id IN (${idPlaceholders})`, ids);
+    await runQuery(`DELETE FROM rdo_fotos WHERE rdo_id IN (${idPlaceholders})`, ids);
+    await runQuery(`DELETE FROM rdos_versions WHERE rdo_id IN (${idPlaceholders})`, ids);
+    await runQuery(`DELETE FROM rdo_materiais WHERE rdo_id IN (${idPlaceholders})`, ids);
+    // anexos vinculados aos RDOs
+    await runQuery(`DELETE FROM anexos WHERE rdo_id IN (${idPlaceholders})`, ids);
+    // histórico vinculado aos RDOs
+    await runQuery(`DELETE FROM historico_atividades WHERE rdo_id IN (${idPlaceholders})`, ids);
+
+    // Finalmente remover os RDOs
+    await runQuery(`DELETE FROM rdos WHERE id IN (${idPlaceholders})`, ids);
+
+    // Reverter avanço das atividades do projeto
+    await runQuery(`
+      UPDATE atividades_eap
+      SET percentual_executado = 0, status = 'Não iniciada', atualizado_em = CURRENT_TIMESTAMP
+      WHERE projeto_id = ?
+    `, [projetoId]);
+
+    // Opcional: recalcular pais (todos ficarão 0, mas garantir consistência)
+    try {
+      const atividades = await allQuery('SELECT id FROM atividades_eap WHERE projeto_id = ?', [projetoId]);
+      for (const a of atividades) {
+        await atualizarStatusAtividade(a.id);
+        await recalcularPercentualPai(a.id);
+      }
+    } catch (err) {
+      console.warn('Falha ao recalcular pais após exclusão total:', err);
+    }
+
+    await registrarAuditoria('rdos', null, 'BULK_DELETE', { projeto_id: projetoId }, { removidos: ids.length }, req.usuario.id);
+
+    res.json({ mensagem: 'Todos os RDOs do projeto foram excluídos e o avanço revertido.', removidos: ids.length });
+  } catch (error) {
+    console.error('Erro ao excluir todos os RDOs do projeto:', error);
+    res.status(500).json({ erro: 'Erro ao excluir todos os RDOs do projeto.' });
   }
 });
 

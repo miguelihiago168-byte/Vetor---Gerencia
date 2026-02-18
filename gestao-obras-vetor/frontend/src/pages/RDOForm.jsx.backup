@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { getAtividadesEAP, getProjeto, getRDO, createRDO, updateRDO, getMaoObra, createMaoObra, addRdoMaoObra, listRdoMaoObra, addRdoClima, addRdoComentario, uploadRdoFoto, addRdoMaterial, addRdoOcorrencia } from '../services/api';
 import { addRdoAssinatura } from '../services/api';
-import { Plus, Trash2, UploadCloud } from 'lucide-react';
+import { Plus, Trash2, UploadCloud, Download } from 'lucide-react';
 import Modal from '../components/Modal';
 import Lightbox from '../components/Lightbox';
 import { useAuth } from '../context/AuthContext';
@@ -369,6 +369,120 @@ function RDOForm(){
     setFormData({ ...formData, atividades: formData.atividades.filter((a) => a.atividade_eap_id !== id) });
   };
 
+  const exportarPDF = () => {
+    if (!rdoFull) {
+      alert('RDO não carregado');
+      return;
+    }
+    
+    try {
+      // Criar um canvas com o relatório HTML
+      const data = { ...formData, ...rdoFull };
+      const mao = (formData.mao_obra_detalhada || []).map(m => 
+        `<tr><td style="padding:6px; border:1px solid #000">${m.nome || ''}</td><td style="padding:6px; border:1px solid #000">${m.funcao || ''}</td><td style="padding:6px; border:1px solid #000">${m.entrada || ''} - ${m.saida || ''}</td><td style="padding:6px; border:1px solid #000; text-align:right">${(m.horas || 0).toFixed(2)}</td></tr>`
+      ).join('');
+
+      const html = `
+        <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>RDO - ${data.numero_rdo || rdoId}</title>
+          <style>
+            body { font-family: Arial, Helvetica, sans-serif; font-size:12px; color:#000; padding:20px; max-width:800px; margin:0 auto; }
+            .header { border-bottom:2px solid #333; padding-bottom:12px; margin-bottom:16px; }
+            .header-title { font-size:18px; font-weight:bold; margin-bottom:4px; }
+            .header-info { display:flex; justify-content:space-between; font-size:11px; }
+            table { border-collapse: collapse; width:100%; margin:12px 0; }
+            th, td { border:1px solid #000; padding:8px; text-align:left; }
+            th { background:#f0f0f0; font-weight:bold; }
+            .section-title { background:#f0f0f0; font-weight:bold; padding:8px; border:none; border-top:2px solid #000; margin-top:16px; }
+            .info-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:12px 0; }
+            .info-box { padding:8px; border:1px solid #ccc; border-radius:4px; }
+            .label { font-weight:bold; font-size:11px; color:#666; }
+            .value { margin-top:4px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="header-title">Relatório Diário de Obra - RDO</div>
+            <div class="header-info">
+              <span><strong>ID:</strong> ${data.numero_rdo || `RDO-${rdoId}`}</span>
+              <span><strong>Data:</strong> ${data.data_relatorio || ''}</span>
+              <span><strong>Gerado em:</strong> ${new Date().toLocaleDateString('pt-BR')}</span>
+            </div>
+          </div>
+
+          <div class="info-row">
+            <div class="info-box">
+              <div class="label">Data</div>
+              <div class="value">${data.data_relatorio || ''} (${data.dia_semana || ''})</div>
+            </div>
+            <div class="info-box">
+              <div class="label">Horário de Trabalho</div>
+              <div class="value">${data.entrada_saida_inicio || '07:00'} às ${data.entrada_saida_fim || '17:00'}</div>
+            </div>
+          </div>
+
+          <div class="section-title">☁️ Condições Climáticas</div>
+          <table>
+            <tr>
+              <th>Período</th>
+              <th>Condição</th>
+              <th>Trabalhabilidade</th>
+            </tr>
+            <tr>
+              <td>Manhã</td>
+              <td>${data.clima_manha || 'Claro'}</td>
+              <td>${data.praticabilidade_manha || 'Praticável'}</td>
+            </tr>
+            <tr>
+              <td>Tarde</td>
+              <td>${data.clima_tarde || 'Claro'}</td>
+              <td>${data.praticabilidade_tarde || 'Praticável'}</td>
+            </tr>
+            <tr>
+              <td>Noite</td>
+              <td>${data.clima_noite || 'Claro'}</td>
+              <td>${data.praticabilidade_noite || 'Praticável'}</td>
+            </tr>
+          </table>
+
+          <div class="section-title">👷 Mão de Obra Detalhada</div>
+          <table>
+            <tr>
+              <th>Nome</th>
+              <th>Função</th>
+              <th>Horário</th>
+              <th style="text-align:right">Horas</th>
+            </tr>
+            ${mao || '<tr><td colspan="4" style="text-align:center; padding:12px;">Nenhum colaborador adicionado</td></tr>'}
+          </table>
+
+          <div class="info-box" style="margin-top:16px;">
+            <div class="label">Pluviometria Total (mm)</div>
+            <div class="value">${data.pluviometria_total || 0}</div>
+          </div>
+
+          ${data.comentarios ? `<div class="section-title">📝 Comentários</div><div style="padding:8px; border:1px solid #ccc; white-space:pre-wrap;">${data.comentarios}</div>` : ''}
+          
+          <div style="margin-top:24px; font-size:10px; color:#999; text-align:center;">
+            Documento gerado automaticamente pelo sistema de gestão de obras
+          </div>
+        </body>
+        </html>
+      `;
+
+      // Usar html2pdf se disponível ou fallback para window.print
+      const newWindow = window.open('', 'PDF');
+      newWindow.document.write(html);
+      newWindow.document.close();
+      newWindow.print();
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      alert('Erro ao gerar PDF. Verifique o console.');
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErro('');
@@ -601,135 +715,47 @@ function RDOForm(){
     <>
       <Navbar />
       <div className="container">
+        {/* Cabeçalho com informações da obra */}
+        {projectInfo && (
+          <div className="card" style={{ padding: '20px', marginBottom: '24px', backgroundColor: '#f5f5f5', borderLeft: '4px solid #2196F3' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
+              <div>
+                <div style={{ fontSize: '12px', color: 'var(--gray-600)', textTransform: 'uppercase', marginBottom: '6px' }}>📍 Obra</div>
+                <strong style={{ fontSize: '16px' }}>{projectInfo.nome || 'N/A'}</strong>
+                {projectInfo.cidade && <div style={{ fontSize: '14px', color: 'var(--gray-700)', marginTop: '4px' }}>{projectInfo.cidade}</div>}
+              </div>
+              <div>
+                <div style={{ fontSize: '12px', color: 'var(--gray-600)', textTransform: 'uppercase', marginBottom: '6px' }}>📅 Prazo Previsto</div>
+                <strong style={{ fontSize: '16px' }}>
+                  {projectInfo.data_termino ? new Date(projectInfo.data_termino).toLocaleDateString('pt-BR') : 'Sem prazo'}
+                </strong>
+                {projectInfo.data_termino && (
+                  <div style={{ fontSize: '12px', color: 'var(--gray-700)', marginTop: '4px' }}>
+                    {new Date(projectInfo.data_termino) > new Date() ? '🟢 Em dia' : '🔴 Atrasado'}
+                  </div>
+                )}
+              </div>
+              <div>
+                <div style={{ fontSize: '12px', color: 'var(--gray-600)', textTransform: 'uppercase', marginBottom: '6px' }}>📊 Andamento</div>
+                <div style={{fontSize: '18px', fontWeight: 'bold', color: '#2196F3', marginTop: '4px' }}>
+                  {Math.round((projectInfo.percentual_progresso || 0))}%
+                </div>
+                <div style={{ height: '6px', backgroundColor: '#e0e0e0', borderRadius: '3px', marginTop: '8px', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', backgroundColor: '#4CAF50', width: `${projectInfo.percentual_progresso || 0}%` }} />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex-between mb-3">
           <div>
             <p className="eyebrow">Projeto #{projetoId}</p>
             <h1>{rdoId ? 'Editar RDO' : 'Novo RDO'}</h1>
           </div>
-          <div style={{ marginTop: '18px' }}>
-            <p className="eyebrow">👷 Mão de obra detalhada</p>
-            {formData.mao_obra_detalhada && formData.mao_obra_detalhada.map((m, idx) => (
-              <div key={idx} className="card" style={{ padding: 12, marginBottom: 8 }}>
-                <div className="grid grid-2">
-                  <div>
-                    <label className="form-label">Nome</label>
-                    <input className="form-input" value={m.nome || ''} onChange={(e) => {
-                      const nova = [...formData.mao_obra_detalhada]; nova[idx] = { ...nova[idx], nome: e.target.value }; setFormData({ ...formData, mao_obra_detalhada: nova });
-                    }} />
-                  </div>
-                  <div>
-                    <label className="form-label">Função</label>
-                    <input className="form-input" value={m.funcao || ''} onChange={(e) => {
-                      const nova = [...formData.mao_obra_detalhada]; nova[idx] = { ...nova[idx], funcao: e.target.value }; setFormData({ ...formData, mao_obra_detalhada: nova });
-                    }} />
-                  </div>
-                </div>
-                <div className="grid grid-3" style={{ marginTop: 8 }}>
-                  <div>
-                    <label className="form-label">Entrada</label>
-                    <input type="time" className="form-input" value={m.entrada || ''} onChange={(e) => { const nova = [...formData.mao_obra_detalhada]; nova[idx] = { ...nova[idx], entrada: e.target.value }; nova[idx].horas = calcHorasInterval(nova[idx].entrada, nova[idx].saida, nova[idx].intervalo_inicio, nova[idx].intervalo_fim); setFormData({ ...formData, mao_obra_detalhada: nova }); }} />
-                  </div>
-                  <div>
-                    <label className="form-label">Saída</label>
-                    <input type="time" className="form-input" value={m.saida || ''} onChange={(e) => { const nova = [...formData.mao_obra_detalhada]; nova[idx] = { ...nova[idx], saida: e.target.value }; nova[idx].horas = calcHorasInterval(nova[idx].entrada, nova[idx].saida, nova[idx].intervalo_inicio, nova[idx].intervalo_fim); setFormData({ ...formData, mao_obra_detalhada: nova }); }} />
-                  </div>
-                  <div>
-                    <label className="form-label">Horas</label>
-                    <input type="number" step="0.25" className="form-input" value={m.horas || 0} onChange={(e) => { const nova = [...formData.mao_obra_detalhada]; nova[idx] = { ...nova[idx], horas: parseFloat(e.target.value) || 0 }; setFormData({ ...formData, mao_obra_detalhada: nova }); }} />
-                  </div>
-                </div>
-                <div className="grid grid-3" style={{ marginTop: 8 }}>
-                  <div>
-                    <label className="form-label">Intervalo Início</label>
-                    <input type="time" className="form-input" value={m.intervalo_inicio || ''} onChange={(e) => { const nova = [...formData.mao_obra_detalhada]; nova[idx] = { ...nova[idx], intervalo_inicio: e.target.value }; nova[idx].horas = calcHorasInterval(nova[idx].entrada, nova[idx].saida, nova[idx].intervalo_inicio, nova[idx].intervalo_fim); setFormData({ ...formData, mao_obra_detalhada: nova }); }} />
-                  </div>
-                  <div>
-                    <label className="form-label">Intervalo Fim</label>
-                    <input type="time" className="form-input" value={m.intervalo_fim || ''} onChange={(e) => { const nova = [...formData.mao_obra_detalhada]; nova[idx] = { ...nova[idx], intervalo_fim: e.target.value }; nova[idx].horas = calcHorasInterval(nova[idx].entrada, nova[idx].saida, nova[idx].intervalo_inicio, nova[idx].intervalo_fim); setFormData({ ...formData, mao_obra_detalhada: nova }); }} />
-                  </div>
-                  <div />
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-                  <button type="button" className="btn btn-danger" onClick={() => { const nova = formData.mao_obra_detalhada.filter((_, i) => i !== idx); setFormData({ ...formData, mao_obra_detalhada: nova }); }}>Remover</button>
-                </div>
-              </div>
-            ))}
-            <div style={{ marginTop: 8 }}>
-              <button type="button" className="btn btn-secondary" onClick={() => { const nova = [...(formData.mao_obra_detalhada || []), { nome: '', funcao: '', entrada: '', saida: '', horas: 0 }]; setFormData({ ...formData, mao_obra_detalhada: nova }); }}>Adicionar colaborador</button>
-            </div>
-          </div>
-          <div>
-
-          <div style={{ marginTop: '18px' }}>
-            <p className="eyebrow">📚 Catálogo de Mão de Obra</p>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {maoObraCatalog.map((m) => (
-                <div key={m.id} className="card" style={{ padding: 8 }}>
-                  <div><strong>{m.nome}</strong></div>
-                  <div style={{ color: 'var(--gray-600)' }}>{m.funcao}</div>
-                  <div style={{ marginTop: 6 }}>
-                    <button type="button" className="btn btn-secondary" onClick={() => handleAddCatalogToRdo(m.id)}>Adicionar ao RDO</button>
-                  </div>
-                </div>
-              ))}
-              <div className="card" style={{ padding: 8 }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setShowCreateMaoModal(true)}>Criar novo</button>
-              </div>
-            </div>
-          </div>
-
-          {rdoFull && (
-            <div style={{ marginTop: '18px' }}>
-              <p className="eyebrow">🖼️ Galeria de Fotos</p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
-                {(rdoFull.fotos || []).map((f) => (
-                  <div key={f.id} className="card" style={{ padding: 8 }}>
-                    <img src={`/uploads/${f.caminho_arquivo}`} alt={f.nome_arquivo} style={{ width: '100%', height: 120, objectFit: 'cover', cursor: 'zoom-in' }} onClick={() => { setLightboxSrc(`/uploads/${f.caminho_arquivo}`); setLightboxAlt(f.nome_arquivo); setLightboxOpen(true); }} />
-                    <div style={{ fontSize: '0.85rem', marginTop: 6 }}>{f.atividade_descricao || 'Geral'}</div>
-                  </div>
-                ))}
-                  <div className="card" style={{ padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <button className="btn btn-secondary" onClick={() => openPhotoModal(null)}><UploadCloud size={14} /> Enviar foto geral</button>
-                  </div>
-              </div>
-            </div>
-          )}
-          {rdoFull && (
-            <>
-              <div style={{ marginTop: 12 }}>
-                <p className="eyebrow">✍️ Assinaturas</p>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                  <input type="file" ref={signatureFileRef} accept="image/*,application/pdf" onChange={onSignatureFileChange} />
-                  <select defaultValue="gestor" id="tipoAssinatura" style={{ padding: '8px' }}>
-                    <option value="gestor">Gestor</option>
-                    <option value="responsavel">Responsável</option>
-                  </select>
-                  <button type="button" className="btn btn-secondary" onClick={() => {
-                    const file = selectedSignatureFile; const tipo = document.getElementById('tipoAssinatura')?.value || 'gestor';
-                    handleUploadSignature(file, tipo);
-                  }} disabled={isUploadingSignature}>{isUploadingSignature ? 'Enviando...' : (<><UploadCloud size={14} /> Enviar assinatura</>)}</button>
-                </div>
-                {signaturePreview && (
-                  <div style={{ marginBottom: 8 }}>
-                    <div style={{ fontSize: '0.9rem', color: 'var(--gray-600)' }}>Preview da assinatura</div>
-                    <img src={signaturePreview} alt="preview" style={{ width: 240, height: 120, objectFit: 'contain', marginTop: 6 }} />
-                    <div style={{ marginTop: 6 }}>
-                      <button className="btn btn-secondary" onClick={() => { if (signaturePreview) try { URL.revokeObjectURL(signaturePreview); } catch(e){} setSignaturePreview(null); setSelectedSignatureFile(null); if (signatureFileRef.current) signatureFileRef.current.value=''; }}>Remover</button>
-                    </div>
-                  </div>
-                )}
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {(rdoFull.assinaturas || []).map((a) => (
-                    <div key={a.id} className="card" style={{ padding: 8 }}>
-                      <img src={`/uploads/${a.arquivo_assinatura}`} alt={`assinatura-${a.id}`} style={{ width: 160, height: 80, objectFit: 'contain', cursor: 'zoom-in' }} onClick={() => { setLightboxSrc(`/uploads/${a.arquivo_assinatura}`); setLightboxAlt(`Assinatura ${a.tipo}`); setLightboxOpen(true); }} />
-                      <div style={{ fontSize: '0.85rem', marginTop: 6 }}>{a.tipo} · {a.usuario_id}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-            <button className="btn btn-secondary" onClick={() => navigate(`/projeto/${projetoId}/rdos`)}>Voltar</button>
+          <div style={{ display: 'flex', gap: '12px', marginTop: '18px' }}>
+            <button type="button" className="btn btn-secondary" onClick={() => navigate(`/projeto/${projetoId}/rdos`)}>← Voltar</button>
+            <button type="button" className="btn btn-outline" onClick={openRelatorio}>📄 Visualizar Relatório</button>
           </div>
         </div>
 
@@ -737,7 +763,7 @@ function RDOForm(){
         {erro && <div className="alert alert-error">{erro}</div>}
 
         <form onSubmit={handleSubmit}>
-          <div className="grid grid-2" style={{ marginBottom: '24px' }}>
+          <div className="grid grid-1" style={{ marginBottom: '24px' }}>
             <div className="form-group">
               <label className="form-label">Data do relatório *</label>
               <input
@@ -748,23 +774,6 @@ function RDOForm(){
                 required
               />
               {formData.dia_semana && <small style={{ color: 'var(--gray-500)' }}>{formData.dia_semana}</small>}
-            </div>
-            <div className="form-group">
-              <label className="form-label">Status</label>
-              <select className="form-select" value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
-                <option value="Em preenchimento">Em preenchimento</option>
-                <option value="Em análise">Enviado para aprovação</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Horas trabalhadas</label>
-              <input
-                type="number"
-                className="form-input"
-                value={formData.horas_trabalhadas}
-                onChange={(e) => setFormData({ ...formData, horas_trabalhadas: parseFloat(e.target.value) || 0 })}
-                step="0.5"
-              />
             </div>
           </div>
 
@@ -818,9 +827,22 @@ function RDOForm(){
                   <option>Nublado</option>
                   <option>Chuvoso</option>
                 </select>
-                <label className="form-label">Pluviometria diária (mm)</label>
-                <input type="number" className="form-input" value={formData.pluviometria_total || 0} onChange={(e) => setFormData({ ...formData, pluviometria_total: parseFloat(e.target.value) || 0 })} />
               </div>
+            </div>
+            <div style={{ marginTop: '12px', padding: '12px', backgroundColor: '#f9f9f9', border: '2px solid #FF9800', borderRadius: '6px', display: 'flex', alignItems: 'flex-end', gap: '12px' }}>
+              <div style={{ flex: 1 }}>
+                <label className="form-label" style={{ marginBottom: '6px', fontWeight: 'bold', color: '#E65100' }}>🌧️ Pluviometria (mm)</label>
+                <input 
+                  type="number" 
+                  className="form-input" 
+                  value={formData.pluviometria_total || 0} 
+                  onChange={(e) => setFormData({ ...formData, pluviometria_total: parseFloat(e.target.value) || 0 })}
+                  style={{ fontSize: '14px' }}
+                  placeholder="0.0"
+                  step="0.1"
+                />
+              </div>
+              <small style={{ color: '#666', whiteSpace: 'nowrap' }}>Total do dia</small>
             </div>
           </div>
 
@@ -945,11 +967,130 @@ function RDOForm(){
             </div>
           </div>
 
+          {/* ==================== SEÇÃO: MÃO DE OBRA DETALHADA ==================== */}
+          <div style={{ marginBottom: '24px', marginTop: '32px', paddingTop: '24px', borderTop: '2px solid #e0e0e0' }}>
+            <p className="eyebrow">👷 Mão de Obra Detalhada</p>
+            {formData.mao_obra_detalhada && formData.mao_obra_detalhada.map((m, idx) => (
+              <div key={idx} className="card" style={{ padding: 12, marginBottom: 8 }}>
+                <div className="grid grid-2">
+                  <div>
+                    <label className="form-label">Nome</label>
+                    <input className="form-input" value={m.nome || ''} onChange={(e) => {
+                      const nova = [...formData.mao_obra_detalhada]; nova[idx] = { ...nova[idx], nome: e.target.value }; setFormData({ ...formData, mao_obra_detalhada: nova });
+                    }} />
+                  </div>
+                  <div>
+                    <label className="form-label">Função</label>
+                    <input className="form-input" value={m.funcao || ''} onChange={(e) => {
+                      const nova = [...formData.mao_obra_detalhada]; nova[idx] = { ...nova[idx], funcao: e.target.value }; setFormData({ ...formData, mao_obra_detalhada: nova });
+                    }} />
+                  </div>
+                </div>
+                <div className="grid grid-3" style={{ marginTop: 8 }}>
+                  <div>
+                    <label className="form-label">Entrada</label>
+                    <input type="time" className="form-input" value={m.entrada || ''} onChange={(e) => { const nova = [...formData.mao_obra_detalhada]; nova[idx] = { ...nova[idx], entrada: e.target.value }; nova[idx].horas = calcHorasInterval(nova[idx].entrada, nova[idx].saida, nova[idx].intervalo_inicio, nova[idx].intervalo_fim); setFormData({ ...formData, mao_obra_detalhada: nova }); }} />
+                  </div>
+                  <div>
+                    <label className="form-label">Saída</label>
+                    <input type="time" className="form-input" value={m.saida || ''} onChange={(e) => { const nova = [...formData.mao_obra_detalhada]; nova[idx] = { ...nova[idx], saida: e.target.value }; nova[idx].horas = calcHorasInterval(nova[idx].entrada, nova[idx].saida, nova[idx].intervalo_inicio, nova[idx].intervalo_fim); setFormData({ ...formData, mao_obra_detalhada: nova }); }} />
+                  </div>
+                  <div>
+                    <label className="form-label">Horas</label>
+                    <input type="number" step="0.25" className="form-input" value={m.horas || 0} onChange={(e) => { const nova = [...formData.mao_obra_detalhada]; nova[idx] = { ...nova[idx], horas: parseFloat(e.target.value) || 0 }; setFormData({ ...formData, mao_obra_detalhada: nova }); }} />
+                  </div>
+                </div>
+                <div className="grid grid-3" style={{ marginTop: 8 }}>
+                  <div>
+                    <label className="form-label">Intervalo Início</label>
+                    <input type="time" className="form-input" value={m.intervalo_inicio || ''} onChange={(e) => { const nova = [...formData.mao_obra_detalhada]; nova[idx] = { ...nova[idx], intervalo_inicio: e.target.value }; nova[idx].horas = calcHorasInterval(nova[idx].entrada, nova[idx].saida, nova[idx].intervalo_inicio, nova[idx].intervalo_fim); setFormData({ ...formData, mao_obra_detalhada: nova }); }} />
+                  </div>
+                  <div>
+                    <label className="form-label">Intervalo Fim</label>
+                    <input type="time" className="form-input" value={m.intervalo_fim || ''} onChange={(e) => { const nova = [...formData.mao_obra_detalhada]; nova[idx] = { ...nova[idx], intervalo_fim: e.target.value }; nova[idx].horas = calcHorasInterval(nova[idx].entrada, nova[idx].saida, nova[idx].intervalo_inicio, nova[idx].intervalo_fim); setFormData({ ...formData, mao_obra_detalhada: nova }); }} />
+                  </div>
+                  <div />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                  <button type="button" className="btn btn-danger" onClick={() => { const nova = formData.mao_obra_detalhada.filter((_, i) => i !== idx); setFormData({ ...formData, mao_obra_detalhada: nova }); }}>Remover</button>
+                </div>
+              </div>
+            ))}
+            <button type="button" className="btn btn-secondary" onClick={() => { const nova = [...(formData.mao_obra_detalhada || []), { nome: '', funcao: '', entrada: '', saida: '', horas: 0 }]; setFormData({ ...formData, mao_obra_detalhada: nova }); }}>+ Adicionar colaborador</button>
           </div>
 
-            <div style={{ marginTop: 16 }} className="flex gap-2">
+          {/* ==================== SEÇÃO: CATÁLOGO DE MÃO DE OBRA ==================== */}
+          {maoObraCatalog.length > 0 && (
+            <div style={{ marginBottom: '24px' }}>
+              <p className="eyebrow">📚 Catálogo de Mão de Obra</p>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {maoObraCatalog.map((m) => (
+                  <div key={m.id} className="card" style={{ padding: 8 }}>
+                    <div><strong>{m.nome}</strong></div>
+                    <div style={{ color: 'var(--gray-600)', fontSize: '12px' }}>{m.funcao}</div>
+                    <button type="button" className="btn btn-secondary" style={{ marginTop: 6, fontSize: '12px' }} onClick={() => handleAddCatalogToRdo(m.id)}>Adicionar</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ==================== SEÇÃO: GALERIA DE FOTOS ==================== */}
+          {rdoFull && (
+            <div style={{ marginBottom: '24px' }}>
+              <p className="eyebrow">🖼️ Galeria de Fotos</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
+                {(rdoFull.fotos || []).map((f) => (
+                  <div key={f.id} className="card" style={{ padding: 8 }}>
+                    <img src={`/uploads/${f.caminho_arquivo}`} alt={f.nome_arquivo} style={{ width: '100%', height: 120, objectFit: 'cover', cursor: 'zoom-in' }} onClick={() => { setLightboxSrc(`/uploads/${f.caminho_arquivo}`); setLightboxAlt(f.nome_arquivo); setLightboxOpen(true); }} />
+                    <div style={{ fontSize: '0.85rem', marginTop: 6 }}>{f.atividade_descricao || 'Geral'}</div>
+                  </div>
+                ))}
+                <div className="card" style={{ padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <button className="btn btn-secondary" onClick={() => openPhotoModal(null)}><UploadCloud size={14} /> Enviar foto</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ==================== SEÇÃO: ASSINATURAS ==================== */}
+          {rdoFull && (
+            <div style={{ marginBottom: '24px' }}>
+              <p className="eyebrow">✍️ Assinaturas</p>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                <input type="file" ref={signatureFileRef} accept="image/*,application/pdf" onChange={onSignatureFileChange} />
+                <select defaultValue="gestor" id="tipoAssinatura" style={{ padding: '8px' }}>
+                  <option value="gestor">Gestor</option>
+                  <option value="responsavel">Responsável</option>
+                </select>
+                <button type="button" className="btn btn-secondary" onClick={() => {
+                  const file = selectedSignatureFile; const tipo = document.getElementById('tipoAssinatura')?.value || 'gestor';
+                  handleUploadSignature(file, tipo);
+                }} disabled={isUploadingSignature}>{isUploadingSignature ? 'Enviando...' : (<><UploadCloud size={14} /> Enviar</>)}</button>
+              </div>
+              {signaturePreview && (
+                <div style={{ marginBottom: 8 }}>
+                  <img src={signaturePreview} alt="preview" style={{ width: 240, height: 120, objectFit: 'contain', marginTop: 6 }} />
+                  <button className="btn btn-secondary" style={{ marginTop: 8 }} onClick={() => { if (signaturePreview) try { URL.revokeObjectURL(signaturePreview); } catch(e){} setSignaturePreview(null); setSelectedSignatureFile(null); if (signatureFileRef.current) signatureFileRef.current.value=''; }}>Remover</button>
+                </div>
+              )}
+              {(rdoFull.assinaturas || []).length > 0 && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+                  {(rdoFull.assinaturas || []).map((a) => (
+                    <div key={a.id} className="card" style={{ padding: 8 }}>
+                      <img src={`/uploads/${a.arquivo_assinatura}`} alt={`assinatura-${a.id}`} style={{ width: 160, height: 80, objectFit: 'contain', cursor: 'zoom-in' }} onClick={() => { setLightboxSrc(`/uploads/${a.arquivo_assinatura}`); setLightboxAlt(`Assinatura ${a.tipo}`); setLightboxOpen(true); }} />
+                      <div style={{ fontSize: '0.85rem', marginTop: 6 }}>{a.tipo}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div style={{ marginTop: 16 }} className="flex gap-2">
             <button type="button" className="btn btn-secondary" onClick={() => navigate(`/projeto/${projetoId}/rdos`)}>Cancelar</button>
             <button type="button" className="btn btn-outline" onClick={openRelatorio}>Visualizar Relatório</button>
+            {rdoId && (<button type="button" className="btn btn-outline" onClick={exportarPDF}><Download size={14} /> Exportar PDF</button>)}
             <button type="submit" className="btn btn-primary" disabled={isSaving}>{isSaving ? 'Salvando...' : (rdoId ? 'Salvar alterações' : 'Salvar RDO')}</button>
           </div>
         </form>

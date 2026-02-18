@@ -1,132 +1,64 @@
-import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getRNCs, createRNC, updateRNC, updateStatusRNC, deleteRNC, getRDOs, getUsuarios, submitCorrecaoRNC, enviarRncParaAprovacao } from '../services/api';
+import { getRNCs, deleteRNC } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { AlertTriangle, Plus, CheckCircle, XCircle, Loader } from 'lucide-react';
-
-const badgeMap = {
-  Aberta: 'badge-red',
-  'Em andamento': 'badge-yellow',
-  Encerrada: 'badge-green'
-};
+import { AlertTriangle, Plus, Eye, Edit, Trash2 } from 'lucide-react';
 
 function RNC() {
   const { projetoId } = useParams();
-  const { isGestor, usuario } = useAuth();
-
+  const navigate = useNavigate();
+  const { isGestor } = useAuth();
   const [rncs, setRncs] = useState([]);
-  const [rdos, setRdos] = useState([]);
-  const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState('');
-  const [sucesso, setSucesso] = useState('');
-  const [showModal, setShowModal] = useState(false);
-  const [editando, setEditando] = useState(null);
-  const [showCorrigirModal, setShowCorrigirModal] = useState(false);
-  const [corrigindoId, setCorrigindoId] = useState(null);
-  const [correcaoText, setCorrecaoText] = useState('');
-  const [formData, setFormData] = useState({
-    titulo: '',
-    descricao: '',
-    gravidade: 'Média',
-    status: 'Aberta',
-    acao_corretiva: '',
-    responsavel_id: '',
-    rdo_id: ''
-  });
+  const formatLocalDate = (dstr) => {
+    if (!dstr) return 'N/A';
+    const m = dstr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) {
+      const dt = new Date(parseInt(m[1],10), parseInt(m[2],10)-1, parseInt(m[3],10));
+      return dt.toLocaleDateString('pt-BR');
+    }
+    const dt = new Date(dstr);
+    return isNaN(dt.getTime()) ? dstr : dt.toLocaleDateString('pt-BR');
+  };
+
+  const statusLabel = (s) => {
+    if (s === 'Em análise') return 'Em aprovação';
+    return s || 'N/A';
+  };
+
+  // Aprovação foi movida para a tela de detalhes (RNCDetalhes)
 
   useEffect(() => {
-    const carregar = async () => {
-      try {
-        const [rncRes, rdoRes, usersRes] = await Promise.all([
-          getRNCs(projetoId),
-          getRDOs(projetoId),
-          getUsuarios()
-        ]);
-        setRncs(rncRes.data);
-        setRdos(rdoRes.data);
-        setUsuarios(usersRes.data);
-      } catch (error) {
-        setErro('Erro ao carregar RNC.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    carregar();
+    carregarRNCs();
   }, [projetoId]);
 
-  const abrirModal = (rnc = null) => {
-    setErro('');
-    setSucesso('');
-    if (rnc) {
-      setEditando(rnc.id);
-      setFormData({
-        titulo: rnc.titulo,
-        descricao: rnc.descricao,
-        gravidade: rnc.gravidade,
-        status: rnc.status,
-        acao_corretiva: rnc.acao_corretiva || '',
-        responsavel_id: rnc.responsavel_id || '',
-        rdo_id: rnc.rdo_id || ''
-      });
-    } else {
-      setEditando(null);
-      setFormData({ titulo: '', descricao: '', gravidade: 'Média', status: 'Aberta', acao_corretiva: '', responsavel_id: '', rdo_id: '' });
-    }
-    setShowModal(true);
-  };
-
-  const fecharModal = () => {
-    setShowModal(false);
-    setEditando(null);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setErro('');
-    setSucesso('');
-
-    const payload = {
-      projeto_id: parseInt(projetoId, 10),
-      ...formData,
-      responsavel_id: formData.responsavel_id ? parseInt(formData.responsavel_id, 10) : null,
-      rdo_id: formData.rdo_id ? parseInt(formData.rdo_id, 10) : null
-    };
-
+  const carregarRNCs = async () => {
     try {
-      if (editando) {
-        await updateRNC(editando, payload);
-        setSucesso('RNC atualizada.');
-      } else {
-        await createRNC(payload);
-        setSucesso('RNC criada.');
-      }
-      const res = await getRNCs(projetoId);
-      setRncs(res.data);
-      fecharModal();
+      setLoading(true);
+      console.log('Carregando RNCs para projeto:', projetoId);
+      const response = await getRNCs(projetoId);
+      console.log('RNCs carregadas:', response.data);
+      console.log('Número de RNCs:', response.data?.length || 0);
+      setRncs(response.data || []);
     } catch (error) {
-      setErro(error.response?.data?.erro || 'Erro ao salvar RNC.');
+      console.error('Erro ao carregar RNCs:', error);
+      setErro('Erro ao carregar RNCs: ' + (error.response?.data?.erro || error.message));
+    } finally {
+      setLoading(false);
     }
   };
 
-  const alterarStatus = async (id, status) => {
-    try {
-      await updateStatusRNC(id, status);
-      const res = await getRNCs(projetoId);
-      setRncs(res.data);
-    } catch (error) {
-      setErro('Erro ao atualizar status.');
-    }
-  };
+  const handleDelete = async (id) => {
+    if (!window.confirm('Deseja realmente deletar esta RNC?')) return;
 
-  const remover = async (id) => {
-    if (!window.confirm('Deseja remover esta RNC?')) return;
     try {
       await deleteRNC(id);
-      setRncs(rncs.filter((r) => r.id !== id));
+      setRncs(rncs.filter(rnc => rnc.id !== id));
     } catch (error) {
-      setErro('Erro ao remover RNC.');
+      console.error('Erro ao deletar RNC:', error);
+      setErro('Erro ao deletar RNC: ' + (error.response?.data?.erro || error.message));
     }
   };
 
@@ -134,7 +66,9 @@ function RNC() {
     return (
       <>
         <Navbar />
-        <div className="loading"><div className="spinner"></div></div>
+        <div className="container" style={{ textAlign: 'center', padding: '40px' }}>
+          <div className="spinner"></div>
+        </div>
       </>
     );
   }
@@ -142,250 +76,96 @@ function RNC() {
   return (
     <>
       <Navbar />
-      <div className="container">
-        <div className="flex-between mb-3">
-          <div>
-            <p className="eyebrow">Riscos e qualidade</p>
-            <h1 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <AlertTriangle size={24} /> RNC
-            </h1>
-          </div>
-          <button className="btn btn-primary" onClick={() => abrirModal()}>
-            <Plus size={18} /> Nova RNC
+      <div className="container" style={{ paddingTop: '24px', paddingBottom: '40px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+          <h1>RNCs do Projeto</h1>
+          <button className="btn btn-primary" onClick={() => navigate(`/projeto/${projetoId}/rnc/novo`)}>
+            <Plus size={16} />
+            Nova RNC
           </button>
         </div>
 
-        {sucesso && <div className="alert alert-success">{sucesso}</div>}
-        {erro && <div className="alert alert-error">{erro}</div>}
+        {erro && <div className="alert alert-error" style={{ marginBottom: '16px' }}>{erro}</div>}
 
-        <div className="grid grid-3">
-          {rncs.map((r) => {
-            const gravidadeColor = r.gravidade === 'Baixa' ? '#16a34a' : r.gravidade === 'Média' ? '#f59e0b' : r.gravidade === 'Alta' ? '#f97316' : '#dc2626';
-            return (
-              <div key={r.id} className="card" style={{ borderLeft: `6px solid ${gravidadeColor}` }}>
-                <div className="flex-between mb-1">
+        {rncs.length === 0 ? (
+          <div className="card text-center" style={{ padding: '60px' }}>
+            <AlertTriangle size={48} style={{ color: 'var(--gray-400)', marginBottom: '16px' }} />
+            <h3 style={{ color: 'var(--gray-500)' }}>Nenhuma RNC encontrada</h3>
+            <p style={{ color: 'var(--gray-400)', marginTop: '8px' }}>
+              Crie a primeira RNC para este projeto.
+            </p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gap: '16px' }}>
+            {rncs.map(rnc => (
+              <div key={rnc.id} className="card" style={{ padding: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
-                    <p className="eyebrow">{r.gravidade}</p>
-                    <h3>{r.titulo}</h3>
-                    <p style={{ color: 'var(--gray-500)' }}>{r.descricao}</p>
+                    <h3 style={{ marginBottom: '8px' }}>
+                      {rnc.titulo || `RNC #${rnc.id}`}
+                    </h3>
+                    <div style={{ display: 'flex', gap: '16px', fontSize: '14px', color: 'var(--gray-600)' }}>
+                      <span>Data: {formatLocalDate(rnc.data_criacao)}</span>
+                      <span>Prevista: {formatLocalDate(rnc.data_prevista_encerramento)}</span>
+                      <span>Status: {statusLabel(rnc.status)}</span>
+                    </div>
                   </div>
-                  <span className={badgeMap[r.status] || 'badge-gray'}>{r.status}</span>
-                </div>
-
-                <p style={{ color: 'var(--gray-600)', marginBottom: '6px' }}>
-                  Responsável: {r.responsavel_nome || 'Não definido'}
-                </p>
-                {r.rdo_data && (
-                  <p style={{ color: 'var(--gray-500)', fontSize: '13px' }}>
-                    RDO: {new Date(r.rdo_data).toLocaleDateString('pt-BR')}
-                  </p>
-                )}
-
-                <div className="flex gap-1 mt-2">
-                  {/* Bloquear edição quando RNC estiver em 'Em análise' para usuários não-gestor */}
-                  {!(r.status === 'Em análise' && !isGestor) && (
-                    <button className="btn btn-secondary" onClick={() => abrirModal(r)}>
-                      Editar
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <span style={{
+                      padding: '6px 10px',
+                      background: rnc.status === 'Em análise' ? '#2962FF' : (rnc.status === 'Encerrada' ? '#2E7D32' : '#F9A825'),
+                      color: 'white',
+                      borderRadius: '16px',
+                      fontSize: '12px',
+                      alignSelf: 'center'
+                    }}>
+                      {statusLabel(rnc.status)}
+                    </span>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => navigate(`/projeto/${projetoId}/rnc/${rnc.id}`)}
+                      title="Ver detalhes"
+                    >
+                      <Eye size={16} />
                     </button>
-                  )}
-                  {/* Permitir ao responsável marcar correção: abrir modal de detalhe da correção */}
-                  {(usuario && (usuario.id === r.responsavel_id || usuario.id === r.criado_por)) && r.status !== 'Encerrada' && r.status !== 'Em análise' && (
-                    <>
-                      <button className="btn btn-primary" onClick={() => { setCorrigindoId(r.id); setCorrecaoText(r.acao_corretiva || ''); setShowCorrigirModal(true); }}>
-                        Corrigido
-                      </button>
-                      <button className="btn btn-blue" onClick={async () => {
-                        try {
-                          await enviarRncParaAprovacao(r.id);
-                          const res = await getRNCs(projetoId);
-                          setRncs(res.data);
-                        } catch (err) {
-                          setErro('Erro ao enviar para aprovação.');
-                        }
-                      }}>
-                        Enviar para aprovação
-                      </button>
-                    </>
-                  )}
-                  {isGestor && (
-                    <>
-                      {/* Gestor actions: quando em análise permite aprovar/reprovar */}
-                      {r.status === 'Em análise' && (
-                        <>
-                          <button className="btn btn-success" onClick={() => alterarStatus(r.id, 'Encerrada')}>
-                            <CheckCircle size={16} /> Aprovar
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => window.open(`/api/rnc/${rnc.id}/pdf`, '_blank')}
+                      title="Download PDF"
+                    >
+                      PDF
+                    </button>
+                    {/* Aprovação apenas na tela de detalhes para evitar duplicidade de botões */}
+                    {rnc.status !== 'Encerrada' && (
+                      <>
+                        <button
+                          className="btn btn-outline"
+                          onClick={() => navigate(`/projeto/${projetoId}/rnc/${rnc.id}/editar`)}
+                          title="Editar RNC"
+                          disabled={rnc.status === 'Encerrada'}
+                        >
+                          <Edit size={16} />
+                        </button>
+                        {isGestor && (
+                          <button
+                            className="btn btn-danger"
+                            onClick={() => handleDelete(rnc.id)}
+                            title="Deletar RNC"
+                            disabled={rnc.status === 'Encerrada'}
+                          >
+                            <Trash2 size={16} />
                           </button>
-                          <button className="btn btn-danger" onClick={() => alterarStatus(r.id, 'Reprovada')}>
-                            <XCircle size={16} /> Reprovar
-                          </button>
-                        </>
-                      )}
-                      {/* Permite gestor mover RNCs para Em andamento manualmente */}
-                      {r.status !== 'Encerrada' && r.status !== 'Reprovada' && (
-                        <button className="btn btn-secondary" onClick={() => alterarStatus(r.id, 'Em andamento')}>Marcar Em andamento</button>
-                      )}
-                      <button className="btn btn-danger" onClick={() => remover(r.id)}>Remover</button>
-                    </>
-                  )}
+                        )}
+                      </>
+                    )}
+                    {/* Removido informativo duplicado de ENCERRADA */}
+                  </div>
                 </div>
               </div>
-            );
-          })}
-        </div>
-
-        {rncs.length === 0 && (
-          <div className="card text-center" style={{ padding: '40px' }}>
-            <h3 style={{ color: 'var(--gray-500)' }}>Nenhuma RNC cadastrada.</h3>
+            ))}
           </div>
         )}
       </div>
-
-      {showModal && (
-        <div className="modal-overlay">
-          <div className="modal-card" style={{ maxWidth: '640px' }}>
-            <div className="flex-between mb-2">
-              <h2>{editando ? 'Editar RNC' : 'Nova RNC'}</h2>
-              <button className="btn btn-secondary" onClick={fecharModal}>Fechar</button>
-            </div>
-
-            {erro && <div className="alert alert-error">{erro}</div>}
-
-            <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label className="form-label">Título</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={formData.titulo}
-                  onChange={(e) => setFormData({ ...formData, titulo: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Descrição</label>
-                <textarea
-                  className="form-textarea"
-                  value={formData.descricao}
-                  onChange={(e) => setFormData({ ...formData, descricao: e.target.value })}
-                  required
-                />
-              </div>
-
-              <div className="grid grid-3">
-                <div className="form-group">
-                  <label className="form-label">Gravidade</label>
-                  <select
-                    className="form-select"
-                    value={formData.gravidade}
-                    onChange={(e) => setFormData({ ...formData, gravidade: e.target.value })}
-                  >
-                    <option value="Baixa">Baixa</option>
-                    <option value="Média">Média</option>
-                    <option value="Alta">Alta</option>
-                    <option value="Crítica">Crítica</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Status</label>
-                  <select
-                    className="form-select"
-                    value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                  >
-                    <option value="Aberta">Aberta</option>
-                    <option value="Em andamento">Em andamento</option>
-                    <option value="Encerrada">Encerrada</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Responsável</label>
-                  <select
-                    className="form-select"
-                    value={formData.responsavel_id}
-                    onChange={(e) => setFormData({ ...formData, responsavel_id: e.target.value })}
-                  >
-                    <option value="">Não definido</option>
-                    {usuarios.map((u) => (
-                      <option key={u.id} value={u.id}>{u.nome}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Vincular a RDO</label>
-                <select
-                  className="form-select"
-                  value={formData.rdo_id}
-                  onChange={(e) => setFormData({ ...formData, rdo_id: e.target.value })}
-                >
-                  <option value="">Sem vínculo</option>
-                  {rdos.map((rdo) => (
-                    <option key={rdo.id} value={rdo.id}>
-                      {new Date(rdo.data_relatorio).toLocaleDateString('pt-BR')} - {rdo.status}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Ação corretiva</label>
-                <textarea
-                  className="form-textarea"
-                  value={formData.acao_corretiva}
-                  onChange={(e) => setFormData({ ...formData, acao_corretiva: e.target.value })}
-                />
-              </div>
-
-              <div className="flex-between mt-3">
-                <button type="button" className="btn btn-secondary" onClick={fecharModal}>Cancelar</button>
-                <button type="submit" className="btn btn-primary">Salvar</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: detalhar correção antes de enviar para gestor */}
-      {showCorrigirModal && (
-        <div className="modal-overlay">
-          <div className="modal-card" style={{ maxWidth: '640px' }}>
-            <div className="flex-between mb-2 fade-in">
-              <h2>Detalhar correção</h2>
-              <button className="btn btn-secondary" onClick={() => { setShowCorrigirModal(false); setCorrigindoId(null); setCorrecaoText(''); }}>Fechar</button>
-            </div>
-
-            <div style={{ marginBottom: 12 }}>
-              <label className="form-label">Descreva o que foi corrigido</label>
-              <textarea className="form-textarea" value={correcaoText} onChange={(e) => setCorrecaoText(e.target.value)} />
-            </div>
-
-            <div className="flex-between">
-              <button className="btn btn-secondary" onClick={() => { setShowCorrigirModal(false); setCorrigindoId(null); setCorrecaoText(''); }}>Cancelar</button>
-              <button className="btn btn-primary" onClick={async () => {
-                if (!corrigindoId) return;
-                try {
-                  // Submeter correção e manter em 'Em andamento' — não enviar automaticamente para aprovação
-                  await submitCorrecaoRNC(corrigindoId, { acao_corretiva: correcaoText });
-                  // feedback visual rápido: manter modal aberto por 400ms para a animação
-                  setSucesso('Correção enviada. Status: Em andamento');
-                  const res = await getRNCs(projetoId);
-                  setRncs(res.data);
-                  setTimeout(() => {
-                    setShowCorrigirModal(false);
-                    setCorrigindoId(null);
-                    setCorrecaoText('');
-                    setSucesso('');
-                  }, 600);
-                } catch (err) {
-                  setErro('Erro ao enviar correção.');
-                }
-              }}>Enviar correção</button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }
