@@ -18,6 +18,37 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 
+const garantirTabelaMaoObraDireta = async () => {
+  await runQuery(`
+    CREATE TABLE IF NOT EXISTS mao_obra_direta (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      identificador TEXT,
+      nome TEXT NOT NULL,
+      funcao TEXT NOT NULL,
+      ativo INTEGER DEFAULT 1,
+      criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+      atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+      criado_por INTEGER,
+      baixado_em DATETIME,
+      baixado_por INTEGER,
+      FOREIGN KEY (criado_por) REFERENCES usuarios(id),
+      FOREIGN KEY (baixado_por) REFERENCES usuarios(id)
+    )
+  `);
+};
+
+const gerarIdentificadorMaoObraDireta = async () => {
+  for (let tentativa = 0; tentativa < 20; tentativa += 1) {
+    const candidato = `MOD-${Math.floor(100000 + Math.random() * 900000)}`;
+    const existente = await getQuery(
+      'SELECT id FROM mao_obra_direta WHERE identificador = ? LIMIT 1',
+      [candidato]
+    );
+    if (!existente) return candidato;
+  }
+  return `MOD-${String(Date.now()).slice(-6)}`;
+};
+
 // Execução acumulada por atividade (somatório de quantidade_executada em RDOs aprovados)
 router.get('/projeto/:projetoId/execucao-atividades', auth, async (req, res) => {
   try {
@@ -34,6 +65,98 @@ router.get('/projeto/:projetoId/execucao-atividades', auth, async (req, res) => 
   } catch (err) {
     console.error('Erro ao calcular execução acumulada de atividades', err);
     res.status(500).json({ erro: 'Erro ao calcular execução acumulada.' });
+  }
+});
+
+// Lista combinada de colaboradores para preenchimento de mão de obra no RDO
+router.get('/projeto/:projetoId/colaboradores', auth, async (req, res) => {
+  try {
+    const { projetoId } = req.params;
+    await garantirTabelaMaoObraDireta();
+
+    const usuariosSistema = await allQuery(`
+      SELECT DISTINCT TRIM(u.nome) AS nome, TRIM(COALESCE(u.funcao, '')) AS funcao, 'usuario_sistema' AS origem
+      FROM usuarios u
+      INNER JOIN projeto_usuarios pu ON pu.usuario_id = u.id
+      WHERE pu.projeto_id = ?
+        AND u.deletado_em IS NULL
+        AND COALESCE(u.ativo, 1) = 1
+        AND TRIM(COALESCE(u.nome, '')) <> ''
+    `, [projetoId]);
+
+    let maoObraDireta = [];
+    try {
+      maoObraDireta = await allQuery(`
+        SELECT TRIM(nome) AS nome, TRIM(COALESCE(funcao, '')) AS funcao, 'mao_obra_direta' AS origem
+        FROM mao_obra_direta
+        WHERE COALESCE(ativo, 1) = 1
+          AND TRIM(COALESCE(nome, '')) <> ''
+      `);
+    } catch (erroTabela) {
+      maoObraDireta = [];
+    }
+
+    const mapaUnico = new Map();
+    [...usuariosSistema, ...maoObraDireta].forEach((item) => {
+      const nome = String(item.nome || '').trim();
+      const funcao = String(item.funcao || '').trim();
+      if (!nome) return;
+      const chave = `${nome.toLowerCase()}|${funcao.toLowerCase()}`;
+      if (!mapaUnico.has(chave)) {
+        mapaUnico.set(chave, { nome, funcao, origem: item.origem });
+      }
+    });
+
+    const lista = Array.from(mapaUnico.values()).sort((a, b) => {
+      const cmpNome = a.nome.localeCompare(b.nome, 'pt-BR');
+      if (cmpNome !== 0) return cmpNome;
+      return a.funcao.localeCompare(b.funcao, 'pt-BR');
+    });
+
+    res.json(lista);
+  } catch (err) {
+    console.error('Erro ao listar colaboradores para RDO', err);
+    res.status(500).json({ erro: 'Erro ao listar colaboradores.' });
+  }
+});
+
+router.post('/projeto/:projetoId/colaboradores', auth, async (req, res) => {
+  try {
+    await garantirTabelaMaoObraDireta();
+    const nome = String(req.body?.nome || '').trim();
+    const funcao = String(req.body?.funcao || '').trim();
+
+    if (!nome) return res.status(400).json({ erro: 'Nome é obrigatório.' });
+    if (!funcao) return res.status(400).json({ erro: 'Função é obrigatória.' });
+
+    const existente = await getQuery(`
+      SELECT id, identificador, nome, funcao, ativo, 'mao_obra_direta' AS origem
+      FROM mao_obra_direta
+      WHERE LOWER(TRIM(nome)) = LOWER(TRIM(?))
+        AND LOWER(TRIM(funcao)) = LOWER(TRIM(?))
+      LIMIT 1
+    `, [nome, funcao]);
+
+    if (existente) {
+      return res.status(200).json({ item: existente, criado: false });
+    }
+
+    const identificador = await gerarIdentificadorMaoObraDireta();
+    const result = await runQuery(`
+      INSERT INTO mao_obra_direta (identificador, nome, funcao, ativo, criado_por)
+      VALUES (?, ?, ?, 1, ?)
+    `, [identificador, nome, funcao, req.usuario.id]);
+
+    const item = await getQuery(`
+      SELECT id, identificador, nome, funcao, ativo, 'mao_obra_direta' AS origem
+      FROM mao_obra_direta
+      WHERE id = ?
+    `, [result.lastID]);
+
+    return res.status(201).json({ item, criado: true });
+  } catch (err) {
+    console.error('Erro ao cadastrar colaborador para RDO', err);
+    return res.status(500).json({ erro: 'Erro ao cadastrar colaborador.' });
   }
 });
 

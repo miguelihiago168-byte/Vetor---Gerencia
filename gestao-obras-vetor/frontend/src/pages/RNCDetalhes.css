@@ -41,6 +41,8 @@
 .rnc-det-info .value {
   display: block;
   margin-top: 4px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .rnc-det-section {
@@ -55,6 +57,8 @@
 
 .text-prewrap {
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .muted {

@@ -35,10 +35,12 @@ export const AuthProvider = ({ children }) => {
     setUsuario(null);
   };
 
-  const isGestor = usuario?.is_gestor === 1;
+  const perfil = usuario?.perfil || null;
+  const isGestor = perfil === 'Gestor Geral' || perfil === 'Gestor da Obra' || perfil === 'Gestor Local' || usuario?.is_gestor === 1;
+  const isAdm = perfil === 'ADM' || usuario?.is_adm === 1;
 
   return (
-    <AuthContext.Provider value={{ usuario, loading, loginAuth, logout, isGestor }}>
+    <AuthContext.Provider value={{ usuario, loading, loginAuth, logout, isGestor, isAdm, perfil }}>
       {children}
     </AuthContext.Provider>
   );

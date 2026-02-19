@@ -1,30 +1,34 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogOut, User } from 'lucide-react';
+import { LogOut, User, LineChart } from 'lucide-react';
 import { useLeaveGuard } from '../context/LeaveGuardContext';
 import { listarPedidosPorProjeto, getRDOs, getRNCs, getNotificacoes, marcarNotificacaoLida } from '../services/api';
 import { useNotification } from '../context/NotificationContext';
+import { useDialog } from '../context/DialogContext';
 
 function Navbar() {
-  const { usuario, logout } = useAuth();
+  const { usuario, logout, isGestor, isAdm, perfil } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { isDirty } = useLeaveGuard();
+  const { confirm } = useDialog();
 
   // tenta extrair projetoId da rota atual (/projeto/:projetoId/...)
   const projetoMatch = (location.pathname || '').match(/\/projeto\/(\d+)/);
   const projetoId = projetoMatch ? projetoMatch[1] : null;
+  const temProjetoSelecionado = Boolean(projetoId);
 
   const [pendCompras, setPendCompras] = useState(0);
   const [pendComprasAdm, setPendComprasAdm] = useState(0);
   const [pendRdos, setPendRdos] = useState(0);
   const [pendRnc, setPendRnc] = useState(0);
+  const [notifCompras, setNotifCompras] = useState(0);
   const { info } = useNotification();
 
   useEffect(() => {
     const loadCounts = async () => {
-      if (!(usuario?.is_gestor === 1) || !projetoId) {
+      if (!isGestor || !projetoId) {
         setPendCompras(0);
         setPendRdos(0);
         return;
@@ -61,11 +65,14 @@ function Navbar() {
       try {
         const res = await getNotificacoes();
         const notifs = res.data || [];
+        const comprasPendentes = notifs.filter((n) => n.referencia_tipo === 'pedido').length;
+        setNotifCompras(comprasPendentes);
         for (const n of notifs) {
-          const idShown = info(n.mensagem, 7000);
+          info(n.mensagem, 7000);
           // marcar como lida para não repetir
           try { await marcarNotificacaoLida(n.id); } catch {}
         }
+        setNotifCompras(0);
       } catch (e) {
         // silenciar falhas de notificação
       }
@@ -73,81 +80,127 @@ function Navbar() {
     fetchNotifs();
   }, [usuario?.id, location.pathname]);
 
-  const confirmNav = (e, to) => {
-    if (isDirty) {
-      const ok = window.confirm('Você tem alterações não salvas. Deseja sair desta página?');
-      if (!ok) {
-        e.preventDefault();
-        return false;
-      }
-    }
-    return true;
+  const confirmNav = async (e, to) => {
+    if (!isDirty) return true;
+    if (e?.preventDefault) e.preventDefault();
+
+    const ok = await confirm({
+      title: 'Alterações não salvas',
+      message: 'Você tem alterações não salvas. Deseja sair desta página?',
+      confirmText: 'Sair da página',
+      cancelText: 'Continuar editando'
+    });
+
+    if (ok && to) navigate(to);
+    return ok;
   };
 
-  const handleLogout = (e) => {
-    if (!confirmNav(e)) return;
+  const handleLogout = async (e) => {
+    const ok = await confirmNav(e);
+    if (!ok) return;
     logout();
     navigate('/login');
   };
 
+  const rotaRdos = projetoId ? `/projeto/${projetoId}/rdos` : '/rdos';
+  const rotaRnc = projetoId ? `/projeto/${projetoId}/rnc` : '/rnc';
+  const rotaCompras = projetoId ? `/projeto/${projetoId}/pedidos` : '/compras';
+  const rotaAlmox = projetoId ? `/projeto/${projetoId}/almoxarifado` : '/ativos';
+  const rotaEap = projetoId ? `/projeto/${projetoId}/eap` : '/eap';
+  const rotaCurvaS = projetoId ? `/projeto/${projetoId}/curva-s` : '/curva-s';
+  const rotaUsuarios = projetoId ? `/projeto/${projetoId}/usuarios` : '/usuarios';
+  const identificacaoTopo = usuario?.funcao || perfil || '';
+
+  const isGestorGeral = perfil === 'Gestor Geral';
+  const isGestorObra = perfil === 'Gestor da Obra' || perfil === 'Gestor Local';
+  const isGestorQualidade = perfil === 'Gestor da Qualidade' || perfil === 'Gestor de Qualidade';
+  const isAdministrativo = perfil === 'ADM';
+  const isAlmoxarife = perfil === 'Almoxarife';
+  const isFiscal = perfil === 'Fiscal';
+
+  const canViewRdo = isGestorGeral || isGestorObra || isGestorQualidade || isFiscal;
+  const canViewRnc = isGestorGeral || isGestorObra || isGestorQualidade || isFiscal;
+  const canViewCurvaS = isGestorGeral || isGestorObra || isGestorQualidade || isFiscal;
+  const canViewCompras = isGestorGeral || isGestorObra || isAdministrativo || isAlmoxarife;
+  const canViewAtivos = isGestorGeral || isGestorObra || isGestorQualidade || isAdministrativo || isAlmoxarife;
+  const canViewEap = isGestorGeral || isGestorObra || isGestorQualidade;
+  const canViewUsuarios = isGestorGeral || isAdministrativo;
+
   return (
     <nav className="navbar">
-      <div className="container">
+      <div className="navbar-container">
         <div className="navbar-content">
           <NavLink to="/projetos" className="navbar-brand">
             <span>Vetor</span> Gestão de Obras
           </NavLink>
-          
-          <div className="navbar-menu">
+
+          <div className="navbar-main">
+            <div className="navbar-menu">
             <NavLink to="/projetos" onClick={(e) => confirmNav(e, '/projetos')} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
               Projetos
             </NavLink>
-            {projetoId && (
+            {temProjetoSelecionado && (
               <>
-                <NavLink to={`/projeto/${projetoId}/rdos`} onClick={(e) => confirmNav(e, `/projeto/${projetoId}/rdos`)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-                  RDOs {usuario?.is_gestor === 1 && pendRdos > 0 && (<span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendRdos}</span>)}
+                {canViewRdo && (
+                <NavLink to={rotaRdos} onClick={(e) => confirmNav(e, rotaRdos)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+                  RDOs {isGestor && pendRdos > 0 && (<span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendRdos}</span>)}
                 </NavLink>
-                <NavLink to={`/projeto/${projetoId}/rnc`} onClick={(e) => confirmNav(e, `/projeto/${projetoId}/rnc`)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-                  RNC {usuario?.is_gestor === 1 && pendRnc > 0 && (<span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendRnc}</span>)}
+                )}
+                {canViewRnc && (
+                <NavLink to={rotaRnc} onClick={(e) => confirmNav(e, rotaRnc)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+                  RNC {isGestor && pendRnc > 0 && (<span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendRnc}</span>)}
                 </NavLink>
-                <NavLink to={`/projeto/${projetoId}/pedidos`} onClick={(e) => confirmNav(e, `/projeto/${projetoId}/pedidos`)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+                )}
+                {canViewCompras && (
+                <NavLink to={rotaCompras} onClick={(e) => confirmNav(e, rotaCompras)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
                   Compras
-                  {usuario?.is_gestor === 1 && pendCompras > 0 && (
+                  {isGestor && pendCompras > 0 && (
                     <span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendCompras}</span>
                   )}
-                  {usuario?.is_adm === 1 && pendComprasAdm > 0 && (
+                  {isAdm && pendComprasAdm > 0 && (
                     <span className="badge badge-yellow" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendComprasAdm}</span>
                   )}
+                  {notifCompras > 0 && (
+                    <span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{notifCompras}</span>
+                  )}
                 </NavLink>
-                {usuario?.is_gestor === 1 && (
-                  <NavLink to={`/projeto/${projetoId}/eap`} onClick={(e) => confirmNav(e, `/projeto/${projetoId}/eap`)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+                )}
+                {canViewAtivos && (
+                <NavLink to={rotaAlmox} onClick={(e) => confirmNav(e, rotaAlmox)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+                  Ativos
+                </NavLink>
+                )}
+                {canViewEap && (
+                  <NavLink to={rotaEap} onClick={(e) => confirmNav(e, rotaEap)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
                     EAP
                   </NavLink>
                 )}
-                {usuario?.is_gestor === 1 && (
-                  <NavLink to={`/projeto/${projetoId}/usuarios`} onClick={(e) => confirmNav(e, `/projeto/${projetoId}/usuarios`)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+                {canViewCurvaS && (
+                <NavLink to={rotaCurvaS} onClick={(e) => confirmNav(e, rotaCurvaS)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+                  <LineChart size={14} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} />
+                  Curva S
+                </NavLink>
+                )}
+                {canViewUsuarios && (
+                  <NavLink to={rotaUsuarios} onClick={(e) => confirmNav(e, rotaUsuarios)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
                     Usuários
                   </NavLink>
                 )}
               </>
             )}
-            {usuario?.is_gestor === 1 && !projetoId && (
-              <NavLink to="/usuarios" onClick={(e) => confirmNav(e, '/usuarios')} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-                Usuários
-              </NavLink>
-            )}
-            
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span className="navbar-user">
-                <User size={16} />
-                {usuario?.nome}
-                {usuario?.is_gestor === 1 && ' · Gestor'}
-              </span>
-              <button onClick={handleLogout} className="btn btn-danger" style={{ padding: '10px 14px' }}>
-                <LogOut size={16} />
-                Sair
-              </button>
             </div>
+          </div>
+
+          <div className="navbar-account">
+            <span className="navbar-user">
+              <User size={16} />
+              {usuario?.nome}
+              {identificacaoTopo ? ` · ${identificacaoTopo}` : ''}
+            </span>
+            <button onClick={handleLogout} className="btn btn-danger" style={{ padding: '10px 14px' }}>
+              <LogOut size={16} />
+              Sair
+            </button>
           </div>
         </div>
       </div>

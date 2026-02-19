@@ -28,6 +28,7 @@ const dashboardRoutes = require('./routes/dashboard');
 const rncRoutes = require('./routes/rnc');
 const pedidosCompraRoutes = require('./routes/pedidos_compra');
 const notificacoesRoutes = require('./routes/notificacoes');
+const almoxarifadoRoutes = require('./routes/almoxarifado');
 // Garantir esquema de notificações e índice único para evitar duplicidades
 try {
   const { db } = require('./config/database');
@@ -63,6 +64,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/rnc', rncRoutes);
 app.use('/api/pedidos-compra', pedidosCompraRoutes);
 app.use('/api/notificacoes', notificacoesRoutes);
+app.use('/api/almoxarifado', almoxarifadoRoutes);
 
 // Rota de teste
 app.get('/api/health', (req, res) => {

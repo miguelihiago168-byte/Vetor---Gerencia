@@ -38,7 +38,7 @@ api.interceptors.response.use(
 export const login = (credentials) => api.post('/auth/login', credentials);
 
 // Usuários
-export const getUsuarios = () => api.get('/usuarios');
+export const getUsuarios = (params) => api.get('/usuarios', { params });
 export const getUsuario = (id) => api.get(`/usuarios/${id}`);
 export const getNovoLogin = () => api.get('/usuarios/novo-login');
 export const getUsuariosDeletados = () => api.get('/usuarios/deletados/lista');
@@ -47,6 +47,10 @@ export const updateUsuario = (id, data) => api.put(`/usuarios/${id}`, data);
 export const updateUsuarioGestor = (id, isGestor) => api.patch(`/usuarios/${id}/gestor`, { is_gestor: isGestor });
 export const updateUsuarioAdm = (id, isAdm) => api.patch(`/usuarios/${id}/adm`, { is_adm: isAdm });
 export const deleteUsuario = (id) => api.delete(`/usuarios/${id}`);
+export const getMaoObraDireta = (params) => api.get('/usuarios/mao-obra-direta', { params });
+export const createMaoObraDireta = (data) => api.post('/usuarios/mao-obra-direta', data);
+export const updateMaoObraDireta = (id, data) => api.put(`/usuarios/mao-obra-direta/${id}`, data);
+export const baixaMaoObraDireta = (id) => api.patch(`/usuarios/mao-obra-direta/${id}/baixa`);
 
 // Projetos
 export const getProjetos = () => api.get('/projetos');
@@ -93,6 +97,9 @@ export const addRdoAssinatura = (rdoId, data) => api.post(`/rdo/${rdoId}/assinat
 export const uploadRdoFoto = (rdoId, formData) => api.post(`/rdo/${rdoId}/foto`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 // Execução acumulada de atividades (somatório de quantidade_executada em RDOs aprovados)
 export const getExecucaoAcumulada = (projetoId) => api.get(`/rdo/projeto/${projetoId}/execucao-atividades`);
+// Colaboradores disponíveis para preenchimento de mão de obra (usuários + mão de obra direta)
+export const getRdoColaboradores = (projetoId) => api.get(`/rdo/projeto/${projetoId}/colaboradores`);
+export const createRdoColaborador = (projetoId, data) => api.post(`/rdo/projeto/${projetoId}/colaboradores`, data);
 
 // Anexos
 export const uploadAnexo = (rdoId, formData) => api.post(`/anexos/upload/${rdoId}`, formData, {
@@ -109,6 +116,7 @@ export const getAnexosRNC = (rncId) => api.get(`/anexos/rnc/${rncId}`);
 // Dashboard
 export const getDashboardAvanco = (projetoId) => api.get(`/dashboard/projeto/${projetoId}/avanco`);
 export const getRDOStats = (projetoId) => api.get(`/dashboard/projeto/${projetoId}/rdos-stats`);
+export const getCurvaS = (projetoId) => api.get(`/dashboard/projeto/${projetoId}/curva-s`);
 
 // RNC
 export const getRNCs = (projetoId) => api.get(`/rnc/projeto/${projetoId}`);
@@ -137,5 +145,24 @@ export const marcarComprado = (id) => api.patch(`/pedidos-compra/${id}/comprado`
 export const reprovarPedido = (id, motivo) => api.patch(`/pedidos-compra/${id}/reprovar`, { motivo });
 export const listarPedidosPorProjeto = (projetoId) => api.get(`/pedidos-compra/projeto/${projetoId}`);
 export const detalharPedido = (id) => api.get(`/pedidos-compra/${id}`);
+
+// Almoxarifado
+export const getPerfilAlmoxarifado = () => api.get('/almoxarifado/perfil');
+export const getFerramentas = (params) => api.get('/almoxarifado/ferramentas', { params });
+export const getColaboradoresRetirada = () => api.get('/almoxarifado/colaboradores');
+export const createFerramenta = (data) => api.post('/almoxarifado/ferramentas', data);
+export const getAlocacoesAbertas = (projetoId) => api.get('/almoxarifado/alocacoes-abertas', { params: { projeto_id: projetoId } });
+export const registrarRetiradaFerramenta = (data) => api.post('/almoxarifado/retiradas', data);
+export const registrarDevolucaoFerramenta = (alocacaoId, data) => api.post(`/almoxarifado/devolucoes/${alocacaoId}`, data);
+export const enviarFerramentaManutencao = (data) => api.post('/almoxarifado/manutencao/enviar', data);
+export const concluirManutencaoFerramenta = (id, data) => api.post(`/almoxarifado/manutencao/${id}/concluir`, data);
+export const registrarPerdaFerramenta = (data) => api.post('/almoxarifado/perdas', data);
+export const transferirFerramenta = (data) => api.post('/almoxarifado/transferencias', data);
+export const getDashboardAlmoxarifado = (projetoId) => api.get(`/almoxarifado/dashboard/projeto/${projetoId}`);
+export const getRelatorioMovimentacoesAlmox = (projetoId) => api.get('/almoxarifado/relatorios/movimentacoes', { params: { projeto_id: projetoId } });
+export const getRelatorioPerdasAlmox = (projetoId) => api.get('/almoxarifado/relatorios/perdas', { params: { projeto_id: projetoId } });
+export const getRdoFerramentasDisponiveis = (rdoId) => api.get(`/almoxarifado/rdo/${rdoId}/ferramentas-disponiveis`);
+export const getRdoFerramentas = (rdoId) => api.get(`/almoxarifado/rdo/${rdoId}/ferramentas`);
+export const addRdoFerramenta = (rdoId, data) => api.post(`/almoxarifado/rdo/${rdoId}/ferramentas`, data);
 
 export default api;

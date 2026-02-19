@@ -2,9 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
-import { getAtividadesEAP, getRDO, createRDO, updateRDO, addRdoClima, addRdoComentario, addRdoOcorrencia, addRdoMaterial, uploadRdoFoto, updateStatusRDO, getExecucaoAcumulada } from '../services/api';
+import { getAtividadesEAP, getRDO, createRDO, updateRDO, addRdoClima, addRdoComentario, addRdoOcorrencia, addRdoMaterial, uploadRdoFoto, updateStatusRDO, getExecucaoAcumulada, getRdoColaboradores, createRdoColaborador } from '../services/api';
 import { Plus, Trash2 } from 'lucide-react';
 import { useLeaveGuard } from '../context/LeaveGuardContext';
+import { useDialog } from '../context/DialogContext';
 
 const dias = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
 const weekdayFromLocalDateInput = (val) => {
@@ -23,12 +24,14 @@ function RDOForm2() {
   const navigate = useNavigate();
   const { setDirty } = useLeaveGuard();
   const { usuario } = useAuth();
+  const { alert, confirm } = useDialog();
 
   const [atividadesEap, setAtividadesEap] = useState([]);
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [execucaoAcum, setExecucaoAcum] = useState({}); // { atividade_eap_id: total_executado }
+  const [colaboradoresDisponiveis, setColaboradoresDisponiveis] = useState([]);
 
   const [formData, setFormData] = useState({
     data_relatorio: '',
@@ -71,6 +74,12 @@ function RDOForm2() {
           (exRes.data || []).forEach(row => { map[String(row.atividade_eap_id)] = Number(row.total_executado || 0); });
           setExecucaoAcum(map);
         } catch {}
+        try {
+          const colabRes = await getRdoColaboradores(projetoId);
+          setColaboradoresDisponiveis(Array.isArray(colabRes.data) ? colabRes.data : []);
+        } catch {
+          setColaboradoresDisponiveis([]);
+        }
         if (rdoId) {
           let rdo;
           try {
@@ -101,8 +110,20 @@ function RDOForm2() {
             climaRegistros: (rdo.clima || []).map(c => ({ periodo: c.periodo, condicao_tempo: c.condicao_tempo || 'Claro', condicao_trabalho: c.condicao_trabalho || 'Praticável', pluviometria_mm: c.pluviometria_mm || 0 })),
             mao_obra_detalhada: Array.isArray(rdo.mao_obra_detalhada) ? rdo.mao_obra_detalhada : [],
             equipamentos_detalhados: (() => { try { return rdo.equipamentos && rdo.equipamentos.startsWith('[') ? JSON.parse(rdo.equipamentos) : []; } catch { return []; } })(),
-            ocorrencias_lista: [],
+            ocorrencias_lista: (rdo.ocorrencias || []).map((o) => ({
+              id: o.id,
+              titulo: o.titulo || '',
+              descricao: o.descricao || '',
+              gravidade: o.gravidade || 'Baixa'
+            })),
             comentarios_lista: []
+            ,
+            materiais_lista: (rdo.materiais || []).map((m) => ({
+              id: m.id,
+              nome: m.nome_material || '',
+              quantidade: Number(m.quantidade || 0),
+              unidade: m.unidade || null
+            }))
           });
           setComentariosExistentes((rdo.comentarios || []).map(c => ({ id: c.id, comentario: c.comentario, autor_nome: c.autor_nome, criado_em: c.criado_em })));
 
@@ -113,7 +134,9 @@ function RDOForm2() {
             const { getRDOs } = await import('../services/api');
             const lista = (await getRDOs(projetoId)).data || [];
             if (lista.length > 0) {
-              const ultimo = lista.reduce((acc, cur) => {
+              const listaAprovados = lista.filter((item) => String(item.status || '') === 'Aprovado');
+              const baseLista = listaAprovados.length > 0 ? listaAprovados : lista;
+              const ultimo = baseLista.reduce((acc, cur) => {
                 const toDate = (s) => { const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? new Date(parseInt(m[1],10), parseInt(m[2],10)-1, parseInt(m[3],10)) : new Date(s); };
                 const dAcc = acc ? toDate(acc.data_relatorio) : null;
                 const dCur = toDate(cur.data_relatorio);
@@ -125,19 +148,25 @@ function RDOForm2() {
                   try {
                     const det = await getRDO(ultimo.id);
                     const atvs = det.data?.atividades || [];
-                    // Somente atividades em execução (Em andamento)
-                    const emExec = new Set((eapRes.data || []).filter(x => String(x.status).toLowerCase() === 'em andamento').map(x => String(x.id)));
                     return atvs
-                      .filter(a => emExec.has(String(a.atividade_eap_id)))
                       .map(a => {
                         const sel = (eapRes.data || []).find(x => String(x.id) === String(a.atividade_eap_id));
                         return { atividade_eap_id: a.atividade_eap_id, quantidade_executada: '', unidade_medida: sel ? (sel.unidade_medida || '') : '', percentual_executado: 0, observacao: '' };
                       });
                   } catch { return []; }
                 })());
+                const maoObraDetalhada = (() => {
+                  if (Array.isArray(ultimo.mao_obra_detalhada)) return ultimo.mao_obra_detalhada;
+                  try {
+                    const parsed = ultimo.mao_obra_detalhada ? JSON.parse(ultimo.mao_obra_detalhada) : [];
+                    return Array.isArray(parsed) ? parsed : [];
+                  } catch {
+                    return [];
+                  }
+                })();
                 setFormData(prev => ({
                   ...prev,
-                  mao_obra_detalhada: Array.isArray(ultimo.mao_obra_detalhada) ? ultimo.mao_obra_detalhada : [],
+                  mao_obra_detalhada: maoObraDetalhada,
                   equipamentos_detalhados: equipamentos,
                   atividades: atividadesCopia
                 }));
@@ -211,11 +240,30 @@ function RDOForm2() {
     return Math.round((total / 60) * 100) / 100;
   };
 
+  const getAtividadeLimites = (atividadeEapId) => {
+    const atividadeSel = atividadesEap.find((atividade) => String(atividade.id) === String(atividadeEapId));
+    const quantidadeTotal = atividadeSel ? Number(atividadeSel.quantidade_total || 0) : 0;
+    const execAprovado = atividadeSel ? Number(execucaoAcum[String(atividadeSel.id)] || 0) : 0;
+    const restante = quantidadeTotal > 0 ? Math.max(quantidadeTotal - execAprovado, 0) : null;
+    return { atividadeSel, quantidadeTotal, execAprovado, restante };
+  };
+
   const handleAddAtividade = () => {
     if (!draftAtividade.atividade_eap_id) return;
-    const atividadeSel = atividadesEap.find(a => String(a.id) === String(draftAtividade.atividade_eap_id));
-    const quantidadeTotal = atividadeSel ? Number(atividadeSel.quantidade_total || 0) : 0;
+    const { atividadeSel, quantidadeTotal, restante } = getAtividadeLimites(draftAtividade.atividade_eap_id);
     const qtdExec = draftAtividade.quantidade_executada !== '' ? Number(draftAtividade.quantidade_executada) : null;
+    if (qtdExec !== null && !Number.isFinite(qtdExec)) {
+      setErro('Quantidade executada inválida.');
+      return;
+    }
+    if (qtdExec !== null && qtdExec < 0) {
+      setErro('Quantidade executada não pode ser negativa.');
+      return;
+    }
+    if (qtdExec !== null && quantidadeTotal > 0 && restante != null && qtdExec > restante) {
+      setErro(`Quantidade acima do permitido para esta atividade. Restante disponível: ${formatQtd(restante)} ${atividadeSel?.unidade_medida || ''}.`);
+      return;
+    }
     let percAuto = 0;
     if (qtdExec !== null && quantidadeTotal > 0) {
       percAuto = Math.min(Math.round((qtdExec / quantidadeTotal) * 10000) / 100, 100);
@@ -232,6 +280,7 @@ function RDOForm2() {
       ? formData.atividades.map((a) => a.atividade_eap_id === item.atividade_eap_id ? item : a)
       : [...formData.atividades, item];
     setFormData({ ...formData, atividades: novaLista });
+    setErro('');
     setDraftAtividade({ atividade_eap_id: '', quantidade_executada: '', percentual_executada: '', observacao: '' });
     setDirty(true);
   };
@@ -256,10 +305,68 @@ function RDOForm2() {
 
   // Mão de obra detalhada
   const [draftColab, setDraftColab] = useState({ nome: '', funcao: '', tipo: 'Direta', entrada: '07:00', saida_almoco: '12:00', retorno_almoco: '13:00', saida_final: '17:00' });
-  const addColab = () => {
+  const [colaboradorSelecionado, setColaboradorSelecionado] = useState('');
+  const chaveColaborador = (nome, funcao) => `${String(nome || '').trim().toLowerCase()}|${String(funcao || '').trim().toLowerCase()}`;
+  const colaboradoresSelecionaveis = useMemo(() => {
+    return colaboradoresDisponiveis.filter((item) => {
+      const chaveItem = chaveColaborador(item?.nome, item?.funcao);
+      return !formData.mao_obra_detalhada.some((c) => chaveColaborador(c?.nome, c?.funcao) === chaveItem);
+    });
+  }, [colaboradoresDisponiveis, formData.mao_obra_detalhada]);
+
+  const onSelecionarColaborador = (valorSelecionado) => {
+    setColaboradorSelecionado(valorSelecionado);
+    if (valorSelecionado === '') return;
+    const item = colaboradoresSelecionaveis.find((colab) => chaveColaborador(colab?.nome, colab?.funcao) === valorSelecionado);
+    if (!item) return;
+    setDraftColab((prev) => ({
+      ...prev,
+      nome: item.nome || prev.nome,
+      funcao: item.funcao || prev.funcao
+    }));
+  };
+  const addColab = async () => {
     if (!draftColab.nome) return;
+
+    const nomeDigitado = String(draftColab.nome || '').trim();
+    const funcaoDigitada = String(draftColab.funcao || '').trim();
+    const nomeExisteNaLista = colaboradoresDisponiveis.some((item) => String(item?.nome || '').trim().toLowerCase() === nomeDigitado.toLowerCase());
+
+    if (!nomeExisteNaLista) {
+      const desejaCadastrar = await confirm({
+        title: 'Cadastrar nova mão de obra?',
+        message: `"${nomeDigitado}" não está na lista de colaboradores. Deseja cadastrar agora como mão de obra direta?`,
+        confirmText: 'Cadastrar',
+        cancelText: 'Não cadastrar'
+      });
+
+      if (desejaCadastrar) {
+        if (!funcaoDigitada) {
+          await alert({ title: 'Função obrigatória', message: 'Para cadastrar nova mão de obra, informe a função.' });
+          return;
+        }
+        try {
+          const resp = await createRdoColaborador(projetoId, { nome: nomeDigitado, funcao: funcaoDigitada });
+          const novo = resp?.data?.item;
+          if (novo?.nome) {
+            setColaboradoresDisponiveis((prev) => {
+              const jaExiste = prev.some((item) =>
+                String(item.nome || '').trim().toLowerCase() === String(novo.nome || '').trim().toLowerCase()
+                && String(item.funcao || '').trim().toLowerCase() === String(novo.funcao || '').trim().toLowerCase()
+              );
+              return jaExiste ? prev : [...prev, { nome: novo.nome, funcao: novo.funcao || '', origem: 'mao_obra_direta' }];
+            });
+          }
+        } catch (e) {
+          await alert({ title: 'Erro', message: `Não foi possível cadastrar a mão de obra: ${e?.response?.data?.erro || e?.message || 'erro inesperado'}` });
+          return;
+        }
+      }
+    }
+
     setFormData({ ...formData, mao_obra_detalhada: [...formData.mao_obra_detalhada, draftColab] });
     setDraftColab({ nome: '', funcao: '', tipo: 'Direta', entrada: '07:00', saida_almoco: '12:00', retorno_almoco: '13:00', saida_final: '17:00' });
+    setColaboradorSelecionado('');
     setDirty(true);
   };
   const removeColab = (idx) => {
@@ -311,7 +418,7 @@ function RDOForm2() {
         setComentariosExistentes(prev => [novo, ...prev]);
         setDraftComentario('');
       } catch (e) {
-        alert('Falha ao comentar: ' + (e.response?.data?.erro || e.message));
+        await alert({ title: 'Erro', message: 'Falha ao comentar: ' + (e.response?.data?.erro || e.message) });
       }
     } else {
       setFormData({ ...formData, comentarios_lista: [...formData.comentarios_lista, texto] });
@@ -370,13 +477,27 @@ function RDOForm2() {
         })
       };
 
+      for (const atividade of body.atividades) {
+        if (atividade.quantidade_executada == null) continue;
+        const { atividadeSel, quantidadeTotal, restante } = getAtividadeLimites(atividade.atividade_eap_id);
+        if (!Number.isFinite(atividade.quantidade_executada) || atividade.quantidade_executada < 0) {
+          throw new Error(`Quantidade inválida na atividade ${atividadeSel?.codigo_eap || atividade.atividade_eap_id}.`);
+        }
+        if (quantidadeTotal > 0 && restante != null && atividade.quantidade_executada > restante) {
+          throw new Error(`Atividade ${atividadeSel?.codigo_eap || atividade.atividade_eap_id}: quantidade executada maior que o restante (${formatQtd(restante)} ${atividadeSel?.unidade_medida || ''}).`);
+        }
+      }
+
       let finalId = rdoId;
       if (rdoId) {
         await updateRDO(rdoId, body);
         for (const c of formData.climaRegistros) {
           await addRdoClima(rdoId, { periodo: c.periodo, condicao_tempo: c.condicao_tempo, condicao_trabalho: c.condicao_trabalho, pluviometria_mm: Number(c.pluviometria_mm || 0) });
         }
-        for (const m of (formData.materiais_lista || [])) {
+        for (const o of (formData.ocorrencias_lista || []).filter(item => !item.id)) {
+          await addRdoOcorrencia(rdoId, { titulo: o.titulo || null, descricao: o.descricao, gravidade: o.gravidade || null });
+        }
+        for (const m of (formData.materiais_lista || []).filter(item => !item.id)) {
           await addRdoMaterial(rdoId, { nome_material: m.nome, quantidade: Number(m.quantidade || 0), unidade: m.unidade || null });
         }
         // Ao salvar, enviar para análise
@@ -531,6 +652,18 @@ function RDOForm2() {
         <div className="card">
           <h3 className="card-title mb-3">Mão de Obra</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1fr 1fr 1fr 1fr', gap: '12px', marginBottom: '8px' }}>
+            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+              <label className="form-label">Selecionar da lista (opcional)</label>
+              <select className="form-select" value={colaboradorSelecionado} onChange={(e) => onSelecionarColaborador(e.target.value)}>
+                <option value="">Selecione...</option>
+                {colaboradoresSelecionaveis.map((item, idx) => (
+                  <option key={`${item.origem || 'origem'}-${item.nome}-${item.funcao}-${idx}`} value={chaveColaborador(item.nome, item.funcao)}>
+                    {item.nome}{item.funcao ? ` - ${item.funcao}` : ''}
+                  </option>
+                ))}
+              </select>
+              <small style={{ color: 'var(--gray-600)' }}>Nome e função podem ser ajustados manualmente após selecionar.</small>
+            </div>
             <div className="form-group">
               <label className="form-label">Nome</label>
               <input className="form-input" type="text" value={draftColab.nome} onChange={(e) => setDraftColab({ ...draftColab, nome: e.target.value })} />
@@ -627,7 +760,24 @@ function RDOForm2() {
             </div>
             <div className="form-group">
               <label className="form-label">Quantidade executada</label>
-              <input className="form-input" type="number" value={draftAtividade.quantidade_executada} onChange={(e) => setDraftAtividade({ ...draftAtividade, quantidade_executada: e.target.value })} />
+              <input
+                className="form-input"
+                type="number"
+                min="0"
+                max={(() => {
+                  const { restante } = getAtividadeLimites(draftAtividade.atividade_eap_id);
+                  return restante != null ? restante : undefined;
+                })()}
+                value={draftAtividade.quantidade_executada}
+                onChange={(e) => setDraftAtividade({ ...draftAtividade, quantidade_executada: e.target.value })}
+              />
+              <small style={{ color: 'var(--gray-600)' }}>
+                {(() => {
+                  const { atividadeSel, quantidadeTotal, execAprovado, restante } = getAtividadeLimites(draftAtividade.atividade_eap_id);
+                  if (!atividadeSel || !quantidadeTotal) return 'Selecione uma atividade para ver o limite.';
+                  return `Limite no RDO: até ${formatQtd(restante)} ${atividadeSel.unidade_medida || ''} (Previsto ${formatQtd(quantidadeTotal)} - Aprovado ${formatQtd(execAprovado)}).`;
+                })()}
+              </small>
             </div>
             <div className="form-group">
               <label className="form-label">Unidade de medida</label>
@@ -702,20 +852,35 @@ function RDOForm2() {
                           })()}</div>
                         </td>
                         <td>
-                          <input className="form-input" type="number" value={a.quantidade_executada} onChange={(e) => {
+                          <input className="form-input" type="number" min="0" max={(() => {
+                            const total = sel ? Number(sel.quantidade_total || 0) : 0;
+                            const execAprov = total ? Number(execucaoAcum[String(sel?.id)] || 0) : 0;
+                            return total ? Math.max(total - execAprov, 0) : undefined;
+                          })()} value={a.quantidade_executada} onChange={(e) => {
                             const valor = e.target.value;
+                            const q = valor !== '' ? Number(valor) : 0;
+                            const total = sel ? Number(sel.quantidade_total || 0) : 0;
+                            const execAprov = total ? Number(execucaoAcum[String(sel?.id)] || 0) : 0;
+                            const restante = total ? Math.max(total - execAprov, 0) : null;
+                            if (valor !== '' && (!Number.isFinite(q) || q < 0)) {
+                              setErro('Quantidade executada inválida.');
+                              return;
+                            }
+                            if (valor !== '' && total > 0 && restante != null && q > restante) {
+                              setErro(`Atividade ${sel?.codigo_eap || ''}: máximo permitido neste RDO é ${formatQtd(restante)} ${sel?.unidade_medida || ''}.`);
+                              return;
+                            }
                             setFormData({
                               ...formData,
                               atividades: formData.atividades.map(x => {
                                 if (x.atividade_eap_id === a.atividade_eap_id) {
-                                  const total = sel ? Number(sel.quantidade_total || 0) : 0;
-                                  const q = valor !== '' ? Number(valor) : 0;
                                   const percAuto = (total && q) ? Math.min(Math.round((q / total) * 10000) / 100, 100) : 0;
                                   return { ...x, quantidade_executada: valor, percentual_executado: percAuto };
                                 }
                                 return x;
                               })
                             });
+                            setErro('');
                           }} />
                         </td>
                         <td>

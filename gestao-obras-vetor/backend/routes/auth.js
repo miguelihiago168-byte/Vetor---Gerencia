@@ -2,7 +2,9 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
-const { getQuery, runQuery } = require('../config/database');
+const { getQuery, allQuery } = require('../config/database');
+const { inferirPerfil } = require('../constants/access');
+const { ensureAccessSchema } = require('../middleware/rbac');
 
 const router = express.Router();
 
@@ -12,6 +14,8 @@ router.post('/login', [
   body('senha').isLength({ min: 6, max: 6 }).isNumeric()
 ], async (req, res) => {
   try {
+    await ensureAccessSchema();
+
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ erro: 'Login e senha devem ter 6 dígitos numéricos.' });
@@ -33,13 +37,22 @@ router.post('/login', [
       return res.status(401).json({ erro: 'Credenciais inválidas.' });
     }
 
+    const perfil = inferirPerfil(usuario);
+    const projetos = await allQuery('SELECT projeto_id FROM projeto_usuarios WHERE usuario_id = ?', [usuario.id]);
+    const obrasVinculadas = projetos.map((item) => Number(item.projeto_id));
+
     const token = jwt.sign(
       { 
         id: usuario.id, 
         login: usuario.login, 
         nome: usuario.nome,
+        funcao: usuario.funcao || perfil,
+        perfil,
+        setor: usuario.setor || null,
+        setor_outro: usuario.setor_outro || null,
         is_gestor: usuario.is_gestor,
-        is_adm: usuario.is_adm || 0
+        is_adm: usuario.is_adm || 0,
+        perfil_almoxarifado: usuario.perfil_almoxarifado || null
       },
       process.env.JWT_SECRET,
       { expiresIn: '8h' }
@@ -52,8 +65,14 @@ router.post('/login', [
         login: usuario.login,
         nome: usuario.nome,
         email: usuario.email,
+        funcao: usuario.funcao || perfil,
+        perfil,
+        setor: usuario.setor || null,
+        setor_outro: usuario.setor_outro || null,
+        obras_vinculadas: obrasVinculadas,
         is_gestor: usuario.is_gestor,
-        is_adm: usuario.is_adm || 0
+        is_adm: usuario.is_adm || 0,
+        perfil_almoxarifado: usuario.perfil_almoxarifado || null
       }
     });
 

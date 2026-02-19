@@ -3,16 +3,22 @@ const { body, validationResult } = require('express-validator');
 const { allQuery, runQuery, getQuery } = require('../config/database');
 const { auth, isGestor } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
+const { PERFIS, inferirPerfil } = require('../constants/access');
 
 const router = express.Router();
+
+const usuarioPodeVerTodosProjetos = (usuario) => {
+  const perfil = inferirPerfil(usuario);
+  return perfil === PERFIS.ADM || perfil === PERFIS.GESTOR_GERAL;
+};
 
 // Listar projetos do usuário
 router.get('/', auth, async (req, res) => {
   try {
     let projetos;
     
-    if (req.usuario.is_gestor) {
-      // Gestor vê todos os projetos
+    if (usuarioPodeVerTodosProjetos(req.usuario)) {
+      // ADM e Gestor Geral veem todos os projetos
       projetos = await allQuery(`
         SELECT p.*, u.nome as criador
         FROM projetos p
@@ -21,7 +27,7 @@ router.get('/', auth, async (req, res) => {
         ORDER BY p.criado_em DESC
       `);
     } else {
-      // Usuário comum vê apenas projetos vinculados
+      // Demais perfis veem apenas projetos vinculados
       projetos = await allQuery(`
         SELECT p.*, u.nome as criador
         FROM projetos p
@@ -98,7 +104,7 @@ router.get('/:id', auth, async (req, res) => {
     }
 
     // Verificar se usuário tem acesso
-    if (!req.usuario.is_gestor) {
+    if (!usuarioPodeVerTodosProjetos(req.usuario)) {
       const acesso = await getQuery(
         'SELECT * FROM projeto_usuarios WHERE projeto_id = ? AND usuario_id = ?',
         [id, req.usuario.id]

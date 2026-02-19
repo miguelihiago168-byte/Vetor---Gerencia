@@ -4,6 +4,28 @@ const { auth } = require('../middleware/auth');
 
 const router = express.Router();
 
+const toDateOnly = (value) => {
+  if (!value) return null;
+  const asString = String(value);
+  const match = asString.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) return `${match[1]}-${match[2]}-${match[3]}`;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+const addDays = (dateOnly, days) => {
+  const base = new Date(`${dateOnly}T00:00:00`);
+  base.setDate(base.getDate() + days);
+  return toDateOnly(base);
+};
+
+const diffDays = (fromDateOnly, toDateOnlyValue) => {
+  const from = new Date(`${fromDateOnly}T00:00:00`);
+  const to = new Date(`${toDateOnlyValue}T00:00:00`);
+  return Math.floor((to - from) / (24 * 60 * 60 * 1000));
+};
+
 // Dashboard - Avanço físico do projeto
 router.get('/projeto/:projetoId/avanco', auth, async (req, res) => {
   try {
@@ -108,6 +130,208 @@ router.get('/projeto/:projetoId/rdos-stats', auth, async (req, res) => {
   } catch (error) {
     console.error('Erro ao obter estatísticas:', error);
     res.status(500).json({ erro: 'Erro ao obter estatísticas.' });
+  }
+});
+
+router.get('/projeto/:projetoId/curva-s', auth, async (req, res) => {
+  try {
+    const { projetoId } = req.params;
+
+    const projeto = await getQuery(`
+      SELECT p.id, p.nome, COALESCE(u.nome, 'Sem responsável') AS responsavel
+      FROM projetos p
+      LEFT JOIN usuarios u ON p.criado_por = u.id
+      WHERE p.id = ?
+    `, [projetoId]);
+
+    if (!projeto) {
+      return res.status(404).json({ erro: 'Projeto não encontrado.' });
+    }
+
+    const atividades = await allQuery(`
+      SELECT a.id,
+             COALESCE(a.id_atividade, ('ATV-' || a.id)) AS id_atividade,
+             COALESCE(a.nome, a.descricao) AS nome,
+             a.data_inicio_planejada,
+             a.data_fim_planejada,
+             COALESCE(a.peso_percentual_projeto, a.percentual_previsto, 0) AS peso_percentual_projeto,
+             COALESCE(a.percentual_executado, 0) AS percentual_executado,
+             a.data_conclusao_real
+      FROM atividades_eap a
+      WHERE a.projeto_id = ?
+        AND NOT EXISTS (SELECT 1 FROM atividades_eap c WHERE c.pai_id = a.id)
+      ORDER BY a.ordem, a.codigo_eap
+    `, [projetoId]);
+
+    if (!atividades.length) {
+      return res.json({
+        projeto,
+        indicadores: {
+          avanco_planejado: 0,
+          avanco_real: 0,
+          desvio: 0,
+          spi: 1,
+          spi_status: 'amarelo'
+        },
+        serie: [],
+        atrasos: [],
+        data_atual: toDateOnly(new Date())
+      });
+    }
+
+    const faltantes = atividades.filter(a => !a.id_atividade || !a.nome || !a.data_inicio_planejada || !a.data_fim_planejada);
+    if (faltantes.length > 0) {
+      return res.status(400).json({
+        erro: 'Estrutura da EAP incompleta para Curva S. Preencha id_atividade, nome e datas planejadas em todas as atividades.',
+        atividades_invalidas: faltantes.map(a => ({ id: a.id, id_atividade: a.id_atividade, nome: a.nome }))
+      });
+    }
+
+    const totalPesos = atividades.reduce((acc, atividade) => acc + Number(atividade.peso_percentual_projeto || 0), 0);
+    if (Math.abs(totalPesos - 100) > 0.01) {
+      return res.status(400).json({
+        erro: 'A soma dos pesos das atividades deve ser 100% para cálculo da Curva S.',
+        total_pesos: Math.round(totalPesos * 100) / 100
+      });
+    }
+
+    const hoje = toDateOnly(new Date());
+    const inicioProjeto = atividades.map(a => a.data_inicio_planejada).sort()[0];
+    const fimPlanejado = atividades.map(a => a.data_fim_planejada).sort().reverse()[0];
+    const dataFimSerie = hoje < fimPlanejado ? hoje : fimPlanejado;
+
+    const pesosPorAtividade = {};
+    atividades.forEach(a => {
+      pesosPorAtividade[a.id] = Number(a.peso_percentual_projeto || 0);
+    });
+
+    const planejadoPorDia = {};
+    for (const atividade of atividades) {
+      const inicio = atividade.data_inicio_planejada;
+      const fim = atividade.data_fim_planejada;
+      const duracao = Math.max(1, diffDays(inicio, fim) + 1);
+      const avancoPlanejadoDia = Number(atividade.peso_percentual_projeto || 0) / duracao;
+
+      for (let i = 0; i < duracao; i += 1) {
+        const data = addDays(inicio, i);
+        if (data > dataFimSerie) break;
+        planejadoPorDia[data] = (planejadoPorDia[data] || 0) + avancoPlanejadoDia;
+      }
+    }
+
+    const realRaw = await allQuery(`
+      SELECT r.data_relatorio, ra.atividade_eap_id, COALESCE(SUM(ra.percentual_executado), 0) AS percentual_dia
+      FROM rdo_atividades ra
+      INNER JOIN rdos r ON r.id = ra.rdo_id
+      WHERE r.projeto_id = ?
+        AND r.status = 'Aprovado'
+      GROUP BY r.data_relatorio, ra.atividade_eap_id
+      ORDER BY r.data_relatorio ASC
+    `, [projetoId]);
+
+    const realPorDiaAtividade = {};
+    realRaw.forEach(row => {
+      const data = toDateOnly(row.data_relatorio);
+      if (!data || data > dataFimSerie) return;
+      if (!realPorDiaAtividade[data]) realPorDiaAtividade[data] = [];
+      realPorDiaAtividade[data].push({
+        atividadeId: row.atividade_eap_id,
+        percentualDia: Number(row.percentual_dia || 0)
+      });
+    });
+
+    const acumuladoRealAtividade = {};
+    atividades.forEach(a => {
+      acumuladoRealAtividade[a.id] = 0;
+    });
+
+    const serie = [];
+    let acumuladoPlanejado = 0;
+    let acumuladoReal = 0;
+
+    const totalDias = Math.max(0, diffDays(inicioProjeto, dataFimSerie));
+    for (let i = 0; i <= totalDias; i += 1) {
+      const data = addDays(inicioProjeto, i);
+
+      acumuladoPlanejado = Math.min(100, acumuladoPlanejado + Number(planejadoPorDia[data] || 0));
+
+      const registrosData = realPorDiaAtividade[data] || [];
+      let incrementoRealDia = 0;
+      for (const registro of registrosData) {
+        const peso = Number(pesosPorAtividade[registro.atividadeId] || 0);
+        if (!peso) continue;
+        const percAnterior = Number(acumuladoRealAtividade[registro.atividadeId] || 0);
+        const percNovo = Math.min(100, percAnterior + Number(registro.percentualDia || 0));
+        const deltaPerc = Math.max(0, percNovo - percAnterior);
+        acumuladoRealAtividade[registro.atividadeId] = percNovo;
+        incrementoRealDia += (peso * deltaPerc) / 100;
+      }
+
+      acumuladoReal = Math.min(100, acumuladoReal + incrementoRealDia);
+
+      serie.push({
+        data,
+        planejado: Math.round(acumuladoPlanejado * 100) / 100,
+        real: Math.round(acumuladoReal * 100) / 100
+      });
+    }
+
+    const pontoAtual = serie.length ? serie[serie.length - 1] : { planejado: 0, real: 0 };
+    const avancoPlanejado = Number(pontoAtual.planejado || 0);
+    const avancoReal = Number(pontoAtual.real || 0);
+    const desvio = Math.round((avancoReal - avancoPlanejado) * 100) / 100;
+    const spi = avancoPlanejado > 0 ? Math.round((avancoReal / avancoPlanejado) * 1000) / 1000 : 1;
+
+    let spiStatus = 'amarelo';
+    if (spi < 1) spiStatus = 'vermelho';
+    if (spi > 1) spiStatus = 'verde';
+
+    const atrasos = atividades
+      .map(atividade => {
+        const inicio = atividade.data_inicio_planejada;
+        const fim = atividade.data_fim_planejada;
+        const executado = Number(atividade.percentual_executado || 0);
+
+        let statusAtraso = null;
+        let diasAtraso = 0;
+
+        if (hoje > fim && executado < 100) {
+          statusAtraso = 'Atraso Crítico';
+          diasAtraso = diffDays(fim, hoje);
+        } else if (hoje > inicio && executado === 0) {
+          statusAtraso = 'Atrasada';
+          diasAtraso = diffDays(inicio, hoje);
+        }
+
+        if (!statusAtraso) return null;
+        return {
+          id_atividade: atividade.id_atividade,
+          nome: atividade.nome,
+          status: statusAtraso,
+          dias_atraso: Math.max(0, diasAtraso),
+          responsavel: projeto.responsavel,
+          percentual_executado: Math.round(executado * 100) / 100
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.dias_atraso - a.dias_atraso);
+
+    res.json({
+      projeto,
+      indicadores: {
+        avanco_planejado: avancoPlanejado,
+        avanco_real: avancoReal,
+        desvio,
+        spi,
+        spi_status: spiStatus
+      },
+      serie,
+      atrasos,
+      data_atual: hoje
+    });
+  } catch (error) {
+    console.error('Erro ao calcular Curva S:', error);
+    res.status(500).json({ erro: 'Erro ao calcular Curva S do projeto.' });
   }
 });
 

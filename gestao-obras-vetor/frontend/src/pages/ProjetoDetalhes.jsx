@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getProjeto, getRDOStats, getRDOs, getAnexos } from '../services/api';
+import { getProjeto, getRDOStats, getRDOs, getAnexos, getDashboardAlmoxarifado } from '../services/api';
 import { FileText, AlertTriangle, Image as ImageIcon, Activity } from 'lucide-react';
+
+const formatBRL = (valor) => Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function ProjetoDetalhes() {
   const { projetoId } = useParams();
   const navigate = useNavigate();
   const [projeto, setProjeto] = useState(null);
   const [stats, setStats] = useState(null);
+  const [almox, setAlmox] = useState(null);
   const [galeria, setGaleria] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -25,6 +28,13 @@ function ProjetoDetalhes() {
 
       setProjeto(projetoRes.data);
       setStats(statsRes.data);
+
+      try {
+        const almoxRes = await getDashboardAlmoxarifado(projetoId);
+        setAlmox(almoxRes.data);
+      } catch {
+        setAlmox(null);
+      }
 
       // Carregar galeria geral de fotos do projeto (anexos dos RDOs)
       try {
@@ -195,6 +205,37 @@ function ProjetoDetalhes() {
 
         {/* Ações Principais */}
         <div className="grid grid-2">
+          <div 
+            className="card" 
+            onClick={() => navigate(`/projeto/${projetoId}/almoxarifado`)}
+            style={{ cursor: 'pointer', transition: 'transform 0.2s' }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-4px)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{
+                width: '60px',
+                height: '60px',
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, #36d1dc 0%, #5b86e5 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Activity size={32} color="white" />
+              </div>
+              <div>
+                <h3>Ativos</h3>
+                <p style={{ fontSize: '14px', color: 'var(--gray-600)', margin: '4px 0 0 0' }}>
+                  Alocadas: {almox?.ferramentas_alocadas || 0} · Atraso: {almox?.ferramentas_atrasadas || 0} · Manutenção: {almox?.ferramentas_manutencao || 0}
+                </p>
+                <p style={{ fontSize: '13px', color: 'var(--danger)', margin: '4px 0 0 0' }}>
+                  Perdas: {almox?.total_perdas || 0} · Custo: R$ {formatBRL(almox?.custo_perdas)}
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div 
             className="card" 
             onClick={() => navigate(`/projeto/${projetoId}/eap`)}

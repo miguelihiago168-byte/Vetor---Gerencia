@@ -2,18 +2,24 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { getAtividadesEAP, createAtividade, updateAtividade } from '../services/api';
+import { useDialog } from '../context/DialogContext';
 import { ArrowLeft, Save } from 'lucide-react';
 
 function EAPForm() {
   const { projetoId, atividadeId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { confirm } = useDialog();
   const [loading, setLoading] = useState(false);
   const [atividades, setAtividades] = useState([]);
   const [formData, setFormData] = useState({
+    id_atividade: '',
     codigo_eap: '',
+    nome: '',
     descricao: '',
-    percentual_previsto: 0,
+    peso_percentual_projeto: 0,
+    data_inicio_planejada: '',
+    data_fim_planejada: '',
     pai_id: '',
     unidade_medida: '',
     quantidade_total: 0
@@ -88,9 +94,13 @@ function EAPForm() {
       const atividade = response.data.find(a => a.id == atividadeId);
       if (atividade) {
         setFormData({
+          id_atividade: atividade.id_atividade || '',
           codigo_eap: atividade.codigo_eap || '',
+          nome: atividade.nome || '',
           descricao: atividade.descricao || '',
-          percentual_previsto: atividade.percentual_previsto || 0,
+          peso_percentual_projeto: atividade.peso_percentual_projeto || atividade.percentual_previsto || 0,
+          data_inicio_planejada: atividade.data_inicio_planejada || '',
+          data_fim_planejada: atividade.data_fim_planejada || '',
           pai_id: atividade.pai_id || '',
           unidade_medida: atividade.unidade_medida || '',
           quantidade_total: atividade.quantidade_total || 0
@@ -107,13 +117,19 @@ function EAPForm() {
 
     try {
       if (atividadeId) {
-        const concorda = window.confirm('Ao alterar esta atividade da EAP, os RDOs relacionados serão recalculados (ajuste aplicado ao último RDO). Deseja continuar?');
+        const concorda = await confirm({
+          title: 'Recalcular EAP',
+          message: 'Ao alterar esta atividade da EAP, os RDOs relacionados serão recalculados (ajuste aplicado ao último RDO). Deseja continuar?',
+          confirmText: 'Continuar',
+          cancelText: 'Cancelar'
+        });
         if (!concorda) { setLoading(false); return; }
       }
       const dataToSend = {
         ...formData,
         projeto_id: projetoId,
-        pai_id: formData.pai_id || null
+        pai_id: formData.pai_id || null,
+        percentual_previsto: formData.peso_percentual_projeto
       };
 
       if (atividadeId) {
@@ -135,7 +151,7 @@ function EAPForm() {
     setFormData(prev => {
       const newData = {
         ...prev,
-        [name]: (['percentual_previsto','quantidade_total'].includes(name)) ? parseFloat(value) || 0 : value
+        [name]: (['peso_percentual_projeto','quantidade_total'].includes(name)) ? parseFloat(value) || 0 : value
       };
 
       // Se mudou a atividade pai, gerar novo código EAP
@@ -165,12 +181,41 @@ function EAPForm() {
           <form onSubmit={handleSubmit}>
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
+                ID da Atividade *
+              </label>
+              <input
+                type="text"
+                name="id_atividade"
+                value={formData.id_atividade}
+                onChange={handleChange}
+                required
+                placeholder="Ex: ATV-1.1"
+                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
                 Código EAP *
               </label>
               <input
                 type="text"
                 name="codigo_eap"
                 value={formData.codigo_eap}
+                onChange={handleChange}
+                required
+                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
+                Nome da Atividade *
+              </label>
+              <input
+                type="text"
+                name="nome"
+                value={formData.nome}
                 onChange={handleChange}
                 required
                 style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
@@ -187,6 +232,34 @@ function EAPForm() {
                 onChange={handleChange}
                 required
                 rows={3}
+                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
+                Data Início Planejada *
+              </label>
+              <input
+                type="date"
+                name="data_inicio_planejada"
+                value={formData.data_inicio_planejada}
+                onChange={handleChange}
+                required
+                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
+                Data Fim Planejada *
+              </label>
+              <input
+                type="date"
+                name="data_fim_planejada"
+                value={formData.data_fim_planejada}
+                onChange={handleChange}
+                required
                 style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
               />
             </div>
@@ -242,16 +315,17 @@ function EAPForm() {
 
             <div style={{ marginBottom: '24px' }}>
               <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                Percentual Previsto (%)
+                Peso Percentual no Projeto (%) *
               </label>
               <input
                 type="number"
-                name="percentual_previsto"
-                value={formData.percentual_previsto}
+                name="peso_percentual_projeto"
+                value={formData.peso_percentual_projeto}
                 onChange={handleChange}
                 min="0"
                 max="100"
                 step="0.1"
+                required
                 style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
               />
             </div>

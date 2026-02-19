@@ -2,7 +2,7 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-function PrivateRoute({ children }) {
+function PrivateRoute({ children, allowedPerfis }) {
   const { usuario, loading } = useAuth();
 
   if (loading) {
@@ -13,7 +13,16 @@ function PrivateRoute({ children }) {
     );
   }
 
-  return usuario ? children : <Navigate to="/login" />;
+  if (!usuario) return <Navigate to="/login" />;
+
+  if (Array.isArray(allowedPerfis) && allowedPerfis.length > 0) {
+    const perfilUsuario = usuario?.perfil;
+    if (!allowedPerfis.includes(perfilUsuario)) {
+      return <Navigate to="/projetos" replace />;
+    }
+  }
+
+  return children;
 }
 
 export default PrivateRoute;

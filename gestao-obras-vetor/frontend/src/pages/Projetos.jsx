@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { getProjetos, createProjeto, updateProjeto, deleteProjeto, getUsuarios, arquivarProjeto, desarquivarProjeto, getDashboardAvanco } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useDialog } from '../context/DialogContext';
 import { Plus, Edit, Trash2, Users, Calendar, Building, Archive, RotateCcw, Eye, EyeOff } from 'lucide-react';
 
 function Projetos() {
+  const { confirm } = useDialog();
   const [projetos, setProjetos] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -23,8 +25,9 @@ function Projetos() {
   const [sucesso, setSucesso] = useState('');
   const [showArquivados, setShowArquivados] = useState(false);
   
-  const { isGestor } = useAuth();
+  const { isGestor, perfil } = useAuth();
   const navigate = useNavigate();
+  const podeListarUsuarios = perfil === 'ADM' || perfil === 'Gestor Geral';
 
   const projetosFiltrados = projetos.filter((p) => showArquivados ? p.arquivado === 1 : p.arquivado === 0);
 
@@ -34,10 +37,7 @@ function Projetos() {
 
   const carregarDados = async () => {
     try {
-      const [projetosRes, usuariosRes] = await Promise.all([
-        getProjetos(),
-        getUsuarios()
-      ]);
+      const projetosRes = await getProjetos();
       
       // Carregar avanço para cada projeto
       const projetosComAvanco = await Promise.all(
@@ -59,7 +59,17 @@ function Projetos() {
       );
       
       setProjetos(projetosComAvanco);
-      setUsuarios(usuariosRes.data);
+      if (podeListarUsuarios) {
+        try {
+          const usuariosRes = await getUsuarios();
+          setUsuarios(usuariosRes.data || []);
+        } catch (errorUsuarios) {
+          console.warn('Sem permissão para listar usuários no modal de projetos.', errorUsuarios?.response?.status);
+          setUsuarios([]);
+        }
+      } else {
+        setUsuarios([]);
+      }
       if (isGestor && projetosComAvanco.length === 0) {
         setShowModal(true);
       }
@@ -126,7 +136,13 @@ function Projetos() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Deseja realmente desativar este projeto?')) return;
+    const ok = await confirm({
+      title: 'Desativar projeto',
+      message: 'Deseja realmente desativar este projeto?',
+      confirmText: 'Desativar',
+      cancelText: 'Cancelar'
+    });
+    if (!ok) return;
 
     try {
       await deleteProjeto(id);
@@ -139,7 +155,13 @@ function Projetos() {
   };
 
   const handleArquivar = async (id) => {
-    if (!window.confirm('Deseja arquivar este projeto? Ele ficará inacessível até ser desarchivado.')) return;
+    const ok = await confirm({
+      title: 'Arquivar projeto',
+      message: 'Deseja arquivar este projeto? Ele ficará inacessível até ser desarquivado.',
+      confirmText: 'Arquivar',
+      cancelText: 'Cancelar'
+    });
+    if (!ok) return;
 
     try {
       await arquivarProjeto(id);
@@ -152,7 +174,13 @@ function Projetos() {
   };
 
   const handleDesarquivar = async (id) => {
-    if (!window.confirm('Deseja restaurar este projeto?')) return;
+    const ok = await confirm({
+      title: 'Restaurar projeto',
+      message: 'Deseja restaurar este projeto?',
+      confirmText: 'Restaurar',
+      cancelText: 'Cancelar'
+    });
+    if (!ok) return;
 
     try {
       await desarquivarProjeto(id);
@@ -409,22 +437,28 @@ function Projetos() {
                     maxHeight: '200px',
                     overflow: 'auto'
                   }}>
-                    {usuarios.map(usuario => (
-                      <div key={usuario.id} style={{ marginBottom: '8px' }}>
-                        <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                          <input
-                            type="checkbox"
-                            checked={formData.usuarios.includes(usuario.id)}
-                            onChange={() => handleUsuarioChange(usuario.id)}
-                            style={{ marginRight: '8px' }}
-                          />
-                          <span>{usuario.nome} ({usuario.login})</span>
-                          {usuario.is_gestor === 1 && (
-                            <span className="badge badge-blue" style={{ marginLeft: '8px' }}>Gestor</span>
-                          )}
-                        </label>
-                      </div>
-                    ))}
+                    {usuarios.length > 0 ? (
+                      usuarios.map(usuario => (
+                        <div key={usuario.id} style={{ marginBottom: '8px' }}>
+                          <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                            <input
+                              type="checkbox"
+                              checked={formData.usuarios.includes(usuario.id)}
+                              onChange={() => handleUsuarioChange(usuario.id)}
+                              style={{ marginRight: '8px' }}
+                            />
+                            <span>{usuario.nome} ({usuario.login})</span>
+                            {usuario.is_gestor === 1 && (
+                              <span className="badge badge-blue" style={{ marginLeft: '8px' }}>Gestor</span>
+                            )}
+                          </label>
+                        </div>
+                      ))
+                    ) : (
+                      <p style={{ margin: 0, color: 'var(--gray-500)' }}>
+                        Sem permissão para listar usuários nesta conta.
+                      </p>
+                    )}
                   </div>
                 </div>
 

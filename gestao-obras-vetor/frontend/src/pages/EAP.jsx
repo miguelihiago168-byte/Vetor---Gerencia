@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getAtividadesEAP, recalcularEapProjeto } from '../services/api';
+import { getAtividadesEAP, recalcularEapProjeto, deleteAtividade } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Activity, Plus, Eye, ChevronRight, ChevronDown } from 'lucide-react';
+import { useDialog } from '../context/DialogContext';
+import { Activity, Plus, Eye, ChevronRight, ChevronDown, Trash2 } from 'lucide-react';
 
 function EAP() {
   const { projetoId } = useParams();
   const navigate = useNavigate();
   const { isGestor } = useAuth();
+  const { confirm, alert } = useDialog();
   const [atividades, setAtividades] = useState([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState('');
@@ -41,6 +43,27 @@ function EAP() {
       newExpanded.add(id);
     }
     setExpandedItems(newExpanded);
+  };
+
+  const handleExcluirAtividade = async (atividade) => {
+    const ok = await confirm({
+      title: 'Excluir atividade',
+      message: `Deseja excluir a atividade ${atividade.codigo_eap} - ${atividade.descricao}?`,
+      confirmText: 'Excluir',
+      cancelText: 'Cancelar'
+    });
+    if (!ok) return;
+
+    try {
+      await deleteAtividade(atividade.id);
+      await alert({ title: 'EAP', message: 'Atividade excluída com sucesso.' });
+      await carregarAtividades();
+    } catch (error) {
+      await alert({
+        title: 'Erro',
+        message: 'Erro ao excluir atividade: ' + (error.response?.data?.erro || error.message)
+      });
+    }
   };
 
   const buildHierarchy = (atividades) => {
@@ -126,6 +149,8 @@ function EAP() {
                   {!hasChildren && (
                     <span>Previsto: {atividade.quantidade_total || 0} {atividade.unidade_medida || ''}</span>
                   )}
+                  <span>Peso: {atividade.peso_percentual_projeto || atividade.percentual_previsto || 0}%</span>
+                  <span>Planejado: {atividade.data_inicio_planejada || '-'} até {atividade.data_fim_planejada || '-'}</span>
                   <span>Executado: {atividade.percentual_executado || 0}%</span>
                   <span>Status: {atividade.status}</span>
                 </div>
@@ -146,6 +171,13 @@ function EAP() {
                 title="Adicionar filha"
               >
                 +
+              </button>
+              <button
+                className="btn btn-danger"
+                onClick={() => handleExcluirAtividade(atividade)}
+                title="Excluir atividade"
+              >
+                <Trash2 size={16} />
               </button>
             </div>
           </div>
@@ -209,13 +241,19 @@ function EAP() {
             </button>
             {isGestor && (
               <button className="btn btn-secondary" onClick={async () => {
-                if (!window.confirm('Recalcular avanço da EAP para este projeto?')) return;
+                const ok = await confirm({
+                  title: 'Recalcular EAP',
+                  message: 'Recalcular avanço da EAP para este projeto?',
+                  confirmText: 'Recalcular',
+                  cancelText: 'Cancelar'
+                });
+                if (!ok) return;
                 try {
                   const resp = await recalcularEapProjeto(projetoId);
-                  alert(resp.data?.mensagem || 'EAP recalculada.');
+                  await alert({ title: 'EAP', message: resp.data?.mensagem || 'EAP recalculada.' });
                   carregarAtividades();
                 } catch (error) {
-                  alert('Erro ao recalcular EAP: ' + (error.response?.data?.erro || error.message));
+                  await alert({ title: 'Erro', message: 'Erro ao recalcular EAP: ' + (error.response?.data?.erro || error.message) });
                 }
               }}>
                 Recalcular EAP

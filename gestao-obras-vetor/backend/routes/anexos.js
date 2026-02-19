@@ -78,6 +78,17 @@ router.post('/upload-rnc/:rncId', auth, upload.single('arquivo'), async (req, re
     }
 
     const { rncId } = req.params;
+    const rnc = await getQuery('SELECT id, status, criado_por, responsavel_id FROM rnc WHERE id = ?', [rncId]);
+    if (!rnc) {
+      return res.status(404).json({ erro: 'RNC não encontrada.' });
+    }
+    if (rnc.status === 'Encerrada') {
+      return res.status(403).json({ erro: 'Não é permitido anexar arquivos em RNC encerrada.' });
+    }
+    if (rnc.criado_por !== req.usuario.id && rnc.responsavel_id !== req.usuario.id && !req.usuario.is_gestor) {
+      return res.status(403).json({ erro: 'Sem permissão para anexar arquivos nesta RNC.' });
+    }
+
     const { originalname, filename, mimetype, size } = req.file;
 
     const result = await runQuery(`

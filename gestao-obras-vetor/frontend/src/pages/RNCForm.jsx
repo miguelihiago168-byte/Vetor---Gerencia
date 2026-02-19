@@ -82,6 +82,11 @@ function RNCForm() {
     }));
   };
 
+  const textWrapStyle = {
+    overflowWrap: 'anywhere',
+    wordBreak: 'break-word'
+  };
+
   return (
     <>
       <Navbar />
@@ -113,6 +118,7 @@ function RNCForm() {
               <label className="form-label">Descrição</label>
               <textarea
                 className="form-input"
+                style={textWrapStyle}
                 name="descricao"
                 value={formData.descricao}
                 onChange={handleChange}
@@ -227,6 +233,7 @@ function RNCForm() {
               <label className="form-label">Registros fotográficos</label>
               <textarea
                 className="form-input"
+                style={textWrapStyle}
                 name="registros_fotograficos"
                 value={formData.registros_fotograficos}
                 onChange={handleChange}
@@ -239,6 +246,7 @@ function RNCForm() {
               <label className="form-label">Ação Corretiva</label>
               <textarea
                 className="form-input"
+                style={textWrapStyle}
                 name="acao_corretiva"
                 value={formData.acao_corretiva}
                 onChange={handleChange}

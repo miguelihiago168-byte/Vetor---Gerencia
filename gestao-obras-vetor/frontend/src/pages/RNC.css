@@ -80,6 +80,15 @@
 
 .rnc-title {
   margin: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.rnc-card p,
+.rnc-card span,
+.rnc-card div {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .rnc-dates {

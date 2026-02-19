@@ -5,6 +5,7 @@ import { getRNCs, updateStatusRNC, getAnexosRNC, uploadAnexoRNC, submitCorrecaoR
 import { useAuth } from '../context/AuthContext';
 import { AlertTriangle, ArrowLeft } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
+import { useDialog } from '../context/DialogContext';
 import './RNCDetalhes.css';
 
 function RNCDetalhes() {
@@ -21,6 +22,7 @@ function RNCDetalhes() {
   const [mostrarResposta, setMostrarResposta] = useState(false);
   const [acaoCorretiva, setAcaoCorretiva] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const { alert } = useDialog();
   const { success, error } = useNotification();
 
   useEffect(() => {
@@ -86,7 +88,7 @@ function RNCDetalhes() {
       await updateStatusRNC(rncId, 'Encerrada');
       setRnc(prev => ({ ...prev, status: 'Encerrada' }));
     } catch (error) {
-      alert('Falha ao aprovar RNC: ' + (error.response?.data?.erro || error.message));
+      await alert({ title: 'Erro', message: 'Falha ao aprovar RNC: ' + (error.response?.data?.erro || error.message) });
     }
   };
 
@@ -95,7 +97,7 @@ function RNCDetalhes() {
       await updateStatusRNC(rncId, 'Reprovada');
       setRnc(prev => ({ ...prev, status: 'Reprovada' }));
     } catch (error) {
-      alert('Falha ao reprovar RNC: ' + (error.response?.data?.erro || error.message));
+      await alert({ title: 'Erro', message: 'Falha ao reprovar RNC: ' + (error.response?.data?.erro || error.message) });
     }
   };
 
@@ -212,7 +214,7 @@ function RNCDetalhes() {
           {mostrarResposta && (usuario?.id === rnc.responsavel_id || usuario?.id === rnc.criado_por || isGestor) && rnc.status !== 'Encerrada' && (
             <div className="rnc-det-section rnc-det-response">
               <h3>Resposta do Responsável</h3>
-              <p className="muted">Descreva o que foi corrigido. Fotos poderão ser adicionadas depois.</p>
+              <p className="muted">Descreva o que foi corrigido. Anexos só podem ser adicionados enquanto a RNC não estiver encerrada.</p>
               <div className="form-group">
                 <label className="form-label">Descrição da correção</label>
                 <textarea className="form-input" rows={4} value={acaoCorretiva} onChange={(e) => setAcaoCorretiva(e.target.value)} placeholder="O que foi feito para corrigir a não conformidade?" />
@@ -235,7 +237,7 @@ function RNCDetalhes() {
                 <div className="muted">Nenhum anexo.</div>
               )}
             </div>
-            {(isGestor || usuario?.id === rnc.criado_por || usuario?.id === rnc.responsavel_id) && (
+            {(isGestor || usuario?.id === rnc.criado_por || usuario?.id === rnc.responsavel_id) && rnc.status !== 'Encerrada' && (
               <div className="rnc-det-upload-grid">
                 <div className="form-group">
                   <label className="form-label">Foto</label>
@@ -257,7 +259,7 @@ function RNCDetalhes() {
                       setFotoFile(null);
                       setFotoDesc('');
                     } catch (err) {
-                      alert('Falha ao enviar foto: ' + (err.response?.data?.erro || err.message));
+                      await alert({ title: 'Erro', message: 'Falha ao enviar foto: ' + (err.response?.data?.erro || err.message) });
                     }
                   }}>Enviar foto</button>
                 </div>

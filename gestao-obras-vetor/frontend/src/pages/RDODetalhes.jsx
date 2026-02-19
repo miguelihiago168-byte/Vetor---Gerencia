@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getRDO, updateRDO, getAtividadesEAP, addRdoMaoObra, listRdoMaoObra, addRdoComentario, addRdoMaterial, addRdoOcorrencia, uploadRdoFoto, getAnexos, updateStatusRDO } from '../services/api';
+import { getRDO, updateRDO, getAtividadesEAP, addRdoMaoObra, listRdoMaoObra, addRdoComentario, addRdoMaterial, addRdoOcorrencia, uploadRdoFoto, getAnexos, updateStatusRDO, getRdoFerramentasDisponiveis, getRdoFerramentas, addRdoFerramenta } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useDialog } from '../context/DialogContext';
 import { FileText, Download, ArrowLeft } from 'lucide-react';
 
 function RDODetalhes() {
   const { projetoId, rdoId } = useParams();
   const navigate = useNavigate();
   const { isGestor } = useAuth();
+  const { alert } = useDialog();
   const [rdo, setRdo] = useState(null);
   const [sucesso, setSucesso] = useState('');
   const [loading, setLoading] = useState(true);
@@ -19,6 +21,9 @@ function RDODetalhes() {
   const [ocorrencias, setOcorrencias] = useState([]);
   const [anexos, setAnexos] = useState([]);
   const [comentarios, setComentarios] = useState([]);
+  const [ferramentasDisponiveis, setFerramentasDisponiveis] = useState([]);
+  const [ferramentasRdo, setFerramentasRdo] = useState([]);
+  const [novaFerramentaRdo, setNovaFerramentaRdo] = useState({ alocacao_id: '', quantidade: 1 });
 
   // Estados para novos itens
   const [novoComentario, setNovoComentario] = useState('');
@@ -37,10 +42,12 @@ function RDODetalhes() {
         getRDO(rdoId),
         getAtividadesEAP(projetoId),
         listRdoMaoObra(rdoId),
-        getAnexos(rdoId)
+        getAnexos(rdoId),
+        getRdoFerramentasDisponiveis(rdoId),
+        getRdoFerramentas(rdoId)
       ]);
 
-      const [rdoRes, atividadesRes, maoObraRes, anexosRes] = results;
+      const [rdoRes, atividadesRes, maoObraRes, anexosRes, ferramentasDispRes, ferramentasRdoRes] = results;
 
       if (rdoRes.status === 'fulfilled') {
         setRdo(rdoRes.value.data);
@@ -55,6 +62,8 @@ function RDODetalhes() {
       setAtividades(atividadesRes.status === 'fulfilled' ? (atividadesRes.value.data || []) : []);
       setMaoObra(maoObraRes.status === 'fulfilled' ? (maoObraRes.value.data || []) : []);
       setAnexos(anexosRes.status === 'fulfilled' ? (anexosRes.value.data || []) : []);
+      setFerramentasDisponiveis(ferramentasDispRes.status === 'fulfilled' ? (ferramentasDispRes.value.data || []) : []);
+      setFerramentasRdo(ferramentasRdoRes.status === 'fulfilled' ? (ferramentasRdoRes.value.data || []) : []);
     } catch (error) {
       console.error('Erro ao carregar RDO:', error);
       const msg = error.response?.data?.erro || error.message || 'Erro ao carregar RDO';
@@ -93,7 +102,31 @@ function RDODetalhes() {
       setRdo(prev => ({ ...prev, status: 'Aprovado' }));
       setSucesso('RDO aprovado com sucesso.');
     } catch (error) {
-      alert('Falha ao aprovar RDO: ' + (error.response?.data?.erro || error.message));
+      await alert({ title: 'Erro', message: 'Falha ao aprovar RDO: ' + (error.response?.data?.erro || error.message) });
+    }
+  };
+
+  const vincularFerramentaRdo = async () => {
+    try {
+      setErro('');
+      if (!novaFerramentaRdo.alocacao_id) {
+        setErro('Selecione um ativo retirado para a obra.');
+        return;
+      }
+      await addRdoFerramenta(rdoId, {
+        alocacao_id: Number(novaFerramentaRdo.alocacao_id),
+        quantidade: Number(novaFerramentaRdo.quantidade || 1)
+      });
+      setNovaFerramentaRdo({ alocacao_id: '', quantidade: 1 });
+      const [dispRes, itensRes] = await Promise.all([
+        getRdoFerramentasDisponiveis(rdoId),
+        getRdoFerramentas(rdoId)
+      ]);
+      setFerramentasDisponiveis(dispRes.data || []);
+      setFerramentasRdo(itensRes.data || []);
+      setSucesso('Ativo vinculado ao RDO com sucesso.');
+    } catch (error) {
+      setErro(error?.response?.data?.erro || 'Erro ao vincular ativo ao RDO.');
     }
   };
 
@@ -169,7 +202,7 @@ function RDODetalhes() {
                   await updateStatusRDO(rdoId, 'Em preenchimento');
                   setRdo(prev => ({ ...prev, status: 'Em preenchimento' }));
                 } catch (error) {
-                  alert('Falha ao permitir edição: ' + (error.response?.data?.erro || error.message));
+                  await alert({ title: 'Erro', message: 'Falha ao permitir edição: ' + (error.response?.data?.erro || error.message) });
                 }
               }}>
                 Permitir edição
@@ -329,6 +362,48 @@ function RDODetalhes() {
                 ))}
                 {materiais.length === 0 && (
                   <div style={{ color: '#666' }}>Nenhum material registrado.</div>
+                )}
+              </div>
+            </div>
+
+            {/* Ativos Utilizados no Dia */}
+            <div className="card" style={{ padding: '24px', marginBottom: '24px' }}>
+              <h2 style={{ marginBottom: '20px' }}>Ativos utilizados no dia</h2>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: '8px', marginBottom: '12px' }}>
+                <select
+                  className="form-select"
+                  value={novaFerramentaRdo.alocacao_id}
+                  onChange={(e) => setNovaFerramentaRdo({ ...novaFerramentaRdo, alocacao_id: e.target.value })}
+                >
+                  <option value="">Selecionar ativo retirado</option>
+                  {ferramentasDisponiveis.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.ferramenta_nome} · {item.colaborador_nome || 'Sem colaborador'} · saldo {item.quantidade_disponivel_alocada}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className="form-input"
+                  type="number"
+                  min="1"
+                  value={novaFerramentaRdo.quantidade}
+                  onChange={(e) => setNovaFerramentaRdo({ ...novaFerramentaRdo, quantidade: e.target.value })}
+                />
+                <button className="btn btn-primary" type="button" onClick={vincularFerramentaRdo}>
+                  Vincular
+                </button>
+              </div>
+
+              <div style={{ display: 'grid', gap: '8px' }}>
+                {ferramentasRdo.map((item) => (
+                  <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '3fr 2fr 1fr', gap: '8px', padding: '8px', border: '1px solid #eee', borderRadius: '4px' }}>
+                    <div>{item.ferramenta_nome}</div>
+                    <div>{item.colaborador || '-'}</div>
+                    <div>{item.quantidade}</div>
+                  </div>
+                ))}
+                {ferramentasRdo.length === 0 && (
+                  <div style={{ color: '#666' }}>Nenhum ativo vinculado a este RDO.</div>
                 )}
               </div>
             </div>

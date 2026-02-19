@@ -6,6 +6,41 @@ Todas as mudanças solicitadas foram implementadas no sistema de Gestão de Obra
 
 ---
 
+## ✅ Atualização: 19 de fevereiro de 2026
+
+### Curva S (Planejado x Real) implementada
+
+- Novo item de menu superior **Curva S** por projeto, com ícone de gráfico de linha.
+- Nova rota frontend: `/projeto/:projetoId/curva-s` com dashboard responsivo.
+- Novo endpoint backend: `GET /api/dashboard/projeto/:projetoId/curva-s`.
+- Gráfico de linhas com série temporal acumulada:
+   - Planejado acumulado (%)
+   - Real acumulado (%)
+- Indicadores na tela:
+   - Avanço Planejado
+   - Avanço Real
+   - Desvio
+   - SPI (com semáforo)
+- Tabela de alertas com atividades atrasadas e atraso crítico.
+
+### Estrutura obrigatória da EAP para Curva S
+
+- Campos adicionados/garantidos em `atividades_eap`:
+   - `id_atividade`
+   - `nome`
+   - `data_inicio_planejada`
+   - `data_fim_planejada`
+   - `peso_percentual_projeto`
+   - `data_conclusao_real`
+- Nova migração: `backend/scripts/migrate_add_curva_s_fields.js`.
+- Novo script npm: `npm run migrate-curva-s`.
+- Regras implementadas:
+   - Soma de pesos não pode ultrapassar 100% no cadastro/edição de folhas da EAP.
+   - Curva S exige soma total de pesos = 100% para cálculo.
+   - `percentual_executado` bloqueado para edição manual na EAP.
+   - Atualização de progresso considera **somente RDO aprovado**.
+
+
 ## ✅ Implementações Concluídas
 
 ### 1. **Gestão de Acesso e Usuários**

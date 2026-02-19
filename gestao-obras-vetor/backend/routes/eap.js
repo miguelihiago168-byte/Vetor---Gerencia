@@ -6,13 +6,43 @@ const { registrarAuditoria } = require('../middleware/auditoria');
 
 const router = express.Router();
 
+const parseDateOnly = (value) => {
+  if (!value) return null;
+  const asString = String(value);
+  const match = asString.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) return `${match[1]}-${match[2]}-${match[3]}`;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
+const ensureFaixaPercentual = (valor) => {
+  const parsed = parseFloat(valor);
+  if (Number.isNaN(parsed) || parsed < 0 || parsed > 100) return null;
+  return Math.round(parsed * 100) / 100;
+};
+
+const getSomaPesosFolhas = async (projetoId) => {
+  const row = await getQuery(`
+    SELECT COALESCE(SUM(COALESCE(a.peso_percentual_projeto, a.percentual_previsto, 0)), 0) AS total
+    FROM atividades_eap a
+    WHERE a.projeto_id = ?
+      AND NOT EXISTS (SELECT 1 FROM atividades_eap c WHERE c.pai_id = a.id)
+  `, [projetoId]);
+  return Number(row?.total || 0);
+};
+
 // Listar atividades EAP de um projeto
 router.get('/projeto/:projetoId', auth, async (req, res) => {
   try {
     const { projetoId } = req.params;
 
     const atividades = await allQuery(`
-      SELECT * FROM atividades_eap
+      SELECT *,
+             COALESCE(id_atividade, ('ATV-' || id)) AS id_atividade,
+             COALESCE(nome, descricao) AS nome,
+             COALESCE(peso_percentual_projeto, percentual_previsto, 0) AS peso_percentual_projeto
+      FROM atividades_eap
       WHERE projeto_id = ?
       ORDER BY ordem, codigo_eap
     `, [projetoId]);
@@ -109,22 +139,80 @@ router.post('/', auth, [
       return res.status(400).json({ erro: 'Dados inválidos.', detalhes: errors.array() });
     }
 
-    const { projeto_id, codigo_eap, descricao, percentual_previsto, pai_id, ordem, unidade_medida, quantidade_total } = req.body;
+    const {
+      projeto_id,
+      codigo_eap,
+      descricao,
+      percentual_previsto,
+      pai_id,
+      ordem,
+      unidade_medida,
+      quantidade_total,
+      id_atividade,
+      nome,
+      data_inicio_planejada,
+      data_fim_planejada,
+      peso_percentual_projeto
+    } = req.body;
+
+    const dataInicio = parseDateOnly(data_inicio_planejada);
+    const dataFim = parseDateOnly(data_fim_planejada);
+    if (!dataInicio || !dataFim) {
+      return res.status(400).json({ erro: 'Informe data_inicio_planejada e data_fim_planejada válidas (YYYY-MM-DD).' });
+    }
+    if (dataInicio > dataFim) {
+      return res.status(400).json({ erro: 'data_fim_planejada deve ser maior ou igual a data_inicio_planejada.' });
+    }
+
+    const pesoInformado = peso_percentual_projeto ?? percentual_previsto;
+    const peso = ensureFaixaPercentual(pesoInformado);
+    if (peso === null) {
+      return res.status(400).json({ erro: 'peso_percentual_projeto deve estar entre 0 e 100.' });
+    }
+
+    const somaAtualFolhas = await getSomaPesosFolhas(projeto_id);
+    let totalProjetado = somaAtualFolhas + peso;
+    if (pai_id) {
+      const paiRow = await getQuery(`
+        SELECT id, COALESCE(peso_percentual_projeto, percentual_previsto, 0) AS peso,
+               EXISTS(SELECT 1 FROM atividades_eap c WHERE c.pai_id = atividades_eap.id) AS tem_filhos
+        FROM atividades_eap
+        WHERE id = ? AND projeto_id = ?
+      `, [pai_id, projeto_id]);
+      if (!paiRow) {
+        return res.status(400).json({ erro: 'Atividade pai inválida para este projeto.' });
+      }
+      if (!paiRow.tem_filhos) {
+        totalProjetado -= Number(paiRow.peso || 0);
+      }
+    }
+
+    if (totalProjetado > 100.0001) {
+      return res.status(400).json({ erro: `A soma dos pesos das atividades não pode ultrapassar 100%. Total projetado: ${totalProjetado.toFixed(2)}%.` });
+    }
+
+    const identificador = (id_atividade && String(id_atividade).trim()) || `ATV-${projeto_id}-${codigo_eap}`;
+    const nomeAtividade = (nome && String(nome).trim()) || descricao;
 
     const result = await runQuery(`
       INSERT INTO atividades_eap 
-      (projeto_id, codigo_eap, descricao, percentual_previsto, pai_id, ordem, unidade_medida, quantidade_total, criado_por)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (projeto_id, codigo_eap, descricao, percentual_previsto, pai_id, ordem, unidade_medida, quantidade_total, criado_por, id_atividade, nome, data_inicio_planejada, data_fim_planejada, peso_percentual_projeto)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       projeto_id,
       codigo_eap,
       descricao,
-      percentual_previsto || 100,
+      peso,
       pai_id || null,
       ordem || 0,
       unidade_medida || null,
       quantidade_total || 0,
-      req.usuario.id
+      req.usuario.id,
+      identificador,
+      nomeAtividade,
+      dataInicio,
+      dataFim,
+      peso
     ]);
 
     await registrarAuditoria('atividades_eap', result.lastID, 'CREATE', null, req.body, req.usuario.id);
@@ -144,15 +232,54 @@ router.post('/', auth, [
 router.put('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
-    const { codigo_eap, descricao, percentual_previsto, ordem, unidade_medida, quantidade_total } = req.body;
+    const { codigo_eap, descricao, percentual_previsto, ordem, unidade_medida, quantidade_total, pai_id, id_atividade, nome, data_inicio_planejada, data_fim_planejada, peso_percentual_projeto, percentual_executado } = req.body;
+
+    if (typeof percentual_executado !== 'undefined') {
+      return res.status(400).json({ erro: 'percentual_executado só pode ser atualizado via RDO aprovado.' });
+    }
 
     const atividadeAnterior = await getQuery('SELECT * FROM atividades_eap WHERE id = ?', [id]);
+    if (!atividadeAnterior) {
+      return res.status(404).json({ erro: 'Atividade não encontrada.' });
+    }
+
+    const dataInicio = parseDateOnly(data_inicio_planejada || atividadeAnterior.data_inicio_planejada);
+    const dataFim = parseDateOnly(data_fim_planejada || atividadeAnterior.data_fim_planejada);
+    if (!dataInicio || !dataFim) {
+      return res.status(400).json({ erro: 'Informe data_inicio_planejada e data_fim_planejada válidas (YYYY-MM-DD).' });
+    }
+    if (dataInicio > dataFim) {
+      return res.status(400).json({ erro: 'data_fim_planejada deve ser maior ou igual a data_inicio_planejada.' });
+    }
+
+    const pesoInformado = (typeof peso_percentual_projeto !== 'undefined')
+      ? peso_percentual_projeto
+      : ((typeof percentual_previsto !== 'undefined') ? percentual_previsto : atividadeAnterior.peso_percentual_projeto);
+    const peso = ensureFaixaPercentual(pesoInformado);
+    if (peso === null) {
+      return res.status(400).json({ erro: 'peso_percentual_projeto deve estar entre 0 e 100.' });
+    }
+
+    const filhos = await getQuery('SELECT COUNT(*) AS total FROM atividades_eap WHERE pai_id = ?', [id]);
+    const ehFolha = Number(filhos?.total || 0) === 0;
+    if (ehFolha) {
+      const somaAtualFolhas = await getSomaPesosFolhas(atividadeAnterior.projeto_id);
+      const pesoAnterior = Number(atividadeAnterior.peso_percentual_projeto || atividadeAnterior.percentual_previsto || 0);
+      const totalProjetado = somaAtualFolhas - pesoAnterior + peso;
+      if (totalProjetado > 100.0001) {
+        return res.status(400).json({ erro: `A soma dos pesos das atividades não pode ultrapassar 100%. Total projetado: ${totalProjetado.toFixed(2)}%.` });
+      }
+    }
+
+    const novoIdentificador = (id_atividade && String(id_atividade).trim()) || atividadeAnterior.id_atividade || `ATV-${atividadeAnterior.projeto_id}-${codigo_eap || atividadeAnterior.codigo_eap}`;
+    const novoNome = (nome && String(nome).trim()) || descricao || atividadeAnterior.descricao;
+    const novoPaiId = (typeof pai_id !== 'undefined') ? (pai_id || null) : atividadeAnterior.pai_id;
 
     await runQuery(`
       UPDATE atividades_eap 
-      SET codigo_eap = ?, descricao = ?, percentual_previsto = ?, ordem = ?, unidade_medida = ?, quantidade_total = ?, atualizado_em = CURRENT_TIMESTAMP
+      SET codigo_eap = ?, descricao = ?, percentual_previsto = ?, ordem = ?, unidade_medida = ?, quantidade_total = ?, pai_id = ?, id_atividade = ?, nome = ?, data_inicio_planejada = ?, data_fim_planejada = ?, peso_percentual_projeto = ?, atualizado_em = CURRENT_TIMESTAMP
       WHERE id = ?
-    `, [codigo_eap, descricao, percentual_previsto, ordem, unidade_medida || null, quantidade_total || 0, id]);
+    `, [codigo_eap, descricao, peso, ordem, unidade_medida || null, quantidade_total || 0, novoPaiId, novoIdentificador, novoNome, dataInicio, dataFim, peso, id]);
 
     await registrarAuditoria('atividades_eap', id, 'UPDATE', atividadeAnterior, req.body, req.usuario.id);
 
@@ -168,7 +295,7 @@ router.put('/:id', auth, async (req, res) => {
           SELECT COALESCE(SUM(COALESCE(ra.quantidade_executada,0)),0) as total_executado_qt
           FROM rdo_atividades ra
           INNER JOIN rdos r ON ra.rdo_id = r.id
-          WHERE ra.atividade_eap_id = ?
+          WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
         `, [id]);
         const totalExec = somaQt ? (somaQt.total_executado_qt || 0) : 0;
         novoPerc = Math.min(Math.round(((totalExec / quantidadeTotal) * 10000)) / 100, 100);
@@ -177,7 +304,7 @@ router.put('/:id', auth, async (req, res) => {
           SELECT COALESCE(SUM(ra.percentual_executado),0) as total_exec_perc
           FROM rdo_atividades ra
           INNER JOIN rdos r ON ra.rdo_id = r.id
-          WHERE ra.atividade_eap_id = ?
+          WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
         `, [id]);
         novoPerc = Math.min((somaPerc?.total_exec_perc || 0), 100);
       }
@@ -301,7 +428,7 @@ router.post('/:id/recalcular', auth, async (req, res) => {
       SELECT COALESCE(SUM(ra.percentual_executado), 0) as total_executado
       FROM rdo_atividades ra
       INNER JOIN rdos r ON ra.rdo_id = r.id
-      WHERE ra.atividade_eap_id = ? AND r.status IN ('Aprovado', 'Em análise', 'Em preenchimento')
+      WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
     `, [id]);
 
     const percentualExecutado = Math.min(resultado.total_executado, 100);
@@ -378,7 +505,7 @@ router.post('/projeto/:projetoId/recalcular-tudo', [auth, isGestor], async (req,
           SELECT COALESCE(SUM(COALESCE(ra.quantidade_executada,0)),0) as total_executado_qt
           FROM rdo_atividades ra
           INNER JOIN rdos r ON ra.rdo_id = r.id
-          WHERE ra.atividade_eap_id = ?
+          WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
         `, [a.id]);
         novoPerc = Math.min(Math.round(((parseFloat(r?.total_executado_qt || 0) / quantidadeTotal) * 10000)) / 100, 100);
       } else {
@@ -386,7 +513,7 @@ router.post('/projeto/:projetoId/recalcular-tudo', [auth, isGestor], async (req,
           SELECT COALESCE(SUM(ra.percentual_executado),0) as total_exec_perc
           FROM rdo_atividades ra
           INNER JOIN rdos r ON ra.rdo_id = r.id
-          WHERE ra.atividade_eap_id = ?
+          WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
         `, [a.id]);
         novoPerc = Math.min(parseFloat(r?.total_exec_perc || 0), 100);
       }

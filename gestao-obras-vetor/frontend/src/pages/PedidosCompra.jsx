@@ -5,9 +5,12 @@ import { useNotification } from '../context/NotificationContext';
 import { useAuth } from '../context/AuthContext';
 import { listarPedidosPorProjeto, criarPedidoCompra, aprovarInicialPedido, inserirCotacao, selecionarCotacao, marcarComprado, detalharPedido, reprovarPedido } from '../services/api';
 
+const parseMoney = (valor) => Number(String(valor ?? 0).replace(',', '.')) || 0;
+const formatBRL = (valor) => Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 function PedidosCompra() {
   const { projetoId } = useParams();
-  const { usuario } = useAuth();
+  const { perfil } = useAuth();
   const { actionNotify, info } = useNotification();
   const navigate = useNavigate();
   const [pedidos, setPedidos] = useState([]);
@@ -15,7 +18,10 @@ function PedidosCompra() {
   const [erro, setErro] = useState('');
   const [search, setSearch] = useState('');
   const [comparativos, setComparativos] = useState({});
-  const [vencedoras, setVencedoras] = useState({});
+
+  const canCreatePurchase = ['Almoxarife', 'Gestor Geral', 'Gestor da Obra'].includes(perfil);
+  const canApprovePurchase = ['Gestor Geral', 'Gestor da Obra', 'ADM'].includes(perfil);
+  const canFinancePurchase = ['ADM', 'Gestor Geral'].includes(perfil);
 
   useEffect(() => {
     const load = async () => {
@@ -34,19 +40,6 @@ function PedidosCompra() {
   const refresh = async () => {
     const res = await listarPedidosPorProjeto(projetoId);
     setPedidos(res.data);
-    try {
-      const lista = res.data || [];
-      const comVencedora = lista.filter(p => p.cotacao_vencedora_id);
-      const next = { ...vencedoras };
-      for (const p of comVencedora) {
-        try {
-          const det = await detalharPedido(p.id);
-          const cot = (det.data.cotacoes || []).find(c => c.id === p.cotacao_vencedora_id);
-          if (cot) next[p.id] = cot;
-        } catch {}
-      }
-      setVencedoras(next);
-    } catch {}
   };
 
   const [showNovaModal, setShowNovaModal] = useState(false);
@@ -208,9 +201,9 @@ function PedidosCompra() {
         const cot = (det.data.cotacoes || []).find(c => c.id === parseInt(selecionarEscolha, 10));
         const qtd = det.data?.pedido?.quantidade || 0;
         const totalProduto = Number(cot?.valor_unitario || 0) * Number(qtd || 0);
-        const freteVal = Number(String(cot?.frete || 0).replace(',','.')) || 0;
+        const freteVal = parseMoney(cot?.frete || 0);
         const totalComFrete = totalProduto + freteVal;
-        info(`Cotação #${cot?.id} selecionada. Total: R$ ${totalProduto.toFixed(2)}${freteVal ? ` + frete R$ ${freteVal.toFixed(2)} = R$ ${totalComFrete.toFixed(2)}` : ''}.`, 7000);
+        info(`Cotação #${cot?.id} selecionada. Total: R$ ${formatBRL(totalProduto)}${freteVal ? ` + frete R$ ${formatBRL(freteVal)} = R$ ${formatBRL(totalComFrete)}` : ''}.`, 7000);
       } catch {
         info('Cotação selecionada com sucesso.', 4000);
       }
@@ -305,7 +298,9 @@ function PedidosCompra() {
               onChange={(e)=> setSearch(e.target.value)}
               placeholder="Buscar por #id, descrição ou aplicação"
             />
-            <button className="btn btn-primary" onClick={() => setShowNovaModal(true)}>Nova Solicitação</button>
+            {canCreatePurchase && (
+              <button className="btn btn-primary" onClick={() => setShowNovaModal(true)}>Nova Solicitação</button>
+            )}
           </div>
         </div>
         {erro && <div className="alert alert-error">{erro}</div>}
@@ -325,6 +320,7 @@ function PedidosCompra() {
               .map(p => {
               const cotas = comparativos[p.id];
               const min = menorValor(cotas);
+              const selectedCotacaoId = Number(p.cotacao_vencedora_id);
               return (
               <div key={p.id} className="card">
                 <div className="flex-between mb-1">
@@ -336,43 +332,28 @@ function PedidosCompra() {
                   <p style={{ color: 'var(--gray-600)' }}>Aplicação: {p.aplicacao_local}</p>
                 )}
                 {p.cotacao_vencedora_id && (
-                  <div className="card" style={{ padding: '8px', marginTop: '8px', background: 'var(--gray-50)' }}>
-                    <p className="eyebrow">Cotação escolhida #{p.cotacao_vencedora_id}</p>
-                    {vencedoras[p.id] ? (
-                      <div>
-                        <p><strong>{vencedoras[p.id].fornecedor}</strong></p>
-                        <p>
-                          Valor unitário: R$ {Number(vencedoras[p.id].valor_unitario || 0).toFixed(2)}
-                          {p?.quantidade != null ? ` — Total produto: R$ ${(Number(vencedoras[p.id].valor_unitario || 0) * Number(p.quantidade || 0)).toFixed(2)}` : ''}
-                        </p>
-                        {vencedoras[p.id].frete && String(vencedoras[p.id].frete).trim() !== '' && (
-                          <p>
-                            Frete: R$ {Number(String(vencedoras[p.id].frete).replace(',','.')).toFixed(2)}
-                            {p?.quantidade != null ? ` — Total c/ frete: R$ ${(
-                              (Number(vencedoras[p.id].valor_unitario || 0) * Number(p.quantidade || 0)) + Number(String(vencedoras[p.id].frete).replace(',','.'))
-                            ).toFixed(2)}` : ''}
-                          </p>
-                        )}
-                      </div>
-                    ) : (
-                      <p style={{ color: 'var(--gray-600)' }}>Carregando detalhes da cotação selecionada…</p>
-                    )}
+                  <div className="card" style={{ padding: '12px 14px', marginTop: '10px', background: 'var(--gray-50)', border: '1px solid var(--gray-100)' }}>
+                    <p className="eyebrow" style={{ marginBottom: '6px' }}>Cotação escolhida</p>
+                    <div className="flex-between" style={{ gap: '8px', alignItems: 'center' }}>
+                      <p style={{ fontWeight: 700, color: 'var(--gray-700)' }}>#{p.cotacao_vencedora_id}</p>
+                      <span className="badge badge-green">Selecionada</span>
+                    </div>
                   </div>
                 )}
                 <div className="flex" style={{ gap: '8px', marginTop: '10px' }}>
-                  {usuario?.is_gestor === 1 && p.status === 'SOLICITADO' && (
+                  {canApprovePurchase && p.status === 'SOLICITADO' && (
                     <button className="btn btn-secondary" onClick={() => aprovarInicial(p.id)}>Aprovar Inicial</button>
                   )}
-                  {usuario?.is_adm === 1 && (p.status === 'EM_COTACAO' || p.status === 'APROVADO_GESTOR_INICIAL') && (
+                  {canFinancePurchase && (p.status === 'EM_COTACAO' || p.status === 'APROVADO_GESTOR_INICIAL') && (
                     <button className="btn btn-secondary" onClick={() => abrirModalCotacoes(p.id)}>Inserir 3 Cotações</button>
                   )}
-                  {usuario?.is_gestor === 1 && p.status === 'COTADO' && (
+                  {canApprovePurchase && p.status === 'COTADO' && (
                     <button className="btn btn-secondary" onClick={() => escolher(p.id)}>Escolher Cotação</button>
                   )}
-                  {usuario?.is_adm === 1 && p.status === 'APROVADO_PARA_COMPRA' && (
+                  {canFinancePurchase && p.status === 'APROVADO_PARA_COMPRA' && (
                     <button className="btn btn-success" onClick={() => finalizarCompra(p.id)}>Marcar como Comprado</button>
                   )}
-                  {(usuario?.is_adm === 1 || usuario?.is_gestor === 1) && p.status !== 'REPROVADO' && podeReprovar(p.status) && (
+                  {canApprovePurchase && p.status !== 'REPROVADO' && podeReprovar(p.status) && (
                     <button className="btn btn-danger" onClick={() => abrirReprovar(p.id)}>Reprovar</button>
                   )}
                   {(p.status === 'COTADO' || p.status === 'APROVADO_PARA_COMPRA' || p.status === 'COMPRADO') && (
@@ -386,14 +367,29 @@ function PedidosCompra() {
                 )}
                 {cotas && (
                   <div style={{ marginTop: '12px' }}>
-                    <div className="grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                      {cotas.map((c) => (
-                        <div key={c.id} className="card" style={{ backgroundColor: (min != null && c.valor_unitario === min) ? '#e7f9ed' : 'white' }}>
-                          <p className="eyebrow">Cotação #{c.id}</p>
+                    <div className="grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+                      {cotas.map((c) => {
+                        const isMenor = min != null && c.valor_unitario === min;
+                        const isSelecionada = selectedCotacaoId > 0 && Number(c.id) === selectedCotacaoId;
+                        return (
+                        <div
+                          key={c.id}
+                          className="card"
+                          style={{
+                            marginBottom: 0,
+                            padding: '18px',
+                            background: isSelecionada ? 'var(--gray-25)' : (isMenor ? 'var(--gray-50)' : 'white'),
+                            border: isSelecionada ? '2px solid var(--success)' : (isMenor ? '1px solid var(--gray-200)' : '1px solid var(--gray-100)')
+                          }}
+                        >
+                          <div className="flex-between" style={{ gap: '8px', marginBottom: '6px' }}>
+                            <p className="eyebrow" style={{ marginBottom: 0 }}>Cotação #{c.id}</p>
+                            {isSelecionada && <span className="badge badge-green">Selecionada</span>}
+                          </div>
                           <h4>{c.fornecedor}</h4>
-                          <p>Valor: R$ {Number(c.valor_unitario).toFixed(2)}</p>
+                          <p>Valor: R$ {formatBRL(c.valor_unitario)}</p>
                           {p?.quantidade != null && (
-                            <p>Total: R$ {(Number(c.valor_unitario || 0) * Number(p.quantidade || 0)).toFixed(2)}</p>
+                            <p>Total: R$ {formatBRL(Number(c.valor_unitario || 0) * Number(p.quantidade || 0))}</p>
                           )}
                           {c.marca && <p>Marca: {c.marca}</p>}
                           {c.modelo && <p>Modelo: {c.modelo}</p>}
@@ -404,9 +400,14 @@ function PedidosCompra() {
                           {c.observacoes && <p>Obs.: {c.observacoes}</p>}
                           {c.pdf_path && <a className="btn btn-outline" href={c.pdf_path} target="_blank" rel="noreferrer">Ver PDF</a>}
                         </div>
-                      ))}
+                      );})}
                     </div>
-                    {min != null && <p style={{ marginTop: '8px', color: 'var(--success)' }}>Menor preço destacado em verde.</p>}
+                    {selectedCotacaoId > 0 && (
+                      <p style={{ marginTop: '8px', color: 'var(--success)', fontWeight: 600 }}>
+                        Cotação selecionada #{selectedCotacaoId} destacada em verde.
+                      </p>
+                    )}
+                    {selectedCotacaoId <= 0 && min != null && <p style={{ marginTop: '8px', color: 'var(--success)' }}>Menor preço destacado em verde.</p>}
                   </div>
                 )}
               </div>
@@ -456,7 +457,7 @@ function PedidosCompra() {
                     </div>
                     <div className="form-group">
                       <label className="form-label">Valor Total (R$)</label>
-                      <input className="form-input" readOnly value={(parseFloat(String(c.valor_unitario || 0).replace(',', '.')) * Number(cotacoesQtdPedido || 0)).toFixed(2)} />
+                      <input className="form-input" readOnly value={formatBRL(parseMoney(c.valor_unitario || 0) * Number(cotacoesQtdPedido || 0))} />
                     </div>
                     <div className="form-group">
                       <label className="form-label">Marca</label>
@@ -526,7 +527,7 @@ function PedidosCompra() {
                 <select className="form-select" value={selecionarEscolha} onChange={(e)=> setSelecionarEscolha(e.target.value)}>
                   <option value="">Selecione...</option>
                   {selecionarLista.map(c => (
-                    <option key={c.id} value={c.id}>#{c.id} - {c.fornecedor} — R$ {Number(c.valor_unitario || 0).toFixed(2)}</option>
+                    <option key={c.id} value={c.id}>#{c.id} - {c.fornecedor} — R$ {formatBRL(c.valor_unitario || 0)}</option>
                   ))}
                 </select>
               </div>

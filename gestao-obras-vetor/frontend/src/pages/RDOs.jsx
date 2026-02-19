@@ -5,12 +5,14 @@ import { getRDOs, deleteRDO, deleteRDOsProjetoTodos, recalcularEapProjeto, getRd
 import { useAuth } from '../context/AuthContext';
 import { FileText, Download, Plus, Eye, Trash2 } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
+import { useDialog } from '../context/DialogContext';
 
 function RDOs() {
   const { projetoId } = useParams();
   const navigate = useNavigate();
   const { isGestor } = useAuth();
   const { info, warning, actionNotify } = useNotification();
+  const { alert } = useDialog();
   const [sucesso, setSucesso] = useState('');
     const formatLocalDate = (dstr) => {
       if (!dstr) return 'N/A';
@@ -40,7 +42,7 @@ function RDOs() {
         setRdos(prev => prev.map(r => r.id === rdoId ? { ...r, status: 'Aprovado' } : r));
         setSucesso('RDO aprovado com sucesso.');
       } catch (error) {
-        alert('Falha ao aprovar RDO: ' + (error.response?.data?.erro || error.message));
+        await alert({ title: 'Erro', message: 'Falha ao aprovar RDO: ' + (error.response?.data?.erro || error.message) });
       }
     };
   const [rdos, setRdos] = useState([]);
@@ -77,14 +79,14 @@ function RDOs() {
       setRdos(prev => prev.map(r => r.id === rdoId ? { ...r, status: 'Reprovado' } : r));
       setSucesso('RDO reprovado.');
     } catch (error) {
-      alert('Falha ao reprovar RDO: ' + (error.response?.data?.erro || error.message));
+      await alert({ title: 'Erro', message: 'Falha ao reprovar RDO: ' + (error.response?.data?.erro || error.message) });
     }
   };
 
   const handleVoltarEdicao = async (rdoId, e) => {
     if (e) e.stopPropagation();
     if (!isGestor) {
-      alert('Apenas gestores podem voltar o RDO para edição.');
+      await alert({ title: 'Acesso restrito', message: 'Apenas gestores podem voltar o RDO para edição.' });
       return;
     }
     try {
@@ -94,7 +96,7 @@ function RDOs() {
       setSucesso('RDO revertido para edição.');
       navigate(`/projeto/${projetoId}/rdos/${rdoId}/editar`);
     } catch (error) {
-      alert('Falha ao voltar para edição: ' + (error.response?.data?.erro || error.message));
+      await alert({ title: 'Erro', message: 'Falha ao voltar para edição: ' + (error.response?.data?.erro || error.message) });
     }
   };
 
@@ -112,19 +114,19 @@ function RDOs() {
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      alert('Falha ao gerar PDF: ' + (error.response?.data?.erro || error.message));
+      await alert({ title: 'Erro', message: 'Falha ao gerar PDF: ' + (error.response?.data?.erro || error.message) });
     }
   };
 
   const handleDeleteRDO = async (rdoId, e) => {
     if (e) e.stopPropagation();
-    alert('A exclusão de RDO está desativada pelo sistema.');
+    await alert({ title: 'Ação indisponível', message: 'A exclusão de RDO está desativada pelo sistema.' });
     return;
   };
 
   const handleDeleteTodos = async () => {
     if (!isGestor) return;
-    alert('A exclusão de RDOs do projeto está desativada.');
+    await alert({ title: 'Ação indisponível', message: 'A exclusão de RDOs do projeto está desativada.' });
     return;
   };
 
@@ -237,7 +239,7 @@ function RDOs() {
                       {statusLabel(rdo.status)}
                     </span>
                     {/* Botão de visualizar removido: clique no card abre o formulário de edição */}
-                    {isGestor && rdo.status === 'Em análise' && (
+                    {isGestor && (rdo.status === 'Em preenchimento' || rdo.status === 'Em análise') && (
                       <div style={{ display: 'flex', gap: '8px' }}>
                         <button
                           className="btn btn-success"

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { getRNCs, deleteRNC } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useDialog } from '../context/DialogContext';
 import { AlertTriangle, Plus, Eye, Edit, Trash2 } from 'lucide-react';
 import './RNC.css';
 
@@ -10,6 +11,7 @@ function RNC() {
   const { projetoId } = useParams();
   const navigate = useNavigate();
   const { isGestor } = useAuth();
+  const { confirm } = useDialog();
   const [rncs, setRncs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState('');
@@ -59,7 +61,13 @@ function RNC() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Deseja realmente deletar esta RNC?')) return;
+    const ok = await confirm({
+      title: 'Excluir RNC',
+      message: 'Deseja realmente deletar esta RNC?',
+      confirmText: 'Excluir',
+      cancelText: 'Cancelar'
+    });
+    if (!ok) return;
 
     try {
       await deleteRNC(id);

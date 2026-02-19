@@ -96,8 +96,8 @@ function UsuariosDeleted() {
                       <td>{usuario.nome}</td>
                       <td>{usuario.email || '-'}</td>
                       <td>
-                        <span className={`badge ${usuario.is_gestor ? 'badge-primary' : 'badge-secondary'}`}>
-                          {usuario.is_gestor ? 'Gestor' : 'Usuário'}
+                        <span className={`badge ${usuario.perfil === 'Gestor Geral' || usuario.perfil === 'Gestor da Obra' ? 'badge-primary' : 'badge-secondary'}`}>
+                          {usuario.perfil || (usuario.is_gestor ? 'Gestor' : 'Usuário')}
                         </span>
                       </td>
                       <td>
