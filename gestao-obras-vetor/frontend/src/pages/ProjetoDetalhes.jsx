@@ -3,8 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { getProjeto, getRDOStats, getRDOs, getAnexos, getDashboardAlmoxarifado } from '../services/api';
 import { FileText, AlertTriangle, Image as ImageIcon, Activity } from 'lucide-react';
+import { formatMoneyBR } from '../utils/currency';
 
-const formatBRL = (valor) => Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatBRL = formatMoneyBR;
 
 function ProjetoDetalhes() {
   const { projetoId } = useParams();

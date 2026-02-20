@@ -11,18 +11,18 @@ function EAPForm() {
   const navigate = useNavigate();
   const { confirm } = useDialog();
   const [loading, setLoading] = useState(false);
+  const [erro, setErro] = useState('');
   const [atividades, setAtividades] = useState([]);
   const [formData, setFormData] = useState({
-    id_atividade: '',
     codigo_eap: '',
     nome: '',
     descricao: '',
-    peso_percentual_projeto: 0,
+    peso_percentual_projeto: '',
     data_inicio_planejada: '',
     data_fim_planejada: '',
     pai_id: '',
     unidade_medida: '',
-    quantidade_total: 0
+    quantidade_total: ''
   });
 
   useEffect(() => {
@@ -94,16 +94,15 @@ function EAPForm() {
       const atividade = response.data.find(a => a.id == atividadeId);
       if (atividade) {
         setFormData({
-          id_atividade: atividade.id_atividade || '',
           codigo_eap: atividade.codigo_eap || '',
           nome: atividade.nome || '',
           descricao: atividade.descricao || '',
-          peso_percentual_projeto: atividade.peso_percentual_projeto || atividade.percentual_previsto || 0,
+          peso_percentual_projeto: String(atividade.peso_percentual_projeto ?? atividade.percentual_previsto ?? ''),
           data_inicio_planejada: atividade.data_inicio_planejada || '',
           data_fim_planejada: atividade.data_fim_planejada || '',
           pai_id: atividade.pai_id || '',
           unidade_medida: atividade.unidade_medida || '',
-          quantidade_total: atividade.quantidade_total || 0
+          quantidade_total: String(atividade.quantidade_total ?? '')
         });
       }
     } catch (error) {
@@ -114,6 +113,7 @@ function EAPForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setErro('');
 
     try {
       if (atividadeId) {
@@ -129,7 +129,13 @@ function EAPForm() {
         ...formData,
         projeto_id: projetoId,
         pai_id: formData.pai_id || null,
-        percentual_previsto: formData.peso_percentual_projeto
+        peso_percentual_projeto: formData.peso_percentual_projeto === ''
+          ? (formData.pai_id ? undefined : 0)
+          : Number(formData.peso_percentual_projeto),
+        percentual_previsto: formData.peso_percentual_projeto === ''
+          ? (formData.pai_id ? undefined : 0)
+          : Number(formData.peso_percentual_projeto),
+        quantidade_total: formData.quantidade_total === '' ? null : Number(formData.quantidade_total)
       };
 
       if (atividadeId) {
@@ -141,6 +147,7 @@ function EAPForm() {
       navigate(`/projeto/${projetoId}/eap`);
     } catch (error) {
       console.error('Erro ao salvar atividade:', error);
+      setErro(error?.response?.data?.erro || 'Erro ao salvar atividade. Verifique os campos e tente novamente.');
     } finally {
       setLoading(false);
     }
@@ -151,7 +158,7 @@ function EAPForm() {
     setFormData(prev => {
       const newData = {
         ...prev,
-        [name]: (['peso_percentual_projeto','quantidade_total'].includes(name)) ? parseFloat(value) || 0 : value
+        [name]: value
       };
 
       // Se mudou a atividade pai, gerar novo código EAP
@@ -165,6 +172,7 @@ function EAPForm() {
   };
 
   const atividadesPai = atividades.filter(a => !a.pai_id);
+  const isAtividadePai = !formData.pai_id;
 
   return (
     <>
@@ -178,59 +186,42 @@ function EAPForm() {
         </div>
 
         <div className="card" style={{ padding: '24px', maxWidth: '600px' }}>
+          {erro && <div className="alert alert-error" style={{ marginBottom: '16px' }}>{erro}</div>}
           <form onSubmit={handleSubmit}>
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                ID da Atividade *
+                Código EAP e Nome da Atividade
               </label>
-              <input
-                type="text"
-                name="id_atividade"
-                value={formData.id_atividade}
-                onChange={handleChange}
-                required
-                placeholder="Ex: ATV-1.1"
-                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-              />
+              <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '10px' }}>
+                <input
+                  type="text"
+                  name="codigo_eap"
+                  value={formData.codigo_eap}
+                  onChange={handleChange}
+                  required
+                  placeholder="Ex: 2.1"
+                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                />
+                <input
+                  type="text"
+                  name="nome"
+                  value={formData.nome}
+                  onChange={handleChange}
+                  required
+                  placeholder="Ex: Lançamento de módulos"
+                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                />
+              </div>
             </div>
 
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                Código EAP *
-              </label>
-              <input
-                type="text"
-                name="codigo_eap"
-                value={formData.codigo_eap}
-                onChange={handleChange}
-                required
-                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-              />
-            </div>
-
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                Nome da Atividade *
-              </label>
-              <input
-                type="text"
-                name="nome"
-                value={formData.nome}
-                onChange={handleChange}
-                required
-                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-              />
-            </div>
-
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                Descrição *
+                Descrição (opcional)
               </label>
               <textarea
                 name="descricao"
                 value={formData.descricao}
                 onChange={handleChange}
-                required
                 rows={3}
                 style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
               />
@@ -238,28 +229,28 @@ function EAPForm() {
 
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                Data Início Planejada *
+                Data Início Planejada {isAtividadePai ? '(opcional para atividade pai)' : '*'}
               </label>
               <input
                 type="date"
                 name="data_inicio_planejada"
                 value={formData.data_inicio_planejada}
                 onChange={handleChange}
-                required
+                required={!isAtividadePai}
                 style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
               />
             </div>
 
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                Data Fim Planejada *
+                Data Fim Planejada {isAtividadePai ? '(opcional para atividade pai)' : '*'}
               </label>
               <input
                 type="date"
                 name="data_fim_planejada"
                 value={formData.data_fim_planejada}
                 onChange={handleChange}
-                required
+                required={!isAtividadePai}
                 style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
               />
             </div>
@@ -277,7 +268,7 @@ function EAPForm() {
                 <option value="">Nenhuma (atividade raiz)</option>
                 {atividadesPai.map(atividade => (
                   <option key={atividade.id} value={atividade.id}>
-                    {atividade.codigo_eap} - {atividade.descricao}
+                    {atividade.codigo_eap} - {atividade.nome || atividade.descricao || 'Sem descrição'}
                   </option>
                 ))}
               </select>
@@ -315,7 +306,7 @@ function EAPForm() {
 
             <div style={{ marginBottom: '24px' }}>
               <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                Peso Percentual no Projeto (%) *
+                Peso Percentual no Projeto (%) {isAtividadePai ? '(opcional para atividade pai)' : '*'}
               </label>
               <input
                 type="number"
@@ -325,7 +316,7 @@ function EAPForm() {
                 min="0"
                 max="100"
                 step="0.1"
-                required
+                required={!isAtividadePai}
                 style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
               />
             </div>

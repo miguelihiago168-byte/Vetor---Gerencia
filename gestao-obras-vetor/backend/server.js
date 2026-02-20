@@ -27,6 +27,7 @@ const rdoRelatedRoutes = require('./routes/rdo_related');
 const dashboardRoutes = require('./routes/dashboard');
 const rncRoutes = require('./routes/rnc');
 const pedidosCompraRoutes = require('./routes/pedidos_compra');
+const financeiroRoutes = require('./routes/financeiro');
 const notificacoesRoutes = require('./routes/notificacoes');
 const almoxarifadoRoutes = require('./routes/almoxarifado');
 // Garantir esquema de notificações e índice único para evitar duplicidades
@@ -63,6 +64,7 @@ app.use('/api/rdo', rdoRelatedRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/rnc', rncRoutes);
 app.use('/api/pedidos-compra', pedidosCompraRoutes);
+app.use('/api/financeiro', financeiroRoutes);
 app.use('/api/notificacoes', notificacoesRoutes);
 app.use('/api/almoxarifado', almoxarifadoRoutes);
 

@@ -13,6 +13,7 @@ export default function ProjetoSelector({ destino }) {
     rnc: 'RNC',
     eap: 'EAP',
     pedidos: 'Compras',
+    financeiro: 'Financeiro',
     almoxarifado: 'Ativos',
     usuarios: 'Usuários',
     'curva-s': 'Curva S'

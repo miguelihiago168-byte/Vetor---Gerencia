@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import AlmoxarifadoLayout from '../components/AlmoxarifadoLayout';
 import { getRelatorioMovimentacoesAlmox } from '../services/api';
@@ -8,6 +8,28 @@ function AlmoxRelatorios() {
   const [movimentacoes, setMovimentacoes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState('');
+  const [filtroRelatorios, setFiltroRelatorios] = useState('');
+
+  const movimentacoesFiltradas = useMemo(() => {
+    const termo = filtroRelatorios.trim().toLowerCase();
+    if (!termo) return movimentacoes;
+
+    return movimentacoes.filter((movimentacao) => {
+      const camposBusca = [
+        movimentacao.tipo,
+        movimentacao.ferramenta_nome,
+        movimentacao.ferramenta_marca,
+        movimentacao.ferramenta_modelo,
+        movimentacao.ferramenta_nf_compra,
+        movimentacao.projeto_origem_nome,
+        movimentacao.projeto_destino_nome,
+        movimentacao.colaborador_nome,
+        movimentacao.usuario_nome
+      ];
+
+      return camposBusca.some((campo) => String(campo || '').toLowerCase().includes(termo));
+    });
+  }, [movimentacoes, filtroRelatorios]);
 
   useEffect(() => {
     const carregar = async () => {
@@ -33,6 +55,14 @@ function AlmoxRelatorios() {
         ) : (
           <div className="card">
             <h2 className="card-header">Histórico imutável de movimentações</h2>
+            <div className="mb-3">
+              <input
+                className="form-input"
+                placeholder="Pesquisar por tipo, ativo, marca, modelo, NF, origem, destino, colaborador ou usuário"
+                value={filtroRelatorios}
+                onChange={(e) => setFiltroRelatorios(e.target.value)}
+              />
+            </div>
             <div style={{ overflowX: 'auto' }}>
               <table className="table">
                 <thead>
@@ -52,7 +82,7 @@ function AlmoxRelatorios() {
                   </tr>
                 </thead>
                 <tbody>
-                  {movimentacoes.map((m) => (
+                  {movimentacoesFiltradas.map((m) => (
                     <tr key={m.id}>
                       <td>#{m.id}</td>
                       <td>{new Date(m.criado_em).toLocaleString('pt-BR')}</td>
@@ -68,8 +98,8 @@ function AlmoxRelatorios() {
                       <td>{m.usuario_nome || '-'}</td>
                     </tr>
                   ))}
-                  {movimentacoes.length === 0 && (
-                    <tr><td colSpan={12}>Nenhuma movimentação registrada.</td></tr>
+                  {movimentacoesFiltradas.length === 0 && (
+                    <tr><td colSpan={12}>{filtroRelatorios ? 'Nenhuma movimentação encontrada para o filtro informado.' : 'Nenhuma movimentação registrada.'}</td></tr>
                   )}
                 </tbody>
               </table>

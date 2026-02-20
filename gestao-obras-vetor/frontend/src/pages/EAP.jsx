@@ -113,6 +113,10 @@ function EAP() {
   const renderAtividade = (atividade, level = 0) => {
     const hasChildren = atividade.children && atividade.children.length > 0;
     const isExpanded = expandedItems.has(atividade.id);
+    const tituloAtividade = `${atividade.codigo_eap} ${atividade.nome || atividade.descricao || ''}`.trim();
+    const descricaoExtra = (atividade.descricao && atividade.nome && atividade.descricao !== atividade.nome)
+      ? atividade.descricao
+      : '';
 
     return (
       <div key={atividade.id}>
@@ -139,10 +143,12 @@ function EAP() {
               
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-                  <strong>{atividade.codigo_eap}</strong>
-                  <span style={{ fontSize: '14px', color: 'var(--gray-600)' }}>
-                    {atividade.descricao}
-                  </span>
+                  <strong>{tituloAtividade}</strong>
+                  {descricaoExtra && (
+                    <span style={{ fontSize: '14px', color: 'var(--gray-600)' }}>
+                      {descricaoExtra}
+                    </span>
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: '15px', fontSize: '13px', color: 'var(--gray-600)' }}>
                   {/* Para atividades mãe, não exibir previsto */}

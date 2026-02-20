@@ -4,9 +4,9 @@ import Navbar from '../components/Navbar';
 import { useNotification } from '../context/NotificationContext';
 import { useAuth } from '../context/AuthContext';
 import { listarPedidosPorProjeto, criarPedidoCompra, aprovarInicialPedido, inserirCotacao, selecionarCotacao, marcarComprado, detalharPedido, reprovarPedido } from '../services/api';
+import { formatMoneyBR, parseMoneyBR, formatMoneyInputBR } from '../utils/currency';
 
-const parseMoney = (valor) => Number(String(valor ?? 0).replace(',', '.')) || 0;
-const formatBRL = (valor) => Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatBRL = formatMoneyBR;
 
 function PedidosCompra() {
   const { projetoId } = useParams();
@@ -129,9 +129,9 @@ function PedidosCompra() {
       }
       for (let i = 0; i < 3; i++) {
         const c = cotacoesForm[i];
-        const valorUnit = parseFloat(String(c.valor_unitario).replace(',', '.'));
+        const valorUnit = parseMoneyBR(c.valor_unitario);
         if (!isFinite(valorUnit) || valorUnit <= 0) {
-          setErro(`Valor unitário inválido na cotação ${i+1}. Use ponto para decimais (ex: 12.50).`);
+          setErro(`Valor unitário inválido na cotação ${i+1}. Use o padrão brasileiro (ex: 12,50).`);
           return;
         }
         await inserirCotacao(cotacoesPedidoId, {
@@ -201,7 +201,7 @@ function PedidosCompra() {
         const cot = (det.data.cotacoes || []).find(c => c.id === parseInt(selecionarEscolha, 10));
         const qtd = det.data?.pedido?.quantidade || 0;
         const totalProduto = Number(cot?.valor_unitario || 0) * Number(qtd || 0);
-        const freteVal = parseMoney(cot?.frete || 0);
+        const freteVal = parseMoneyBR(cot?.frete || 0);
         const totalComFrete = totalProduto + freteVal;
         info(`Cotação #${cot?.id} selecionada. Total: R$ ${formatBRL(totalProduto)}${freteVal ? ` + frete R$ ${formatBRL(freteVal)} = R$ ${formatBRL(totalComFrete)}` : ''}.`, 7000);
       } catch {
@@ -303,6 +303,7 @@ function PedidosCompra() {
             )}
           </div>
         </div>
+
         {erro && <div className="alert alert-error">{erro}</div>}
         {loading ? (
           <div className="loading"><div className="spinner"></div></div>
@@ -451,13 +452,13 @@ function PedidosCompra() {
                     </div>
                     <div className="form-group">
                       <label className="form-label">Valor Unitário (R$) *</label>
-                      <input className="form-input" type="number" step="0.01" value={c.valor_unitario} onChange={(e)=>{
-                        const next=[...cotacoesForm]; next[idx] = { ...next[idx], valor_unitario: e.target.value }; setCotacoesForm(next);
+                      <input className="form-input" type="text" inputMode="numeric" placeholder="0,00" value={c.valor_unitario} onChange={(e)=>{
+                        const next=[...cotacoesForm]; next[idx] = { ...next[idx], valor_unitario: formatMoneyInputBR(e.target.value) }; setCotacoesForm(next);
                       }} />
                     </div>
                     <div className="form-group">
                       <label className="form-label">Valor Total (R$)</label>
-                      <input className="form-input" readOnly value={formatBRL(parseMoney(c.valor_unitario || 0) * Number(cotacoesQtdPedido || 0))} />
+                      <input className="form-input" readOnly value={formatBRL(parseMoneyBR(c.valor_unitario || 0) * Number(cotacoesQtdPedido || 0))} />
                     </div>
                     <div className="form-group">
                       <label className="form-label">Marca</label>

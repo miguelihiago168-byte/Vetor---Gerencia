@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import AlmoxarifadoLayout from '../components/AlmoxarifadoLayout';
 import { getDashboardAlmoxarifado } from '../services/api';
+import { formatMoneyBR } from '../utils/currency';
 
-const formatBRL = (valor) => Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatBRL = formatMoneyBR;
 
 function AlmoxarifadoDashboard() {
   const { projetoId } = useParams();

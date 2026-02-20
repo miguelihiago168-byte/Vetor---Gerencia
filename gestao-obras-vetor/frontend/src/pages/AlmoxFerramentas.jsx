@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import AlmoxarifadoLayout from '../components/AlmoxarifadoLayout';
 import { createFerramenta, getFerramentas, getProjetos, transferirAtivoObra } from '../services/api';
 import { useDialog } from '../context/DialogContext';
+import { formatMoneyBR, parseMoneyBR, formatMoneyInputBR } from '../utils/currency';
 
 const CATEGORIAS_ATIVO = ['Ferramenta', 'Equipamento', 'Máquina', 'Veículo', 'EPI', 'Eletrônico', 'Outros'];
-const formatBRL = (valor) => Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const formatBRL = formatMoneyBR;
 
 function AlmoxFerramentas() {
   const { projetoId } = useParams();
@@ -16,7 +17,27 @@ function AlmoxFerramentas() {
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
+  const [filtroAtivos, setFiltroAtivos] = useState('');
   const [form, setForm] = useState({ codigo: '', nome: '', categoria: 'Outros', nf_compra: '', marca: '', modelo: '', descricao: '', unidade: 'UN', quantidade_total: '', valor_reposicao: '' });
+
+  const ferramentasFiltradas = useMemo(() => {
+    const termo = filtroAtivos.trim().toLowerCase();
+    if (!termo) return ferramentas;
+
+    return ferramentas.filter((ferramenta) => {
+      const camposBusca = [
+        ferramenta.codigo,
+        ferramenta.nome,
+        ferramenta.categoria,
+        ferramenta.nf_compra,
+        ferramenta.marca,
+        ferramenta.modelo,
+        ferramenta.descricao
+      ];
+
+      return camposBusca.some((campo) => String(campo || '').toLowerCase().includes(termo));
+    });
+  }, [ferramentas, filtroAtivos]);
 
   const carregar = async () => {
     try {
@@ -53,7 +74,7 @@ function AlmoxFerramentas() {
         ...form,
         projeto_id: Number(projetoId),
         quantidade_total: Number(form.quantidade_total),
-        valor_reposicao: Number(form.valor_reposicao)
+        valor_reposicao: parseMoneyBR(form.valor_reposicao)
       });
       setForm({ codigo: '', nome: '', categoria: 'Outros', nf_compra: '', marca: '', modelo: '', descricao: '', unidade: 'UN', quantidade_total: '', valor_reposicao: '' });
       setSucesso('Ativo cadastrado com sucesso.');
@@ -107,7 +128,7 @@ function AlmoxFerramentas() {
             </select>
             <input className="form-input" placeholder="Unidade" value={form.unidade} onChange={(e) => setForm({ ...form, unidade: e.target.value })} />
             <input className="form-input" type="number" min="0" required placeholder="Qtd. total (un)" value={form.quantidade_total} onChange={(e) => setForm({ ...form, quantidade_total: e.target.value })} />
-            <input className="form-input" type="number" min="0" step="0.01" required placeholder="R$ 0,00" value={form.valor_reposicao} onChange={(e) => setForm({ ...form, valor_reposicao: e.target.value })} />
+            <input className="form-input" type="text" inputMode="numeric" required placeholder="0,00" value={form.valor_reposicao} onChange={(e) => setForm({ ...form, valor_reposicao: formatMoneyInputBR(e.target.value) })} />
             <input className="form-input" required placeholder="NF de compra" value={form.nf_compra} onChange={(e) => setForm({ ...form, nf_compra: e.target.value })} />
             <input className="form-input" placeholder="Marca" value={form.marca} onChange={(e) => setForm({ ...form, marca: e.target.value })} />
             <input className="form-input" placeholder="Modelo" value={form.modelo} onChange={(e) => setForm({ ...form, modelo: e.target.value })} />
@@ -120,6 +141,14 @@ function AlmoxFerramentas() {
 
         <div className="card">
           <h2 className="card-header">Ativos cadastrados</h2>
+          <div className="mb-3">
+            <input
+              className="form-input"
+              placeholder="Pesquisar ativos por código, nome, categoria, NF, marca ou modelo"
+              value={filtroAtivos}
+              onChange={(e) => setFiltroAtivos(e.target.value)}
+            />
+          </div>
           {loading ? <div className="loading"><div className="spinner"></div></div> : (
             <div style={{ overflowX: 'auto' }}>
               <table className="table">
@@ -139,7 +168,7 @@ function AlmoxFerramentas() {
                   </tr>
                 </thead>
                 <tbody>
-                  {ferramentas.map((f) => (
+                  {ferramentasFiltradas.map((f) => (
                     <tr key={f.id}>
                       <td>{f.codigo || '-'}</td>
                       <td>{f.nome}</td>
@@ -177,8 +206,8 @@ function AlmoxFerramentas() {
                       </td>
                     </tr>
                   ))}
-                  {ferramentas.length === 0 && (
-                    <tr><td colSpan={11}>Nenhum ativo cadastrado.</td></tr>
+                  {ferramentasFiltradas.length === 0 && (
+                    <tr><td colSpan={11}>{filtroAtivos ? 'Nenhum ativo encontrado para o filtro informado.' : 'Nenhum ativo cadastrado.'}</td></tr>
                   )}
                 </tbody>
               </table>

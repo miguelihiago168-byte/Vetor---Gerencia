@@ -146,6 +146,20 @@ export const reprovarPedido = (id, motivo) => api.patch(`/pedidos-compra/${id}/r
 export const listarPedidosPorProjeto = (projetoId) => api.get(`/pedidos-compra/projeto/${projetoId}`);
 export const detalharPedido = (id) => api.get(`/pedidos-compra/${id}`);
 
+// Financeiro (Fluxo de Caixa)
+export const getFinanceiroDashboard = (projetoId, params) => api.get(`/financeiro/projeto/${projetoId}/dashboard`, { params });
+export const updateFinanceiroSaldoInicial = (projetoId, saldoInicial) => api.patch(`/financeiro/projeto/${projetoId}/saldo-inicial`, { saldo_inicial: saldoInicial });
+export const listarReceitasFinanceiro = (projetoId, params) => api.get(`/financeiro/projeto/${projetoId}/receitas`, { params });
+export const criarReceitaFinanceiro = (projetoId, data) => api.post(`/financeiro/projeto/${projetoId}/receitas`, data);
+export const receberReceitaFinanceiro = (id, data) => api.patch(`/financeiro/receitas/${id}/receber`, data);
+export const estornarReceitaFinanceiro = (id, data) => api.post(`/financeiro/receitas/${id}/estornar`, data);
+export const listarDespesasFinanceiro = (projetoId, params) => api.get(`/financeiro/projeto/${projetoId}/despesas`, { params });
+export const criarDespesaFinanceiro = (projetoId, data) => api.post(`/financeiro/projeto/${projetoId}/despesas`, data);
+export const pagarDespesaFinanceiro = (id, data) => api.patch(`/financeiro/despesas/${id}/pagar`, data);
+export const estornarDespesaFinanceiro = (id, data) => api.post(`/financeiro/despesas/${id}/estornar`, data);
+export const getFluxoCaixaFinanceiro = (projetoId, params) => api.get(`/financeiro/projeto/${projetoId}/fluxo`, { params });
+export const getFinanceiroConsolidado = (params) => api.get('/financeiro/consolidado', { params });
+
 // Almoxarifado
 export const getPerfilAlmoxarifado = () => api.get('/almoxarifado/perfil');
 export const getFerramentas = (params) => api.get('/almoxarifado/ferramentas', { params });

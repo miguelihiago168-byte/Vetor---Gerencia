@@ -13,6 +13,7 @@ import Dashboard from './pages/Dashboard';
 import Projetos from './pages/Projetos';
 import ProjetoDetalhes from './pages/ProjetoDetalhes';
 import PedidosCompra from './pages/PedidosCompra';
+import FinanceiroFluxoCaixa from './pages/FinanceiroFluxoCaixa';
 import EAP from './pages/EAP';
 import EAPForm from './pages/EAPForm';
 import CurvaS from './pages/CurvaS';
@@ -91,6 +92,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/projeto/:projetoId/pedidos" element={
             <PrivateRoute allowedPerfis={PERFIS_COMPRAS}>
               <PedidosCompra />
+            </PrivateRoute>
+          } />
+          <Route path="/projeto/:projetoId/financeiro" element={
+            <PrivateRoute allowedPerfis={PERFIS_COMPRAS}>
+              <FinanceiroFluxoCaixa />
             </PrivateRoute>
           } />
           <Route path="/projeto/:projetoId/rdo/:rdoId" element={
@@ -187,6 +193,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/curva-s" element={<ProjetoSelector destino="curva-s" />} />
           <Route path="/rnc" element={<ProjetoSelector destino="rnc" />} />
            <Route path="/compras" element={<ProjetoSelector destino="pedidos" />} />
+           <Route path="/financeiro" element={<ProjetoSelector destino="financeiro" />} />
            <Route path="/ativos" element={<ProjetoSelector destino="almoxarifado" />} />
            <Route path="/usuarios" element={<ProjetoSelector destino="usuarios" />} />
 

@@ -8,7 +8,7 @@ function AlmoxarifadoLayout({ title, children, extraHeader }) {
   return (
     <>
       <Navbar />
-      <div className="container">
+      <div className="container almox-container">
         <div className="almox-layout">
           <aside className="almox-sidebar card">
             <h3 className="card-header" style={{ marginBottom: 12 }}>Ativos</h3>

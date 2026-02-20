@@ -6,6 +6,7 @@ const { db, getQuery, allQuery, runQuery } = require('../config/database');
 const { registrarAuditoria } = require('../middleware/auditoria');
 const { PERMISSIONS, hasPermission, assertProjectAccess } = require('../middleware/rbac');
 const { PERFIS, inferirPerfil } = require('../constants/access');
+const { ensureFinanceiroSchema, sincronizarDespesaPedido } = require('../services/financeiro');
 
 const router = express.Router();
 
@@ -334,6 +335,13 @@ router.patch('/:id/selecionar/:cotacaoId', [auth, requirePedidoPermission(PERMIS
     await runQuery('UPDATE cotacoes SET status = "SELECIONADA" WHERE id = ?', [req.params.cotacaoId]);
     await runQuery('UPDATE cotacoes SET status = "NAO_SELECIONADA" WHERE pedido_id = ? AND id <> ?', [pedido.id, req.params.cotacaoId]);
     await updatePedidoStatus(pedido.id, 'APROVADO_PARA_COMPRA', { cotacao_vencedora_id: req.params.cotacaoId });
+
+    await ensureFinanceiroSchema();
+    await sincronizarDespesaPedido({
+      pedido,
+      cotacao,
+      usuarioId: req.usuario.id
+    });
 
     const pedidoNovo = await carregarPedido(pedido.id);
     await registrarHistoricoPedido(pedido.id, req.usuario.id, 'COTACAO_SELECIONADA', { cotacao_id: Number(req.params.cotacaoId) });

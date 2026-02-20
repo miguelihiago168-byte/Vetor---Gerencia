@@ -87,6 +87,7 @@ node server.js
 
 ```powershell
 cd 'c:\Apps\Vetor - Gerencia\gestao-obras-vetor\frontend'
+
 npm run dev
 ```
 

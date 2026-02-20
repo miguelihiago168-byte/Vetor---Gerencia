@@ -105,6 +105,7 @@ function Navbar() {
   const rotaRdos = projetoId ? `/projeto/${projetoId}/rdos` : '/rdos';
   const rotaRnc = projetoId ? `/projeto/${projetoId}/rnc` : '/rnc';
   const rotaCompras = projetoId ? `/projeto/${projetoId}/pedidos` : '/compras';
+  const rotaFinanceiro = projetoId ? `/projeto/${projetoId}/financeiro` : '/financeiro';
   const rotaAlmox = projetoId ? `/projeto/${projetoId}/almoxarifado` : '/ativos';
   const rotaEap = projetoId ? `/projeto/${projetoId}/eap` : '/eap';
   const rotaCurvaS = projetoId ? `/projeto/${projetoId}/curva-s` : '/curva-s';
@@ -122,6 +123,7 @@ function Navbar() {
   const canViewRnc = isGestorGeral || isGestorObra || isGestorQualidade || isFiscal;
   const canViewCurvaS = isGestorGeral || isGestorObra || isGestorQualidade || isFiscal;
   const canViewCompras = isGestorGeral || isGestorObra || isAdministrativo || isAlmoxarife;
+  const canViewFinanceiro = isGestorGeral || isGestorObra || isAdministrativo;
   const canViewAtivos = isGestorGeral || isGestorObra || isGestorQualidade || isAdministrativo || isAlmoxarife;
   const canViewEap = isGestorGeral || isGestorObra || isGestorQualidade;
   const canViewUsuarios = isGestorGeral || isAdministrativo;
@@ -163,6 +165,11 @@ function Navbar() {
                   {notifCompras > 0 && (
                     <span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{notifCompras}</span>
                   )}
+                </NavLink>
+                )}
+                {canViewFinanceiro && (
+                <NavLink to={rotaFinanceiro} onClick={(e) => confirmNav(e, rotaFinanceiro)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+                  Financeiro
                 </NavLink>
                 )}
                 {canViewAtivos && (

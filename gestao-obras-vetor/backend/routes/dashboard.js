@@ -188,12 +188,14 @@ router.get('/projeto/:projetoId/curva-s', auth, async (req, res) => {
     }
 
     const totalPesos = atividades.reduce((acc, atividade) => acc + Number(atividade.peso_percentual_projeto || 0), 0);
-    if (Math.abs(totalPesos - 100) > 0.01) {
+    if (totalPesos <= 0.0001) {
       return res.status(400).json({
-        erro: 'A soma dos pesos das atividades deve ser 100% para cálculo da Curva S.',
+        erro: 'Não há pesos válidos para cálculo da Curva S.',
         total_pesos: Math.round(totalPesos * 100) / 100
       });
     }
+
+    const fatorNormalizacao = 100 / totalPesos;
 
     const hoje = toDateOnly(new Date());
     const inicioProjeto = atividades.map(a => a.data_inicio_planejada).sort()[0];
@@ -202,7 +204,7 @@ router.get('/projeto/:projetoId/curva-s', auth, async (req, res) => {
 
     const pesosPorAtividade = {};
     atividades.forEach(a => {
-      pesosPorAtividade[a.id] = Number(a.peso_percentual_projeto || 0);
+      pesosPorAtividade[a.id] = Number(a.peso_percentual_projeto || 0) * fatorNormalizacao;
     });
 
     const planejadoPorDia = {};
@@ -210,7 +212,7 @@ router.get('/projeto/:projetoId/curva-s', auth, async (req, res) => {
       const inicio = atividade.data_inicio_planejada;
       const fim = atividade.data_fim_planejada;
       const duracao = Math.max(1, diffDays(inicio, fim) + 1);
-      const avancoPlanejadoDia = Number(atividade.peso_percentual_projeto || 0) / duracao;
+      const avancoPlanejadoDia = (Number(atividade.peso_percentual_projeto || 0) * fatorNormalizacao) / duracao;
 
       for (let i = 0; i < duracao; i += 1) {
         const data = addDays(inicio, i);

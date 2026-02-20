@@ -32,6 +32,19 @@ const getSomaPesosFolhas = async (projetoId) => {
   return Number(row?.total || 0);
 };
 
+const getSomaPesosIrmaos = async (projetoId, paiId, excluirId = null) => {
+  const whereExtra = excluirId ? 'AND id <> ?' : '';
+  const params = excluirId ? [projetoId, paiId, excluirId] : [projetoId, paiId];
+  const row = await getQuery(`
+    SELECT COALESCE(SUM(COALESCE(peso_percentual_projeto, percentual_previsto, 0)), 0) AS total
+    FROM atividades_eap
+    WHERE projeto_id = ?
+      AND pai_id = ?
+      ${whereExtra}
+  `, params);
+  return Number(row?.total || 0);
+};
+
 // Listar atividades EAP de um projeto
 router.get('/projeto/:projetoId', auth, async (req, res) => {
   try {
@@ -130,7 +143,6 @@ router.post('/copiar', [auth, isGestor], async (req, res) => {
 router.post('/', auth, [
   body('projeto_id').isInt(),
   body('codigo_eap').trim().notEmpty(),
-  body('descricao').trim().notEmpty(),
   body('percentual_previsto').optional().isFloat({ min: 0, max: 100 })
 ], async (req, res) => {
   try {
@@ -155,24 +167,39 @@ router.post('/', auth, [
       peso_percentual_projeto
     } = req.body;
 
+    const ehFilha = !!pai_id;
+
+    const descricaoNormalizada = (typeof descricao === 'string')
+      ? descricao.trim()
+      : '';
+
     const dataInicio = parseDateOnly(data_inicio_planejada);
     const dataFim = parseDateOnly(data_fim_planejada);
-    if (!dataInicio || !dataFim) {
+    if (ehFilha && (!dataInicio || !dataFim)) {
       return res.status(400).json({ erro: 'Informe data_inicio_planejada e data_fim_planejada válidas (YYYY-MM-DD).' });
     }
-    if (dataInicio > dataFim) {
+    if (dataInicio && dataFim && dataInicio > dataFim) {
       return res.status(400).json({ erro: 'data_fim_planejada deve ser maior ou igual a data_inicio_planejada.' });
     }
 
     const pesoInformado = peso_percentual_projeto ?? percentual_previsto;
-    const peso = ensureFaixaPercentual(pesoInformado);
-    if (peso === null) {
+    const peso = (ehFilha || pesoInformado !== undefined)
+      ? ensureFaixaPercentual(pesoInformado)
+      : 0;
+    if (ehFilha && peso === null) {
       return res.status(400).json({ erro: 'peso_percentual_projeto deve estar entre 0 e 100.' });
     }
+    if (!ehFilha && peso === null) {
+      return res.status(400).json({ erro: 'peso_percentual_projeto deve estar entre 0 e 100 quando informado.' });
+    }
 
-    const somaAtualFolhas = await getSomaPesosFolhas(projeto_id);
-    let totalProjetado = somaAtualFolhas + peso;
-    if (pai_id) {
+    if (ehFilha) {
+      const somaIrmaos = await getSomaPesosIrmaos(projeto_id, pai_id);
+      const totalFilhosProjetado = somaIrmaos + Number(peso || 0);
+      if (totalFilhosProjetado > 100.0001) {
+        return res.status(400).json({ erro: `A soma dos pesos das atividades filhas deste pai não pode ultrapassar 100%. Total projetado: ${totalFilhosProjetado.toFixed(2)}%.` });
+      }
+
       const paiRow = await getQuery(`
         SELECT id, COALESCE(peso_percentual_projeto, percentual_previsto, 0) AS peso,
                EXISTS(SELECT 1 FROM atividades_eap c WHERE c.pai_id = atividades_eap.id) AS tem_filhos
@@ -182,17 +209,16 @@ router.post('/', auth, [
       if (!paiRow) {
         return res.status(400).json({ erro: 'Atividade pai inválida para este projeto.' });
       }
-      if (!paiRow.tem_filhos) {
-        totalProjetado -= Number(paiRow.peso || 0);
+    } else {
+      const somaAtualFolhas = await getSomaPesosFolhas(projeto_id);
+      const totalProjetado = somaAtualFolhas + Number(peso || 0);
+      if (totalProjetado > 100.0001) {
+        return res.status(400).json({ erro: `A soma dos pesos das atividades não pode ultrapassar 100%. Total projetado: ${totalProjetado.toFixed(2)}%.` });
       }
     }
 
-    if (totalProjetado > 100.0001) {
-      return res.status(400).json({ erro: `A soma dos pesos das atividades não pode ultrapassar 100%. Total projetado: ${totalProjetado.toFixed(2)}%.` });
-    }
-
     const identificador = (id_atividade && String(id_atividade).trim()) || `ATV-${projeto_id}-${codigo_eap}`;
-    const nomeAtividade = (nome && String(nome).trim()) || descricao;
+    const nomeAtividade = (nome && String(nome).trim()) || descricaoNormalizada || `Atividade ${codigo_eap}`;
 
     const result = await runQuery(`
       INSERT INTO atividades_eap 
@@ -201,7 +227,7 @@ router.post('/', auth, [
     `, [
       projeto_id,
       codigo_eap,
-      descricao,
+      descricaoNormalizada,
       peso,
       pai_id || null,
       ordem || 0,
@@ -210,8 +236,8 @@ router.post('/', auth, [
       req.usuario.id,
       identificador,
       nomeAtividade,
-      dataInicio,
-      dataFim,
+      dataInicio || null,
+      dataFim || null,
       peso
     ]);
 
@@ -219,7 +245,7 @@ router.post('/', auth, [
 
     res.status(201).json({
       mensagem: 'Atividade criada com sucesso.',
-      atividade: { id: result.lastID, codigo_eap, descricao }
+      atividade: { id: result.lastID, codigo_eap, descricao: descricaoNormalizada }
     });
 
   } catch (error) {
@@ -243,43 +269,68 @@ router.put('/:id', auth, async (req, res) => {
       return res.status(404).json({ erro: 'Atividade não encontrada.' });
     }
 
-    const dataInicio = parseDateOnly(data_inicio_planejada || atividadeAnterior.data_inicio_planejada);
-    const dataFim = parseDateOnly(data_fim_planejada || atividadeAnterior.data_fim_planejada);
-    if (!dataInicio || !dataFim) {
+    const novoPaiId = (typeof pai_id !== 'undefined') ? (pai_id || null) : atividadeAnterior.pai_id;
+    const ehFilha = !!novoPaiId;
+
+    const dataInicioRaw = (typeof data_inicio_planejada !== 'undefined') ? data_inicio_planejada : atividadeAnterior.data_inicio_planejada;
+    const dataFimRaw = (typeof data_fim_planejada !== 'undefined') ? data_fim_planejada : atividadeAnterior.data_fim_planejada;
+    const dataInicio = parseDateOnly(dataInicioRaw);
+    const dataFim = parseDateOnly(dataFimRaw);
+    if (ehFilha && (!dataInicio || !dataFim)) {
       return res.status(400).json({ erro: 'Informe data_inicio_planejada e data_fim_planejada válidas (YYYY-MM-DD).' });
     }
-    if (dataInicio > dataFim) {
+    if (dataInicio && dataFim && dataInicio > dataFim) {
       return res.status(400).json({ erro: 'data_fim_planejada deve ser maior ou igual a data_inicio_planejada.' });
     }
 
     const pesoInformado = (typeof peso_percentual_projeto !== 'undefined')
       ? peso_percentual_projeto
       : ((typeof percentual_previsto !== 'undefined') ? percentual_previsto : atividadeAnterior.peso_percentual_projeto);
-    const peso = ensureFaixaPercentual(pesoInformado);
-    if (peso === null) {
+    const peso = (ehFilha || typeof pesoInformado !== 'undefined')
+      ? ensureFaixaPercentual(pesoInformado)
+      : 0;
+    if (ehFilha && peso === null) {
       return res.status(400).json({ erro: 'peso_percentual_projeto deve estar entre 0 e 100.' });
+    }
+    if (!ehFilha && peso === null) {
+      return res.status(400).json({ erro: 'peso_percentual_projeto deve estar entre 0 e 100 quando informado.' });
     }
 
     const filhos = await getQuery('SELECT COUNT(*) AS total FROM atividades_eap WHERE pai_id = ?', [id]);
     const ehFolha = Number(filhos?.total || 0) === 0;
     if (ehFolha) {
-      const somaAtualFolhas = await getSomaPesosFolhas(atividadeAnterior.projeto_id);
-      const pesoAnterior = Number(atividadeAnterior.peso_percentual_projeto || atividadeAnterior.percentual_previsto || 0);
-      const totalProjetado = somaAtualFolhas - pesoAnterior + peso;
-      if (totalProjetado > 100.0001) {
-        return res.status(400).json({ erro: `A soma dos pesos das atividades não pode ultrapassar 100%. Total projetado: ${totalProjetado.toFixed(2)}%.` });
+      if (ehFilha) {
+        const somaIrmaos = await getSomaPesosIrmaos(atividadeAnterior.projeto_id, novoPaiId, id);
+        const totalFilhosProjetado = somaIrmaos + Number(peso || 0);
+        if (totalFilhosProjetado > 100.0001) {
+          return res.status(400).json({ erro: `A soma dos pesos das atividades filhas deste pai não pode ultrapassar 100%. Total projetado: ${totalFilhosProjetado.toFixed(2)}%.` });
+        }
+      } else {
+        const somaAtualFolhas = await getSomaPesosFolhas(atividadeAnterior.projeto_id);
+        const pesoAnterior = Math.max(
+          Number(atividadeAnterior.peso_percentual_projeto || 0),
+          Number(atividadeAnterior.percentual_previsto || 0)
+        );
+        const totalProjetado = somaAtualFolhas - pesoAnterior + peso;
+        const aumentoReal = totalProjetado - somaAtualFolhas;
+        if (totalProjetado > 100.0001 && aumentoReal > 0.0001) {
+          return res.status(400).json({ erro: `A soma dos pesos das atividades não pode ultrapassar 100%. Total projetado: ${totalProjetado.toFixed(2)}%.` });
+        }
       }
     }
 
+    const novaDescricao = (typeof descricao === 'string')
+      ? descricao.trim()
+      : (atividadeAnterior.descricao || '');
+
     const novoIdentificador = (id_atividade && String(id_atividade).trim()) || atividadeAnterior.id_atividade || `ATV-${atividadeAnterior.projeto_id}-${codigo_eap || atividadeAnterior.codigo_eap}`;
-    const novoNome = (nome && String(nome).trim()) || descricao || atividadeAnterior.descricao;
-    const novoPaiId = (typeof pai_id !== 'undefined') ? (pai_id || null) : atividadeAnterior.pai_id;
+    const novoNome = (nome && String(nome).trim()) || novaDescricao || atividadeAnterior.descricao;
 
     await runQuery(`
       UPDATE atividades_eap 
       SET codigo_eap = ?, descricao = ?, percentual_previsto = ?, ordem = ?, unidade_medida = ?, quantidade_total = ?, pai_id = ?, id_atividade = ?, nome = ?, data_inicio_planejada = ?, data_fim_planejada = ?, peso_percentual_projeto = ?, atualizado_em = CURRENT_TIMESTAMP
       WHERE id = ?
-    `, [codigo_eap, descricao, peso, ordem, unidade_medida || null, quantidade_total || 0, novoPaiId, novoIdentificador, novoNome, dataInicio, dataFim, peso, id]);
+    `, [codigo_eap, novaDescricao, peso, ordem, unidade_medida || null, quantidade_total || 0, novoPaiId, novoIdentificador, novoNome, dataInicio || null, dataFim || null, peso, id]);
 
     await registrarAuditoria('atividades_eap', id, 'UPDATE', atividadeAnterior, req.body, req.usuario.id);
 
