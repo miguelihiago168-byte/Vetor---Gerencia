@@ -293,7 +293,7 @@ function Projetos() {
                   </div>
                   <div className="info-item">
                     <Users size={16} />
-                    <span>{projeto.usuarios?.length || 0} usuários</span>
+                    <span>{Number(projeto.total_usuarios ?? projeto.usuarios?.length ?? 0)} usuários</span>
                   </div>
                 </div>
                 

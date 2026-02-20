@@ -1,14 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import AlmoxarifadoLayout from '../components/AlmoxarifadoLayout';
-import { createFerramenta, getFerramentas } from '../services/api';
+import { createFerramenta, getFerramentas, getProjetos, transferirAtivoObra } from '../services/api';
+import { useDialog } from '../context/DialogContext';
 
 const CATEGORIAS_ATIVO = ['Ferramenta', 'Equipamento', 'Máquina', 'Veículo', 'EPI', 'Eletrônico', 'Outros'];
 const formatBRL = (valor) => Number(valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function AlmoxFerramentas() {
   const { projetoId } = useParams();
+  const { confirm } = useDialog();
   const [ferramentas, setFerramentas] = useState([]);
+  const [projetos, setProjetos] = useState([]);
+  const [destinosTransferencia, setDestinosTransferencia] = useState({});
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
@@ -30,6 +34,16 @@ function AlmoxFerramentas() {
     carregar();
   }, [projetoId]);
 
+  useEffect(() => {
+    const carregarProjetos = async () => {
+      try {
+        const res = await getProjetos();
+        setProjetos(res.data || []);
+      } catch {}
+    };
+    carregarProjetos();
+  }, []);
+
   const salvar = async (e) => {
     e.preventDefault();
     setErro('');
@@ -37,6 +51,7 @@ function AlmoxFerramentas() {
     try {
       await createFerramenta({
         ...form,
+        projeto_id: Number(projetoId),
         quantidade_total: Number(form.quantidade_total),
         valor_reposicao: Number(form.valor_reposicao)
       });
@@ -47,6 +62,35 @@ function AlmoxFerramentas() {
       setErro(error?.response?.data?.erro || 'Erro ao cadastrar ativo.');
     }
   };
+
+  const transferir = async (ferramenta) => {
+    setErro('');
+    setSucesso('');
+    const destinoId = Number(destinosTransferencia[ferramenta.id] || 0);
+    if (!destinoId) {
+      setErro('Selecione a obra de destino para transferir o ativo.');
+      return;
+    }
+
+    const ok = await confirm({
+      title: 'Transferir ativo',
+      message: `Deseja transferir o ativo "${ferramenta.nome}" para outra obra?`,
+      confirmText: 'Transferir',
+      cancelText: 'Cancelar'
+    });
+    if (!ok) return;
+
+    try {
+      await transferirAtivoObra(ferramenta.id, { obra_destino_id: destinoId });
+      setSucesso('Ativo transferido com sucesso.');
+      setDestinosTransferencia((prev) => ({ ...prev, [ferramenta.id]: '' }));
+      await carregar();
+    } catch (error) {
+      setErro(error?.response?.data?.erro || 'Erro ao transferir ativo.');
+    }
+  };
+
+  const obrasDestino = (projetos || []).filter((p) => Number(p.id) !== Number(projetoId));
 
   return (
     <AlmoxarifadoLayout title="Cadastro de Ativos">
@@ -91,6 +135,7 @@ function AlmoxFerramentas() {
                     <th>Disponível</th>
                     <th>Alocada</th>
                     <th>Valor reposição</th>
+                    <th>Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -106,10 +151,34 @@ function AlmoxFerramentas() {
                       <td>{f.quantidade_disponivel}</td>
                       <td>{f.quantidade_alocada}</td>
                       <td>R$ {formatBRL(f.valor_reposicao)}</td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <select
+                            className="form-select"
+                            style={{ minWidth: 170 }}
+                            value={destinosTransferencia[f.id] || ''}
+                            onChange={(e) => setDestinosTransferencia((prev) => ({ ...prev, [f.id]: e.target.value }))}
+                          >
+                            <option value="">Obra destino</option>
+                            {obrasDestino.map((obra) => (
+                              <option key={obra.id} value={obra.id}>{obra.nome}</option>
+                            ))}
+                          </select>
+                          <button
+                            className="btn btn-secondary"
+                            type="button"
+                            onClick={() => transferir(f)}
+                            disabled={Number(f.quantidade_alocada || 0) > 0}
+                            title={Number(f.quantidade_alocada || 0) > 0 ? 'Devolva/encerre alocações antes de transferir.' : 'Transferir ativo para outra obra'}
+                          >
+                            Transferir
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                   {ferramentas.length === 0 && (
-                    <tr><td colSpan={10}>Nenhum ativo cadastrado.</td></tr>
+                    <tr><td colSpan={11}>Nenhum ativo cadastrado.</td></tr>
                   )}
                 </tbody>
               </table>

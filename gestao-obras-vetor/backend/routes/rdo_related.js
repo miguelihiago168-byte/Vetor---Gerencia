@@ -23,6 +23,7 @@ const garantirTabelaMaoObraDireta = async () => {
     CREATE TABLE IF NOT EXISTS mao_obra_direta (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       identificador TEXT,
+      projeto_id INTEGER,
       nome TEXT NOT NULL,
       funcao TEXT NOT NULL,
       ativo INTEGER DEFAULT 1,
@@ -31,10 +32,17 @@ const garantirTabelaMaoObraDireta = async () => {
       criado_por INTEGER,
       baixado_em DATETIME,
       baixado_por INTEGER,
+      FOREIGN KEY (projeto_id) REFERENCES projetos(id),
       FOREIGN KEY (criado_por) REFERENCES usuarios(id),
       FOREIGN KEY (baixado_por) REFERENCES usuarios(id)
     )
   `);
+
+  const colunas = await allQuery('PRAGMA table_info(mao_obra_direta)');
+  const temProjetoId = (colunas || []).some((col) => String(col.name) === 'projeto_id');
+  if (!temProjetoId) {
+    await runQuery('ALTER TABLE mao_obra_direta ADD COLUMN projeto_id INTEGER');
+  }
 };
 
 const gerarIdentificadorMaoObraDireta = async () => {
@@ -90,8 +98,9 @@ router.get('/projeto/:projetoId/colaboradores', auth, async (req, res) => {
         SELECT TRIM(nome) AS nome, TRIM(COALESCE(funcao, '')) AS funcao, 'mao_obra_direta' AS origem
         FROM mao_obra_direta
         WHERE COALESCE(ativo, 1) = 1
+          AND projeto_id = ?
           AND TRIM(COALESCE(nome, '')) <> ''
-      `);
+      `, [projetoId]);
     } catch (erroTabela) {
       maoObraDireta = [];
     }
@@ -122,6 +131,7 @@ router.get('/projeto/:projetoId/colaboradores', auth, async (req, res) => {
 
 router.post('/projeto/:projetoId/colaboradores', auth, async (req, res) => {
   try {
+    const { projetoId } = req.params;
     await garantirTabelaMaoObraDireta();
     const nome = String(req.body?.nome || '').trim();
     const funcao = String(req.body?.funcao || '').trim();
@@ -130,12 +140,13 @@ router.post('/projeto/:projetoId/colaboradores', auth, async (req, res) => {
     if (!funcao) return res.status(400).json({ erro: 'Função é obrigatória.' });
 
     const existente = await getQuery(`
-      SELECT id, identificador, nome, funcao, ativo, 'mao_obra_direta' AS origem
+      SELECT id, identificador, projeto_id, nome, funcao, ativo, 'mao_obra_direta' AS origem
       FROM mao_obra_direta
-      WHERE LOWER(TRIM(nome)) = LOWER(TRIM(?))
+      WHERE projeto_id = ?
+        AND LOWER(TRIM(nome)) = LOWER(TRIM(?))
         AND LOWER(TRIM(funcao)) = LOWER(TRIM(?))
       LIMIT 1
-    `, [nome, funcao]);
+    `, [Number(projetoId), nome, funcao]);
 
     if (existente) {
       return res.status(200).json({ item: existente, criado: false });
@@ -143,12 +154,12 @@ router.post('/projeto/:projetoId/colaboradores', auth, async (req, res) => {
 
     const identificador = await gerarIdentificadorMaoObraDireta();
     const result = await runQuery(`
-      INSERT INTO mao_obra_direta (identificador, nome, funcao, ativo, criado_por)
-      VALUES (?, ?, ?, 1, ?)
-    `, [identificador, nome, funcao, req.usuario.id]);
+      INSERT INTO mao_obra_direta (identificador, projeto_id, nome, funcao, ativo, criado_por)
+      VALUES (?, ?, ?, ?, 1, ?)
+    `, [identificador, Number(projetoId), nome, funcao, req.usuario.id]);
 
     const item = await getQuery(`
-      SELECT id, identificador, nome, funcao, ativo, 'mao_obra_direta' AS origem
+      SELECT id, identificador, projeto_id, nome, funcao, ativo, 'mao_obra_direta' AS origem
       FROM mao_obra_direta
       WHERE id = ?
     `, [result.lastID]);

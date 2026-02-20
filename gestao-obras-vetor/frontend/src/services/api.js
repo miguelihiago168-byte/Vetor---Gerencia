@@ -149,8 +149,9 @@ export const detalharPedido = (id) => api.get(`/pedidos-compra/${id}`);
 // Almoxarifado
 export const getPerfilAlmoxarifado = () => api.get('/almoxarifado/perfil');
 export const getFerramentas = (params) => api.get('/almoxarifado/ferramentas', { params });
-export const getColaboradoresRetirada = () => api.get('/almoxarifado/colaboradores');
+export const getColaboradoresRetirada = (projetoId) => api.get('/almoxarifado/colaboradores', { params: { projeto_id: projetoId } });
 export const createFerramenta = (data) => api.post('/almoxarifado/ferramentas', data);
+export const transferirAtivoObra = (ferramentaId, data) => api.post(`/almoxarifado/ferramentas/${ferramentaId}/transferir`, data);
 export const getAlocacoesAbertas = (projetoId) => api.get('/almoxarifado/alocacoes-abertas', { params: { projeto_id: projetoId } });
 export const registrarRetiradaFerramenta = (data) => api.post('/almoxarifado/retiradas', data);
 export const registrarDevolucaoFerramenta = (alocacaoId, data) => api.post(`/almoxarifado/devolucoes/${alocacaoId}`, data);

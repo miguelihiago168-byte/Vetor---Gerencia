@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import {
   getUsuarios,
@@ -35,6 +35,7 @@ const normalizarPerfilTela = (perfil) => {
 };
 
 function Usuarios() {
+  const { projetoId } = useParams();
   const { perfil } = useAuth();
   const { confirm } = useDialog();
   const navigate = useNavigate();
@@ -72,10 +73,17 @@ function Usuarios() {
   const carregarDados = async (setor = filtroSetor) => {
     setLoading(true);
     try {
+      const paramsUsuarios = {};
+      if (setor) paramsUsuarios.setor = setor;
+      if (projetoId) paramsUsuarios.projeto_id = Number(projetoId);
+
+      const paramsMaoObra = { ativos: 0 };
+      if (projetoId) paramsMaoObra.projeto_id = Number(projetoId);
+
       const [resUsuarios, projetosRes, maoRes] = await Promise.all([
-        getUsuarios(setor ? { setor } : undefined),
+        getUsuarios(Object.keys(paramsUsuarios).length ? paramsUsuarios : undefined),
         getProjetos(),
-        getMaoObraDireta({ ativos: 0 })
+        getMaoObraDireta(paramsMaoObra)
       ]);
       setUsuarios(resUsuarios.data || []);
       setProjetos(projetosRes.data || []);
@@ -267,7 +275,10 @@ function Usuarios() {
         await updateMaoObraDireta(maoEditId, maoForm);
         setSucesso('Mão de obra direta atualizada com sucesso.');
       } else {
-        await createMaoObraDireta(maoForm);
+        await createMaoObraDireta({
+          ...maoForm,
+          projeto_id: projetoId ? Number(projetoId) : undefined
+        });
         setSucesso('Mão de obra direta cadastrada com sucesso.');
       }
       setMaoForm({ nome: '', funcao: '' });

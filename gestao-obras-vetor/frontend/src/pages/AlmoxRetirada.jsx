@@ -50,7 +50,7 @@ function AlmoxRetirada() {
       try {
         const [fRes, cRes] = await Promise.all([
           getFerramentas({ projeto_id: projetoId }),
-          getColaboradoresRetirada()
+          getColaboradoresRetirada(projetoId)
         ]);
         setFerramentas((fRes.data || []).filter((f) => Number(f.quantidade_disponivel) > 0));
         setColaboradores(cRes.data || []);

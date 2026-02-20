@@ -134,6 +134,7 @@ const ensureSchema = async () => {
       await runQuery(`
         CREATE TABLE IF NOT EXISTS almox_ferramentas (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
+          projeto_id INTEGER,
           codigo TEXT UNIQUE,
           nome TEXT NOT NULL,
           categoria TEXT NOT NULL DEFAULT 'Outros',
@@ -149,9 +150,14 @@ const ensureSchema = async () => {
           criado_por INTEGER NOT NULL,
           criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
           atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (projeto_id) REFERENCES projetos(id),
           FOREIGN KEY (criado_por) REFERENCES usuarios(id)
         )
       `);
+
+      try {
+        await runQuery(`ALTER TABLE almox_ferramentas ADD COLUMN projeto_id INTEGER`);
+      } catch (_) {}
 
       try {
         await runQuery(`ALTER TABLE almox_ferramentas ADD COLUMN categoria TEXT NOT NULL DEFAULT 'Outros'`);
@@ -180,6 +186,35 @@ const ensureSchema = async () => {
         SET nf_compra = 'NÃO INFORMADA'
         WHERE nf_compra IS NULL OR TRIM(nf_compra) = ''
       `);
+
+      try {
+        await runQuery(`
+          UPDATE almox_ferramentas
+          SET projeto_id = (
+            SELECT a.projeto_id
+            FROM almox_alocacoes a
+            WHERE a.ferramenta_id = almox_ferramentas.id
+            ORDER BY a.id DESC
+            LIMIT 1
+          )
+          WHERE projeto_id IS NULL
+        `);
+      } catch (_) {}
+
+      try {
+        await runQuery(`
+          UPDATE almox_ferramentas
+          SET projeto_id = (
+            SELECT COALESCE(m.projeto_destino_id, m.projeto_origem_id)
+            FROM almox_movimentacoes m
+            WHERE m.ferramenta_id = almox_ferramentas.id
+              AND COALESCE(m.projeto_destino_id, m.projeto_origem_id) IS NOT NULL
+            ORDER BY m.id DESC
+            LIMIT 1
+          )
+          WHERE projeto_id IS NULL
+        `);
+      } catch (_) {}
 
       await runQuery(`
         CREATE TABLE IF NOT EXISTS almox_alocacoes (
@@ -300,6 +335,7 @@ const ensureSchema = async () => {
         CREATE TABLE IF NOT EXISTS mao_obra_direta (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           identificador TEXT,
+          projeto_id INTEGER,
           nome TEXT NOT NULL,
           funcao TEXT NOT NULL,
           ativo INTEGER DEFAULT 1,
@@ -308,11 +344,17 @@ const ensureSchema = async () => {
           criado_por INTEGER,
           baixado_em DATETIME,
           baixado_por INTEGER,
+          FOREIGN KEY (projeto_id) REFERENCES projetos(id),
           FOREIGN KEY (criado_por) REFERENCES usuarios(id),
           FOREIGN KEY (baixado_por) REFERENCES usuarios(id)
         )
       `);
 
+      try {
+        await runQuery(`ALTER TABLE mao_obra_direta ADD COLUMN projeto_id INTEGER`);
+      } catch (_) {}
+
+      await runQuery('CREATE INDEX IF NOT EXISTS idx_almox_ferramentas_projeto ON almox_ferramentas(projeto_id)');
       await runQuery('CREATE INDEX IF NOT EXISTS idx_almox_alocacoes_projeto_status ON almox_alocacoes(projeto_id, status)');
       await runQuery('CREATE INDEX IF NOT EXISTS idx_almox_movimentacoes_tipo_data ON almox_movimentacoes(tipo, criado_em)');
       await runQuery('CREATE INDEX IF NOT EXISTS idx_almox_perdas_projeto_data ON almox_perdas(projeto_id, criado_em)');
@@ -343,20 +385,29 @@ router.get('/perfil', [auth, requireReadPermission], async (req, res) => {
 
 router.get('/colaboradores', [auth, requireReadPermission], async (req, res) => {
   try {
+    const { projeto_id: projetoId } = req.query;
+    if (!projetoId) return res.status(400).json({ erro: 'projeto_id é obrigatório.' });
+
+    const ok = await ensureProjectAccess(req.usuario, req.perfilAlmox, Number(projetoId));
+    if (!ok) return res.status(403).json({ erro: 'Sem acesso a esta obra.' });
+
     const usuariosSistema = await allQuery(`
-      SELECT id, login, nome, funcao
-      FROM usuarios
-      WHERE ativo = 1
+      SELECT u.id, u.login, u.nome, u.funcao
+      FROM usuarios u
+      INNER JOIN projeto_usuarios pu ON pu.usuario_id = u.id
+      WHERE pu.projeto_id = ?
+        AND u.ativo = 1
         AND deletado_em IS NULL
-      ORDER BY nome
-    `);
+      ORDER BY u.nome
+    `, [Number(projetoId)]);
 
     const maoObraDireta = await allQuery(`
       SELECT id, identificador, nome, funcao
       FROM mao_obra_direta
       WHERE ativo = 1
+        AND projeto_id = ?
       ORDER BY nome
-    `);
+    `, [Number(projetoId)]);
 
     const colaboradores = [
       ...usuariosSistema.map((item) => ({
@@ -387,10 +438,10 @@ router.get('/colaboradores', [auth, requireReadPermission], async (req, res) => 
 router.get('/ferramentas', [auth, requireReadPermission], async (req, res) => {
   try {
     const { projeto_id: projetoId, busca } = req.query;
-    if (projetoId) {
-      const ok = await ensureProjectAccess(req.usuario, req.perfilAlmox, Number(projetoId));
-      if (!ok) return res.status(403).json({ erro: 'Sem acesso a esta obra.' });
-    }
+    if (!projetoId) return res.status(400).json({ erro: 'projeto_id é obrigatório.' });
+
+    const ok = await ensureProjectAccess(req.usuario, req.perfilAlmox, Number(projetoId));
+    if (!ok) return res.status(403).json({ erro: 'Sem acesso a esta obra.' });
 
     const filtros = ['f.ativo = 1'];
     const params = [];
@@ -406,11 +457,12 @@ router.get('/ferramentas', [auth, requireReadPermission], async (req, res) => {
         COALESCE(SUM(CASE WHEN a.status IN ('ALOCADA', 'EM_MANUTENCAO') THEN (a.quantidade - a.quantidade_devolvida) ELSE 0 END), 0) AS quantidade_alocada
       FROM almox_ferramentas f
       LEFT JOIN almox_alocacoes a ON a.ferramenta_id = f.id
-      ${projetoId ? 'AND a.projeto_id = ?' : ''}
+      AND a.projeto_id = ?
       WHERE ${filtros.join(' AND ')}
+        AND f.projeto_id = ?
       GROUP BY f.id
       ORDER BY f.nome
-    `, projetoId ? [Number(projetoId), ...params] : params);
+    `, [Number(projetoId), ...params, Number(projetoId)]);
 
     res.json(ferramentas);
   } catch (error) {
@@ -422,6 +474,7 @@ router.get('/ferramentas', [auth, requireReadPermission], async (req, res) => {
 router.post('/ferramentas', [auth, requireWritePermission], async (req, res) => {
   try {
     const {
+      projeto_id: projetoId,
       codigo,
       nome,
       categoria,
@@ -439,18 +492,26 @@ router.post('/ferramentas', [auth, requireWritePermission], async (req, res) => 
     const nfCompraNormalizada = String(nfCompra || '').trim();
     const valorInformado = !(valorReposicao === undefined || valorReposicao === null || String(valorReposicao).trim() === '');
 
-    if (!nome || !Number.isInteger(quantidade) || quantidade < 0 || !nfCompraNormalizada || !valorInformado || !Number.isFinite(valorReposicaoNum) || valorReposicaoNum < 0) {
+    if (!projetoId || !nome || !Number.isInteger(quantidade) || quantidade < 0 || !nfCompraNormalizada || !valorInformado || !Number.isFinite(valorReposicaoNum) || valorReposicaoNum < 0) {
       return res.status(400).json({ erro: 'Campos inválidos para cadastro de ativo.' });
     }
+
+    const projeto = await validateProjeto(Number(projetoId));
+    if (!projeto) return res.status(404).json({ erro: 'Obra não encontrada.' });
+
+    const ok = await ensureProjectAccess(req.usuario, req.perfilAlmox, Number(projetoId));
+    if (!ok) return res.status(403).json({ erro: 'Sem acesso a esta obra.' });
+
     if (!categoriaNormalizada) {
       return res.status(400).json({ erro: `Categoria inválida. Use: ${CATEGORIAS_ATIVO.join(', ')}.` });
     }
 
     const result = await runQuery(`
       INSERT INTO almox_ferramentas
-      (codigo, nome, categoria, nf_compra, marca, modelo, descricao, unidade, quantidade_total, quantidade_disponivel, valor_reposicao, criado_por)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (projeto_id, codigo, nome, categoria, nf_compra, marca, modelo, descricao, unidade, quantidade_total, quantidade_disponivel, valor_reposicao, criado_por)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
+      Number(projetoId),
       codigo || null,
       String(nome).trim(),
       categoriaNormalizada,
@@ -470,6 +531,7 @@ router.post('/ferramentas', [auth, requireWritePermission], async (req, res) => 
       ferramentaId: result.lastID,
       tipo: 'CADASTRO',
       quantidade,
+      projetoDestinoId: Number(projetoId),
       usuarioId: req.usuario.id
     });
     await registrarAuditoria('almox_ferramentas', result.lastID, 'CREATE', null, ferramenta, req.usuario.id, { strict: true });
@@ -478,6 +540,62 @@ router.post('/ferramentas', [auth, requireWritePermission], async (req, res) => 
   } catch (error) {
     console.error('Erro ao cadastrar ativo:', error);
     res.status(500).json({ erro: 'Erro ao cadastrar ativo.' });
+  }
+});
+
+router.post('/ferramentas/:ferramentaId/transferir', [auth, requireWritePermission], async (req, res) => {
+  try {
+    const { ferramentaId } = req.params;
+    const { obra_destino_id: obraDestinoId } = req.body;
+    if (!obraDestinoId) return res.status(400).json({ erro: 'obra_destino_id é obrigatório.' });
+
+    const ferramenta = await getQuery('SELECT * FROM almox_ferramentas WHERE id = ? AND ativo = 1', [Number(ferramentaId)]);
+    if (!ferramenta) return res.status(404).json({ erro: 'Ativo não encontrado.' });
+    if (!ferramenta.projeto_id) return res.status(400).json({ erro: 'Ativo sem obra de origem definida. Atualize o cadastro primeiro.' });
+    if (Number(ferramenta.projeto_id) === Number(obraDestinoId)) {
+      return res.status(400).json({ erro: 'A obra de destino deve ser diferente da obra atual.' });
+    }
+
+    const origemOk = await ensureProjectAccess(req.usuario, req.perfilAlmox, Number(ferramenta.projeto_id));
+    const destinoOk = await ensureProjectAccess(req.usuario, req.perfilAlmox, Number(obraDestinoId));
+    if (!origemOk || !destinoOk) return res.status(403).json({ erro: 'Sem acesso às obras de origem ou destino.' });
+
+    const obraDestino = await validateProjeto(Number(obraDestinoId));
+    if (!obraDestino) return res.status(404).json({ erro: 'Obra de destino não encontrada.' });
+
+    const alocacaoAtiva = await getQuery(`
+      SELECT id
+      FROM almox_alocacoes
+      WHERE ferramenta_id = ?
+        AND status IN ('ALOCADA', 'EM_MANUTENCAO')
+      LIMIT 1
+    `, [Number(ferramentaId)]);
+    if (alocacaoAtiva) {
+      return res.status(400).json({ erro: 'Não é possível transferir ativo com alocação/manutenção em aberto.' });
+    }
+
+    await runQuery(
+      'UPDATE almox_ferramentas SET projeto_id = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+      [Number(obraDestinoId), Number(ferramentaId)]
+    );
+
+    await registrarMovimentacao({
+      ferramentaId: Number(ferramentaId),
+      tipo: 'TRANSFERENCIA_ATIVO',
+      quantidade: Number(ferramenta.quantidade_total || 0),
+      projetoOrigemId: Number(ferramenta.projeto_id),
+      projetoDestinoId: Number(obraDestinoId),
+      justificativa: 'Transferência de ativo entre obras',
+      usuarioId: req.usuario.id
+    });
+
+    const ferramentaAtualizada = await getQuery('SELECT * FROM almox_ferramentas WHERE id = ?', [Number(ferramentaId)]);
+    await registrarAuditoria('almox_ferramentas', Number(ferramentaId), 'TRANSFERENCIA', ferramenta, ferramentaAtualizada, req.usuario.id, { strict: true });
+
+    res.json({ ferramenta: ferramentaAtualizada });
+  } catch (error) {
+    console.error('Erro ao transferir ativo entre obras:', error);
+    res.status(500).json({ erro: 'Erro ao transferir ativo entre obras.' });
   }
 });
 

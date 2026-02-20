@@ -20,7 +20,15 @@ router.get('/', auth, async (req, res) => {
     if (usuarioPodeVerTodosProjetos(req.usuario)) {
       // ADM e Gestor Geral veem todos os projetos
       projetos = await allQuery(`
-        SELECT p.*, u.nome as criador
+        SELECT p.*, u.nome as criador,
+          (
+            SELECT COUNT(*)
+            FROM projeto_usuarios pu2
+            INNER JOIN usuarios ux ON ux.id = pu2.usuario_id
+            WHERE pu2.projeto_id = p.id
+              AND ux.deletado_em IS NULL
+              AND COALESCE(ux.ativo, 1) = 1
+          ) AS total_usuarios
         FROM projetos p
         LEFT JOIN usuarios u ON p.criado_por = u.id
         WHERE p.ativo = 1
@@ -29,7 +37,15 @@ router.get('/', auth, async (req, res) => {
     } else {
       // Demais perfis veem apenas projetos vinculados
       projetos = await allQuery(`
-        SELECT p.*, u.nome as criador
+        SELECT p.*, u.nome as criador,
+          (
+            SELECT COUNT(*)
+            FROM projeto_usuarios pu2
+            INNER JOIN usuarios ux ON ux.id = pu2.usuario_id
+            WHERE pu2.projeto_id = p.id
+              AND ux.deletado_em IS NULL
+              AND COALESCE(ux.ativo, 1) = 1
+          ) AS total_usuarios
         FROM projetos p
         INNER JOIN projeto_usuarios pu ON p.id = pu.projeto_id
         LEFT JOIN usuarios u ON p.criado_por = u.id

@@ -111,6 +111,7 @@ router.use(async (req, res, next) => {
       CREATE TABLE IF NOT EXISTS mao_obra_direta (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         identificador TEXT,
+        projeto_id INTEGER,
         nome TEXT NOT NULL,
         funcao TEXT NOT NULL,
         ativo INTEGER DEFAULT 1,
@@ -119,10 +120,18 @@ router.use(async (req, res, next) => {
         criado_por INTEGER,
         baixado_em DATETIME,
         baixado_por INTEGER,
+        FOREIGN KEY (projeto_id) REFERENCES projetos(id),
         FOREIGN KEY (criado_por) REFERENCES usuarios(id),
         FOREIGN KEY (baixado_por) REFERENCES usuarios(id)
       )
     `);
+
+    const colunasMaoObraDireta = await allQuery('PRAGMA table_info(mao_obra_direta)');
+    const temProjetoId = (colunasMaoObraDireta || []).some((col) => String(col.name) === 'projeto_id');
+    if (!temProjetoId) {
+      await runQuery('ALTER TABLE mao_obra_direta ADD COLUMN projeto_id INTEGER');
+    }
+
     next();
   } catch (error) {
     console.error('Erro ao preparar schema de usuários:', error);
@@ -132,13 +141,18 @@ router.use(async (req, res, next) => {
 
 router.get('/', [auth, requirePermission(PERMISSIONS.USERS_VIEW)], async (req, res) => {
   try {
-    const { setor } = req.query;
+    const { setor, projeto_id } = req.query;
     const filtros = ['deletado_em IS NULL'];
     const params = [];
 
     if (setor) {
       filtros.push('setor = ?');
       params.push(setor);
+    }
+
+    if (projeto_id) {
+      filtros.push('EXISTS (SELECT 1 FROM projeto_usuarios pu WHERE pu.usuario_id = usuarios.id AND pu.projeto_id = ?)');
+      params.push(Number(projeto_id));
     }
 
     const usuarios = await allQuery(`
@@ -196,13 +210,23 @@ router.get('/novo-login', [auth, requirePermission(PERMISSIONS.USERS_MANAGE)], a
 
 router.get('/mao-obra-direta', [auth, requirePermission(PERMISSIONS.USERS_MANAGE)], async (req, res) => {
   try {
+    const projetoId = req.query.projeto_id ? Number(req.query.projeto_id) : null;
     const somenteAtivos = String(req.query.ativos || '1') !== '0';
+    const filtros = [];
+    const params = [];
+
+    if (somenteAtivos) filtros.push('ativo = 1');
+    if (projetoId) {
+      filtros.push('projeto_id = ?');
+      params.push(projetoId);
+    }
+
     const rows = await allQuery(`
-      SELECT id, identificador, nome, funcao, ativo, criado_em, atualizado_em, baixado_em, baixado_por
+      SELECT id, identificador, projeto_id, nome, funcao, ativo, criado_em, atualizado_em, baixado_em, baixado_por
       FROM mao_obra_direta
-      ${somenteAtivos ? 'WHERE ativo = 1' : ''}
+      ${filtros.length ? `WHERE ${filtros.join(' AND ')}` : ''}
       ORDER BY nome
-    `);
+    `, params);
     res.json(rows);
   } catch (error) {
     console.error('Erro ao listar mão de obra direta:', error);
@@ -224,12 +248,13 @@ router.post('/mao-obra-direta', [
 
     const nome = String(req.body.nome || '').trim();
     const funcao = String(req.body.funcao || '').trim();
+    const projetoId = req.body.projeto_id ? Number(req.body.projeto_id) : null;
     const identificador = await gerarIdentificadorMaoObraDireta();
 
     const result = await runQuery(`
-      INSERT INTO mao_obra_direta (identificador, nome, funcao, ativo, criado_por)
-      VALUES (?, ?, ?, 1, ?)
-    `, [identificador, nome, funcao, req.usuario.id]);
+      INSERT INTO mao_obra_direta (identificador, projeto_id, nome, funcao, ativo, criado_por)
+      VALUES (?, ?, ?, ?, 1, ?)
+    `, [identificador, projetoId, nome, funcao, req.usuario.id]);
 
     const item = await getQuery('SELECT * FROM mao_obra_direta WHERE id = ?', [result.lastID]);
     await registrarAuditoria('mao_obra_direta', result.lastID, 'CREATE', null, item, req.usuario.id);
@@ -265,6 +290,10 @@ router.put('/mao-obra-direta/:id', [
     if (req.body.ativo !== undefined) {
       updates.push('ativo = ?');
       params.push(req.body.ativo ? 1 : 0);
+    }
+    if (req.body.projeto_id !== undefined) {
+      updates.push('projeto_id = ?');
+      params.push(req.body.projeto_id ? Number(req.body.projeto_id) : null);
     }
 
     if (updates.length === 0) {
