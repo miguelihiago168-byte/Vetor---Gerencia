@@ -340,6 +340,50 @@ const initDatabase = async () => {
     });
     console.log('✓ Usuário administrador criado (Login: 000001, Senha: 123456)');
 
+    // Get admin user id
+    const adminUser = await new Promise((resolve, reject) => {
+      db.get(`SELECT id FROM usuarios WHERE login = '000001'`, (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    // Check if any project already exists
+    const existingProject = await new Promise((resolve, reject) => {
+      db.get(`SELECT id FROM projetos LIMIT 1`, (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
+
+    if (!existingProject && adminUser) {
+      // Create default project
+      const projectResult = await new Promise((resolve, reject) => {
+        db.run(`
+          INSERT INTO projetos (nome, empresa_responsavel, empresa_executante, prazo_termino, cidade, ativo, arquivado, criado_por)
+          VALUES ('Projeto Padrão', 'Vetor Engenharia', 'Vetor Engenharia', date('now', '+1 year'), 'São Paulo', 1, 0, ?)
+        `, [adminUser.id], function(err) {
+          if (err) reject(err);
+          else resolve(this);
+        });
+      });
+      console.log('✓ Projeto padrão criado');
+
+      // Link admin user to default project
+      await new Promise((resolve, reject) => {
+        db.run(`
+          INSERT OR IGNORE INTO projeto_usuarios (projeto_id, usuario_id)
+          VALUES (?, ?)
+        `, [projectResult.lastID, adminUser.id], (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+      console.log('✓ Administrador vinculado ao projeto padrão');
+    } else {
+      console.log('• Projeto padrão já existe — skipping');
+    }
+
     console.log('\n✅ Banco de dados inicializado com sucesso!');
     console.log('\n📋 Credenciais padrão:');
     console.log('   Login: 000001');
