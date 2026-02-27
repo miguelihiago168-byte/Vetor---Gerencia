@@ -141,13 +141,35 @@ router.use(async (req, res, next) => {
 
 router.get('/', [auth, requirePermission(PERMISSIONS.USERS_VIEW)], async (req, res) => {
   try {
-    const { setor, projeto_id } = req.query;
-    const filtros = ['deletado_em IS NULL'];
+    const { setor, projeto_id, perfil, nome, ativo } = req.query;
+    const filtros = [];
     const params = [];
+
+    // Quando filtrando desativados (ativo=0): inclui usuários com soft-delete (deletado_em != null)
+    // Quando filtrando ativos (ativo=1): exclui soft-delete
+    // Sem filtro de status: retorna todos (frontend filtra client-side)
+    if (ativo !== undefined && ativo !== '' && Number(ativo) === 0) {
+      filtros.push('ativo = 0');
+    } else if (ativo !== undefined && ativo !== '' && Number(ativo) === 1) {
+      filtros.push('deletado_em IS NULL');
+      filtros.push('ativo = 1');
+    }
+    // else: sem restrição de status — retorna tudo incluindo soft-deleted
 
     if (setor) {
       filtros.push('setor = ?');
       params.push(setor);
+    }
+
+    if (perfil) {
+      filtros.push('perfil = ?');
+      params.push(perfil);
+    }
+
+    if (nome) {
+      filtros.push('(LOWER(nome) LIKE ? OR LOWER(email) LIKE ? OR LOWER(login) LIKE ?)');
+      const termo = `%${nome.toLowerCase()}%`;
+      params.push(termo, termo, termo);
     }
 
     if (projeto_id) {
@@ -158,7 +180,7 @@ router.get('/', [auth, requirePermission(PERMISSIONS.USERS_VIEW)], async (req, r
     const usuarios = await allQuery(`
       SELECT id, login, nome, email, pin, perfil, funcao, setor, setor_outro, is_gestor, is_adm, perfil_almoxarifado, ativo, criado_em
       FROM usuarios
-      WHERE ${filtros.join(' AND ')}
+      ${filtros.length ? `WHERE ${filtros.join(' AND ')}` : ''}
       ORDER BY nome
     `, params);
 
@@ -332,6 +354,87 @@ router.patch('/mao-obra-direta/:id/baixa', [auth, requirePermission(PERMISSIONS.
   }
 });
 
+// Campos permitidos para alteração em lote
+const CAMPOS_BULK = ['ativo', 'perfil', 'setor', 'is_gestor'];
+
+router.patch('/bulk-update', [auth, requirePermission(PERMISSIONS.USERS_MANAGE)], async (req, res) => {
+  try {
+    const { ids, campo, valor, projeto_id } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ erro: 'Lista de IDs inválida.' });
+    }
+
+    const idsValidos = ids.map(Number).filter((id) => Number.isInteger(id) && id > 0);
+    if (idsValidos.length === 0) return res.status(400).json({ erro: 'Nenhum ID válido informado.' });
+
+    // Caso especial: vincular obra
+    if (campo === 'projeto_vincular' || campo === 'projeto_desvincular') {
+      if (!projeto_id) return res.status(400).json({ erro: 'projeto_id é obrigatório para vincular/desvincular obras.' });
+      const projetoIdNum = Number(projeto_id);
+      for (const uid of idsValidos) {
+        if (campo === 'projeto_vincular') {
+          await runQuery('INSERT OR IGNORE INTO projeto_usuarios (projeto_id, usuario_id) VALUES (?, ?)', [projetoIdNum, uid]);
+        } else {
+          await runQuery('DELETE FROM projeto_usuarios WHERE projeto_id = ? AND usuario_id = ?', [projetoIdNum, uid]);
+        }
+      }
+      await registrarAuditoria('usuarios_bulk', null, campo.toUpperCase(), null, { ids: idsValidos, projeto_id: projetoIdNum }, req.usuario.id);
+      return res.json({ atualizados: idsValidos.length });
+    }
+
+    if (!CAMPOS_BULK.includes(campo)) {
+      return res.status(400).json({ erro: `Campo "${campo}" não é permitido em alteração em lote.` });
+    }
+
+    if (campo === 'perfil') {
+      const perfilCanonico = normalizarPerfil(valor);
+      if (!perfilCanonico || !PERFIS_LISTA.includes(perfilCanonico)) {
+        return res.status(400).json({ erro: 'Perfil inválido.' });
+      }
+    }
+
+    if (campo === 'setor') {
+      if (!SETORES_LISTA.includes(valor)) {
+        return res.status(400).json({ erro: 'Setor inválido.' });
+      }
+    }
+
+    const valorFinal = campo === 'perfil' ? normalizarPerfil(valor)
+      : (campo === 'ativo' || campo === 'is_gestor') ? (valor ? 1 : 0)
+      : valor;
+
+    const placeholders = idsValidos.map(() => '?').join(', ');
+
+    // Ao reativar em lote, também limpa o soft-delete
+    if (campo === 'ativo' && valorFinal === 1) {
+      await runQuery(
+        `UPDATE usuarios SET ativo = 1, deletado_em = NULL, deletado_por = NULL, atualizado_em = CURRENT_TIMESTAMP WHERE id IN (${placeholders})`,
+        [...idsValidos]
+      );
+    } else {
+      await runQuery(
+        `UPDATE usuarios SET ${campo} = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id IN (${placeholders})`,
+        [valorFinal, ...idsValidos]
+      );
+    }
+
+    // Se ativando Gestor Geral em lote, vincular a todos os projetos
+    if (campo === 'perfil' && valorFinal === PERFIS.GESTOR_GERAL) {
+      const todosIds = await listarTodosProjetosIds();
+      for (const uid of idsValidos) {
+        await sincronizarVinculosProjeto(uid, todosIds);
+      }
+    }
+
+    await registrarAuditoria('usuarios_bulk', null, 'BULK_UPDATE', null, { ids: idsValidos, campo, valor: valorFinal }, req.usuario.id);
+    res.json({ atualizados: idsValidos.length });
+  } catch (error) {
+    console.error('Erro no bulk-update de usuários:', error);
+    res.status(500).json({ erro: 'Erro ao executar alteração em lote.' });
+  }
+});
+
 router.get('/:id', [auth, requirePermission(PERMISSIONS.USERS_VIEW)], async (req, res) => {
   try {
     const { id } = req.params;
@@ -462,8 +565,14 @@ router.put('/:id', [
     }
 
     if (req.body.ativo !== undefined) {
+      const ativoVal = req.body.ativo ? 1 : 0;
       updates.push('ativo = ?');
-      params.push(req.body.ativo ? 1 : 0);
+      params.push(ativoVal);
+      // Ao reativar, limpa o soft-delete para que o usuário volte à listagem normal
+      if (ativoVal === 1) {
+        updates.push('deletado_em = NULL');
+        updates.push('deletado_por = NULL');
+      }
     }
 
     if (req.body.senha !== undefined && req.body.senha !== '') {

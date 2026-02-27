@@ -24,7 +24,6 @@ import Usuarios from './pages/Usuarios';
 import RNC from './pages/RNC';
 import RNCForm from './pages/RNCForm';
 import RNCDetalhes from './pages/RNCDetalhes';
-import UsuariosDeleted from './pages/UsuariosDeleted';
 import ProjetoSelector from './pages/ProjetoSelector';
 import AlmoxarifadoDashboard from './pages/AlmoxarifadoDashboard';
 import AlmoxFerramentas from './pages/AlmoxFerramentas';
@@ -128,11 +127,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/projeto/:projetoId/usuarios" element={
             <PrivateRoute allowedPerfis={PERFIS_USUARIOS}>
               <Usuarios />
-            </PrivateRoute>
-          } />
-          <Route path="/usuarios-deleted" element={
-            <PrivateRoute allowedPerfis={PERFIS_USUARIOS}>
-              <UsuariosDeleted />
             </PrivateRoute>
           } />
           <Route path="/projeto/:projetoId/rnc" element={

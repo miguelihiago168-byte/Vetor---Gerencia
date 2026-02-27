@@ -188,12 +188,12 @@ function Navbar() {
                   Curva S
                 </NavLink>
                 )}
-                {canViewUsuarios && (
-                  <NavLink to={rotaUsuarios} onClick={(e) => confirmNav(e, rotaUsuarios)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-                    Usuários
-                  </NavLink>
-                )}
               </>
+            )}
+            {canViewUsuarios && (
+              <NavLink to={rotaUsuarios} onClick={(e) => confirmNav(e, rotaUsuarios)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+                Usuários
+              </NavLink>
             )}
             </div>
           </div>
