@@ -195,8 +195,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
            <Route path="/compras" element={<ProjetoSelector destino="pedidos" />} />
            <Route path="/financeiro" element={<ProjetoSelector destino="financeiro" />} />
            <Route path="/ativos" element={<ProjetoSelector destino="almoxarifado" />} />
-           <Route path="/usuarios" element={<ProjetoSelector destino="usuarios" />} />
-
            <Route path="/" element={<Navigate to="/projetos" replace />} />
         </Routes>
         <NotificationContainer />

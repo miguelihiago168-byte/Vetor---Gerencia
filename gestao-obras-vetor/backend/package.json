@@ -5,8 +5,11 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "set PORT=3001&& nodemon server.js",
+    "dev": "cross-env PORT=3001 nodemon server.js",
+    "dev:win": "set PORT=3001&& nodemon server.js",
     "pm2-start": "pm2 start ecosystem.config.js --env production",
+    "setup": "node scripts/setupDatabase.js",
+    "setup:dummy": "node scripts/setupDatabase.js --with-dummy-data",
     "init-db": "node scripts/initDatabase.js",
     "migrate-curva-s": "node scripts/migrate_add_curva_s_fields.js"
   },
