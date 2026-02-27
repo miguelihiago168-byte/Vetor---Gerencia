@@ -1,9 +1,15 @@
 Guia de Instalação — Gestão de Obras - Vetor
 
 Pré-requisitos
-- Node.js (>= 18) e npm
+- Node.js 18.20.4
+- npm 10.8.2
 - Git (opcional)
 - Windows (testado) ou Linux/macOS
+
+Versões fixadas do projeto
+- Backend: dependências fixadas em `backend/package.json` (sem `^`)
+- Frontend: dependências fixadas em `frontend/package.json` (sem `^`)
+- Instalação determinística: use `npm ci` (respeita `package-lock.json`)
 
 1) Clone do repositório
 ```bash
@@ -15,12 +21,12 @@ cd gestao-obras-vetor
 - Backend
 ```powershell
 cd backend
-npm install
+npm ci
 ```
 - Frontend
 ```powershell
 cd ../frontend
-npm install
+npm ci
 ```
 
 3) Variáveis de ambiente
@@ -75,6 +81,7 @@ tasklist /FI "PID eq <PID>"
 taskkill /PID <PID> /F
 ```
 - Problemas com dependências: delete `node_modules` e rode `npm install` novamente.
+- Problemas com dependências: delete `node_modules` e rode `npm ci` novamente.
 - Se o frontend não carregar, confirme se o dev server (Vite) está ativo e acessível na porta 5173.
 
 Observações
