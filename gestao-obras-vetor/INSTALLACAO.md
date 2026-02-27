@@ -57,7 +57,7 @@ npm run dev
 ```
 
 Acessos
-- Frontend: http://localhost:5173/
+- Frontend: http://localhost:3000/
 - Backend (health): http://localhost:3001/api/health
 
 6) Build de produção do frontend
@@ -80,9 +80,8 @@ netstat -ano | findstr ":3001"
 tasklist /FI "PID eq <PID>"
 taskkill /PID <PID> /F
 ```
-- Problemas com dependências: delete `node_modules` e rode `npm install` novamente.
 - Problemas com dependências: delete `node_modules` e rode `npm ci` novamente.
-- Se o frontend não carregar, confirme se o dev server (Vite) está ativo e acessível na porta 5173.
+- Se o frontend não carregar, confirme se o dev server (Vite) está ativo e acessível na porta 3000.
 
 Observações
 - O backend usa SQLite por padrão; arquivo de banco fica em `backend/database/gestao_obras.db`.
@@ -121,12 +120,12 @@ ngrok http 80
 **Acesso remoto**
 - Para permitir que outras pessoas na sua rede (ou pela internet) acessem a instância, faça o seguinte:
 	- Backend: defina no arquivo `.env` ou na variável de ambiente `HOST=0.0.0.0` (padrão agora) e `PORT=3001` se desejar porta diferente.
-	- Frontend (desenvolvimento): o script `npm run dev` já foi atualizado para expor o Vite em `0.0.0.0` na porta `5173`.
+	- Frontend (desenvolvimento): o script `npm run dev` já foi atualizado para expor o Vite em `0.0.0.0` na porta `3000`.
 	- Abra/encaminhe as portas no firewall/roteador:
-		- Na rede local, abra a porta TCP `3001` (backend) e `5173` (frontend) no host Windows/Linux.
+		- Na rede local, abra a porta TCP `3001` (backend) e `3000` (frontend) no host Windows/Linux.
 		- Para acesso pela Internet, configure port forwarding no seu roteador para o IP da máquina que executa o app.
 	- Alternativa segura para exposição pública: use um proxy reverso (NGINX) com HTTPS, ou uma ferramenta de túnel como `ngrok`/`cloudflared`.
-	- Verificação: após iniciar os servidores, acesse `http://<IP_DA_MAQUINA>:5173/` (frontend) e `http://<IP_DA_MAQUINA>:3001/api/health` (backend).
+	- Verificação: após iniciar os servidores, acesse `http://<IP_DA_MAQUINA>:3000/` (frontend) e `http://<IP_DA_MAQUINA>:3001/api/health` (backend).
 	- Segurança: se for disponibilizar pela Internet, proteja o backend com HTTPS/Firewall, troque `JWT_SECRET` e não deixe credenciais padrão em produção.
 
 Se quiser, eu posso gerar um `docker-compose.yml` e um `nginx` básico para colocar em produção.

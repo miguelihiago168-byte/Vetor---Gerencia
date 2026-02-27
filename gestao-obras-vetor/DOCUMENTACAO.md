@@ -35,7 +35,7 @@ Mudanças e melhorias aplicadas (interface RDO / EAP)
 Checks realizados
 - Build do frontend (Vite): gerou `frontend/dist` com sucesso.
 - Backend `GET /api/health`: respondeu OK.
-- Teste inicial: frontend dev server em `http://localhost:5173/` (Vite ready).
+- Teste inicial: frontend dev server em `http://localhost:3000/` (Vite ready).
 
 Boas práticas e próximos passos sugeridos
 - Adicionar validações client-side mais explícitas (por exemplo, impedir salvar atividade com % inválido).

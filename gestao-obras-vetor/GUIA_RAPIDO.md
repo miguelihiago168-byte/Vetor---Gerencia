@@ -2,6 +2,12 @@
 
 ## ⚡ Iniciar o Sistema
 
+## 📦 Pré-requisitos
+
+- Node.js `18.20.4`
+- npm `10.8.2`
+- Use `npm ci` para instalar dependências com versões travadas pelo `package-lock.json`
+
 ### Opção 1: Script Automatizado (Recomendado)
 ```powershell
 cd "c:\Apps\Vetor - Gerencia\gestao-obras-vetor"
@@ -123,7 +129,7 @@ Visualize:
 cd backend
 
 # Instalar dependências
-npm install
+npm ci
 
 # Inicializar banco de dados
 npm run init-db
@@ -139,7 +145,7 @@ npm run dev      # Desenvolvimento (com nodemon)
 cd frontend
 
 # Instalar dependências
-npm install
+npm ci
 
 # Iniciar servidor
 npm run dev      # Desenvolvimento
@@ -217,11 +223,11 @@ taskkill /PID <PID> /F
 # Reinstalar dependências
 cd backend
 Remove-Item node_modules -Recurse -Force
-npm install
+npm ci
 
 cd ..\frontend
 Remove-Item node_modules -Recurse -Force
-npm install
+npm ci
 ```
 
 ### Erro de autenticação

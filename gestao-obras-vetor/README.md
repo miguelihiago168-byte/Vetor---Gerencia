@@ -20,11 +20,19 @@ Sistema completo de gestão de obras com controle de EAP e RDO.
 
 ## 📦 Instalação
 
+### Pré-requisitos (versões fixas)
+
+- Node.js `18.20.4`
+- npm `10.8.2`
+- Dependências do projeto fixadas nos arquivos `package.json` (sem `^`)
+
+> Recomendado: usar `npm ci` para instalação determinística baseada no `package-lock.json`.
+
 ### 1. Instalar dependências do Backend
 
 ```powershell
 cd backend
-npm install
+npm ci
 ```
 
 ### 2. Inicializar o banco de dados
@@ -37,7 +45,7 @@ npm run init-db
 
 ```powershell
 cd ../frontend
-npm install
+npm ci
 ```
 
 ## ▶️ Executar o Sistema
@@ -285,11 +293,11 @@ Para expandir o sistema, você pode:
 # Reinstalar dependências
 cd backend
 Remove-Item node_modules -Recurse -Force
-npm install
+npm ci
 
 cd ../frontend
 Remove-Item node_modules -Recurse -Force
-npm install
+npm ci
 ```
 
 ### Erro: "Port already in use"
