@@ -1,12 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import React, { useEffect, useState, useMemo } from 'react';
+import { useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import {
   getUsuarios,
   getUsuario,
   createUsuario,
   updateUsuario,
-  deleteUsuario,
+  bulkUpdateUsuarios,
   getNovoLogin,
   getProjetos,
   getMaoObraDireta,
@@ -16,7 +16,7 @@ import {
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
-import { Shield, UserPlus, Trash2, RotateCcw, Eye, EyeOff, UserX } from 'lucide-react';
+import { Shield, UserPlus, Trash2, RotateCcw, Search, X, Users, UserCheck } from 'lucide-react';
 
 const PERFIS = ['ADM', 'Gestor Geral', 'Gestor Local', 'Gestor de Qualidade', 'Almoxarife', 'Fiscal'];
 const SETORES = ['Administrativo', 'Engenharia', 'Qualidade', 'Almoxarifado', 'Financeiro', 'Outro'];
@@ -37,8 +37,6 @@ const normalizarPerfilTela = (perfil) => {
 function Usuarios() {
   const { projetoId } = useParams();
   const { perfil } = useAuth();
-  const { confirm } = useDialog();
-  const navigate = useNavigate();
 
   const podeGerenciar = perfil === 'Gestor Geral' || perfil === 'ADM';
 
@@ -51,8 +49,20 @@ function Usuarios() {
   const [showModal, setShowModal] = useState(false);
   const [editingUserId, setEditingUserId] = useState(null);
   const [loginGerado, setLoginGerado] = useState('');
-  const [showDeletedUsers, setShowDeletedUsers] = useState(false);
+
+  // Filtros
+  const [filtroTexto, setFiltroTexto] = useState('');
   const [filtroSetor, setFiltroSetor] = useState('');
+  const [filtroPerfil, setFiltroPerfil] = useState('');
+  const [filtroStatus, setFiltroStatus] = useState('ativos'); // 'ativos' | 'desativados' | 'todos'
+  const [filtroObra, setFiltroObra] = useState('');
+
+  // Seleção em lote
+  const [selecionados, setSelecionados] = useState([]);
+  const [bulkAcao, setBulkAcao] = useState('');
+  const [bulkValor, setBulkValor] = useState('');
+  const [bulkLoading, setBulkLoading] = useState(false);
+
   const [formData, setFormData] = useState({
     nome: '',
     email: '',
@@ -234,7 +244,7 @@ function Usuarios() {
     if (!ok) return;
 
     try {
-      await deleteUsuario(id);
+      await updateUsuario(id, { ativo: 0 });
       await carregarDados();
       setSucesso('Usuário desativado com sucesso.');
     } catch {
@@ -316,6 +326,121 @@ function Usuarios() {
     }
   };
 
+  // Lista filtrada client-side
+  const usuariosFiltrados = useMemo(() => {
+    return usuarios.filter((u) => {
+      // Status
+      if (filtroStatus === 'ativos' && Number(u.ativo) !== 1) return false;
+      if (filtroStatus === 'desativados' && Number(u.ativo) !== 0) return false;
+
+      // Texto livre
+      if (filtroTexto.trim()) {
+        const t = filtroTexto.trim().toLowerCase();
+        const emNome = (u.nome || '').toLowerCase().includes(t);
+        const emEmail = (u.email || '').toLowerCase().includes(t);
+        const emLogin = (u.login || '').toLowerCase().includes(t);
+        if (!emNome && !emEmail && !emLogin) return false;
+      }
+
+      // Perfil
+      if (filtroPerfil) {
+        const perfilTela = normalizarPerfilTela(u.perfil);
+        if (perfilTela !== filtroPerfil) return false;
+      }
+
+      // Setor
+      if (filtroSetor && u.setor !== filtroSetor) return false;
+
+      // Obra
+      if (filtroObra) {
+        const ids = u.projeto_ids || (u.projeto_id ? [u.projeto_id] : []);
+        if (!ids.includes(Number(filtroObra))) return false;
+      }
+
+      return true;
+    });
+  }, [usuarios, filtroStatus, filtroTexto, filtroPerfil, filtroSetor, filtroObra]);
+
+  const filtrosAtivos = filtroTexto || filtroSetor || filtroPerfil || filtroStatus !== 'ativos' || filtroObra;
+
+  const limparFiltros = () => {
+    setFiltroTexto('');
+    setFiltroSetor('');
+    setFiltroPerfil('');
+    setFiltroStatus('ativos');
+    setFiltroObra('');
+  };
+
+  const toggleSelecionado = (id) => {
+    setSelecionados((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelecionarTodos = () => {
+    if (selecionados.length === usuariosFiltrados.length && usuariosFiltrados.length > 0) {
+      setSelecionados([]);
+    } else {
+      setSelecionados(usuariosFiltrados.map((u) => u.id));
+    }
+  };
+
+  const executarBulk = async () => {
+    if (!bulkAcao || selecionados.length === 0) return;
+
+    const textos = {
+      ativo_desativar: 'Desativar os usuários selecionados?',
+      ativo_ativar: 'Ativar os usuários selecionados?',
+      perfil: `Alterar perfil de ${selecionados.length} usuário(s) para "${bulkValor}"?`,
+      setor: `Alterar setor de ${selecionados.length} usuário(s) para "${bulkValor}"?`,
+      is_gestor_sim: `Marcar ${selecionados.length} usuário(s) como Gestor?`,
+      is_gestor_nao: `Remover flag Gestor de ${selecionados.length} usuário(s)?`,
+      projeto_vincular: `Vincular ${selecionados.length} usuário(s) à obra selecionada?`,
+      projeto_desvincular: `Desvincular ${selecionados.length} usuário(s) da obra selecionada?`,
+    };
+
+    const ok = await confirm({
+      title: 'Alteração em lote',
+      message: textos[bulkAcao] || 'Confirmar alteração?',
+      confirmText: 'Confirmar',
+      cancelText: 'Cancelar'
+    });
+    if (!ok) return;
+
+    setBulkLoading(true);
+    setErro('');
+    try {
+      if (bulkAcao === 'ativo_desativar') {
+        await bulkUpdateUsuarios(selecionados, 'ativo', false);
+      } else if (bulkAcao === 'ativo_ativar') {
+        await bulkUpdateUsuarios(selecionados, 'ativo', true);
+      } else if (bulkAcao === 'perfil') {
+        if (!bulkValor) { setErro('Selecione o perfil desejado.'); setBulkLoading(false); return; }
+        await bulkUpdateUsuarios(selecionados, 'perfil', normalizarPerfilParaApi(bulkValor));
+      } else if (bulkAcao === 'setor') {
+        if (!bulkValor) { setErro('Selecione o setor desejado.'); setBulkLoading(false); return; }
+        await bulkUpdateUsuarios(selecionados, 'setor', bulkValor);
+      } else if (bulkAcao === 'is_gestor_sim') {
+        await bulkUpdateUsuarios(selecionados, 'is_gestor', true);
+      } else if (bulkAcao === 'is_gestor_nao') {
+        await bulkUpdateUsuarios(selecionados, 'is_gestor', false);
+      } else if (bulkAcao === 'projeto_vincular' || bulkAcao === 'projeto_desvincular') {
+        if (!bulkValor) { setErro('Selecione a obra desejada.'); setBulkLoading(false); return; }
+        await bulkUpdateUsuarios(selecionados, bulkAcao, null, Number(bulkValor));
+      }
+
+      setSucesso(`Alteração em lote aplicada a ${selecionados.length} usuário(s).`);
+      setSelecionados([]);
+      setBulkAcao('');
+      setBulkValor('');
+      await carregarDados();
+    } catch (error) {
+      setErro(error.response?.data?.erro || 'Erro ao executar alteração em lote.');
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
   if (!podeGerenciar) {
     return (
       <>
@@ -333,7 +458,7 @@ function Usuarios() {
   return (
     <>
       <Navbar />
-      <div className="container">
+      <div className="container" style={{ maxWidth: '100%' }}>
         <div className="flex-between mb-3">
           <div>
             <p className="eyebrow">Administração</p>
@@ -358,71 +483,225 @@ function Usuarios() {
           <main className="almox-content">
             {aba === 'usuarios' && (
               <>
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: 16 }}>
-                  <select
-                    className="form-select"
-                    value={filtroSetor}
-                    onChange={async (e) => {
-                      const value = e.target.value;
-                      setFiltroSetor(value);
-                      await carregarDados(value);
-                    }}
-                    style={{ minWidth: '180px' }}
-                  >
-                    <option value="">Todos os setores</option>
-                    {SETORES.map((setor) => (
-                      <option key={setor} value={setor}>{setor}</option>
-                    ))}
-                  </select>
-                  <button className="btn btn-outline" onClick={() => navigate('/usuarios-deleted')} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <UserX size={18} /> Usuários Deletados
+                {/* Barra de ações */}
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+                  <button className="btn btn-primary" onClick={() => setShowModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <UserPlus size={16} /> Novo usuário
                   </button>
-                  <button className={`btn ${showDeletedUsers ? 'btn-secondary' : 'btn-outline'}`} onClick={() => setShowDeletedUsers(!showDeletedUsers)} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {showDeletedUsers ? <Eye size={18} /> : <EyeOff size={18} />}
-                    {showDeletedUsers ? 'Mostrar ativos' : 'Mostrar desativados'}
-                  </button>
-                  <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-                    <UserPlus size={18} /> Novo usuário
-                  </button>
+                  {filtrosAtivos && (
+                    <button className="btn btn-outline" onClick={limparFiltros} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-danger)' }}>
+                      <X size={16} /> Limpar filtros
+                    </button>
+                  )}
+                  <span style={{ marginLeft: 'auto', color: 'var(--gray-500)', fontSize: '0.85rem' }}>
+                    {usuariosFiltrados.length} usuário(s)
+                  </span>
                 </div>
+
+                {/* Filtros */}
+                <div className="card" style={{ marginBottom: 14, padding: '14px 16px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '10px' }}>
+                    {/* Busca por texto */}
+                    <div style={{ position: 'relative' }}>
+                      <Search size={15} style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', pointerEvents: 'none' }} />
+                      <input
+                        className="form-input"
+                        placeholder="Buscar por nome, e-mail ou login"
+                        value={filtroTexto}
+                        onChange={(e) => setFiltroTexto(e.target.value)}
+                        style={{ paddingLeft: 30 }}
+                      />
+                    </div>
+
+                    {/* Status */}
+                    <select className="form-select" value={filtroStatus} onChange={(e) => setFiltroStatus(e.target.value)}>
+                      <option value="ativos">Ativos</option>
+                      <option value="desativados">Desativados</option>
+                      <option value="todos">Todos os status</option>
+                    </select>
+
+                    {/* Perfil */}
+                    <select className="form-select" value={filtroPerfil} onChange={(e) => setFiltroPerfil(e.target.value)}>
+                      <option value="">Todos os perfis</option>
+                      {PERFIS.map((p) => <option key={p} value={p}>{p}</option>)}
+                    </select>
+
+                    {/* Setor */}
+                    <select className="form-select" value={filtroSetor} onChange={(e) => setFiltroSetor(e.target.value)}>
+                      <option value="">Todos os setores</option>
+                      {SETORES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+
+                    {/* Obra */}
+                    <select className="form-select" value={filtroObra} onChange={(e) => setFiltroObra(e.target.value)}>
+                      <option value="">Todas as obras</option>
+                      {projetos.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Barra de ações em lote */}
+                {selecionados.length > 0 && (
+                  <div className="card" style={{
+                    marginBottom: 14, padding: '12px 16px', background: 'var(--color-primary-light, #eff6ff)',
+                    border: '1px solid var(--color-primary, #3b82f6)',
+                    display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center'
+                  }}>
+                    <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Users size={16} /> {selecionados.length} usuário(s) selecionado(s)
+                    </span>
+
+                    <select
+                      className="form-select"
+                      value={bulkAcao}
+                      onChange={(e) => { setBulkAcao(e.target.value); setBulkValor(''); }}
+                      style={{ minWidth: 210 }}
+                    >
+                      <option value="">-- Escolha a ação --</option>
+                      <option value="ativo_ativar">Ativar</option>
+                      <option value="ativo_desativar">Desativar</option>
+                      <option value="perfil">Alterar Perfil</option>
+                      <option value="setor">Alterar Setor</option>
+                      <option value="is_gestor_sim">Marcar como Gestor</option>
+                      <option value="is_gestor_nao">Remover flag Gestor</option>
+                      <option value="projeto_vincular">Vincular à Obra</option>
+                      <option value="projeto_desvincular">Desvincular da Obra</option>
+                    </select>
+
+                    {/* Campo extra por ação */}
+                    {bulkAcao === 'perfil' && (
+                      <select className="form-select" style={{ minWidth: 180 }} value={bulkValor} onChange={(e) => setBulkValor(e.target.value)}>
+                        <option value="">Selecione o perfil</option>
+                        {PERFIS.map((p) => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                    )}
+                    {bulkAcao === 'setor' && (
+                      <select className="form-select" style={{ minWidth: 180 }} value={bulkValor} onChange={(e) => setBulkValor(e.target.value)}>
+                        <option value="">Selecione o setor</option>
+                        {SETORES.map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    )}
+                    {(bulkAcao === 'projeto_vincular' || bulkAcao === 'projeto_desvincular') && (
+                      <select className="form-select" style={{ minWidth: 200 }} value={bulkValor} onChange={(e) => setBulkValor(e.target.value)}>
+                        <option value="">Selecione a obra</option>
+                        {projetos.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                      </select>
+                    )}
+
+                    {bulkAcao && (
+                      <button
+                        className="btn btn-primary"
+                        onClick={executarBulk}
+                        disabled={bulkLoading}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                      >
+                        <UserCheck size={16} /> {bulkLoading ? 'Aplicando...' : 'Aplicar'}
+                      </button>
+                    )}
+
+                    <button
+                      className="btn btn-outline"
+                      onClick={() => { setSelecionados([]); setBulkAcao(''); setBulkValor(''); }}
+                      style={{ marginLeft: 'auto' }}
+                    >
+                      <X size={15} /> Cancelar
+                    </button>
+                  </div>
+                )}
 
                 {loading ? (
                   <div className="loading"><div className="spinner"></div></div>
                 ) : (
-                  <div className="grid grid-3">
-                    {usuarios
-                      .filter((u) => (showDeletedUsers ? Number(u.ativo) === 0 : Number(u.ativo) === 1))
-                      .map((u) => (
-                        <div key={u.id} className="card" style={{ border: u.ativo ? '1px solid #e2e8f0' : '1px dashed #fca5a5' }}>
-                          <div className="flex-between mb-1">
-                            <div>
-                              <p className="eyebrow">Login: {u.login}</p>
-                              <h3>{u.nome}</h3>
-                              <p style={{ color: 'var(--gray-500)', fontSize: '0.9rem' }}>{u.email || 'sem e-mail'}</p>
-                              <p style={{ color: 'var(--gray-500)', fontSize: '0.9rem' }}>Função: {u.funcao || '-'}</p>
-                              <p style={{ color: 'var(--gray-500)', fontSize: '0.9rem' }}>{normalizarPerfilTela(u.perfil) || 'Sem perfil'}</p>
-                              <p style={{ color: 'var(--gray-500)', fontSize: '0.9rem' }}>
-                                Setor: {u.setor}{u.setor === 'Outro' && u.setor_outro ? ` (${u.setor_outro})` : ''}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex gap-1">
-                            {Number(u.ativo) === 1 ? (
-                              <>
-                                <button className="btn btn-secondary" onClick={() => abrirEdicao(u)}>Editar</button>
-                                <button className="btn btn-danger" onClick={() => desativar(u.id)}>
-                                  <Trash2 size={16} />
-                                </button>
-                              </>
-                            ) : (
-                              <button className="btn btn-success" onClick={() => reativar(u.id)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <RotateCcw size={16} /> Reativar
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      ))}
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th style={{ width: 36 }}>
+                            <input
+                              type="checkbox"
+                              title="Selecionar todos"
+                              checked={selecionados.length === usuariosFiltrados.length && usuariosFiltrados.length > 0}
+                              onChange={toggleSelecionarTodos}
+                            />
+                          </th>
+                          <th>Nome</th>
+                          <th>Login</th>
+                          <th>E-mail</th>
+                          <th>Perfil</th>
+                          <th>Setor</th>
+                          <th>Obra(s)</th>
+                          <th>Status</th>
+                          <th>Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {usuariosFiltrados.map((u) => {
+                          const isAtivo = Number(u.ativo) === 1;
+                          const obrasTitulos = (u.projeto_ids || []).map((pid) => {
+                            const p = projetos.find((pr) => pr.id === pid);
+                            return p ? p.nome : `#${pid}`;
+                          }).join(', ');
+                          return (
+                            <tr key={u.id} style={{ opacity: isAtivo ? 1 : 0.6 }}>
+                              <td>
+                                <input
+                                  type="checkbox"
+                                  checked={selecionados.includes(u.id)}
+                                  onChange={() => toggleSelecionado(u.id)}
+                                />
+                              </td>
+                              <td style={{ fontWeight: 500 }}>{u.nome}</td>
+                              <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{u.login}</td>
+                              <td style={{ fontSize: '0.85rem', color: 'var(--gray-500)' }}>{u.email || <span style={{ color: 'var(--gray-300)' }}>—</span>}</td>
+                              <td>
+                                <span style={{
+                                  fontSize: '0.78rem', fontWeight: 600, padding: '2px 8px',
+                                  borderRadius: 12, background: 'var(--color-primary-light, #eff6ff)',
+                                  color: 'var(--color-primary, #3b82f6)'
+                                }}>
+                                  {normalizarPerfilTela(u.perfil)}
+                                </span>
+                              </td>
+                              <td style={{ fontSize: '0.85rem' }}>
+                                {u.setor}{u.setor === 'Outro' && u.setor_outro ? ` (${u.setor_outro})` : ''}
+                              </td>
+                              <td style={{ fontSize: '0.8rem', color: 'var(--gray-500)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={obrasTitulos}>
+                                {obrasTitulos || <span style={{ color: 'var(--gray-300)' }}>—</span>}
+                              </td>
+                              <td>
+                                <span style={{
+                                  fontSize: '0.75rem', fontWeight: 700, padding: '2px 8px',
+                                  borderRadius: 12,
+                                  background: isAtivo ? '#dcfce7' : '#fee2e2',
+                                  color: isAtivo ? '#16a34a' : '#dc2626'
+                                }}>
+                                  {isAtivo ? 'Ativo' : 'Desativado'}
+                                </span>
+                              </td>
+                              <td>
+                                <div style={{ display: 'flex', gap: 6 }}>
+                                  {isAtivo ? (
+                                    <>
+                                      <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.8rem' }} onClick={() => abrirEdicao(u)}>Editar</button>
+                                      <button className="btn btn-danger" style={{ padding: '4px 8px', fontSize: '0.8rem' }} onClick={() => desativar(u.id)}>
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <button className="btn btn-success" style={{ padding: '4px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => reativar(u.id)}>
+                                      <RotateCcw size={13} /> Reativar
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {usuariosFiltrados.length === 0 && (
+                          <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--gray-400)', padding: '24px 0' }}>Nenhum usuário encontrado com os filtros aplicados.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </>

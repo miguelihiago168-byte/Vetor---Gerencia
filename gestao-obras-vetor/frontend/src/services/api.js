@@ -47,6 +47,8 @@ export const updateUsuario = (id, data) => api.put(`/usuarios/${id}`, data);
 export const updateUsuarioGestor = (id, isGestor) => api.patch(`/usuarios/${id}/gestor`, { is_gestor: isGestor });
 export const updateUsuarioAdm = (id, isAdm) => api.patch(`/usuarios/${id}/adm`, { is_adm: isAdm });
 export const deleteUsuario = (id) => api.delete(`/usuarios/${id}`);
+export const bulkUpdateUsuarios = (ids, campo, valor, projeto_id) =>
+  api.patch('/usuarios/bulk-update', { ids, campo, valor, projeto_id });
 export const getMaoObraDireta = (params) => api.get('/usuarios/mao-obra-direta', { params });
 export const createMaoObraDireta = (data) => api.post('/usuarios/mao-obra-direta', data);
 export const updateMaoObraDireta = (id, data) => api.put(`/usuarios/mao-obra-direta/${id}`, data);
