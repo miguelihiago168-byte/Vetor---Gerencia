@@ -134,7 +134,39 @@ export const enviarRncParaAprovacao = (id) => api.post(`/rnc/${id}/enviar-aprova
 export const getNotificacoes = () => api.get('/notificacoes');
 export const marcarNotificacaoLida = (id) => api.patch(`/notificacoes/${id}/read`);
 
-// Compras (Pedidos e Cotações)
+// ─── Fornecedores ─────────────────────────────────────────────────────────
+export const listarFornecedores = (params) => api.get('/fornecedores', { params });
+export const detalharFornecedor = (id) => api.get(`/fornecedores/${id}`);
+export const criarFornecedor = (data) => api.post('/fornecedores', data);
+export const editarFornecedor = (id, data) => api.patch(`/fornecedores/${id}`, data);
+export const toggleFornecedor = (id) => api.delete(`/fornecedores/${id}`);
+
+// ─── Requisições (módulo compras multi-itens) ─────────────────────────────
+export const listarRequisicoes = (params) => api.get('/requisicoes', { params });
+export const criarRequisicao = (data) => api.post('/requisicoes', data);
+export const listarRequisicoesProjeto = (projetoId, params) =>
+  api.get(`/requisicoes/projeto/${projetoId}`, { params });
+export const detalharRequisicao = (id) => api.get(`/requisicoes/${id}`);
+export const analisarItemRequisicao = (reqId, itemId, data) =>
+  api.patch(`/requisicoes/${reqId}/itens/${itemId}/analisar`, data);
+export const inserirCotacaoItem = (reqId, itemId, data) =>
+  api.post(`/requisicoes/${reqId}/itens/${itemId}/cotacoes`, data);
+export const selecionarCotacaoItem = (reqId, itemId, cotacaoId) =>
+  api.patch(`/requisicoes/${reqId}/itens/${itemId}/cotacoes/${cotacaoId}/selecionar`);
+export const marcarItemComprado = (reqId, itemId) =>
+  api.patch(`/requisicoes/${reqId}/itens/${itemId}/comprado`);
+export const cancelarItemRequisicao = (reqId, itemId, data) =>
+  api.patch(`/requisicoes/${reqId}/itens/${itemId}/cancelar`, data);
+export const listarCotacoesFinalizadas = (params) => api.get('/requisicoes/finalizadas', { params });
+export const listarCotacoesNegadas = (params) => api.get('/requisicoes/negadas', { params });
+export const kanbanRequisicoes = (projetoId, params) =>
+  api.get(`/requisicoes/kanban/projeto/${projetoId}`, { params });
+export const aprovarTodosItens = (reqId) =>
+  api.patch(`/requisicoes/${reqId}/aprovar-todos`);
+export const editarCotacaoItem = (reqId, itemId, cotacaoId, data) =>
+  api.patch(`/requisicoes/${reqId}/itens/${itemId}/cotacoes/${cotacaoId}`, data);
+
+// Compras (Pedidos e Cotações) — legado
 export const criarPedidoCompra = (data) => api.post('/pedidos-compra', data);
 export const aprovarInicialPedido = (id) => api.patch(`/pedidos-compra/${id}/aprovar-inicial`);
 export const inserirCotacao = (id, dataOrForm) => {

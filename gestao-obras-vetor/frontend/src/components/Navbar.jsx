@@ -104,7 +104,7 @@ function Navbar() {
 
   const rotaRdos = projetoId ? `/projeto/${projetoId}/rdos` : '/rdos';
   const rotaRnc = projetoId ? `/projeto/${projetoId}/rnc` : '/rnc';
-  const rotaCompras = projetoId ? `/projeto/${projetoId}/pedidos` : '/compras';
+  const rotaCompras = projetoId ? `/projeto/${projetoId}/compras` : '/compras';
   const rotaFinanceiro = projetoId ? `/projeto/${projetoId}/financeiro` : '/financeiro';
   const rotaAlmox = projetoId ? `/projeto/${projetoId}/almoxarifado` : '/ativos';
   const rotaEap = projetoId ? `/projeto/${projetoId}/eap` : '/eap';
@@ -153,6 +153,11 @@ function Navbar() {
                   RNC {isGestor && pendRnc > 0 && (<span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendRnc}</span>)}
                 </NavLink>
                 )}
+                {canViewFinanceiro && (
+                <NavLink to={rotaFinanceiro} onClick={(e) => confirmNav(e, rotaFinanceiro)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+                  Financeiro
+                </NavLink>
+                )}
                 {canViewCompras && (
                 <NavLink to={rotaCompras} onClick={(e) => confirmNav(e, rotaCompras)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
                   Compras
@@ -165,11 +170,6 @@ function Navbar() {
                   {notifCompras > 0 && (
                     <span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{notifCompras}</span>
                   )}
-                </NavLink>
-                )}
-                {canViewFinanceiro && (
-                <NavLink to={rotaFinanceiro} onClick={(e) => confirmNav(e, rotaFinanceiro)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-                  Financeiro
                 </NavLink>
                 )}
                 {canViewAtivos && (
@@ -189,6 +189,20 @@ function Navbar() {
                 </NavLink>
                 )}
               </>
+            )}
+            {!temProjetoSelecionado && canViewCompras && (
+            <NavLink to={rotaCompras} onClick={(e) => confirmNav(e, rotaCompras)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+              Compras
+              {isGestor && pendCompras > 0 && (
+                <span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendCompras}</span>
+              )}
+              {isAdm && pendComprasAdm > 0 && (
+                <span className="badge badge-yellow" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendComprasAdm}</span>
+              )}
+              {notifCompras > 0 && (
+                <span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{notifCompras}</span>
+              )}
+            </NavLink>
             )}
             {canViewUsuarios && (
               <NavLink to={rotaUsuarios} onClick={(e) => confirmNav(e, rotaUsuarios)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
