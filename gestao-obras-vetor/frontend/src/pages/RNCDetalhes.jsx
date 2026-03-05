@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { AlertTriangle, ArrowLeft } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import { useDialog } from '../context/DialogContext';
+import RNCTimeline from '../components/RNCTimeline';
 import './RNCDetalhes.css';
 
 function RNCDetalhes() {
@@ -167,6 +168,8 @@ function RNCDetalhes() {
             </div>
           )}
         </div>
+
+        <RNCTimeline rnc={rnc} />
 
         <div className="card rnc-det-card">
           <h2>Detalhes da RNC</h2>
