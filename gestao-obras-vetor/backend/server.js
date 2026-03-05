@@ -109,6 +109,15 @@ const startServer = (maxAttempts = 10) => {
       console.log(`\nServidor inicializado na porta ${PORT}`);
       console.log(`Acesse http://localhost:${PORT}/api/health`);
       console.log('Credenciais padrão: Login: 000001 Senha: 123456');
+
+      // Recalcular EAP ao iniciar para corrigir eventuais inconsistências
+      const path = require('path');
+      try {
+        const { recalcularTodasAtividades } = require('./scripts/recalcular_eap_startup');
+        recalcularTodasAtividades().catch(e => console.warn('Aviso: falha no recálculo EAP inicial:', e?.message));
+      } catch (e) {
+        // se o módulo não existir, ignora silenciosamente
+      }
     });
 
     server.on('error', (err) => {

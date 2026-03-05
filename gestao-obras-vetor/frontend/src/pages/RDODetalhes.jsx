@@ -376,16 +376,15 @@ function RDODetalhes() {
           </div>
           {(rdo.atividades || []).length > 0 ? (
             <div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr 1fr', padding: '6px 16px', background: '#F9FAFB', borderBottom: '1px solid #F3F4F6' }}>
-                {['Código', 'Descrição', 'Qtd', '%'].map(h => (
+              <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr 1fr', padding: '6px 16px', background: '#F9FAFB', borderBottom: '1px solid #F3F4F6' }}>
+                {['Atividade', 'Qtd', '%'].map(h => (
                   <span key={h} style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#9CA3AF' }}>{h}</span>
                 ))}
               </div>
               {(rdo.atividades || []).map(atividade => (
-                <div key={atividade.id} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr 1fr', padding: '8px 16px', borderBottom: '1px solid #F3F4F6', alignItems: 'center' }}>
-                  <span style={{ fontSize: '13px', color: '#374151', fontFamily: 'monospace' }}>{atividade.codigo_eap || '-'}</span>
+                <div key={atividade.id} style={{ display: 'grid', gridTemplateColumns: '3fr 1fr 1fr', padding: '8px 16px', borderBottom: '1px solid #F3F4F6', alignItems: 'center' }}>
                   <div>
-                    <div style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{atividade.descricao}</div>
+                    <div style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{atividade.codigo_eap ? `${atividade.codigo_eap} — ` : ''}{atividade.descricao}</div>
                     {atividade.observacao && <div style={{ fontSize: '12px', color: '#9CA3AF', marginTop: '2px' }}>{atividade.observacao}</div>}
                   </div>
                   <span style={{ fontSize: '14px', color: '#374151' }}>{atividade.quantidade_executada ?? '-'}</span>
@@ -408,7 +407,7 @@ function RDODetalhes() {
               <div key={foto.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
                 <div>
                   <div style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{foto.descricao || 'Foto'}</div>
-                  {foto.atividade_descricao && <div style={{ fontSize: '12px', color: '#9CA3AF' }}>Atividade: {foto.atividade_descricao}</div>}
+                  {foto.atividade_descricao && <div style={{ fontSize: '12px', color: '#9CA3AF' }}>Atividade: {foto.atividade_codigo ? `${foto.atividade_codigo} — ` : ''}{foto.atividade_descricao}</div>}
                 </div>
                 <span style={{ fontSize: '12px', color: '#9CA3AF' }}>{new Date(foto.criado_em).toLocaleString('pt-BR')}</span>
               </div>

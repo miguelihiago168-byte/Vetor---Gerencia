@@ -1131,9 +1131,9 @@ function RDOForm2() {
                 }}>
                 <option value="">Selecione a atividade...</option>
                 {groupedLeafsByParent.map(group => (
-                  <optgroup key={group.parentId} label={`${group.parent?.codigo_eap || ''} — ${group.parent?.descricao || 'Atividade mãe'}`}>
+                  <optgroup key={group.parentId} label={`${group.parent?.codigo_eap || ''} — ${group.parent?.nome || group.parent?.descricao || ''}`}>
                     {group.children.map(a => (
-                      <option key={a.id} value={a.id}>{a.codigo_eap} — {a.descricao}</option>
+                      <option key={a.id} value={a.id}>{a.codigo_eap} — {a.nome || a.descricao}</option>
                     ))}
                   </optgroup>
                 ))}
@@ -1215,8 +1215,7 @@ function RDOForm2() {
                     <React.Fragment key={a.atividade_eap_id}>
                       <tr>
                         <td>
-                          <div style={{ fontWeight: 600 }}>{sel?.descricao || 'Atividade'}</div>
-                          <div style={{ color: '#94a3b8', fontSize: '11px' }}>{sel?.codigo_eap || ''}</div>
+                          <div style={{ fontWeight: 600 }}>{sel?.codigo_eap ? `${sel.codigo_eap} — ` : ''}{sel?.nome || sel?.descricao || ''}</div>
                           {total > 0 && (
                             <div style={{ color: '#64748b', fontSize: '11px' }}>
                               {formatQtd(execAprov + q)}/{formatQtd(total)} {sel?.unidade_medida || ''}
@@ -1281,7 +1280,7 @@ function RDOForm2() {
                 <option value="">Nenhuma</option>
                 {formData.atividades.map(a => {
                   const sel = atividadesEap.find(x => String(x.id) === String(a.atividade_eap_id));
-                  return <option key={a.atividade_eap_id} value={a.atividade_eap_id}>{sel?.codigo_eap} — {sel?.descricao}</option>;
+                  return <option key={a.atividade_eap_id} value={a.atividade_eap_id}>{sel?.codigo_eap} — {sel?.nome || sel?.descricao || ''}</option>;
                 })}
               </select>
             </div>
@@ -1312,7 +1311,7 @@ function RDOForm2() {
                   <tr key={f.id}>
                     <td><FileText size={14} style={{ marginRight: '6px', color: '#94a3b8' }} />{f.nome_arquivo}</td>
                     <td>{f.descricao || '—'}</td>
-                    <td style={{ color: '#64748b', fontSize: '12px' }}>{f.atividade_descricao || (f.atividade_eap_id ? `Ativ. ${f.atividade_eap_id}` : '—')}</td>
+                    <td style={{ color: '#64748b', fontSize: '12px' }}>{(() => { const a = atividadesEap.find(x => String(x.id) === String(f.atividade_eap_id)); return a ? `${a.codigo_eap} — ${a.nome || a.descricao || ''}` : (f.atividade_descricao || '—'); })()}</td>
                     <td style={{ color: '#94a3b8', fontSize: '12px' }}>{f.criado_em ? new Date(f.criado_em).toLocaleString('pt-BR') : '—'}</td>
                   </tr>
                 ))}
@@ -1320,8 +1319,8 @@ function RDOForm2() {
                   <tr key={`q-${i}`} style={{ background: '#fefce8' }}>
                     <td><FileText size={14} style={{ marginRight: '6px', color: '#94a3b8' }} />{f.file.name}</td>
                     <td>{f.descricao || '—'}</td>
-                    <td style={{ color: '#64748b', fontSize: '12px' }}>{f.atividadeId ? `Ativ. ${f.atividadeId}` : '—'}</td>
-                    <td style={{ color: '#f59e0b', fontSize: '12px' }}>Na fila</td>
+                    <td style={{ color: '#64748b', fontSize: '12px' }}>{(() => { const a = atividadesEap.find(x => String(x.id) === String(f.atividadeId)); return a ? `${a.codigo_eap} — ${a.nome || a.descricao || ''}` : (f.atividadeId ? '—' : '—'); })()}</td>
+                    <td style={{ color: '#94a3b8', fontSize: '12px' }}>—</td>
                   </tr>
                 ))}
               </tbody>

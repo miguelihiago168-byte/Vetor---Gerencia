@@ -56,6 +56,59 @@ const atualizarStatusAtividade = async (atividadeId) => {
   );
 };
 
+// Recalcula EAP para uma lista de atividadeIds com base em TODOS os RDOs não-reprovados.
+// Chamado ao salvar (criar/atualizar) um RDO para que o avanço seja imediato.
+const recalcularEapAtividades = async (atividadeIds) => {
+  const ids = [...new Set(atividadeIds.filter(Boolean))];
+  for (const atividadeId of ids) {
+    try {
+      const infoAtividade = await getQuery('SELECT quantidade_total FROM atividades_eap WHERE id = ?', [atividadeId]);
+      if (!infoAtividade) continue;
+      const quantidadeTotal = Number(infoAtividade.quantidade_total || 0);
+
+      const resultadoQt = await getQuery(`
+        SELECT COALESCE(SUM(COALESCE(ra.quantidade_executada, 0)), 0) AS total_executado_qt
+        FROM rdo_atividades ra
+        INNER JOIN rdos r ON ra.rdo_id = r.id
+        WHERE ra.atividade_eap_id = ? AND r.status != 'Reprovado'
+      `, [atividadeId]);
+
+      let percentualExecutado = 0;
+      if (quantidadeTotal > 0 && resultadoQt && resultadoQt.total_executado_qt) {
+        percentualExecutado = Math.min(Math.round((resultadoQt.total_executado_qt / quantidadeTotal) * 10000) / 100, 100);
+      } else {
+        const resultado = await getQuery(`
+          SELECT COALESCE(SUM(ra.percentual_executado), 0) AS total_executado
+          FROM rdo_atividades ra
+          INNER JOIN rdos r ON ra.rdo_id = r.id
+          WHERE ra.atividade_eap_id = ? AND r.status != 'Reprovado'
+        `, [atividadeId]);
+        percentualExecutado = Math.min(resultado?.total_executado || 0, 100);
+      }
+
+      let dataConclusaoReal = null;
+      if (percentualExecutado >= 100) {
+        const ultima = await getQuery(`
+          SELECT MAX(r.data_relatorio) AS data_conclusao
+          FROM rdo_atividades ra
+          INNER JOIN rdos r ON ra.rdo_id = r.id
+          WHERE ra.atividade_eap_id = ? AND r.status != 'Reprovado'
+        `, [atividadeId]);
+        dataConclusaoReal = ultima?.data_conclusao || null;
+      }
+
+      await runQuery(
+        'UPDATE atividades_eap SET percentual_executado = ?, data_conclusao_real = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+        [percentualExecutado, dataConclusaoReal, atividadeId]
+      );
+      await atualizarStatusAtividade(atividadeId);
+      await recalcularPercentualPai(atividadeId);
+    } catch (err) {
+      console.warn('Erro ao recalcular EAP para atividade', atividadeId, err);
+    }
+  }
+};
+
 // Recalcula percentual da atividade pai de forma ponderada (recursiva)
 const recalcularPercentualPai = async (atividadeId) => {
   try {
@@ -141,7 +194,7 @@ router.get('/:id', auth, async (req, res) => {
 
     // Buscar atividades executadas
     const atividades = await allQuery(`
-      SELECT ra.*, ae.codigo_eap, ae.descricao
+      SELECT ra.*, ae.codigo_eap, COALESCE(ae.nome, ae.descricao) AS descricao
       FROM rdo_atividades ra
       INNER JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
       WHERE ra.rdo_id = ?
@@ -163,7 +216,7 @@ router.get('/:id', auth, async (req, res) => {
 
     // Buscar fotos vinculadas às atividades do RDO
     const fotos = await allQuery(`
-      SELECT rf.*, ae.descricao as atividade_descricao
+      SELECT rf.*, ae.codigo_eap AS atividade_codigo, COALESCE(ae.nome, ae.descricao) AS atividade_descricao
       FROM rdo_fotos rf
       LEFT JOIN rdo_atividades ra ON rf.rdo_atividade_id = ra.id
       LEFT JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
@@ -477,6 +530,15 @@ router.post('/', auth, [
 
     await registrarAuditoria('rdos', rdoId, 'CREATE', null, req.body, req.usuario.id);
 
+    // Recalcular avanço EAP imediatamente após criar o RDO
+    if (atividades && atividades.length > 0) {
+      try {
+        await recalcularEapAtividades(atividades.map(a => a.atividade_eap_id));
+      } catch (err) {
+        console.warn('Erro ao recalcular EAP após criar RDO:', err);
+      }
+    }
+
     res.status(201).json({
       mensagem: 'RDO criado com sucesso.',
       rdo: { id: rdoId, data_relatorio: dataRelatorioStr }
@@ -613,6 +675,16 @@ router.put('/:id', auth, async (req, res) => {
 
     await registrarAuditoria('rdos', id, 'UPDATE', rdoAtual, req.body, req.usuario.id);
 
+    // Recalcular avanço EAP imediatamente após salvar o RDO
+    if (atividades) {
+      try {
+        const todasAtividades = await allQuery('SELECT DISTINCT atividade_eap_id FROM rdo_atividades WHERE rdo_id = ?', [id]);
+        await recalcularEapAtividades(todasAtividades.map(r => r.atividade_eap_id));
+      } catch (err) {
+        console.warn('Erro ao recalcular EAP após atualizar RDO:', err);
+      }
+    }
+
     res.json({ mensagem: 'RDO atualizado com sucesso.' });
 
   } catch (error) {
@@ -713,124 +785,12 @@ router.patch('/:id/status', auth, async (req, res) => {
         `, [status, aprovadoPor, aprovadoEm, id]);
       }
 
-    // Se aprovado, atualizar percentuais executados nas atividades EAP
-    if (status === 'Aprovado') {
-      const atividades = await allQuery(
-        'SELECT atividade_eap_id FROM rdo_atividades WHERE rdo_id = ?',
-        [id]
-      );
-
-      for (const row of atividades) {
-        const atividadeId = row.atividade_eap_id;
-        try {
-          // Buscar quantidade_total da atividade
-          const infoAtividade = await getQuery('SELECT quantidade_total FROM atividades_eap WHERE id = ?', [atividadeId]);
-          const quantidadeTotal = infoAtividade ? (infoAtividade.quantidade_total || 0) : 0;
-
-          // Somar quantidades executadas em RDOs aprovados
-          const resultadoQt = await getQuery(`
-            SELECT COALESCE(SUM(COALESCE(ra.quantidade_executada,0)), 0) as total_executado_qt
-            FROM rdo_atividades ra
-            INNER JOIN rdos r ON ra.rdo_id = r.id
-            WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
-          `, [atividadeId]);
-
-          let percentualExecutado = 0;
-          if (quantidadeTotal && resultadoQt && resultadoQt.total_executado_qt) {
-            percentualExecutado = Math.min(Math.round((resultadoQt.total_executado_qt / quantidadeTotal) * 10000) / 100, 100);
-          } else {
-            // fallback: somar percentuais armazenados
-            const resultado = await getQuery(`
-              SELECT COALESCE(SUM(ra.percentual_executado), 0) as total_executado
-              FROM rdo_atividades ra
-              INNER JOIN rdos r ON ra.rdo_id = r.id
-              WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
-            `, [atividadeId]);
-            percentualExecutado = Math.min(resultado.total_executado || 0, 100);
-          }
-
-          let dataConclusaoReal = null;
-          if (percentualExecutado >= 100) {
-            const ultimaAprovacao = await getQuery(`
-              SELECT MAX(r.data_relatorio) AS data_conclusao
-              FROM rdo_atividades ra
-              INNER JOIN rdos r ON ra.rdo_id = r.id
-              WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
-            `, [atividadeId]);
-            dataConclusaoReal = ultimaAprovacao?.data_conclusao || rdoAtual.data_relatorio || null;
-          }
-
-          await runQuery('UPDATE atividades_eap SET percentual_executado = ?, data_conclusao_real = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?', [percentualExecutado, dataConclusaoReal, atividadeId]);
-
-          await atualizarStatusAtividade(atividadeId);
-          await recalcularPercentualPai(atividadeId);
-
-          // Atualizar histórico para este RDO/atividade
-          await runQuery(`
-            UPDATE historico_atividades 
-            SET percentual_novo = ?
-            WHERE rdo_id = ? AND atividade_eap_id = ?
-          `, [percentualExecutado, id, atividadeId]);
-        } catch (err) {
-          console.warn('Falha ao recalcular avanço para atividade', atividadeId, err);
-        }
-      }
-    }
-
-    // Se um RDO aprovado foi revertido, recalcular as atividades desse RDO (exclui efeito deste RDO)
-    if (rdoAtual.status === 'Aprovado' && status !== 'Aprovado') {
-      const atividades = await allQuery('SELECT atividade_eap_id FROM rdo_atividades WHERE rdo_id = ?', [id]);
-      for (const row of atividades) {
-        const atividadeId = row.atividade_eap_id;
-        try {
-          const infoAtividade = await getQuery('SELECT quantidade_total FROM atividades_eap WHERE id = ?', [atividadeId]);
-          const quantidadeTotal = infoAtividade ? (infoAtividade.quantidade_total || 0) : 0;
-
-          const resultadoQt = await getQuery(`
-            SELECT COALESCE(SUM(COALESCE(ra.quantidade_executada,0)),0) as total_executado_qt
-            FROM rdo_atividades ra
-            INNER JOIN rdos r ON ra.rdo_id = r.id
-            WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
-          `, [atividadeId]);
-
-          let percentualExecutado = 0;
-          if (quantidadeTotal && resultadoQt && resultadoQt.total_executado_qt) {
-            percentualExecutado = Math.min(Math.round((resultadoQt.total_executado_qt / quantidadeTotal) * 10000) / 100, 100);
-          } else {
-            const resultado = await getQuery(`
-              SELECT COALESCE(SUM(ra.percentual_executado), 0) as total_executado
-              FROM rdo_atividades ra
-              INNER JOIN rdos r ON ra.rdo_id = r.id
-              WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
-            `, [atividadeId]);
-            percentualExecutado = Math.min(resultado.total_executado || 0, 100);
-          }
-
-          let dataConclusaoReal = null;
-          if (percentualExecutado >= 100) {
-            const ultimaAprovacao = await getQuery(`
-              SELECT MAX(r.data_relatorio) AS data_conclusao
-              FROM rdo_atividades ra
-              INNER JOIN rdos r ON ra.rdo_id = r.id
-              WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
-            `, [atividadeId]);
-            dataConclusaoReal = ultimaAprovacao?.data_conclusao || null;
-          }
-
-          await runQuery('UPDATE atividades_eap SET percentual_executado = ?, data_conclusao_real = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?', [percentualExecutado, dataConclusaoReal, atividadeId]);
-          await atualizarStatusAtividade(atividadeId);
-          await recalcularPercentualPai(atividadeId);
-
-          // Atualizar historico para os registros correspondentes
-          await runQuery(`
-            UPDATE historico_atividades 
-            SET percentual_novo = ?
-            WHERE atividade_eap_id = ?
-          `, [percentualExecutado, atividadeId]);
-        } catch (err) {
-          console.warn('Falha ao recalcular avanço (reversão) para atividade', atividadeId, err);
-        }
-      }
+    // Recalcular EAP sempre que o status mudar (aprovado, reprovado ou reversão)
+    try {
+      const atividadesDoRdo = await allQuery('SELECT DISTINCT atividade_eap_id FROM rdo_atividades WHERE rdo_id = ?', [id]);
+      await recalcularEapAtividades(atividadesDoRdo.map(r => r.atividade_eap_id));
+    } catch (err) {
+      console.warn('Erro ao recalcular EAP após mudança de status:', err);
     }
 
     // Notificar criador em caso de reprovação (sem ressalvas)
@@ -983,7 +943,7 @@ router.get('/:id/pdf', auth, async (req, res) => {
     } catch {}
 
     const atividades = await allQuery(`
-      SELECT ra.*, ae.descricao AS atividade_descricao, ae.codigo_eap,
+      SELECT ra.*, COALESCE(ae.nome, ae.descricao) AS atividade_descricao, ae.codigo_eap,
              ae.unidade_medida, ae.quantidade_total, ae.percentual_executado AS percentual_eap
       FROM rdo_atividades ra
       JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
@@ -1012,7 +972,7 @@ router.get('/:id/pdf', auth, async (req, res) => {
     }));
 
     const fotos = await allQuery(`
-      SELECT rf.*, ae.descricao AS atividade_descricao
+      SELECT rf.*, ae.codigo_eap AS atividade_codigo, COALESCE(ae.nome, ae.descricao) AS atividade_descricao
       FROM rdo_fotos rf
       LEFT JOIN rdo_atividades ra ON rf.rdo_atividade_id = ra.id
       LEFT JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
@@ -1148,7 +1108,7 @@ router.get('/:id/pdf', auth, async (req, res) => {
       <section>
         <h2>Atividades Executadas</h2>
         <table>
-          <thead><tr><th>Código</th><th>Atividade</th><th>Qtd</th><th>Unidade</th><th>% Exec.</th><th>% Acum.</th><th>Status</th></tr></thead>
+          <thead><tr><th>Atividade</th><th>Qtd</th><th>Unidade</th><th>% Exec.</th><th>% Acum.</th><th>Status</th></tr></thead>
           <tbody>${rows(atividades, a => {
             const total = Number(a.quantidade_total || 0);
             const qtExec = Number(a.quantidade_executada || 0);
@@ -1158,8 +1118,7 @@ router.get('/:id/pdf', auth, async (req, res) => {
             const st = acumVirt >= 100 ? 'Concluída' : (acumVirt > 0 ? 'Em andamento' : 'Não iniciada');
             const stColor = acumVirt >= 100 ? '#10b981' : (acumVirt > 0 ? '#f59e0b' : '#6b7280');
             return `<tr>
-              <td><code>${a.codigo_eap || '—'}</code></td>
-              <td>${a.atividade_descricao || '—'}${a.observacao ? `<br><small style="color:#6b7280">${a.observacao}</small>` : ''}</td>
+              <td>${a.codigo_eap ? `<strong>${a.codigo_eap}</strong> — ` : ''}${a.atividade_descricao || '—'}${a.observacao ? `<br><small style="color:#6b7280">${a.observacao}</small>` : ''}</td>
               <td style="text-align:right">${qtExec}</td>
               <td>${a.unidade_medida || '—'}</td>
               <td style="text-align:right">${percAuto}%</td>
@@ -1179,7 +1138,7 @@ router.get('/:id/pdf', auth, async (req, res) => {
             if (!b64) return '';
             return `<div class="foto-item">
               <img src="${b64}" alt="${f.nome_arquivo}" />
-              <p class="foto-desc">${f.atividade_descricao ? `<strong>${f.atividade_descricao}</strong><br>` : ''}${f.descricao || f.nome_arquivo}</p>
+              <p class="foto-desc">${f.atividade_descricao ? `<strong>${f.atividade_codigo ? f.atividade_codigo + ' — ' : ''}${f.atividade_descricao}</strong><br>` : ''}${f.descricao || f.nome_arquivo}</p>
             </div>`;
           })}
         </div>

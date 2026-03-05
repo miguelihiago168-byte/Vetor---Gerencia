@@ -122,7 +122,7 @@ function ProjetoDetalhes() {
               id: img.id,
               nome: img.nome_arquivo,
               tipo: img.tipo,
-              url: `/api/anexos/download/${img.id}`,
+              url: `/uploads/${img.caminho_arquivo}`,
               rdo_id: rdo.id,
               criado_em: img.criado_em
             }));

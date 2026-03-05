@@ -209,12 +209,6 @@ router.post('/', auth, [
       if (!paiRow) {
         return res.status(400).json({ erro: 'Atividade pai inválida para este projeto.' });
       }
-    } else {
-      const somaAtualFolhas = await getSomaPesosFolhas(projeto_id);
-      const totalProjetado = somaAtualFolhas + Number(peso || 0);
-      if (totalProjetado > 100.0001) {
-        return res.status(400).json({ erro: `A soma dos pesos das atividades não pode ultrapassar 100%. Total projetado: ${totalProjetado.toFixed(2)}%.` });
-      }
     }
 
     const identificador = (id_atividade && String(id_atividade).trim()) || `ATV-${projeto_id}-${codigo_eap}`;
@@ -304,17 +298,6 @@ router.put('/:id', auth, async (req, res) => {
         const totalFilhosProjetado = somaIrmaos + Number(peso || 0);
         if (totalFilhosProjetado > 100.0001) {
           return res.status(400).json({ erro: `A soma dos pesos das atividades filhas deste pai não pode ultrapassar 100%. Total projetado: ${totalFilhosProjetado.toFixed(2)}%.` });
-        }
-      } else {
-        const somaAtualFolhas = await getSomaPesosFolhas(atividadeAnterior.projeto_id);
-        const pesoAnterior = Math.max(
-          Number(atividadeAnterior.peso_percentual_projeto || 0),
-          Number(atividadeAnterior.percentual_previsto || 0)
-        );
-        const totalProjetado = somaAtualFolhas - pesoAnterior + peso;
-        const aumentoReal = totalProjetado - somaAtualFolhas;
-        if (totalProjetado > 100.0001 && aumentoReal > 0.0001) {
-          return res.status(400).json({ erro: `A soma dos pesos das atividades não pode ultrapassar 100%. Total projetado: ${totalProjetado.toFixed(2)}%.` });
         }
       }
     }
