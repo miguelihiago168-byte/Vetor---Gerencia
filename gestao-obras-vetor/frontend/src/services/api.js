@@ -97,6 +97,10 @@ export const addRdoOcorrencia = (rdoId, data) => api.post(`/rdo/${rdoId}/ocorren
 export const addRdoAssinatura = (rdoId, data) => api.post(`/rdo/${rdoId}/assinatura`, data);
 // Backend espera o campo 'arquivo' no upload
 export const uploadRdoFoto = (rdoId, formData) => api.post(`/rdo/${rdoId}/foto`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+// Equipamentos
+export const getRdoEquipamentos = (rdoId) => api.get(`/rdo/${rdoId}/equipamentos`);
+export const addRdoEquipamento = (rdoId, data) => api.post(`/rdo/${rdoId}/equipamentos`, data);
+export const deleteRdoEquipamento = (rdoId, equipId) => api.delete(`/rdo/${rdoId}/equipamentos/${equipId}`);
 // Execução acumulada de atividades (somatório de quantidade_executada em RDOs aprovados)
 export const getExecucaoAcumulada = (projetoId) => api.get(`/rdo/projeto/${projetoId}/execucao-atividades`);
 // Colaboradores disponíveis para preenchimento de mão de obra (usuários + mão de obra direta)

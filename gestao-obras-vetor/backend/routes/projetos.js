@@ -133,7 +133,7 @@ router.get('/:id', auth, async (req, res) => {
 
     // Buscar usuários do projeto
     const usuarios = await allQuery(`
-      SELECT u.id, u.login, u.nome, u.email, u.is_gestor
+      SELECT u.id, u.login, u.nome, u.email, u.is_gestor, u.perfil
       FROM usuarios u
       INNER JOIN projeto_usuarios pu ON u.id = pu.usuario_id
       WHERE pu.projeto_id = ?

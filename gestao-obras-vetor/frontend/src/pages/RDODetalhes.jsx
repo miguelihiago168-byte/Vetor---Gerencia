@@ -336,6 +336,26 @@ function RDODetalhes() {
           )}
         </div>
 
+        {/* Equipamentos */}
+        {(rdo.equipamentos_lista || []).length > 0 && (
+          <div className="card" style={{ padding: '0', marginBottom: '16px', overflow: 'hidden' }}>
+            <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
+              <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Equipamentos</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', padding: '6px 16px', background: '#F9FAFB', borderBottom: '1px solid #F3F4F6' }}>
+              {['Equipamento', 'Quantidade'].map(h => (
+                <span key={h} style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#9CA3AF' }}>{h}</span>
+              ))}
+            </div>
+            {(rdo.equipamentos_lista || []).map((eq, idx) => (
+              <div key={eq.id || idx} style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
+                <span style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{eq.nome}</span>
+                <span style={{ fontSize: '14px', color: '#374151' }}>{eq.quantidade}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Atividades Executadas */}
         <div className="card" style={{ padding: '0', marginBottom: '16px', overflow: 'hidden' }}>
           <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
