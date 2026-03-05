@@ -290,7 +290,7 @@ export default function RequisicaoDetalhe() {
 
       {/* ═══ Modal Análise ═══ */}
       {modalAnalise && (
-        <div className="modal-overlay" onClick={() => setModalAnalise(null)}>
+        <div className="modal-overlay fade-in" role="dialog" aria-modal="true" onClick={() => setModalAnalise(null)}>
           <div className="modal-card" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
             <h2 className="card-header" style={{ marginBottom: '1.25rem' }}>Analisar Item</h2>
             <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
@@ -318,7 +318,7 @@ export default function RequisicaoDetalhe() {
 
       {/* ═══ Modal Cotações (3 slots) ═══ */}
       {modalCotacao && (
-        <div className="modal-overlay" onClick={() => setModalCotacao(null)}>
+        <div className="modal-overlay fade-in" role="dialog" aria-modal="true" onClick={() => setModalCotacao(null)}>
           <div className="modal-card" style={{ maxWidth: 1100, width: '96vw' }} onClick={(e) => e.stopPropagation()}>
             <h2 className="card-header" style={{ marginBottom: '0.25rem' }}>
               {modalCotacao.editando ? 'Editar Cotações' : 'Inserir Cotações'}
@@ -388,7 +388,7 @@ export default function RequisicaoDetalhe() {
 
       {/* ═══ Modal Cancelar ═══ */}
       {modalCancelar && (
-        <div className="modal-overlay" onClick={() => setModalCancelar(null)}>
+        <div className="modal-overlay fade-in" role="dialog" aria-modal="true" onClick={() => setModalCancelar(null)}>
           <div className="modal-card" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
             <h2 className="card-header" style={{ marginBottom: '1.25rem' }}>Cancelar Item</h2>
             <div style={{ marginBottom: '1rem' }}><label className="form-label">Motivo (opcional)</label><textarea className="form-input" rows={3} style={{ resize: 'vertical' }} value={motivoCancelar} onChange={(e) => setMotivoCancelar(e.target.value)} /></div>

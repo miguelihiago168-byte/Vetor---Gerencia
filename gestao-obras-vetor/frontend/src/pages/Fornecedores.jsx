@@ -154,7 +154,7 @@ export default function Fornecedores() {
 
       {/* Modal criar/editar */}
       {modal && (
-        <div className="modal-overlay" onClick={fecharModal}>
+        <div className="modal-overlay fade-in" role="dialog" aria-modal="true" onClick={fecharModal}>
           <div className="modal-card" style={{ maxWidth: 680 }} onClick={(e) => e.stopPropagation()}>
             <h2 className="card-header" style={{ marginBottom: '1.5rem' }}>
               {modal === 'criar' ? 'Novo Fornecedor' : 'Editar Fornecedor'}

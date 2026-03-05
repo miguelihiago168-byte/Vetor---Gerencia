@@ -203,7 +203,7 @@ export default function ComprasGlobal() {
 
       {/* ═══ Modal Nova Requisição ═══ */}
       {modalAberto && (
-        <div className="modal-overlay" onClick={resetModal}>
+        <div className="modal-overlay fade-in" role="dialog" aria-modal="true" onClick={resetModal}>
           <div className="modal-card" style={{ maxWidth: 820 }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', marginBottom: '1.5rem' }}>
               {[{ n: 1, label: 'Dados Gerais' }, { n: 2, label: 'Itens' }].map(({ n, label }) => (

@@ -177,7 +177,7 @@ export default function Requisicoes() {
 
       {/* Modal multi-step */}
       {modalAberto && (
-        <div className="modal-overlay" onClick={resetModal}>
+        <div className="modal-overlay fade-in" role="dialog" aria-modal="true" onClick={resetModal}>
           <div className="modal-card" style={{ maxWidth: 820 }} onClick={(e) => e.stopPropagation()}>
             {/* Passos */}
             <div style={{ display: 'flex', marginBottom: '1.5rem' }}>

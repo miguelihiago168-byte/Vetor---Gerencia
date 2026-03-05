@@ -766,8 +766,8 @@ function Usuarios() {
       </div>
 
       {showModal && (
-        <div className="modal-overlay">
-          <div className="modal-card" style={{ maxWidth: '640px' }}>
+        <div className="modal-overlay fade-in" role="dialog" aria-modal="true" onClick={() => { setShowModal(false); setEditingUserId(null); }}>
+          <div className="modal-card" style={{ maxWidth: '640px' }} onClick={(e) => e.stopPropagation()}>
             <div className="flex-between mb-2">
               <h2>{editingUserId ? 'Editar usuário' : 'Novo usuário'}</h2>
               <button className="btn btn-secondary" onClick={() => { setShowModal(false); setEditingUserId(null); }}>Fechar</button>
