@@ -21,7 +21,8 @@ import CotacoesNegadas from './pages/CotacoesNegadas';
 import Fornecedores from './pages/Fornecedores';
 import ComprasStatusList from './pages/ComprasStatusList';
 import ComprasGlobal from './pages/ComprasGlobal';
-import FinanceiroFluxoCaixa from './pages/FinanceiroFluxoCaixa';
+// FINANCEIRO DESATIVADO
+// import FinanceiroFluxoCaixa from './pages/FinanceiroFluxoCaixa';
 import EAP from './pages/EAP';
 import EAPForm from './pages/EAPForm';
 import CurvaS from './pages/CurvaS';
@@ -139,11 +140,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
               <Fornecedores />
             </PrivateRoute>
           } />
+          {/* FINANCEIRO DESATIVADO
           <Route path="/projeto/:projetoId/financeiro" element={
             <PrivateRoute allowedPerfis={PERFIS_COMPRAS}>
               <FinanceiroFluxoCaixa />
             </PrivateRoute>
           } />
+          */}
           <Route path="/projeto/:projetoId/rdo/:rdoId" element={
             <PrivateRoute allowedPerfis={PERFIS_RDO}>
               <RDODetalhes />
@@ -254,7 +257,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/curva-s" element={<ProjetoSelector destino="curva-s" />} />
           <Route path="/rnc" element={<ProjetoSelector destino="rnc" />} />
           <Route path="/compras" element={<PrivateRoute allowedPerfis={PERFIS_COMPRAS}><ComprasGlobal /></PrivateRoute>} />
-          <Route path="/financeiro" element={<ProjetoSelector destino="financeiro" />} />
+          {/* FINANCEIRO DESATIVADO: <Route path="/financeiro" element={<ProjetoSelector destino="financeiro" />} /> */}
           <Route path="/ativos" element={<ProjetoSelector destino="almoxarifado" />} />
           <Route path="/" element={<Navigate to="/projetos" replace />} />
         </Routes>

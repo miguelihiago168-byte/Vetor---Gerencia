@@ -29,7 +29,8 @@ const rncRoutes = require('./routes/rnc');
 const pedidosCompraRoutes = require('./routes/pedidos_compra');
 const requisicoesRoutes = require('./routes/requisicoes');
 const fornecedoresRoutes = require('./routes/fornecedores');
-const financeiroRoutes = require('./routes/financeiro');
+// FINANCEIRO DESATIVADO
+// const financeiroRoutes = require('./routes/financeiro');
 const notificacoesRoutes = require('./routes/notificacoes');
 const almoxarifadoRoutes = require('./routes/almoxarifado');
 // Garantir esquema de notificações e índice único para evitar duplicidades
@@ -68,7 +69,8 @@ app.use('/api/rnc', rncRoutes);
 app.use('/api/pedidos-compra', pedidosCompraRoutes);
 app.use('/api/requisicoes', requisicoesRoutes);
 app.use('/api/fornecedores', fornecedoresRoutes);
-app.use('/api/financeiro', financeiroRoutes);
+// FINANCEIRO DESATIVADO
+// app.use('/api/financeiro', financeiroRoutes);
 app.use('/api/notificacoes', notificacoesRoutes);
 app.use('/api/almoxarifado', almoxarifadoRoutes);
 

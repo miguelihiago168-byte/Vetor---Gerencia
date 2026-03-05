@@ -123,7 +123,7 @@ function Navbar() {
   const canViewRnc = isGestorGeral || isGestorObra || isGestorQualidade || isFiscal;
   const canViewCurvaS = isGestorGeral || isGestorObra || isGestorQualidade || isFiscal;
   const canViewCompras = isGestorGeral || isGestorObra || isAdministrativo || isAlmoxarife;
-  const canViewFinanceiro = isGestorGeral || isGestorObra || isAdministrativo;
+  const canViewFinanceiro = false; // FINANCEIRO DESATIVADO (era: isGestorGeral || isGestorObra || isAdministrativo)
   const canViewAtivos = isGestorGeral || isGestorObra || isGestorQualidade || isAdministrativo || isAlmoxarife;
   const canViewEap = isGestorGeral || isGestorObra || isGestorQualidade;
   const canViewUsuarios = isGestorGeral || isAdministrativo;
