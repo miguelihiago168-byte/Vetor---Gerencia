@@ -143,6 +143,14 @@ function Navbar() {
             </NavLink>
             {temProjetoSelecionado && (
               <>
+                <NavLink
+                  to={`/projeto/${projetoId}`}
+                  end
+                  onClick={(e) => confirmNav(e, `/projeto/${projetoId}`)}
+                  className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}
+                >
+                  Dashboard
+                </NavLink>
                 {canViewRdo && (
                 <NavLink to={rotaRdos} onClick={(e) => confirmNav(e, rotaRdos)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
                   RDOs {isGestor && pendRdos > 0 && (<span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendRdos}</span>)}

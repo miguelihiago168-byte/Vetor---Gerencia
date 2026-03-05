@@ -1,0 +1,229 @@
+/* RDOs list — minimal design inspired by Notion / Linear / Stripe */
+
+/* ── Date group header ── */
+.rdo-date-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.rdo-date-group-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.rdo-date-group-line {
+  flex: 1;
+  height: 1px;
+  background: #e2e8f0;
+}
+
+/* ── Card ── */
+.rdo-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  /* override global .card styles */
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+  margin-bottom: 0 !important;
+}
+
+.rdo-card:hover {
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.07) !important;
+  border-color: #cbd5e1;
+}
+
+.rdo-card-body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.rdo-card-info {
+  min-width: 0;
+}
+
+.rdo-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+  margin: 0 0 5px;
+  white-space: nowrap;
+}
+
+.rdo-card-meta {
+  font-size: 13px;
+  color: #94a3b8;
+  font-weight: 400;
+  margin: 0;
+}
+
+/* ── Status badges ── */
+.rdo-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.rdo-badge-aprovado  { background: #dcfce7; color: #15803d; }
+.rdo-badge-reprovado { background: #fee2e2; color: #b91c1c; }
+.rdo-badge-analise   { background: #fef9c3; color: #92400e; }
+.rdo-badge-pendente  { background: #f1f5f9; color: #475569; }
+
+/* ── Actions ── */
+.rdo-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* Ghost button (PDF) */
+.rdo-btn-ghost {
+  background: transparent;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.13s ease, border-color 0.13s ease, color 0.13s ease;
+  white-space: nowrap;
+  font-family: inherit;
+  line-height: 1;
+}
+
+.rdo-btn-ghost:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+
+/* Icon button (...) */
+.rdo-btn-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.13s ease, border-color 0.13s ease, color 0.13s ease;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+
+.rdo-btn-icon:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+
+/* ── Dropdown ── */
+.rdo-dropdown {
+  position: relative;
+}
+
+.rdo-dropdown-menu {
+  position: absolute;
+  right: 0;
+  top: 40px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.10), 0 2px 6px rgba(15, 23, 42, 0.05);
+  z-index: 300;
+  min-width: 190px;
+  padding: 4px;
+  animation: rdo-dropdown-in 0.1s ease;
+}
+
+@keyframes rdo-dropdown-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.rdo-dropdown-item {
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+  border-radius: 7px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  transition: background 0.1s ease;
+  user-select: none;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  line-height: 1;
+}
+
+.rdo-dropdown-item:hover         { background: #f8fafc; color: #0f172a; }
+.rdo-dropdown-item.success       { color: #15803d; }
+.rdo-dropdown-item.success:hover { background: #f0fdf4; }
+.rdo-dropdown-item.danger        { color: #b91c1c; }
+.rdo-dropdown-item.danger:hover  { background: #fef2f2; }
+.rdo-dropdown-item.warning       { color: #92400e; }
+.rdo-dropdown-item.warning:hover { background: #fffbeb; }
+
+.rdo-dropdown-divider {
+  height: 1px;
+  background: #f1f5f9;
+  margin: 3px 4px;
+}
+
+/* ── Empty state ── */
+.rdo-empty {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 64px 32px;
+  text-align: center;
+}
+
+.rdo-empty h3 {
+  color: #475569;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 12px 0 6px;
+}
+
+.rdo-empty p {
+  color: #94a3b8;
+  font-size: 14px;
+  margin: 0;
+}
