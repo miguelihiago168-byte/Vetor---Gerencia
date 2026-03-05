@@ -4,7 +4,8 @@ import Navbar from '../components/Navbar';
 import { getRDO, updateRDO, getAtividadesEAP, addRdoMaoObra, listRdoMaoObra, addRdoComentario, addRdoMaterial, addRdoOcorrencia, uploadRdoFoto, getAnexos, updateStatusRDO, getRdoFerramentasDisponiveis, getRdoFerramentas, addRdoFerramenta } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
-import { FileText, Download, ArrowLeft } from 'lucide-react';
+import { FileText, Download, ArrowLeft, MapPin, Building2, User, Calendar } from 'lucide-react';
+import { KPICards } from '../components/RDOTimeline';
 
 function RDODetalhes() {
   const { projetoId, rdoId } = useParams();
@@ -164,28 +165,30 @@ function RDODetalhes() {
     <>
       <Navbar />
       <div className="container" style={{ paddingTop: '24px', paddingBottom: '40px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+        {/* Cabeçalho: título + ações */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <button className="btn btn-secondary" onClick={() => navigate(`/projeto/${projetoId}/rdos`)}>
               <ArrowLeft size={16} />
             </button>
-            <h1>{`RDO - ${(rdo.numero_rdo || String(rdo.id)).toString().padStart(2,'0')}`}</h1>
-            <span style={{
-              padding: '6px 10px',
-              background: (function(){
-                // Aprovado -> verde; Em aprovação (Em análise) -> amarelo; Aguardando aprovação (Em preenchimento) -> azul; Reprovado -> vermelho
-                if (rdo.status === 'Aprovado') return '#2E7D32';
-                if (rdo.status === 'Em análise') return '#F9A825';
-                if (rdo.status === 'Em preenchimento') return '#2962FF';
-                if (rdo.status === 'Reprovado') return '#C62828';
-                return '#888';
-              })(),
-              color: 'white',
-              borderRadius: '16px',
-              fontSize: '12px'
-            }}>
-              {statusLabel(rdo.status)}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <h1 style={{ margin: 0 }}>{`RDO - ${(rdo.numero_rdo || String(rdo.id)).toString().padStart(2,'0')}`}</h1>
+              <span style={{
+                padding: '4px 10px',
+                background: (function(){
+                  if (rdo.status === 'Aprovado') return '#2E7D32';
+                  if (rdo.status === 'Em análise') return '#F9A825';
+                  if (rdo.status === 'Em preenchimento') return '#2962FF';
+                  if (rdo.status === 'Reprovado') return '#C62828';
+                  return '#888';
+                })(),
+                color: 'white',
+                borderRadius: '16px',
+                fontSize: '12px'
+              }}>
+                {statusLabel(rdo.status)}
+              </span>
+            </div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button className="btn btn-primary" onClick={handleDownloadPDF}>
@@ -211,270 +214,260 @@ function RDODetalhes() {
           </div>
         </div>
 
+        {/* Row 1: 2 colunas — Informações Gerais | Informações do Projeto */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+          {/* Informações Gerais */}
+          <div className="card" style={{ padding: '0', overflow: 'hidden' }}>
+            <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
+              <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Informações Gerais</span>
+            </div>
+            {[
+              { label: 'Data', value: formatLocalDate(rdo.data_relatorio) },
+              { label: 'Dia da Semana', value: rdo.dia_semana || 'N/A' },
+              { label: 'Status', value: statusLabel(rdo.status) },
+              { label: 'Responsável', value: rdo.criado_por_nome || 'N/A' },
+            ].map((row, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
+                <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#9CA3AF', fontWeight: 600 }}>{row.label}</span>
+                <span style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{row.value}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Informações do Projeto */}
+          <div className="card" style={{ padding: '0', overflow: 'hidden' }}>
+            <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
+              <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Informações do Projeto</span>
+            </div>
+            {[
+              { label: 'Projeto', value: rdo.projeto_nome || 'N/A', icon: <Building2 size={11} /> },
+              { label: 'Empresa Executante', value: rdo.empresa_executante || 'N/A', icon: <Building2 size={11} /> },
+              { label: 'Cidade', value: rdo.cidade || 'N/A', icon: <MapPin size={11} /> },
+            ].map((row, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#9CA3AF', fontWeight: 600 }}>{row.icon}{row.label}</span>
+                <span style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{row.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {erro && <div className="alert alert-error" style={{ marginBottom: '16px' }}>{erro}</div>}
         {sucesso && <div className="alert alert-success" style={{ marginBottom: '16px' }}>{sucesso}</div>}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '24px' }}>
-          {/* Conteúdo Principal */}
-          <div>
-            {/* Informações Gerais */}
-            <div className="card" style={{ padding: '24px', marginBottom: '24px' }}>
-              <h2 style={{ marginBottom: '20px' }}>Informações Gerais</h2>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-                <div>
-                  <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '4px' }}>Data do Relatório</label>
-                  <div>{formatLocalDate(rdo.data_relatorio)}</div>
+        {/* KPI Cards */}
+        <KPICards
+          rdo={rdo}
+          maoObra={maoObra}
+          atividadesExecutadas={rdo.atividades || []}
+          ocorrencias={ocorrencias}
+        />
+
+        {/* Condições Climáticas — Manhã | Tarde lado a lado */}
+        <div className="card" style={{ padding: '0', marginBottom: '16px', overflow: 'hidden' }}>
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
+            <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Condições Climáticas</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
+            <div style={{ borderRight: '1px solid #F3F4F6' }}>
+              <div style={{ padding: '6px 16px', borderBottom: '1px solid #F3F4F6', background: '#FAFAFA' }}>
+                <span style={{ fontSize: '11px', fontWeight: 600, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Manhã</span>
+              </div>
+              {[
+                { label: 'Clima', value: rdo.clima_manha || 'N/A' },
+                { label: 'Praticabilidade', value: rdo.praticabilidade_manha || 'N/A' },
+              ].map((row, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
+                  <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#9CA3AF', fontWeight: 600 }}>{row.label}</span>
+                  <span style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{row.value}</span>
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '4px' }}>Dia da Semana</label>
-                  <div>{rdo.dia_semana || 'N/A'}</div>
+              ))}
+            </div>
+            <div>
+              <div style={{ padding: '6px 16px', borderBottom: '1px solid #F3F4F6', background: '#FAFAFA' }}>
+                <span style={{ fontSize: '11px', fontWeight: 600, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Tarde</span>
+              </div>
+              {[
+                { label: 'Clima', value: rdo.clima_tarde || 'N/A' },
+                { label: 'Praticabilidade', value: rdo.praticabilidade_tarde || 'N/A' },
+              ].map((row, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
+                  <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#9CA3AF', fontWeight: 600 }}>{row.label}</span>
+                  <span style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{row.value}</span>
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '4px' }}>Status</label>
-                  <div>{statusLabel(rdo.status)}</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Condições Climáticas */}
-            <div className="card" style={{ padding: '24px', marginBottom: '24px' }}>
-              <h2 style={{ marginBottom: '20px' }}>Condições Climáticas</h2>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-                <div>
-                  <h3>Manhã</h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '4px' }}>Clima</label>
-                      <div>{rdo.clima_manha || 'N/A'}</div>
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '4px' }}>Praticabilidade</label>
-                      <div>{rdo.praticabilidade_manha || 'N/A'}</div>
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <h3>Tarde</h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div>
-                      <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '4px' }}>Clima</label>
-                      <div>{rdo.clima_tarde || 'N/A'}</div>
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontWeight: 'bold', marginBottom: '4px' }}>Praticabilidade</label>
-                      <div>{rdo.praticabilidade_tarde || 'N/A'}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Atividades Executadas */}
-            <div className="card" style={{ padding: '24px', marginBottom: '24px' }}>
-              <h2 style={{ marginBottom: '20px' }}>Atividades Executadas</h2>
-              <div style={{ display: 'grid', gap: '12px' }}>
-                {(rdo.atividades || []).map(atividade => (
-                  <div key={atividade.id} style={{ padding: '12px', border: '1px solid #eee', borderRadius: '4px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <strong>{atividade.codigo_eap}</strong> - {atividade.descricao}
-                        {atividade.observacao && (
-                          <div style={{ color: '#666', fontSize: '12px', marginTop: '4px' }}>Obs: {atividade.observacao}</div>
-                        )}
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        {atividade.quantidade_executada != null && (
-                          <div>Qtd executada: {atividade.quantidade_executada}</div>
-                        )}
-                        {atividade.percentual_executado != null && (
-                          <div>Percentual: {atividade.percentual_executado}%</div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {(!rdo.atividades || rdo.atividades.length === 0) && (
-                  <div style={{ color: '#666' }}>Nenhuma atividade registrada neste RDO.</div>
-                )}
-              </div>
-            </div>
-
-            {/* Mão de Obra */}
-            <div className="card" style={{ padding: '24px', marginBottom: '24px' }}>
-              <h2 style={{ marginBottom: '20px' }}>Mão de Obra</h2>
-              <div style={{ display: 'grid', gap: '8px' }}>
-                {(Array.isArray(rdo.mao_obra_detalhada) && rdo.mao_obra_detalhada.length > 0 ? rdo.mao_obra_detalhada : maoObra).map((item, index) => (
-                  <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr', gap: '8px', padding: '8px', border: '1px solid #eee', borderRadius: '4px' }}>
-                    <div>{item.nome || item.nome_colaborador}</div>
-                    <div>{item.funcao || item.funcao_colaborador}</div>
-                    <div>{item.tipo ? String(item.tipo) : '-'}</div>
-                    <div>{(item.horas || item.horas_trabalhadas || (function(){
-                      // calcular horas quando vier detalhado
-                      const toMin = (t) => { const m = String(t||'').match(/(\d{1,2}):(\d{2})/); return m ? (parseInt(m[1],10)*60+parseInt(m[2],10)) : null; };
-                      const ini = toMin(item.entrada);
-                      const fim = toMin(item.saida_final);
-                      const i1 = toMin(item.saida_almoco);
-                      const i2 = toMin(item.retorno_almoco);
-                      if (ini==null || fim==null || fim<=ini) return 0;
-                      let tot = Math.max(0, fim-ini);
-                      if (i1!=null && i2!=null && i2>i1) tot = Math.max(0, tot-(i2-i1));
-                      return Math.round((tot/60)*100)/100;
-                    })())}h</div>
-                  </div>
-                ))}
-                {(!Array.isArray(rdo.mao_obra_detalhada) || rdo.mao_obra_detalhada.length === 0) && maoObra.length === 0 && (
-                  <div style={{ color: '#666' }}>Nenhum registro de mão de obra.</div>
-                )}
-              </div>
-            </div>
-
-            {/* Registros Fotográficos */}
-            <div className="card" style={{ padding: '24px', marginBottom: '24px' }}>
-              <h2 style={{ marginBottom: '20px' }}>Registros Fotográficos</h2>
-              <div style={{ display: 'grid', gap: '8px' }}>
-                {(rdo.fotos || []).map((foto) => (
-                  <div key={foto.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px', padding: '8px', border: '1px solid #eee', borderRadius: '4px' }}>
-                    <div>
-                      <div style={{ fontWeight: 600 }}>{foto.descricao || 'Foto'}</div>
-                      {foto.atividade_descricao && (
-                        <div style={{ color: '#666', fontSize: '12px' }}>Atividade: {foto.atividade_descricao}</div>
-                      )}
-                    </div>
-                    <div style={{ textAlign: 'right', color: '#666' }}>{new Date(foto.criado_em).toLocaleString('pt-BR')}</div>
-                  </div>
-                ))}
-                {(!rdo.fotos || rdo.fotos.length === 0) && (
-                  <div style={{ color: '#666' }}>Nenhum registro fotográfico.</div>
-                )}
-              </div>
-            </div>
-
-            {/* Materiais Utilizados */}
-            <div className="card" style={{ padding: '24px', marginBottom: '24px' }}>
-              <h2 style={{ marginBottom: '20px' }}>Materiais Utilizados</h2>
-              <div style={{ display: 'grid', gap: '8px' }}>
-                {materiais.map((item, index) => (
-                  <div key={index} style={{ display: 'grid', gridTemplateColumns: '3fr 1fr 1fr', gap: '8px', padding: '8px', border: '1px solid #eee', borderRadius: '4px' }}>
-                    <div>{item.nome_material || item.nome}</div>
-                    <div>{item.quantidade}</div>
-                    <div>{item.unidade}</div>
-                  </div>
-                ))}
-                {materiais.length === 0 && (
-                  <div style={{ color: '#666' }}>Nenhum material registrado.</div>
-                )}
-              </div>
-            </div>
-
-            {/* Ativos Utilizados no Dia */}
-            <div className="card" style={{ padding: '24px', marginBottom: '24px' }}>
-              <h2 style={{ marginBottom: '20px' }}>Ativos utilizados no dia</h2>
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: '8px', marginBottom: '12px' }}>
-                <select
-                  className="form-select"
-                  value={novaFerramentaRdo.alocacao_id}
-                  onChange={(e) => setNovaFerramentaRdo({ ...novaFerramentaRdo, alocacao_id: e.target.value })}
-                >
-                  <option value="">Selecionar ativo retirado</option>
-                  {ferramentasDisponiveis.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.ferramenta_nome} · {item.colaborador_nome || 'Sem colaborador'} · saldo {item.quantidade_disponivel_alocada}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  className="form-input"
-                  type="number"
-                  min="1"
-                  value={novaFerramentaRdo.quantidade}
-                  onChange={(e) => setNovaFerramentaRdo({ ...novaFerramentaRdo, quantidade: e.target.value })}
-                />
-                <button className="btn btn-primary" type="button" onClick={vincularFerramentaRdo}>
-                  Vincular
-                </button>
-              </div>
-
-              <div style={{ display: 'grid', gap: '8px' }}>
-                {ferramentasRdo.map((item) => (
-                  <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '3fr 2fr 1fr', gap: '8px', padding: '8px', border: '1px solid #eee', borderRadius: '4px' }}>
-                    <div>{item.ferramenta_nome}</div>
-                    <div>{item.colaborador || '-'}</div>
-                    <div>{item.quantidade}</div>
-                  </div>
-                ))}
-                {ferramentasRdo.length === 0 && (
-                  <div style={{ color: '#666' }}>Nenhum ativo vinculado a este RDO.</div>
-                )}
-              </div>
-            </div>
-
-            {/* Ocorrências */}
-            <div className="card" style={{ padding: '24px', marginBottom: '24px' }}>
-              <h2 style={{ marginBottom: '20px' }}>Ocorrências</h2>
-              <div style={{ display: 'grid', gap: '12px' }}>
-                {ocorrencias.map((item, index) => (
-                  <div key={index} style={{ padding: '12px', border: '1px solid #eee', borderRadius: '4px' }}>
-                    <div>
-                      <strong>{item.titulo}</strong>
-                      <div style={{ color: '#666', fontSize: '14px', marginTop: '4px' }}>{item.descricao}</div>
-                      {item.gravidade && (
-                        <div style={{ color: '#999', fontSize: '12px', marginTop: '4px' }}>Gravidade: {item.gravidade}</div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {ocorrencias.length === 0 && (
-                  <div style={{ color: '#666' }}>Nenhuma ocorrência registrada.</div>
-                )}
-              </div>
-            </div>
-
-            {/* Comentários */}
-            <div className="card" style={{ padding: '24px', marginBottom: '24px' }}>
-              <h2 style={{ marginBottom: '20px' }}>Comentários</h2>
-              <div style={{ display: 'grid', gap: '12px' }}>
-                {comentarios.map((item, index) => (
-                  <div key={index} style={{ padding: '12px', border: '1px solid #eee', borderRadius: '4px' }}>
-                    {item.comentario}
-                  </div>
-                ))}
-                {comentarios.length === 0 && (
-                  <div style={{ color: '#666' }}>Nenhum comentário.</div>
-                )}
-              </div>
+              ))}
             </div>
           </div>
+        </div>
 
-          {/* Sidebar */}
-          <div>
-            {/* Anexos */}
-            <div className="card" style={{ padding: '24px', marginBottom: '24px' }}>
-              <h3 style={{ marginBottom: '16px' }}>Anexos</h3>
-              <div style={{ display: 'grid', gap: '8px' }}>
-                {anexos.map((anexo) => (
-                  <div key={anexo.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px', border: '1px solid #eee', borderRadius: '4px' }}>
-                    <FileText size={16} />
-                    <div style={{ flex: 1, fontSize: '14px' }}>{anexo.nome_original}</div>
-                  </div>
-                ))}
-                {anexos.length === 0 && (
-                  <div style={{ color: '#666' }}>Nenhum anexo.</div>
-                )}
-              </div>
-            </div>
-
-            {/* Informações do Projeto */}
-            <div className="card" style={{ padding: '24px' }}>
-              <h3 style={{ marginBottom: '16px' }}>Informações do Projeto</h3>
-              <div style={{ fontSize: '14px', color: '#666' }}>
-                <div><strong>Projeto:</strong> {rdo.projeto_nome}</div>
-                <div><strong>Empresa Executante:</strong> {rdo.empresa_executante}</div>
-                <div><strong>Cidade:</strong> {rdo.cidade}</div>
-                <div><strong>Criado por:</strong> {rdo.criado_por_nome}</div>
-                <div><strong>Data de Criação:</strong> {formatLocalDate(rdo.criado_em)}</div>
-              </div>
-            </div>
+        {/* Mão de Obra */}
+        <div className="card" style={{ padding: '0', marginBottom: '16px', overflow: 'hidden' }}>
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
+            <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Mão de Obra</span>
           </div>
+          {(Array.isArray(rdo.mao_obra_detalhada) && rdo.mao_obra_detalhada.length > 0 ? rdo.mao_obra_detalhada : maoObra).length > 0 ? (
+            <div>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr', padding: '6px 16px', background: '#F9FAFB', borderBottom: '1px solid #F3F4F6' }}>
+                {['Nome', 'Função', 'Tipo', 'Horas'].map(h => (
+                  <span key={h} style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#9CA3AF' }}>{h}</span>
+                ))}
+              </div>
+              {(Array.isArray(rdo.mao_obra_detalhada) && rdo.mao_obra_detalhada.length > 0 ? rdo.mao_obra_detalhada : maoObra).map((item, index) => (
+                <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
+                  <span style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{item.nome || item.nome_colaborador || '-'}</span>
+                  <span style={{ fontSize: '14px', color: '#374151' }}>{item.funcao || item.funcao_colaborador || '-'}</span>
+                  <span style={{ fontSize: '14px', color: '#374151' }}>{item.tipo ? String(item.tipo) : '-'}</span>
+                  <span style={{ fontSize: '14px', color: '#374151' }}>{(item.horas || item.horas_trabalhadas || (function(){
+                    const toMin = (t) => { const m = String(t||'').match(/(\d{1,2}):(\d{2})/); return m ? (parseInt(m[1],10)*60+parseInt(m[2],10)) : null; };
+                    const ini = toMin(item.entrada);
+                    const fim = toMin(item.saida_final);
+                    const i1 = toMin(item.saida_almoco);
+                    const i2 = toMin(item.retorno_almoco);
+                    if (ini==null || fim==null || fim<=ini) return 0;
+                    let tot = Math.max(0, fim-ini);
+                    if (i1!=null && i2!=null && i2>i1) tot = Math.max(0, tot-(i2-i1));
+                    return Math.round((tot/60)*100)/100;
+                  })())}h</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ padding: '16px', color: '#9CA3AF', fontSize: '14px' }}>Nenhum registro de mão de obra.</div>
+          )}
+        </div>
+
+        {/* Atividades Executadas */}
+        <div className="card" style={{ padding: '0', marginBottom: '16px', overflow: 'hidden' }}>
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
+            <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Atividades Executadas</span>
+          </div>
+          {(rdo.atividades || []).length > 0 ? (
+            <div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr 1fr', padding: '6px 16px', background: '#F9FAFB', borderBottom: '1px solid #F3F4F6' }}>
+                {['Código', 'Descrição', 'Qtd', '%'].map(h => (
+                  <span key={h} style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#9CA3AF' }}>{h}</span>
+                ))}
+              </div>
+              {(rdo.atividades || []).map(atividade => (
+                <div key={atividade.id} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr 1fr', padding: '8px 16px', borderBottom: '1px solid #F3F4F6', alignItems: 'center' }}>
+                  <span style={{ fontSize: '13px', color: '#374151', fontFamily: 'monospace' }}>{atividade.codigo_eap || '-'}</span>
+                  <div>
+                    <div style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{atividade.descricao}</div>
+                    {atividade.observacao && <div style={{ fontSize: '12px', color: '#9CA3AF', marginTop: '2px' }}>{atividade.observacao}</div>}
+                  </div>
+                  <span style={{ fontSize: '14px', color: '#374151' }}>{atividade.quantidade_executada ?? '-'}</span>
+                  <span style={{ fontSize: '14px', color: '#374151' }}>{atividade.percentual_executado != null ? `${atividade.percentual_executado}%` : '-'}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ padding: '16px', color: '#9CA3AF', fontSize: '14px' }}>Nenhuma atividade registrada neste RDO.</div>
+          )}
+        </div>
+
+        {/* Registros Fotográficos */}
+        {(rdo.fotos || []).length > 0 && (
+          <div className="card" style={{ padding: '0', marginBottom: '16px', overflow: 'hidden' }}>
+            <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
+              <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Registros Fotográficos</span>
+            </div>
+            {(rdo.fotos || []).map((foto) => (
+              <div key={foto.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
+                <div>
+                  <div style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{foto.descricao || 'Foto'}</div>
+                  {foto.atividade_descricao && <div style={{ fontSize: '12px', color: '#9CA3AF' }}>Atividade: {foto.atividade_descricao}</div>}
+                </div>
+                <span style={{ fontSize: '12px', color: '#9CA3AF' }}>{new Date(foto.criado_em).toLocaleString('pt-BR')}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Materiais Utilizados */}
+        <div className="card" style={{ padding: '0', marginBottom: '16px', overflow: 'hidden' }}>
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
+            <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Materiais Utilizados</span>
+          </div>
+          {materiais.length > 0 ? (
+            <div>
+              <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr 1fr', padding: '6px 16px', background: '#F9FAFB', borderBottom: '1px solid #F3F4F6' }}>
+                {['Material', 'Quantidade', 'Unidade'].map(h => (
+                  <span key={h} style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#9CA3AF' }}>{h}</span>
+                ))}
+              </div>
+              {materiais.map((item, index) => (
+                <div key={index} style={{ display: 'grid', gridTemplateColumns: '3fr 1fr 1fr', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
+                  <span style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{item.nome_material || item.nome}</span>
+                  <span style={{ fontSize: '14px', color: '#374151' }}>{item.quantidade}</span>
+                  <span style={{ fontSize: '14px', color: '#374151' }}>{item.unidade}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ padding: '16px', color: '#9CA3AF', fontSize: '14px' }}>Nenhum material registrado.</div>
+          )}
+        </div>
+
+        {/* Ocorrências */}
+        <div className="card" style={{ padding: '0', marginBottom: '16px', overflow: 'hidden' }}>
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
+            <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Ocorrências</span>
+          </div>
+          {ocorrencias.length > 0 ? (
+            <div>
+              {ocorrencias.map((item, index) => (
+                <div key={index} style={{ padding: '12px 16px', borderBottom: '1px solid #F3F4F6', background: (item.gravidade || '').toLowerCase() === 'alta' ? '#FFFBEB' : 'transparent' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <span style={{ fontSize: '14px', color: '#111827', fontWeight: 600 }}>{item.titulo}</span>
+                    {item.gravidade && (
+                      <span style={{
+                        fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em',
+                        padding: '2px 8px', borderRadius: '4px',
+                        background: (item.gravidade || '').toLowerCase() === 'alta' ? '#FEF3C7' : (item.gravidade || '').toLowerCase().startsWith('m') ? '#EDE9FE' : '#F3F4F6',
+                        color: (item.gravidade || '').toLowerCase() === 'alta' ? '#92400E' : (item.gravidade || '').toLowerCase().startsWith('m') ? '#5B21B6' : '#6B7280',
+                      }}>{item.gravidade}</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#6B7280' }}>{item.descricao}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ padding: '16px', color: '#9CA3AF', fontSize: '14px' }}>Nenhuma ocorrência registrada.</div>
+          )}
+        </div>
+
+        {/* Comentários */}
+        {comentarios.length > 0 && (
+          <div className="card" style={{ padding: '0', marginBottom: '16px', overflow: 'hidden' }}>
+            <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
+              <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Comentários</span>
+            </div>
+            {comentarios.map((item, index) => (
+              <div key={index} style={{ padding: '12px 16px', borderBottom: '1px solid #F3F4F6', fontSize: '14px', color: '#374151' }}>
+                {item.comentario}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Anexos */}
+        <div className="card" style={{ padding: '0', marginBottom: '16px', overflow: 'hidden' }}>
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
+            <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Anexos</span>
+          </div>
+          {anexos.length > 0 ? (
+            <div>
+              {anexos.map((anexo) => (
+                <div key={anexo.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
+                  <FileText size={14} style={{ color: '#9CA3AF', flexShrink: 0 }} />
+                  <span style={{ fontSize: '14px', color: '#111827' }}>{anexo.nome_original}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ padding: '16px', color: '#9CA3AF', fontSize: '14px' }}>Nenhum anexo.</div>
+          )}
         </div>
       </div>
     </>

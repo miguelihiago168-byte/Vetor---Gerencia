@@ -234,6 +234,28 @@ function RDOs() {
                               <span className={getBadgeClass(rdo.status)}>{statusLabel(rdo.status)}</span>
                             </div>
                             <p className="rdo-card-meta">{formatLocalDate(rdo.data_relatorio)}</p>
+                            {/* Pills de métricas rápidas */}
+                            {(() => {
+                              const total = Number(rdo.mao_obra_direta || 0) + Number(rdo.mao_obra_indireta || 0) + Number(rdo.mao_obra_terceiros || 0);
+                              const horas = rdo.horas_trabalhadas;
+                              if (!total && !horas) return null;
+                              return (
+                                <div className="rdo-meta-pills">
+                                  {total > 0 && (
+                                    <span className="rdo-meta-pill">
+                                      <span className="rdo-meta-pill-icon">👥</span>
+                                      {total} {total === 1 ? 'pessoa' : 'pessoas'}
+                                    </span>
+                                  )}
+                                  {horas != null && (
+                                    <span className="rdo-meta-pill">
+                                      <span className="rdo-meta-pill-icon">⏱</span>
+                                      {horas}h
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
 

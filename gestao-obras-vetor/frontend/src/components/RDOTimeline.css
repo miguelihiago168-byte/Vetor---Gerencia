@@ -1,0 +1,190 @@
+/* ─────────────────────────────────────────────
+   RDO Timeline + KPI Cards
+   Estilo: minimalista (Linear / Notion / Stripe)
+───────────────────────────────────────────── */
+
+/* KPI Cards ─────────────────────────────── */
+.rdo-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 900px) {
+  .rdo-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .rdo-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rdo-kpi-card {
+  background: #ffffff;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: box-shadow 0.15s ease;
+}
+
+.rdo-kpi-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.rdo-kpi-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #9CA3AF;
+}
+
+.rdo-kpi-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.1;
+}
+
+.rdo-kpi-value.danger {
+  color: #DC2626;
+}
+
+.rdo-kpi-sub {
+  font-size: 12px;
+  color: #6B7280;
+  margin-top: 2px;
+}
+
+/* Timeline Container ─────────────────────── */
+.rdo-timeline-wrapper {
+  background: #ffffff;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  padding: 28px 32px;
+  margin-bottom: 24px;
+}
+
+.rdo-timeline-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #9CA3AF;
+  margin-bottom: 28px;
+}
+
+/* Timeline track ───────────────────────── */
+.rdo-timeline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: relative;
+}
+
+/* Linha vertical contínua */
+.rdo-timeline-list::before {
+  content: '';
+  position: absolute;
+  left: 16px;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  background: #E5E7EB;
+  border-radius: 1px;
+}
+
+/* Evento individual ─────────────────────── */
+.rdo-tl-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 0 0 28px 0;
+  position: relative;
+}
+
+.rdo-tl-item:last-child {
+  padding-bottom: 0;
+}
+
+/* Ponto na linha */
+.rdo-tl-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #D1D5DB;
+  border: 2px solid #ffffff;
+  box-shadow: 0 0 0 2px #D1D5DB;
+  flex-shrink: 0;
+  margin-top: 3px;
+  position: relative;
+  z-index: 1;
+  /* centraliza sobre a linha (linha em left:16px, dot width 12px + 2+2 border = 16px → left 8px) */
+  margin-left: 10px;
+}
+
+.rdo-tl-dot.dot-start   { background: #111827; box-shadow: 0 0 0 2px #111827; }
+.rdo-tl-dot.dot-end     { background: #111827; box-shadow: 0 0 0 2px #111827; }
+.rdo-tl-dot.dot-team    { background: #2563EB; box-shadow: 0 0 0 2px #2563EB; }
+.rdo-tl-dot.dot-climate { background: #0EA5E9; box-shadow: 0 0 0 2px #0EA5E9; }
+.rdo-tl-dot.dot-equip   { background: #7C3AED; box-shadow: 0 0 0 2px #7C3AED; }
+.rdo-tl-dot.dot-activity{ background: #059669; box-shadow: 0 0 0 2px #059669; }
+.rdo-tl-dot.dot-warn    { background: #F59E0B; box-shadow: 0 0 0 2px #F59E0B; }
+.rdo-tl-dot.dot-danger  { background: #DC2626; box-shadow: 0 0 0 2px #DC2626; }
+
+/* Conteúdo do evento */
+.rdo-tl-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.rdo-tl-time {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: #9CA3AF;
+  margin-bottom: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rdo-tl-heading {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 4px;
+}
+
+.rdo-tl-desc {
+  font-size: 13px;
+  color: #6B7280;
+  line-height: 1.5;
+}
+
+.rdo-tl-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.rdo-tl-tag {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #F3F4F6;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.rdo-tl-tag.tag-warn   { background: #FEF3C7; color: #92400E; }
+.rdo-tl-tag.tag-danger { background: #FEE2E2; color: #991B1B; }
+.rdo-tl-tag.tag-ok     { background: #D1FAE5; color: #065F46; }
+.rdo-tl-tag.tag-info   { background: #DBEAFE; color: #1E40AF; }
