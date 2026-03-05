@@ -236,87 +236,138 @@ function Projetos() {
         {sucesso && <div className="alert alert-success">{sucesso}</div>}
         {erro && <div className="alert alert-error">{erro}</div>}
 
-        <div className="grid grid-1 md:grid-2 lg:grid-3 gap-4">
-          {projetosFiltrados.map((projeto) => (
-            <div key={projeto.id} className="card">
-              <div className="card-header">
-                <div className="flex-between">
-                  <h3 className="card-title">{projeto.nome}</h3>
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => abrirModal(projeto)} 
-                      className="btn btn-icon btn-secondary"
-                      title="Editar"
-                    >
-                      <Edit size={16} />
-                    </button>
-                    {isGestor && (
-                      <>
-                        <button 
-                          onClick={() => showArquivados ? handleDesarquivar(projeto.id) : handleArquivar(projeto.id)} 
-                          className="btn btn-icon btn-warning"
-                          title={showArquivados ? 'Desarquivar' : 'Arquivar'}
-                        >
-                          {showArquivados ? <RotateCcw size={16} /> : <Archive size={16} />}
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(projeto.id)} 
-                          className="btn btn-icon btn-danger"
-                          title="Excluir"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+          gap: '20px',
+        }}>
+          {projetosFiltrados.map((projeto) => {
+            const pct = Math.round(projeto.percentual_progresso || 0);
+            const hoje = new Date();
+            const prazo = projeto.prazo_termino ? new Date(projeto.prazo_termino + 'T12:00:00') : null;
+            const diasRestantes = prazo ? Math.ceil((prazo - hoje) / (1000 * 60 * 60 * 24)) : null;
+            const barColor = pct >= 80 ? '#22c55e' : pct >= 40 ? '#3b82f6' : '#f59e0b';
+            const prazoColor = diasRestantes === null ? '#94a3b8'
+              : diasRestantes > 30 ? '#15803d'
+              : diasRestantes > 0  ? '#d97706'
+              : '#dc2626';
+            const prazoBg = diasRestantes === null ? '#f8fafc'
+              : diasRestantes > 30 ? '#f0fdf4'
+              : diasRestantes > 0  ? '#fffbeb'
+              : '#fef2f2';
+
+            return (
+              <div
+                key={projeto.id}
+                onClick={() => navigate(`/projeto/${projeto.id}`)}
+                style={{
+                  background: '#fff',
+                  borderRadius: '14px',
+                  padding: '22px 24px',
+                  boxShadow: '0 1px 6px rgba(0,0,0,0.07)',
+                  border: '1px solid #e8edf2',
+                  cursor: 'pointer',
+                  transition: 'transform 0.15s, box-shadow 0.15s',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.11)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)';    e.currentTarget.style.boxShadow = '0 1px 6px rgba(0,0,0,0.07)'; }}
+              >
+                {/* Cabeçalho */}
+                <div style={{ marginBottom: '14px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '6px' }}>
+                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#1e293b', lineHeight: 1.3 }}>
+                      {projeto.nome}
+                    </h3>
+                    {projeto.cidade && (
+                      <span style={{
+                        flexShrink: 0, fontSize: '11px', fontWeight: 600, padding: '2px 8px',
+                        borderRadius: '999px', background: '#f1f5f9', color: '#64748b',
+                      }}>
+                        📍 {projeto.cidade}
+                      </span>
                     )}
                   </div>
-                </div>
-                <div className="card-meta">
-                  <span className="badge badge-primary">#{projeto.id}</span>
-                  {projeto.cidade && <span className="badge badge-secondary">{projeto.cidade}</span>}
-                </div>
-              </div>
-              
-              <div className="card-body">
-                <div className="project-info">
-                  <div className="info-item">
-                    <Building size={16} />
-                    <span>{projeto.empresa_executante || 'Não informado'}</span>
-                  </div>
-                  <div className="info-item">
-                    <Calendar size={16} />
-                    <span>
-                      {projeto.prazo_termino 
-                        ? new Date(projeto.prazo_termino).toLocaleDateString('pt-BR')
-                        : 'Sem prazo'
-                      }
-                    </span>
-                  </div>
-                  <div className="info-item">
-                    <Users size={16} />
-                    <span>{Number(projeto.total_usuarios ?? projeto.usuarios?.length ?? 0)} usuários</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                    <div style={{ fontSize: '12px', color: '#64748b' }}>
+                      <span style={{ color: '#94a3b8' }}>Contratante:</span>{' '}
+                      <span style={{ fontWeight: 500 }}>{projeto.empresa_responsavel || '—'}</span>
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748b' }}>
+                      <span style={{ color: '#94a3b8' }}>Executante:</span>{' '}
+                      <span style={{ fontWeight: 500 }}>{projeto.empresa_executante || '—'}</span>
+                    </div>
                   </div>
                 </div>
-                
-                <div className="progress-bar mt-3">
-                  <div 
-                    className="progress-fill"
-                    style={{ width: `${projeto.percentual_progresso || 0}%` }}
-                  ></div>
+
+                {/* Barra de progresso */}
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px' }}>
+                    <span style={{ fontWeight: 600, color: '#334155' }}>Progresso</span>
+                    <span style={{ fontWeight: 700, color: barColor }}>{pct}%</span>
+                  </div>
+                  <div style={{ background: '#e2e8f0', borderRadius: '999px', height: '8px', overflow: 'hidden' }}>
+                    <div style={{
+                      width: `${pct}%`, height: '100%', borderRadius: '999px',
+                      background: barColor, transition: 'width 0.4s ease',
+                    }} />
+                  </div>
                 </div>
-                <div className="progress-text">
-                  {Math.round(projeto.percentual_progresso || 0)}% concluído
+
+                {/* Prazo */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: prazoBg, borderRadius: '8px', padding: '8px 12px',
+                  marginBottom: '14px',
+                }}>
+                  <span style={{ fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <Calendar size={13} color="#94a3b8" />
+                    {prazo ? prazo.toLocaleDateString('pt-BR') : 'Sem prazo'}
+                  </span>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: prazoColor }}>
+                    {diasRestantes === null ? 'Sem prazo'
+                      : diasRestantes > 0 ? `Restam ${diasRestantes}d`
+                      : diasRestantes === 0 ? 'Vence hoje'
+                      : `Vencido há ${Math.abs(diasRestantes)}d`}
+                  </span>
                 </div>
+
+                {/* Ações de gestão (interrompem propagação do clique) */}
+                {isGestor && (
+                  <div
+                    style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', paddingTop: '12px' }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      onClick={() => abrirModal(projeto)}
+                      className="btn btn-icon btn-secondary"
+                      title="Editar"
+                      style={{ padding: '5px 8px' }}
+                    >
+                      <Edit size={14} />
+                    </button>
+                    <button
+                      onClick={() => showArquivados ? handleDesarquivar(projeto.id) : handleArquivar(projeto.id)}
+                      className="btn btn-icon btn-warning"
+                      title={showArquivados ? 'Restaurar' : 'Arquivar'}
+                      style={{ padding: '5px 8px' }}
+                    >
+                      {showArquivados ? <RotateCcw size={14} /> : <Archive size={14} />}
+                    </button>
+                    <button
+                      onClick={() => handleDelete(projeto.id)}
+                      className="btn btn-icon btn-danger"
+                      title="Excluir"
+                      style={{ padding: '5px 8px' }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                )}
               </div>
-              <div className="card-footer">
-                <button 
-                  onClick={() => navigate(`/projeto/${projeto.id}`)} 
-                  className="btn btn-primary btn-block"
-                >
-                  Ver Detalhes
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {sucesso && <div className="alert alert-success">{sucesso}</div>}
