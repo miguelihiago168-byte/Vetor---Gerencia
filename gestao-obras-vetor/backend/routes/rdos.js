@@ -1375,7 +1375,7 @@ ${anexosSection}
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${displayId}.pdf"`);
-    res.send(pdfBuffer);
+    res.send(Buffer.from(pdfBuffer));
 
   } catch (error) {
     if (browser) { try { await browser.close(); } catch {} }
