@@ -259,7 +259,7 @@ function Projetos() {
             return (
               <div
                 key={projeto.id}
-                onClick={() => navigate(`/projeto/${projeto.id}`)}
+                onClick={() => navigate(perfil === 'Almoxarife' ? `/projeto/${projeto.id}/compras` : `/projeto/${projeto.id}`)}
                 style={{
                   background: '#fff',
                   borderRadius: '14px',

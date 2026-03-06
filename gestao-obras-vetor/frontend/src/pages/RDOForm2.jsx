@@ -349,7 +349,18 @@ function RDOForm2() {
 
   const groupedLeafsByParent = useMemo(() => {
     if (!Array.isArray(atividadesEap) || atividadesEap.length === 0) return [];
-    const leaves = atividadesEap.filter(a => a.pai_id != null && !atividadesEap.some(x => x.pai_id === a.id));
+    const leaves = atividadesEap.filter(a => {
+      if (a.pai_id == null || atividadesEap.some(x => x.pai_id === a.id)) return false;
+      // Excluir atividades 100% concluídas
+      const qtdTotal = Number(a.quantidade_total || 0);
+      if (qtdTotal > 0) {
+        const execAprov = Number(execucaoAcum[String(a.id)] || 0);
+        if (execAprov >= qtdTotal) return false;
+      } else {
+        if (Number(a.percentual_executado || 0) >= 100) return false;
+      }
+      return true;
+    });
     const groupsMap = new Map();
     for (const leaf of leaves) {
       const pid = leaf.pai_id;
@@ -363,7 +374,7 @@ function RDOForm2() {
     });
     groups.sort((g1, g2) => compareCodigo(g1.parent?.codigo_eap || '0', g2.parent?.codigo_eap || '0'));
     return groups;
-  }, [atividadesEap]);
+  }, [atividadesEap, execucaoAcum]);
 
   /* ── Atividades ─────────────────────────────────── */
   const getAtividadeLimites = (atividadeEapId) => {
