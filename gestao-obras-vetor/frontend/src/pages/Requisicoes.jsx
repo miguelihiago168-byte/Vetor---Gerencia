@@ -50,7 +50,9 @@ export default function Requisicoes() {
           }),
         ]);
         setProjeto(projRes.data);
-        setRequisicoes(reqRes.data);
+        const STATUS_FINAIS = ['Finalizada', 'Negada', 'Cancelada'];
+        const listaProj = Array.isArray(reqRes.data) ? reqRes.data : (reqRes.data?.requisicoes || []);
+        setRequisicoes(filtros.status_requisicao ? listaProj : listaProj.filter(r => !STATUS_FINAIS.includes(r.status_requisicao)));
       } else {
         const [projsRes, reqsRes] = await Promise.all([
           getProjetos(),
@@ -62,7 +64,9 @@ export default function Requisicoes() {
         ]);
         setProjetos(projsRes.data || []);
         const data = reqsRes.data;
-        setRequisicoes(Array.isArray(data) ? data : (data?.requisicoes || []));
+        const STATUS_FINAIS = ['Finalizada', 'Negada', 'Cancelada'];
+        const lista = Array.isArray(data) ? data : (data?.requisicoes || []);
+        setRequisicoes(filtros.status_requisicao ? lista : lista.filter(r => !STATUS_FINAIS.includes(r.status_requisicao)));
       }
     } catch { setErro('Erro ao carregar requisições.'); }
     finally { setLoading(false); }

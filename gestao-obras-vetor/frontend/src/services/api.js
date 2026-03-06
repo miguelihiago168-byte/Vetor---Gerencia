@@ -165,8 +165,18 @@ export const listarCotacoesFinalizadas = (params) => api.get('/requisicoes/final
 export const listarCotacoesNegadas = (params) => api.get('/requisicoes/negadas', { params });
 export const kanbanRequisicoes = (projetoId, params) =>
   api.get(`/requisicoes/kanban/projeto/${projetoId}`, { params });
+export const kanbanRequisicoesV2 = (projetoId, params) =>
+  api.get(`/requisicoes/kanban/projeto/${projetoId}`, { params });
+export const kanbanGlobal = (params) =>
+  api.get('/requisicoes/kanban', { params });
 export const aprovarTodosItens = (reqId) =>
   api.patch(`/requisicoes/${reqId}/aprovar-todos`);
+export const analisarTodosItens = (reqId) =>
+  api.patch(`/requisicoes/${reqId}/analisar-todos`);
+export const comprarTodosItens = (reqId) =>
+  api.patch(`/requisicoes/${reqId}/comprar-todos`);
+export const getRequisicoesBadges = (projetoId) =>
+  api.get('/requisicoes/badges', { params: projetoId ? { projeto_id: projetoId } : {} });
 export const editarCotacaoItem = (reqId, itemId, cotacaoId, data) =>
   api.patch(`/requisicoes/${reqId}/itens/${itemId}/cotacoes/${cotacaoId}`, data);
 

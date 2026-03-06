@@ -34,6 +34,7 @@ const URGENCIAS = ['Normal', 'Urgente', 'Emergencial'];
 const STATUS_REQ = {
   EM_ANALISE:              'Em análise',
   EM_COTACAO:              'Em cotação',
+  COT_RECEBIDAS:           'Cotações recebidas',
   AG_DECISAO:              'Aguardando decisão gestor geral',
   AUTORIZADA:              'Compra autorizada',
   FINALIZADA:              'Finalizada',
@@ -122,8 +123,10 @@ const atualizarStatusRequisicao = async (requisicaoId, usuarioId) => {
     novoStatus = STATUS_REQ.FINALIZADA;
   } else if (algum(STATUS_ITEM.COMPRADO)) {
     novoStatus = STATUS_REQ.AUTORIZADA;
-  } else if (algum(STATUS_ITEM.APROVADO) || algum(STATUS_ITEM.COT_FINALIZADA)) {
+  } else if (algum(STATUS_ITEM.APROVADO)) {
     novoStatus = STATUS_REQ.AG_DECISAO;
+  } else if (algum(STATUS_ITEM.COT_FINALIZADA)) {
+    novoStatus = STATUS_REQ.COT_RECEBIDAS;
   } else if (algum(STATUS_ITEM.EM_COTACAO)) {
     novoStatus = STATUS_REQ.EM_COTACAO;
   } else if (todos(STATUS_ITEM.AG_ANALISE)) {
@@ -426,6 +429,132 @@ router.get('/negadas', async (req, res) => {
   }
 });
 
+// ─── Helper: montar kanban de requisições ────────────────────────────────
+const montarKanbanRequisicoes = async (where, params) => {
+  const COLUNAS = [
+    { id: 'solicitado',    label: 'Solicitado',             status: STATUS_REQ.EM_ANALISE },
+    { id: 'em_cotacao',    label: 'Em cotação',             status: STATUS_REQ.EM_COTACAO },
+    { id: 'cot_recebidas', label: 'Cotações recebidas',     status: STATUS_REQ.COT_RECEBIDAS },
+    { id: 'ag_aprovacao',  label: 'Aguardando aprovação',   status: STATUS_REQ.AG_DECISAO },
+    { id: 'liberado',      label: 'Liberado para compra',   status: STATUS_REQ.AUTORIZADA },
+    { id: 'comprado',      label: 'Comprado',               status: STATUS_REQ.FINALIZADA },
+  ];
+
+  const reqs = await allQuery(`
+    SELECT
+      r.id,
+      r.numero_requisicao,
+      r.tipo_material,
+      r.urgencia,
+      r.status_requisicao,
+      r.projeto_id,
+      r.criado_em,
+      r.atualizado_em,
+      p.nome AS projeto_nome,
+      u.nome AS solicitante_nome,
+      COUNT(DISTINCT i.id) AS total_itens,
+      COUNT(DISTINCT cx.id) AS total_cotacoes,
+      COALESCE(SUM(CASE WHEN cx.selecionada = 1 THEN i.quantidade * cx.valor_unitario ELSE 0 END), 0) AS valor_total,
+      MAX(CASE WHEN cx.selecionada = 1 THEN COALESCE(cx.fornecedor_nome, f.razao_social) ELSE NULL END) AS fornecedor_selecionado
+    FROM requisicoes r
+    LEFT JOIN projetos p ON p.id = r.projeto_id
+    LEFT JOIN usuarios u ON u.id = r.solicitante_id
+    LEFT JOIN requisicao_itens i ON i.requisicao_id = r.id
+    LEFT JOIN requisicao_cotacoes cx ON cx.item_id = i.id
+    LEFT JOIN fornecedores f ON f.id = cx.fornecedor_id
+    ${where}
+    GROUP BY r.id
+    ORDER BY
+      CASE r.urgencia WHEN 'Emergencial' THEN 0 WHEN 'Urgente' THEN 1 ELSE 2 END,
+      r.criado_em ASC
+  `, params);
+
+  const kanban = COLUNAS.map((col) => {
+    const cards = reqs.filter((r) => r.status_requisicao === col.status);
+    const valorTotal = cards.reduce((sum, r) => sum + Number(r.valor_total || 0), 0);
+    return { id: col.id, label: col.label, count: cards.length, valor_total: valorTotal, requisicoes: cards };
+  });
+
+  return kanban;
+};
+
+// ─── GET /api/requisicoes/kanban — Painel global ──────────────────────────
+router.get('/kanban', async (req, res) => {
+  try {
+    const usuario = await carregarPerfilUsuario(req.usuario.id);
+    const perfil = inferirPerfil(usuario);
+
+    const PODE_VER = ['ADM', 'Gestor Geral', 'Gestor da Obra', 'Almoxarife'];
+    if (!PODE_VER.includes(perfil)) {
+      return res.status(403).json({ erro: 'Sem permissão.' });
+    }
+
+    const { projeto_id, tipo_material, urgencia, fornecedor, responsavel, data_inicio, data_fim, valor_max } = req.query;
+
+    let where = 'WHERE 1=1';
+    const params = [];
+
+    if (!['ADM', 'Gestor Geral'].includes(perfil)) {
+      const projetosUsuario = await allQuery(
+        'SELECT projeto_id FROM projeto_usuarios WHERE usuario_id = ?',
+        [usuario.id]
+      );
+      if (projetosUsuario.length === 0) {
+        return res.json([
+          { id: 'solicitado',    label: 'Solicitado',           count: 0, valor_total: 0, requisicoes: [] },
+          { id: 'em_cotacao',    label: 'Em cotação',           count: 0, valor_total: 0, requisicoes: [] },
+          { id: 'cot_recebidas', label: 'Cotações recebidas',   count: 0, valor_total: 0, requisicoes: [] },
+          { id: 'ag_aprovacao',  label: 'Aguardando aprovação', count: 0, valor_total: 0, requisicoes: [] },
+          { id: 'liberado',      label: 'Liberado para compra', count: 0, valor_total: 0, requisicoes: [] },
+          { id: 'comprado',      label: 'Comprado',             count: 0, valor_total: 0, requisicoes: [] },
+        ]);
+      }
+      const ids = projetosUsuario.map((p) => p.projeto_id).join(',');
+      where += ` AND r.projeto_id IN (${ids})`;
+    }
+
+    if (projeto_id)    { where += ' AND r.projeto_id = ?';       params.push(Number(projeto_id)); }
+    if (tipo_material) { where += ' AND r.tipo_material = ?';    params.push(tipo_material); }
+    if (urgencia)      { where += ' AND r.urgencia = ?';         params.push(urgencia); }
+    if (data_inicio)   { where += ' AND r.criado_em >= ?';       params.push(data_inicio); }
+    if (data_fim)      { where += ' AND r.criado_em <= ?';       params.push(data_fim + ' 23:59:59'); }
+
+    let kanban = await montarKanbanRequisicoes(where, params);
+
+    if (valor_max) {
+      const max = Number(valor_max);
+      kanban = kanban.map((col) => ({
+        ...col,
+        requisicoes: col.requisicoes.filter((r) => !r.valor_total || Number(r.valor_total) <= max),
+      }));
+      kanban = kanban.map((col) => ({ ...col, count: col.requisicoes.length }));
+    }
+
+    if (fornecedor) {
+      const f = fornecedor.toLowerCase();
+      kanban = kanban.map((col) => ({
+        ...col,
+        requisicoes: col.requisicoes.filter((r) => r.fornecedor_selecionado?.toLowerCase().includes(f)),
+      }));
+      kanban = kanban.map((col) => ({ ...col, count: col.requisicoes.length }));
+    }
+
+    if (responsavel) {
+      const resp = responsavel.toLowerCase();
+      kanban = kanban.map((col) => ({
+        ...col,
+        requisicoes: col.requisicoes.filter((r) => r.solicitante_nome?.toLowerCase().includes(resp)),
+      }));
+      kanban = kanban.map((col) => ({ ...col, count: col.requisicoes.length }));
+    }
+
+    res.json(kanban);
+  } catch (err) {
+    console.error('[requisicoes] Erro /kanban global:', err);
+    res.status(500).json({ erro: 'Erro ao buscar dados do kanban.' });
+  }
+});
+
 // ─── GET /api/requisicoes/kanban/projeto/:projetoId ───────────────────────
 router.get('/kanban/projeto/:projetoId', async (req, res) => {
   try {
@@ -441,7 +570,7 @@ router.get('/kanban/projeto/:projetoId', async (req, res) => {
     const ok = await assertProjectAccess(req, res, Number(projetoId));
     if (!ok) return;
 
-    const { tipo_material, urgencia, data_inicio, data_fim, valor_max } = req.query;
+    const { tipo_material, urgencia, fornecedor, responsavel, data_inicio, data_fim, valor_max } = req.query;
 
     let where = 'WHERE r.projeto_id = ?';
     const params = [Number(projetoId)];
@@ -451,48 +580,82 @@ router.get('/kanban/projeto/:projetoId', async (req, res) => {
     if (data_inicio)   { where += ' AND r.criado_em >= ?';    params.push(data_inicio); }
     if (data_fim)      { where += ' AND r.criado_em <= ?';    params.push(data_fim + ' 23:59:59'); }
 
-    const itens = await allQuery(`
-      SELECT
-        i.*,
-        r.numero_requisicao,
-        r.tipo_material,
-        r.urgencia,
-        r.projeto_id,
-        u.nome AS solicitante_nome,
-        (SELECT COUNT(*) FROM requisicao_cotacoes cx WHERE cx.item_id = i.id) AS total_cotacoes,
-        (SELECT MIN(cx.valor_unitario) FROM requisicao_cotacoes cx WHERE cx.item_id = i.id) AS menor_cotacao
-      FROM requisicao_itens i
-      JOIN requisicoes r ON r.id = i.requisicao_id
-      LEFT JOIN usuarios u ON u.id = r.solicitante_id
-      ${where}
-      AND i.status_item IN ('Em cotação','Cotação finalizada','Aprovado para compra','Comprado')
-      ORDER BY r.urgencia DESC, r.criado_em ASC
-    `, params);
+    let kanban = await montarKanbanRequisicoes(where, params);
 
-    // Filtro por valor estimado
-    const itensFiltrados = valor_max
-      ? itens.filter((i) => !i.menor_cotacao || i.menor_cotacao <= Number(valor_max))
-      : itens;
+    if (valor_max) {
+      const max = Number(valor_max);
+      kanban = kanban.map((col) => ({
+        ...col,
+        requisicoes: col.requisicoes.filter((r) => !r.valor_total || Number(r.valor_total) <= max),
+      }));
+      kanban = kanban.map((col) => ({ ...col, count: col.requisicoes.length }));
+    }
 
-    // Agrupar por status → coluna kanban
-    const COLUNAS = [
-      { id: 'em_cotacao',    label: 'Em cotação',               status: STATUS_ITEM.EM_COTACAO },
-      { id: 'cot_recebida',  label: 'Cotação recebida',         status: STATUS_ITEM.COT_FINALIZADA },
-      { id: 'ag_decisao',    label: 'Aguardando decisão gestor', status: STATUS_ITEM.COT_FINALIZADA, extra: true },
-      { id: 'liberado',      label: 'Liberado para compra',     status: STATUS_ITEM.APROVADO },
-      { id: 'comprado',      label: 'Comprado',                 status: STATUS_ITEM.COMPRADO },
-    ];
+    if (fornecedor) {
+      const f = fornecedor.toLowerCase();
+      kanban = kanban.map((col) => ({
+        ...col,
+        requisicoes: col.requisicoes.filter((r) => r.fornecedor_selecionado?.toLowerCase().includes(f)),
+      }));
+      kanban = kanban.map((col) => ({ ...col, count: col.requisicoes.length }));
+    }
 
-    const kanban = COLUNAS.map((col) => ({
-      id: col.id,
-      label: col.label,
-      itens: itensFiltrados.filter((i) => i.status_item === col.status),
-    }));
+    if (responsavel) {
+      const resp = responsavel.toLowerCase();
+      kanban = kanban.map((col) => ({
+        ...col,
+        requisicoes: col.requisicoes.filter((r) => r.solicitante_nome?.toLowerCase().includes(resp)),
+      }));
+      kanban = kanban.map((col) => ({ ...col, count: col.requisicoes.length }));
+    }
 
     res.json(kanban);
   } catch (err) {
     console.error('[requisicoes] Erro /kanban:', err);
     res.status(500).json({ erro: 'Erro ao buscar dados do kanban.' });
+  }
+});
+
+// ─── GET /api/requisicoes/badges ───────────────────────────────────────────
+// Contagem por status_requisicao para badges do menu lateral (leve)
+router.get('/badges', async (req, res) => {
+  try {
+    const usuario = await carregarPerfilUsuario(req.usuario.id);
+    const perfil = inferirPerfil(usuario);
+
+    const PODE_VER = ['ADM', 'Gestor Geral', 'Gestor da Obra', 'Almoxarife', 'Gestor Local'];
+    if (!PODE_VER.includes(perfil)) return res.json([]);
+
+    const { projeto_id } = req.query;
+    let where = 'WHERE 1=1';
+    const params = [];
+
+    if (!['ADM', 'Gestor Geral'].includes(perfil)) {
+      const proj = await allQuery(
+        'SELECT projeto_id FROM projeto_usuarios WHERE usuario_id = ?',
+        [usuario.id]
+      );
+      if (proj.length === 0) return res.json([]);
+      where += ` AND r.projeto_id IN (${proj.map(p => p.projeto_id).join(',')})`;
+    }
+
+    if (projeto_id) {
+      where += ' AND r.projeto_id = ?';
+      params.push(Number(projeto_id));
+    }
+
+    const rows = await allQuery(
+      `SELECT r.status_requisicao AS status, COUNT(*) AS count
+       FROM requisicoes r
+       ${where}
+       GROUP BY r.status_requisicao`,
+      params
+    );
+
+    res.json(rows);
+  } catch (err) {
+    console.error('[requisicoes] Erro /badges:', err);
+    res.status(500).json({ erro: 'Erro ao buscar contagens.' });
   }
 });
 
@@ -597,9 +760,7 @@ router.get('/projeto/:projetoId', async (req, res) => {
       FROM requisicoes r
       LEFT JOIN usuarios u ON u.id = r.solicitante_id
       ${where}
-      ORDER BY
-        CASE r.urgencia WHEN 'Emergencial' THEN 1 WHEN 'Urgente' THEN 2 ELSE 3 END ASC,
-        r.criado_em DESC
+      ORDER BY r.criado_em DESC
     `, params);
 
     res.json(rows);
@@ -1097,6 +1258,102 @@ router.patch('/:id/itens/:itemId/cancelar', async (req, res) => {
   } catch (err) {
     console.error('[requisicoes] Erro ao cancelar item:', err);
     res.status(500).json({ erro: 'Erro ao cancelar item.' });
+  }
+});
+
+// ─── PATCH /api/requisicoes/:id/analisar-todos ────────────────────────────
+// Move todos os itens "Aguardando análise" para "Em cotação" (ação do DnD Solicitado→Em cotação)
+router.patch('/:id/analisar-todos', async (req, res) => {
+  try {
+    const usuario = await carregarPerfilUsuario(req.usuario.id);
+    const perfil = inferirPerfil(usuario);
+
+    if (!['Gestor da Obra', 'Gestor Geral', 'ADM'].includes(perfil)) {
+      return res.status(403).json({ erro: 'Sem permissão para iniciar cotação em lote.' });
+    }
+
+    const req2 = await getQuery('SELECT projeto_id FROM requisicoes WHERE id = ?', [req.params.id]);
+    if (!req2) return res.status(404).json({ erro: 'Requisição não encontrada.' });
+
+    const ok = await assertProjectAccess(req, res, Number(req2.projeto_id));
+    if (!ok) return;
+
+    const itens = await allQuery(
+      `SELECT * FROM requisicao_itens WHERE requisicao_id = ? AND status_item = ?`,
+      [req.params.id, STATUS_ITEM.AG_ANALISE]
+    );
+
+    if (itens.length === 0) {
+      return res.status(409).json({ erro: 'Nenhum item aguardando análise para iniciar cotação.' });
+    }
+
+    for (const item of itens) {
+      await runQuery(
+        `UPDATE requisicao_itens
+           SET aprovado_para_cotacao = 1, status_item = ?, atualizado_em = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [STATUS_ITEM.EM_COTACAO, item.id]
+      );
+      await registrarHistorico(
+        Number(req.params.id), item.id, usuario.id,
+        'ITEM_APROVADO_COTACAO', item.status_item, STATUS_ITEM.EM_COTACAO,
+        { lote: true, origem: 'kanban_dnd' }
+      );
+    }
+
+    await atualizarStatusRequisicao(Number(req.params.id), usuario.id);
+    res.json({ atualizados: itens.length });
+  } catch (err) {
+    console.error('[requisicoes] Erro ao analisar-todos:', err);
+    res.status(500).json({ erro: 'Erro ao iniciar cotação em lote.' });
+  }
+});
+
+// ─── PATCH /api/requisicoes/:id/comprar-todos ─────────────────────────────
+// Marca todos os itens "Aprovado para compra" como "Comprado" (ação do DnD Liberado→Comprado)
+router.patch('/:id/comprar-todos', async (req, res) => {
+  try {
+    const usuario = await carregarPerfilUsuario(req.usuario.id);
+    const perfil = inferirPerfil(usuario);
+
+    if (!['ADM', 'Gestor Geral'].includes(perfil)) {
+      return res.status(403).json({ erro: 'Apenas ADM ou Gestor Geral podem confirmar compra em lote.' });
+    }
+
+    const req2 = await getQuery('SELECT projeto_id FROM requisicoes WHERE id = ?', [req.params.id]);
+    if (!req2) return res.status(404).json({ erro: 'Requisição não encontrada.' });
+
+    const ok = await assertProjectAccess(req, res, Number(req2.projeto_id));
+    if (!ok) return;
+
+    const itens = await allQuery(
+      `SELECT * FROM requisicao_itens WHERE requisicao_id = ? AND status_item = ?`,
+      [req.params.id, STATUS_ITEM.APROVADO]
+    );
+
+    if (itens.length === 0) {
+      return res.status(409).json({ erro: 'Nenhum item liberado para confirmar compra.' });
+    }
+
+    for (const item of itens) {
+      await runQuery(
+        `UPDATE requisicao_itens
+           SET status_item = ?, atualizado_em = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [STATUS_ITEM.COMPRADO, item.id]
+      );
+      await registrarHistorico(
+        Number(req.params.id), item.id, usuario.id,
+        'ITEM_COMPRADO', item.status_item, STATUS_ITEM.COMPRADO,
+        { lote: true, origem: 'kanban_dnd' }
+      );
+    }
+
+    await atualizarStatusRequisicao(Number(req.params.id), usuario.id);
+    res.json({ comprados: itens.length });
+  } catch (err) {
+    console.error('[requisicoes] Erro ao comprar-todos:', err);
+    res.status(500).json({ erro: 'Erro ao confirmar compra em lote.' });
   }
 });
 

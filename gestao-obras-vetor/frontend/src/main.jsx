@@ -231,6 +231,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           } />
 
           {/* Rotas globais de compras */}
+          <Route path="/compras/kanban" element={
+            <PrivateRoute allowedPerfis={PERFIS_COMPRAS}>
+              <RequisicaoKanban />
+            </PrivateRoute>
+          } />
           <Route path="/compras/finalizadas" element={
             <PrivateRoute allowedPerfis={PERFIS_COMPRAS}>
               <CotacoesFinalizadas />
@@ -257,6 +262,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/curva-s" element={<ProjetoSelector destino="curva-s" />} />
           <Route path="/rnc" element={<ProjetoSelector destino="rnc" />} />
           <Route path="/compras" element={<PrivateRoute allowedPerfis={PERFIS_COMPRAS}><ComprasGlobal /></PrivateRoute>} />
+          <Route path="/compras/status/:statusSlug" element={<PrivateRoute allowedPerfis={PERFIS_COMPRAS}><ComprasStatusList /></PrivateRoute>} />
           {/* FINANCEIRO DESATIVADO: <Route path="/financeiro" element={<ProjetoSelector destino="financeiro" />} /> */}
           <Route path="/ativos" element={<ProjetoSelector destino="almoxarifado" />} />
           <Route path="/" element={<Navigate to="/projetos" replace />} />

@@ -1,122 +1,235 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import ComprasLayout from '../components/ComprasLayout';
-import { kanbanRequisicoes } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { listarRequisicoesProjeto, listarRequisicoes } from '../services/api';
+import { Search, FileText, Clock } from 'lucide-react';
 
+// Mapeamento: slug → { label, statuses[] }
+// "aguardando-decisao" consolida Cotações recebidas + Aguardando decisão gestor geral
 const SLUG_MAP = {
-  'aguardando-analise':   'Aguardando análise',
-  'em-cotacao':           'Em cotação',
-  'cotacao-finalizada':   'Cotação finalizada',
-  'aguardando-gestor':    'Aguardando decisão gestor geral',
-  'aprovado-compra':      'Aprovado para compra',
-  'comprado':             'Comprado',
+  'solicitado':         { label: 'Solicitado',           statuses: ['Em análise'] },
+  'em-cotacao':         { label: 'Em cotação',           statuses: ['Em cotação'] },
+  'aguardando-decisao': { label: 'Aguardando decisão',   statuses: ['Cotações recebidas', 'Aguardando decisão gestor geral'] },
+  'aprovado-compra':    { label: 'Aprovado para compra', statuses: ['Compra autorizada'] },
+  'comprado':           { label: 'Comprado',             statuses: ['Finalizada'] },
 };
 
+// Botão de ação contextual por perfil + slug
+const ACAO_MAP = {
+  'solicitado':         { perfis: ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'ADM'], label: 'Analisar' },
+  'em-cotacao':         { perfis: ['ADM', 'Gestor Geral'],                                   label: 'Cotar' },
+  'aguardando-decisao': { perfis: ['Gestor Geral'],                                          label: 'Decidir' },
+  'aprovado-compra':    { perfis: ['ADM', 'Gestor Geral'],                                   label: 'Registrar compra' },
+  'comprado':           { perfis: [],                                                         label: null },
+};
+
+const URG_ROW = {
+  Emergencial: { background: '#fee2e2', borderLeft: '3px solid #ef4444' },
+  Urgente:     { background: '#fef3c7', borderLeft: '3px solid #fbbf24' },
+  Normal:      { background: '#fff',    borderLeft: '3px solid transparent' },
+};
 const URG_BADGE = {
-  Normal:      'badge badge-gray',
-  Urgente:     'badge badge-yellow',
-  Emergencial: 'badge badge-red',
+  Emergencial: { background: '#fee2e2', color: '#dc2626', fontWeight: 700 },
+  Urgente:     { background: '#fef3c7', color: '#d97706', fontWeight: 700 },
+  Normal:      { background: '#f1f5f9', color: '#64748b', fontWeight: 600 },
 };
 
-const fmt = (v) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—';
+const diasDesde = (iso) => {
+  if (!iso) return '—';
+  const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  if (d === 0) return 'hoje';
+  if (d === 1) return 'há 1 dia';
+  return `há ${d} dias`;
+};
+const fmtData = (iso) => iso ? new Date(iso).toLocaleDateString('pt-BR') : '—';
 
 export default function ComprasStatusList() {
-  const { projetoId, statusItem } = useParams();
+  const { projetoId, statusSlug, statusItem } = useParams();
   const navigate = useNavigate();
-  const label = SLUG_MAP[statusItem] || statusItem;
+  const { usuario } = useAuth();
+  const perfil = usuario?.perfil || '';
 
-  const [itens, setItens] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [busca, setBusca] = useState('');
+  // Suporta ambos os nomes de param (:statusSlug e :statusItem legacy)
+  const slug   = statusSlug || statusItem || 'solicitado';
+  const config = SLUG_MAP[slug] || SLUG_MAP['solicitado'];
+  const acao   = ACAO_MAP[slug];
+  const showAcao = acao?.label && acao.perfis.includes(perfil);
+
+  const [requisicoes, setRequisicoes] = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [busca,       setBusca]       = useState('');
 
   const carregar = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await kanbanRequisicoes(projetoId, {});
-      // Flatten all columns, filter by matching label
-      const todas = (res.data || []).flatMap((col) =>
-        col.itens.map((item) => ({ ...item, coluna: col.label }))
-      );
-      setItens(todas.filter((i) => i.coluna === label));
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
-  }, [projetoId, label]);
+      const fetchStatus = async (status) => {
+        if (projetoId) {
+          const r = await listarRequisicoesProjeto(projetoId, { status_requisicao: status });
+          return Array.isArray(r.data) ? r.data : (r.data?.requisicoes || []);
+        } else {
+          const r = await listarRequisicoes({ status_requisicao: status });
+          return Array.isArray(r.data) ? r.data : (r.data?.requisicoes || []);
+        }
+      };
+      const resultados = await Promise.all(config.statuses.map(fetchStatus));
+      const merged = resultados.flat();
+      merged.sort((a, b) => new Date(b.criado_em) - new Date(a.criado_em));
+      setRequisicoes(merged);
+    } catch {
+      setRequisicoes([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [projetoId, slug]);
 
   useEffect(() => { carregar(); }, [carregar]);
 
-  const itensFiltrados = busca
-    ? itens.filter((i) =>
-        i.descricao?.toLowerCase().includes(busca.toLowerCase()) ||
-        i.numero_requisicao?.toLowerCase().includes(busca.toLowerCase())
+  const filtradas = busca
+    ? requisicoes.filter((r) =>
+        r.numero_requisicao?.toLowerCase().includes(busca.toLowerCase()) ||
+        r.tipo_material?.toLowerCase().includes(busca.toLowerCase()) ||
+        r.solicitante_nome?.toLowerCase().includes(busca.toLowerCase()) ||
+        r.projeto_nome?.toLowerCase().includes(busca.toLowerCase())
       )
-    : itens;
+    : requisicoes;
+
+  const verDetalhe = (req) =>
+    navigate(projetoId ? `/projeto/${projetoId}/compras/${req.id}` : `/compras/${req.id}`);
+
+  const breadcrumb = projetoId
+    ? <><Link to={`/projeto/${projetoId}/compras`} style={{ color: 'var(--primary)', textDecoration: 'none' }}>Requisições</Link>{' / '}{config.label}</>
+    : <><Link to="/compras" style={{ color: 'var(--primary)', textDecoration: 'none' }}>Compras</Link>{' / '}{config.label}</>;
 
   return (
-    <ComprasLayout title={label}>
+    <ComprasLayout title={config.label}>
       <p style={{ marginTop: -8, marginBottom: 16, fontSize: '0.85rem', color: 'var(--gray-500)' }}>
-        <Link to={`/projeto/${projetoId}/compras`} style={{ color: 'var(--primary)', textDecoration: 'none' }}>Requisições</Link>
-        {' / '}{label}
-        <span style={{ marginLeft: 8, color: 'var(--gray-400)' }}>({itensFiltrados.length} itens)</span>
+        {breadcrumb}
+        <span style={{ marginLeft: 8, color: 'var(--gray-400)' }}>
+          ({filtradas.length} {filtradas.length === 1 ? 'requisição' : 'requisições'})
+        </span>
       </p>
 
-      {/* Busca */}
-      <div style={{ marginBottom: '1.25rem' }}>
-        <input
-          className="form-input"
-          style={{ maxWidth: 400 }}
-          placeholder="Buscar por item ou requisição..."
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-        />
+      {/* Barra de busca */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '1.25rem', maxWidth: 480 }}>
+        <div style={{ position: 'relative', flex: 1 }}>
+          <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
+          <input
+            className="form-input"
+            style={{ paddingLeft: 32, width: '100%' }}
+            placeholder="Código, tipo de material, solicitante..."
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+          />
+        </div>
+        {busca && (
+          <button onClick={() => setBusca('')} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.82rem' }}>
+            Limpar
+          </button>
+        )}
       </div>
 
-      {/* Tabela */}
       {loading ? (
-        <div className="card" style={{ padding: '3rem', textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
-      ) : itensFiltrados.length === 0 ? (
-        <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray-400)' }}>
-          Nenhum item com status <strong>{label}</strong> nesta obra.
+        <div className="card" style={{ padding: '3.5rem', textAlign: 'center' }}>
+          <div className="spinner" style={{ margin: '0 auto' }} />
+          <p style={{ marginTop: 12, color: '#94a3b8', fontSize: '0.88rem' }}>Carregando...</p>
+        </div>
+      ) : filtradas.length === 0 ? (
+        <div className="card" style={{ padding: '3.5rem', textAlign: 'center' }}>
+          <FileText size={32} style={{ color: '#cbd5e1', marginBottom: 12 }} />
+          <p style={{ color: '#94a3b8', fontSize: '0.9rem', margin: 0 }}>
+            Nenhuma requisição com status <strong>{config.label}</strong>
+            {busca ? ` correspondendo a "${busca}"` : ''}.
+          </p>
         </div>
       ) : (
-        <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
+        <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
           <table className="table" style={{ margin: 0 }}>
             <thead>
               <tr>
-                <th>Requisição</th>
-                <th>Descrição</th>
-                <th>Qtd</th>
-                <th>Urgência</th>
-                <th>Tipo material</th>
-                <th>Menor cotação</th>
-                <th>Cotações</th>
-                <th></th>
+                <th style={{ width: 175 }}>Código</th>
+                {!projetoId && <th>Projeto</th>}
+                <th>Tipo de material</th>
+                <th style={{ textAlign: 'center', width: 70 }}>Itens</th>
+                <th>Solicitante</th>
+                <th style={{ width: 105 }}>Data</th>
+                <th style={{ width: 115 }}>Urgência</th>
+                <th style={{ width: 95 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Clock size={12} /> Tempo
+                  </span>
+                </th>
+                <th style={{ width: showAcao ? 175 : 85, textAlign: 'right' }}></th>
               </tr>
             </thead>
             <tbody>
-              {itensFiltrados.map((item) => (
-                <tr key={item.id}>
-                  <td><span style={{ color: 'var(--primary)', fontSize: '0.82rem' }}>{item.numero_requisicao}</span></td>
-                  <td><strong>{item.descricao}</strong></td>
-                  <td style={{ textAlign: 'center' }}>{item.quantidade} {item.unidade || ''}</td>
-                  <td><span className={URG_BADGE[item.urgencia] || 'badge badge-gray'}>{item.urgencia}</span></td>
-                  <td style={{ fontSize: '0.85rem' }}>{item.tipo_material}</td>
-                  <td style={{ textAlign: 'right', fontWeight: 600, color: '#047857' }}>
-                    {fmt(item.menor_cotacao)}
-                  </td>
-                  <td style={{ textAlign: 'center', color: 'var(--gray-500)', fontSize: '0.85rem' }}>
-                    {item.total_cotacoes ?? 0}
-                  </td>
-                  <td>
-                    <button
-                      className="btn btn-secondary"
-                      style={{ padding: '4px 12px', fontSize: '0.8rem' }}
-                      onClick={() => navigate(`/projeto/${projetoId}/compras/${item.requisicao_id}`)}
+              {filtradas.map((req) => {
+                const rowStyle = slug === 'comprado' ? URG_ROW.Normal : (URG_ROW[req.urgencia] || URG_ROW.Normal);
+                const badgeStyle = URG_BADGE[req.urgencia] || URG_BADGE.Normal;
+                return (
+                  <tr
+                    key={req.id}
+                    style={{ ...rowStyle, cursor: 'pointer', transition: 'filter 0.1s' }}
+                    onClick={() => verDetalhe(req)}
+                    onMouseEnter={(e) => { e.currentTarget.style.filter = 'brightness(0.97)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.filter = 'none'; }}
+                  >
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.82rem', color: 'var(--primary)' }}>
+                        {req.numero_requisicao}
+                      </span>
+                    </td>
+                    {!projetoId && (
+                      <td style={{ fontSize: '0.85rem', color: '#475569', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {req.projeto_nome || '—'}
+                      </td>
+                    )}
+                    <td style={{ fontWeight: 600, fontSize: '0.88rem', color: '#1e293b' }}>
+                      {req.tipo_material}
+                    </td>
+                    <td style={{ textAlign: 'center', fontSize: '0.85rem', color: '#64748b' }}>
+                      {req.total_itens ?? 0}
+                    </td>
+                    <td style={{ fontSize: '0.85rem', color: '#475569' }}>
+                      {req.solicitante_nome || '—'}
+                    </td>
+                    <td style={{ fontSize: '0.83rem', color: '#64748b' }}>
+                      {fmtData(req.criado_em)}
+                    </td>
+                    <td>
+                      <span style={{ fontSize: '0.75rem', borderRadius: 99, padding: '2px 9px', ...badgeStyle }}>
+                        {req.urgencia}
+                      </span>
+                    </td>
+                    <td style={{ fontSize: '0.82rem', color: '#94a3b8' }}>
+                      {diasDesde(req.atualizado_em || req.criado_em)}
+                    </td>
+                    <td
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ textAlign: 'right', padding: '6px 12px' }}
                     >
-                      Ver
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                      <div style={{ display: 'flex', gap: 5, justifyContent: 'flex-end' }}>
+                        {showAcao && (
+                          <button
+                            className="btn btn-primary"
+                            style={{ padding: '4px 10px', fontSize: '0.78rem', whiteSpace: 'nowrap' }}
+                            onClick={() => verDetalhe(req)}
+                          >
+                            {acao.label}
+                          </button>
+                        )}
+                        <button
+                          className="btn btn-secondary"
+                          style={{ padding: '4px 10px', fontSize: '0.78rem' }}
+                          onClick={() => verDetalhe(req)}
+                        >
+                          Ver
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
