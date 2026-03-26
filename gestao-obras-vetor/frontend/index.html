@@ -7,6 +7,13 @@
     <title>Gestão de Obras - Vetor</title>
   </head>
   <body>
+    <script>
+      try {
+        if (localStorage.getItem('theme') === 'dark') {
+          document.body.classList.add('dark-mode');
+        }
+      } catch (e) {}
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

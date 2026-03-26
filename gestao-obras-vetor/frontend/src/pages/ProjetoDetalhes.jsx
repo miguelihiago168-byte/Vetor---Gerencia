@@ -148,11 +148,13 @@ function ProjetoDetalhes() {
 
   // ── Cálculos derivados ────────────────────────────────────────────────────
 
-  const hoje = new Date();
-  const prazoTermino = projeto?.prazo_termino ? new Date(projeto.prazo_termino) : null;
-  const criadoEm     = projeto?.criado_em     ? new Date(projeto.criado_em)     : null;
-  const diasRestantes = prazoTermino ? Math.ceil((prazoTermino - hoje) / MS_DIA) : null;
-  const prazoTotal    = (prazoTermino && criadoEm) ? Math.ceil((prazoTermino - criadoEm) / MS_DIA) : null;
+  // Normaliza para meia-noite local para contagem por dia-calendário (00:00 → 00:00)
+  const toMidnight = (val) => { const str = String(val).trim(); const norm = /^\d{4}-\d{2}-\d{2}$/.test(str) ? str + 'T00:00:00' : str.replace(' ', 'T'); const d = new Date(norm); d.setHours(0, 0, 0, 0); return d; };
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const prazoTermino = projeto?.prazo_termino ? toMidnight(projeto.prazo_termino) : null;
+  const criadoEm     = projeto?.criado_em     ? toMidnight(projeto.criado_em)     : null;
+  const diasRestantes = prazoTermino ? Math.round((prazoTermino - hoje) / MS_DIA) : null;
+  const prazoTotal    = (prazoTermino && criadoEm) ? Math.round((prazoTermino - criadoEm) / MS_DIA) : null;
   const prazoConsumidoPct = (prazoTotal && prazoTotal > 0)
     ? Math.min(100, Math.max(0, Math.round(((hoje - criadoEm) / MS_DIA) / prazoTotal * 100)))
     : null;
@@ -165,7 +167,7 @@ function ProjetoDetalhes() {
   const rdosOrdenados = [...rdos].sort((a, b) => new Date(b.data_relatorio) - new Date(a.data_relatorio));
   const ultimoRdo = rdosOrdenados[0] || null;
   const diasSemRdo = ultimoRdo
-    ? Math.floor((hoje - new Date(ultimoRdo.data_relatorio + 'T12:00:00')) / MS_DIA)
+    ? Math.floor((hoje - new Date(ultimoRdo.data_relatorio + 'T00:00:00')) / MS_DIA)
     : null;
 
   // RNC insights
@@ -232,16 +234,16 @@ function ProjetoDetalhes() {
 
   // ── Estilos base ─────────────────────────────────────────────────────────
   const cardBase = {
-    background: '#fff',
+    background: 'var(--card-bg)',
     borderRadius: '12px',
     padding: '20px 24px',
     boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
-    border: '1px solid #f0f0f0',
+    border: '1px solid var(--border-default)',
   };
 
   const sectionLabel = {
     fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em',
-    textTransform: 'uppercase', color: '#94a3b8',
+    textTransform: 'uppercase', color: 'var(--text-muted)',
     marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px',
   };
 
@@ -577,7 +579,7 @@ function ProjetoDetalhes() {
                   <div key={idx} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
                     <div style={{ width: '7px', height: '7px', borderRadius: '50%', marginTop: '5px', flexShrink: 0, background: item.cor }} />
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '13px', color: '#334155' }}>{item.texto}</div>
+                      <div style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{item.texto}</div>
                       {item.data && (
                         <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>{horaRelativa(item.data)}</div>
                       )}

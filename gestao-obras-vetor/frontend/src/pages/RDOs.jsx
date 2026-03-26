@@ -11,7 +11,11 @@ import './RDOs.css';
 function RDOs() {
   const { projetoId } = useParams();
   const navigate = useNavigate();
-  const { isGestor } = useAuth();
+  const { isGestor, perfil } = useAuth();
+
+  // Controle de permissões para ações nos RDOs
+  const canAprovarRdo = perfil === 'Gestor Geral' || perfil === 'Gestor da Obra' || perfil === 'Gestor Local';
+  const canReprovarRdo = canAprovarRdo || perfil === 'Fiscal';
   const { info, actionNotify } = useNotification();
   const { alert } = useDialog();
   const [sucesso, setSucesso] = useState('');
@@ -170,7 +174,7 @@ function RDOs() {
         {/* ── Cabeçalho ── */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
           <div>
-            <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#0f172a', margin: 0, letterSpacing: '-0.02em' }}>
+            <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.02em' }}>
               Relatórios Diários de Obra
             </h1>
             <p style={{ fontSize: '13px', color: '#94a3b8', margin: '4px 0 0', fontWeight: 400 }}>
@@ -300,8 +304,8 @@ function RDOs() {
                                   Ver detalhes
                                 </button>
 
-                                {/* Gestor: aprovar / reprovar RDOs pendentes */}
-                                {isGestor && isPending && (
+                                {/* Aprovar: somente Gestor Geral / Gestor de Obra */}
+                                {canAprovarRdo && isPending && (
                                   <>
                                     <div className="rdo-dropdown-divider" />
                                     <button
@@ -311,6 +315,12 @@ function RDOs() {
                                       <CheckCircle size={14} />
                                       Aprovar
                                     </button>
+                                  </>
+                                )}
+                                {/* Reprovar: Gestor Geral, Gestor de Obra e Fiscal */}
+                                {canReprovarRdo && isPending && (
+                                  <>
+                                    {!canAprovarRdo && <div className="rdo-dropdown-divider" />}
                                     <button
                                       className="rdo-dropdown-item danger"
                                       onClick={e => reprovarRDO(rdo.id, e)}

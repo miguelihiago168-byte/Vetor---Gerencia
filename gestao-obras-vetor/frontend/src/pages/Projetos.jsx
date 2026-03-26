@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getProjetos, createProjeto, updateProjeto, deleteProjeto, getUsuarios, arquivarProjeto, desarquivarProjeto, getDashboardAvanco } from '../services/api';
+import { getProjetos, createProjeto, updateProjeto, deleteProjeto, getUsuarios, arquivarProjeto, desarquivarProjeto, getDashboardAvanco, copiarEapProjeto } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
 import { Plus, Edit, Trash2, Users, Calendar, Building, Archive, RotateCcw, Eye, EyeOff } from 'lucide-react';
@@ -24,6 +24,7 @@ function Projetos() {
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
   const [showArquivados, setShowArquivados] = useState(false);
+  const [copiarEapDe, setCopiarEapDe] = useState('');
   
   const { isGestor, perfil } = useAuth();
   const navigate = useNavigate();
@@ -91,8 +92,18 @@ function Projetos() {
         await updateProjeto(editando.id, formData);
         setSucesso('Projeto atualizado com sucesso!');
       } else {
-        await createProjeto(formData);
-        setSucesso('Projeto criado com sucesso!');
+        const res = await createProjeto(formData);
+        const novoId = res.data?.projeto?.id;
+        if (copiarEapDe && novoId) {
+          try {
+            await copiarEapProjeto(novoId, Number(copiarEapDe));
+            setSucesso('Projeto criado e EAP copiada com sucesso!');
+          } catch (eapErr) {
+            setSucesso('Projeto criado! Não foi possível copiar a EAP: ' + (eapErr.response?.data?.erro || 'Erro desconhecido'));
+          }
+        } else {
+          setSucesso('Projeto criado com sucesso!');
+        }
       }
       
       await carregarDados();
@@ -133,6 +144,7 @@ function Projetos() {
     setShowModal(false);
     setEditando(null);
     setErro('');
+    setCopiarEapDe('');
   };
 
   const handleDelete = async (id) => {
@@ -243,9 +255,9 @@ function Projetos() {
         }}>
           {projetosFiltrados.map((projeto) => {
             const pct = Math.round(projeto.percentual_progresso || 0);
-            const hoje = new Date();
-            const prazo = projeto.prazo_termino ? new Date(projeto.prazo_termino + 'T12:00:00') : null;
-            const diasRestantes = prazo ? Math.ceil((prazo - hoje) / (1000 * 60 * 60 * 24)) : null;
+            const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+            const prazo = projeto.prazo_termino ? new Date(projeto.prazo_termino + 'T00:00:00') : null;
+            const diasRestantes = prazo ? Math.round((prazo - hoje) / (1000 * 60 * 60 * 24)) : null;
             const barColor = pct >= 80 ? '#22c55e' : pct >= 40 ? '#3b82f6' : '#f59e0b';
             const prazoColor = diasRestantes === null ? '#94a3b8'
               : diasRestantes > 30 ? '#15803d'
@@ -261,11 +273,11 @@ function Projetos() {
                 key={projeto.id}
                 onClick={() => navigate(perfil === 'Almoxarife' ? `/projeto/${projeto.id}/compras` : `/projeto/${projeto.id}`)}
                 style={{
-                  background: '#fff',
+                  background: 'var(--card-bg)',
                   borderRadius: '14px',
                   padding: '22px 24px',
                   boxShadow: '0 1px 6px rgba(0,0,0,0.07)',
-                  border: '1px solid #e8edf2',
+                  border: '1px solid var(--border-default)',
                   cursor: 'pointer',
                   transition: 'transform 0.15s, box-shadow 0.15s',
                   display: 'flex',
@@ -277,7 +289,7 @@ function Projetos() {
                 {/* Cabeçalho */}
                 <div style={{ marginBottom: '14px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '6px' }}>
-                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: '#1e293b', lineHeight: 1.3 }}>
+                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3 }}>
                       {projeto.nome}
                     </h3>
                     {projeto.cidade && (
@@ -304,10 +316,10 @@ function Projetos() {
                 {/* Barra de progresso */}
                 <div style={{ marginBottom: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px' }}>
-                    <span style={{ fontWeight: 600, color: '#334155' }}>Progresso</span>
+                    <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Progresso</span>
                     <span style={{ fontWeight: 700, color: barColor }}>{pct}%</span>
                   </div>
-                  <div style={{ background: '#e2e8f0', borderRadius: '999px', height: '8px', overflow: 'hidden' }}>
+                  <div style={{ background: 'var(--border-medium)', borderRadius: '999px', height: '8px', overflow: 'hidden' }}>
                     <div style={{
                       width: `${pct}%`, height: '100%', borderRadius: '999px',
                       background: barColor, transition: 'width 0.4s ease',
@@ -336,7 +348,7 @@ function Projetos() {
                 {/* Ações de gestão (interrompem propagação do clique) */}
                 {isGestor && (
                   <div
-                    style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', borderTop: '1px solid #f1f5f9', paddingTop: '12px' }}
+                    style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', borderTop: '1px solid var(--border-default)', paddingTop: '12px' }}
                     onClick={(e) => e.stopPropagation()}
                   >
                     <button
@@ -459,6 +471,27 @@ function Projetos() {
                     required
                   />
                 </div>
+
+                {!editando && projetos.filter(p => p.arquivado === 0).length > 0 && (
+                  <div className="form-group">
+                    <label className="form-label">Copiar EAP de outro projeto (opcional)</label>
+                    <select
+                      className="form-select"
+                      value={copiarEapDe}
+                      onChange={(e) => setCopiarEapDe(e.target.value)}
+                    >
+                      <option value="">— Não copiar EAP —</option>
+                      {projetos.filter(p => p.arquivado === 0).map(p => (
+                        <option key={p.id} value={p.id}>{p.nome}</option>
+                      ))}
+                    </select>
+                    {copiarEapDe && (
+                      <small style={{ color: 'var(--text-muted)', marginTop: 4, display: 'block' }}>
+                        A estrutura de atividades será copiada. Percentuais zerados, status "Não iniciada".
+                      </small>
+                    )}
+                  </div>
+                )}
 
                 <div className="form-group">
                   <label className="form-label">

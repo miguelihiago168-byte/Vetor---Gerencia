@@ -2,6 +2,7 @@ const express = require('express');
 const { auth } = require('../middleware/auth');
 const { allQuery, getQuery, runQuery } = require('../config/database');
 const { registrarAuditoria } = require('../middleware/auditoria');
+const { PERFIS, inferirPerfil } = require('../constants/access');
 
 const router = express.Router();
 
@@ -37,13 +38,17 @@ const normalizarValorMonetario = (valor) => {
 };
 
 const getPerfilAlmox = (usuario) => {
-  if (usuario?.perfil_almoxarifado) return usuario.perfil_almoxarifado;
-  if (usuario?.is_adm) return PERFIL_ALMOX.ADMIN;
-  if (usuario?.is_gestor) return PERFIL_ALMOX.GESTOR;
+  // Usa o sistema canônico de perfis como fonte da verdade principal
+  const canonical = inferirPerfil(usuario);
+  if (canonical === PERFIS.GESTOR_GERAL || canonical === PERFIS.ADM) return PERFIL_ALMOX.ADMIN;
+  if (canonical === PERFIS.GESTOR_OBRA) return PERFIL_ALMOX.GESTOR;
+  if (canonical === PERFIS.ALMOXARIFE) return PERFIL_ALMOX.ALMOXARIFE;
+  // Fallback: perfil_almoxarifado explícito no DB (para casos específicos de customização)
+  if (usuario?.perfil_almoxarifado && canRead(usuario.perfil_almoxarifado)) return usuario.perfil_almoxarifado;
   return PERFIL_ALMOX.VISUALIZADOR;
 };
 
-const canWrite = (perfil) => [PERFIL_ALMOX.ADMIN, PERFIL_ALMOX.ALMOXARIFE].includes(perfil);
+const canWrite = (perfil) => [PERFIL_ALMOX.ADMIN, PERFIL_ALMOX.GESTOR, PERFIL_ALMOX.ALMOXARIFE].includes(perfil);
 const canRead = (perfil) => [PERFIL_ALMOX.ADMIN, PERFIL_ALMOX.GESTOR, PERFIL_ALMOX.ALMOXARIFE, PERFIL_ALMOX.VISUALIZADOR].includes(perfil);
 
 const requireReadPermission = (req, res, next) => {
@@ -461,7 +466,7 @@ router.get('/ferramentas', [auth, requireReadPermission], async (req, res) => {
       WHERE ${filtros.join(' AND ')}
         AND f.projeto_id = ?
       GROUP BY f.id
-      ORDER BY f.nome
+      ORDER BY CAST(f.codigo AS INTEGER) ASC, f.id ASC
     `, [Number(projetoId), ...params, Number(projetoId)]);
 
     res.json(ferramentas);
@@ -471,11 +476,41 @@ router.get('/ferramentas', [auth, requireReadPermission], async (req, res) => {
   }
 });
 
+// Gera o próximo código baseado no último ativo cadastrado nesta obra.
+// Retorna null se a obra ainda não tem ativos (primeiro código é livre).
+const gerarProximoCodigo = async (projetoId) => {
+  const ultimo = await getQuery(
+    `SELECT codigo FROM almox_ferramentas WHERE projeto_id = ? ORDER BY id DESC LIMIT 1`,
+    [Number(projetoId)]
+  );
+  if (!ultimo) return null;
+  const cod = String(ultimo.codigo);
+  const lastDash = cod.lastIndexOf('-');
+  if (lastDash === -1) return null;
+  const prefixo = cod.substring(0, lastDash);
+  const ultimoNum = parseInt(cod.substring(lastDash + 1), 10) || 0;
+  return `${prefixo}-${String(ultimoNum + 1).padStart(4, '0')}`;
+};
+
+router.get('/ferramentas/proximo-codigo', [auth, requireReadPermission], async (req, res) => {
+  try {
+    const { projeto_id: projetoId } = req.query;
+    if (!projetoId) return res.status(400).json({ erro: 'projeto_id obrigatório.' });
+    const projeto = await validateProjeto(Number(projetoId));
+    if (!projeto) return res.status(404).json({ erro: 'Obra não encontrada.' });
+    const codigo = await gerarProximoCodigo(Number(projetoId));
+    // primeiro: true = obra ainda sem ativos, usuário define o código inicial
+    res.json({ codigo, primeiro: codigo === null });
+  } catch (error) {
+    console.error('Erro ao gerar próximo código:', error);
+    res.status(500).json({ erro: 'Erro ao gerar código.' });
+  }
+});
+
 router.post('/ferramentas', [auth, requireWritePermission], async (req, res) => {
   try {
     const {
       projeto_id: projetoId,
-      codigo,
       nome,
       categoria,
       nf_compra: nfCompra,
@@ -506,13 +541,20 @@ router.post('/ferramentas', [auth, requireWritePermission], async (req, res) => 
       return res.status(400).json({ erro: `Categoria inválida. Use: ${CATEGORIAS_ATIVO.join(', ')}.` });
     }
 
+    const codigoGerado = await gerarProximoCodigo(Number(projetoId)) ?? (() => {
+      // Primeiro ativo desta obra: o usuário define o código inicial
+      const codigoManual = String(req.body.codigo || '').trim().toUpperCase();
+      if (!codigoManual) throw Object.assign(new Error('Código inválido'), { status: 400, erro: 'Informe o código inicial para o primeiro ativo desta obra (ex: IPT-0001).' });
+      return codigoManual;
+    })();
+
     const result = await runQuery(`
       INSERT INTO almox_ferramentas
       (projeto_id, codigo, nome, categoria, nf_compra, marca, modelo, descricao, unidade, quantidade_total, quantidade_disponivel, valor_reposicao, criado_por)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       Number(projetoId),
-      codigo || null,
+      codigoGerado,
       String(nome).trim(),
       categoriaNormalizada,
       nfCompraNormalizada,
@@ -538,6 +580,9 @@ router.post('/ferramentas', [auth, requireWritePermission], async (req, res) => 
 
     res.status(201).json({ ferramenta });
   } catch (error) {
+    if (error.status === 400 && error.erro) {
+      return res.status(400).json({ erro: error.erro });
+    }
     console.error('Erro ao cadastrar ativo:', error);
     res.status(500).json({ erro: 'Erro ao cadastrar ativo.' });
   }
@@ -1341,7 +1386,7 @@ router.get('/rdo/:rdoId/ferramentas-disponiveis', [auth, requireReadPermission],
       INNER JOIN almox_ferramentas f ON f.id = a.ferramenta_id
       WHERE a.projeto_id = ?
         AND a.status IN ('ALOCADA', 'EM_MANUTENCAO')
-      ORDER BY f.nome
+      ORDER BY f.id ASC
     `, [Number(rdo.projeto_id)]);
 
     res.json(alocacoes);

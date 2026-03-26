@@ -10,7 +10,11 @@ import { KPICards } from '../components/RDOTimeline';
 function RDODetalhes() {
   const { projetoId, rdoId } = useParams();
   const navigate = useNavigate();
-  const { isGestor } = useAuth();
+  const { isGestor, perfil } = useAuth();
+
+  // Controle de permissões para ações nos RDOs
+  const canAprovarRdo = perfil === 'Gestor Geral' || perfil === 'Gestor da Obra' || perfil === 'Gestor Local';
+  const canReprovarRdo = canAprovarRdo || perfil === 'Fiscal';
   const { alert } = useDialog();
   const [rdo, setRdo] = useState(null);
   const [sucesso, setSucesso] = useState('');
@@ -120,6 +124,16 @@ function RDODetalhes() {
     }
   };
 
+  const reprovarRDO = async () => {
+    try {
+      await updateStatusRDO(rdoId, 'Reprovado');
+      setRdo(prev => ({ ...prev, status: 'Reprovado' }));
+      setSucesso('RDO reprovado.');
+    } catch (error) {
+      await alert({ title: 'Erro', message: 'Falha ao reprovar RDO: ' + (error.response?.data?.erro || error.message) });
+    }
+  };
+
   const vincularFerramentaRdo = async () => {
     try {
       setErro('');
@@ -207,9 +221,14 @@ function RDODetalhes() {
             <button className="btn btn-primary" onClick={handleDownloadPDF}>
               <Download size={16} /> PDF
             </button>
-            {isGestor && rdo.status === 'Em análise' && (
+            {canAprovarRdo && rdo.status === 'Em análise' && (
               <button className="btn btn-success" onClick={aprovarRDO}>
                 Aprovar
+              </button>
+            )}
+            {canReprovarRdo && rdo.status === 'Em análise' && (
+              <button className="btn btn-danger" onClick={reprovarRDO}>
+                Reprovar
               </button>
             )}
             {isGestor && rdo.status !== 'Em preenchimento' && (

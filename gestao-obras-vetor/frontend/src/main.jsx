@@ -42,14 +42,15 @@ import AlmoxManutencao from './pages/AlmoxManutencao';
 import AlmoxPerdas from './pages/AlmoxPerdas';
 import AlmoxRelatorios from './pages/AlmoxRelatorios';
 import './index.css';
+import './dark-mode.css';
 
-const PERFIS_RDO = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade', 'Fiscal'];
-const PERFIS_RNC = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade', 'Fiscal'];
-const PERFIS_CURVA_S = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade', 'Fiscal'];
-const PERFIS_EAP = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade'];
+const PERFIS_RDO = ['Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade', 'Fiscal'];
+const PERFIS_RNC = ['Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade', 'Fiscal'];
+const PERFIS_CURVA_S = ['Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade', 'Fiscal'];
+const PERFIS_EAP = ['Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade'];
 const PERFIS_COMPRAS = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'ADM', 'Almoxarife'];
 const PERFIS_GESTORES_ADM = ['Gestor Geral', 'ADM'];
-const PERFIS_ATIVOS = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade', 'ADM', 'Almoxarife'];
+const PERFIS_ATIVOS = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'ADM', 'Almoxarife'];
 const PERFIS_USUARIOS = ['Gestor Geral', 'ADM'];
 
 ReactDOM.createRoot(document.getElementById('root')).render(

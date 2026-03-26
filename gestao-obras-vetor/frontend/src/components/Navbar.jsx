@@ -6,6 +6,7 @@ import { useLeaveGuard } from '../context/LeaveGuardContext';
 import { listarPedidosPorProjeto, getRDOs, getRNCs, getNotificacoes, marcarNotificacaoLida } from '../services/api';
 import { useNotification } from '../context/NotificationContext';
 import { useDialog } from '../context/DialogContext';
+import ThemeToggle from './ThemeToggle';
 
 function Navbar() {
   const { usuario, logout, isGestor, isAdm, perfil } = useAuth();
@@ -124,7 +125,7 @@ function Navbar() {
   const canViewCurvaS = isGestorGeral || isGestorObra || isGestorQualidade || isFiscal;
   const canViewCompras = isGestorGeral || isGestorObra || isAdministrativo || isAlmoxarife;
   const canViewFinanceiro = false; // FINANCEIRO DESATIVADO (era: isGestorGeral || isGestorObra || isAdministrativo)
-  const canViewAtivos = isGestorGeral || isGestorObra || isGestorQualidade || isAdministrativo || isAlmoxarife;
+  const canViewAtivos = isGestorGeral || isGestorObra || isAdministrativo || isAlmoxarife;
   const canViewEap = isGestorGeral || isGestorObra || isGestorQualidade;
   const canViewUsuarios = isGestorGeral || isAdministrativo;
 
@@ -232,6 +233,7 @@ function Navbar() {
               <LogOut size={16} />
               Sair
             </button>
+            <ThemeToggle />
           </div>
         </div>
       </div>

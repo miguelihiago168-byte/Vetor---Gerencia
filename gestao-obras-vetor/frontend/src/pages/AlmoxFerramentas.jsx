@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import AlmoxarifadoLayout from '../components/AlmoxarifadoLayout';
-import { createFerramenta, getFerramentas, getProjetos, transferirAtivoObra } from '../services/api';
+import { createFerramenta, getFerramentas, getProjetos, getProximoCodigoAtivo, transferirAtivoObra } from '../services/api';
 import { useDialog } from '../context/DialogContext';
 import { formatMoneyBR, parseMoneyBR, formatMoneyInputBR } from '../utils/currency';
 
@@ -11,6 +11,7 @@ const formatBRL = formatMoneyBR;
 function AlmoxFerramentas() {
   const { projetoId } = useParams();
   const { confirm } = useDialog();
+  const [aba, setAba] = useState('lista');
   const [ferramentas, setFerramentas] = useState([]);
   const [projetos, setProjetos] = useState([]);
   const [destinosTransferencia, setDestinosTransferencia] = useState({});
@@ -19,6 +20,8 @@ function AlmoxFerramentas() {
   const [sucesso, setSucesso] = useState('');
   const [filtroAtivos, setFiltroAtivos] = useState('');
   const [form, setForm] = useState({ codigo: '', nome: '', categoria: 'Outros', nf_compra: '', marca: '', modelo: '', descricao: '', unidade: 'UN', quantidade_total: '', valor_reposicao: '' });
+  const [proximoCodigo, setProximoCodigo] = useState('');
+  const [primeiroCodigo, setPrimeiroCodigo] = useState(false);
 
   const ferramentasFiltradas = useMemo(() => {
     const termo = filtroAtivos.trim().toLowerCase();
@@ -42,8 +45,19 @@ function AlmoxFerramentas() {
   const carregar = async () => {
     try {
       setLoading(true);
-      const res = await getFerramentas({ projeto_id: projetoId });
-      setFerramentas(res.data || []);
+      const [resFerramentas, resCodigo] = await Promise.all([
+        getFerramentas({ projeto_id: projetoId }),
+        getProximoCodigoAtivo(projetoId)
+      ]);
+      setFerramentas(resFerramentas.data || []);
+      const { codigo, primeiro } = resCodigo.data;
+      setProximoCodigo(codigo || '');
+      setPrimeiroCodigo(!!primeiro);
+      if (!primeiro && codigo) {
+        setForm((prev) => ({ ...prev, codigo }));
+      } else {
+        setForm((prev) => ({ ...prev, codigo: '' }));
+      }
     } catch (error) {
       setErro(error?.response?.data?.erro || 'Erro ao carregar ativos.');
     } finally {
@@ -78,7 +92,8 @@ function AlmoxFerramentas() {
       });
       setForm({ codigo: '', nome: '', categoria: 'Outros', nf_compra: '', marca: '', modelo: '', descricao: '', unidade: 'UN', quantidade_total: '', valor_reposicao: '' });
       setSucesso('Ativo cadastrado com sucesso.');
-      carregar();
+      await carregar();
+      setAba('lista');
     } catch (error) {
       setErro(error?.response?.data?.erro || 'Erro ao cadastrar ativo.');
     }
@@ -113,34 +128,74 @@ function AlmoxFerramentas() {
 
   const obrasDestino = (projetos || []).filter((p) => Number(p.id) !== Number(projetoId));
 
-  return (
-    <AlmoxarifadoLayout title="Cadastro de Ativos">
-        {erro && <div className="alert alert-error">{erro}</div>}
-        {sucesso && <div className="alert alert-success">{sucesso}</div>}
+  const tabStyle = (aba_id) => ({
+    padding: '8px 20px',
+    border: 'none',
+    borderBottom: aba === aba_id ? '2px solid var(--accent)' : '2px solid transparent',
+    background: 'none',
+    color: aba === aba_id ? 'var(--accent)' : 'var(--text-muted)',
+    fontWeight: aba === aba_id ? 600 : 400,
+    cursor: 'pointer',
+    fontSize: 14,
+    transition: 'color 0.15s',
+  });
 
+  return (
+    <AlmoxarifadoLayout title="Ativos">
+      {erro && <div className="alert alert-error">{erro}</div>}
+      {sucesso && <div className="alert alert-success">{sucesso}</div>}
+
+      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
+        <button style={tabStyle('lista')} onClick={() => { setErro(''); setSucesso(''); setAba('lista'); }}>
+          Ativos cadastrados {ferramentas.length > 0 && <span style={{ fontSize: 12, marginLeft: 4, opacity: 0.7 }}>({ferramentas.length})</span>}
+        </button>
+        <button style={tabStyle('novo')} onClick={() => { setErro(''); setSucesso(''); setAba('novo'); }}>
+          + Novo ativo
+        </button>
+      </div>
+
+      {aba === 'novo' && (
         <div className="card">
           <h2 className="card-header">Novo ativo</h2>
           <form onSubmit={salvar} className="grid grid-3" style={{ gap: 12 }}>
-            <input className="form-input" placeholder="Código" value={form.codigo} onChange={(e) => setForm({ ...form, codigo: e.target.value })} />
+            {primeiroCodigo ? (
+              <input
+                className="form-input"
+                placeholder="Código inicial (ex: IPT-0001) — você define o padrão desta obra"
+                required
+                value={form.codigo}
+                onChange={(e) => setForm({ ...form, codigo: e.target.value.toUpperCase() })}
+                style={{ gridColumn: '1 / -1' }}
+              />
+            ) : (
+              <input
+                className="form-input"
+                value={proximoCodigo ? `Próximo código: ${proximoCodigo}` : 'Calculando código...'}
+                readOnly
+                style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)', cursor: 'default', gridColumn: '1 / -1' }}
+              />
+            )}
             <input className="form-input" placeholder="Nome" required value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} />
             <select className="form-select" value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })}>
               {CATEGORIAS_ATIVO.map((categoria) => <option key={categoria} value={categoria}>{categoria}</option>)}
             </select>
             <input className="form-input" placeholder="Unidade" value={form.unidade} onChange={(e) => setForm({ ...form, unidade: e.target.value })} />
             <input className="form-input" type="number" min="0" required placeholder="Qtd. total (un)" value={form.quantidade_total} onChange={(e) => setForm({ ...form, quantidade_total: e.target.value })} />
-            <input className="form-input" type="text" inputMode="numeric" required placeholder="0,00" value={form.valor_reposicao} onChange={(e) => setForm({ ...form, valor_reposicao: formatMoneyInputBR(e.target.value) })} />
+            <input className="form-input" type="text" inputMode="numeric" required placeholder="Valor de reposição (R$)" value={form.valor_reposicao} onChange={(e) => setForm({ ...form, valor_reposicao: formatMoneyInputBR(e.target.value) })} />
             <input className="form-input" required placeholder="NF de compra" value={form.nf_compra} onChange={(e) => setForm({ ...form, nf_compra: e.target.value })} />
             <input className="form-input" placeholder="Marca" value={form.marca} onChange={(e) => setForm({ ...form, marca: e.target.value })} />
             <input className="form-input" placeholder="Modelo" value={form.modelo} onChange={(e) => setForm({ ...form, modelo: e.target.value })} />
             <input className="form-input" placeholder="Descrição" value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} />
-            <div style={{ gridColumn: '1 / -1' }}>
+            <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8 }}>
               <button className="btn btn-primary" type="submit">Salvar ativo</button>
+              <button className="btn btn-secondary" type="button" onClick={() => setAba('lista')}>Cancelar</button>
             </div>
           </form>
         </div>
+      )}
 
+      {aba === 'lista' && (
         <div className="card">
-          <h2 className="card-header">Ativos cadastrados</h2>
           <div className="mb-3">
             <input
               className="form-input"
@@ -170,7 +225,7 @@ function AlmoxFerramentas() {
                 <tbody>
                   {ferramentasFiltradas.map((f) => (
                     <tr key={f.id}>
-                      <td>{f.codigo || '-'}</td>
+                      <td style={{ whiteSpace: 'nowrap' }}>{f.codigo || '-'}</td>
                       <td>{f.nome}</td>
                       <td>{f.categoria || 'Outros'}</td>
                       <td>{f.nf_compra || '-'}</td>
@@ -214,8 +269,10 @@ function AlmoxFerramentas() {
             </div>
           )}
         </div>
+      )}
     </AlmoxarifadoLayout>
   );
 }
 
 export default AlmoxFerramentas;
+

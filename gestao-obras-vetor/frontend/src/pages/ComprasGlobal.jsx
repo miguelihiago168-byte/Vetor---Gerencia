@@ -123,8 +123,8 @@ export default function ComprasGlobal() {
           { label: 'Prontos p/ compra',   valor: resumo.prontos,    cls: 'badge badge-green' },
         ].map((c) => (
           <div key={c.label} className="card" style={{ flex: '1 1 130px', padding: '1rem' }}>
-            <p style={{ margin: 0, color: 'var(--gray-400)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{c.label}</p>
-            <p style={{ margin: '0.3rem 0 0', fontWeight: 700, fontSize: '1.4rem', color: 'var(--secondary)' }}>{c.valor ?? 0}</p>
+            <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{c.label}</p>
+            <p style={{ margin: '0.3rem 0 0', fontWeight: 700, fontSize: '1.4rem', color: 'var(--text-primary)' }}>{c.valor ?? 0}</p>
           </div>
         ))}
       </div>

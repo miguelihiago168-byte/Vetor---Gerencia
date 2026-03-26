@@ -62,6 +62,7 @@ export const updateProjeto = (id, data) => api.put(`/projetos/${id}`, data);
 export const deleteProjeto = (id) => api.delete(`/projetos/${id}`);
 export const arquivarProjeto = (id) => api.patch(`/projetos/${id}/arquivar`);
 export const desarquivarProjeto = (id) => api.patch(`/projetos/${id}/desarquivar`);
+export const copiarEapProjeto = (destinoId, origemProjetoId) => api.post(`/projetos/${destinoId}/copiar-eap`, { origem_projeto_id: origemProjetoId });
 
 // EAP
 export const getAtividadesEAP = (projetoId) => api.get(`/eap/projeto/${projetoId}`);
@@ -212,6 +213,7 @@ export const getFinanceiroConsolidado = (params) => api.get('/financeiro/consoli
 export const getPerfilAlmoxarifado = () => api.get('/almoxarifado/perfil');
 export const getFerramentas = (params) => api.get('/almoxarifado/ferramentas', { params });
 export const getColaboradoresRetirada = (projetoId) => api.get('/almoxarifado/colaboradores', { params: { projeto_id: projetoId } });
+export const getProximoCodigoAtivo = (projetoId) => api.get('/almoxarifado/ferramentas/proximo-codigo', { params: { projeto_id: projetoId } });
 export const createFerramenta = (data) => api.post('/almoxarifado/ferramentas', data);
 export const transferirAtivoObra = (ferramentaId, data) => api.post(`/almoxarifado/ferramentas/${ferramentaId}/transferir`, data);
 export const getAlocacoesAbertas = (projetoId) => api.get('/almoxarifado/alocacoes-abertas', { params: { projeto_id: projetoId } });

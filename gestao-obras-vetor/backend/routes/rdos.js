@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const { allQuery, runQuery, getQuery } = require('../config/database');
 const { auth, isGestor } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
+const { PERFIS, inferirPerfil } = require('../constants/access');
 
 const router = express.Router();
 
@@ -711,13 +712,20 @@ router.patch('/:id/status', auth, async (req, res) => {
       return res.status(403).json({ erro: 'Apenas o criador pode enviar para análise.' });
     }
 
-    // Apenas gestor pode aprovar/reprovar
-    if ((status === 'Aprovado' || status === 'Reprovado') && !req.usuario.is_gestor) {
-      return res.status(403).json({ erro: 'Apenas gestores podem aprovar ou reprovar RDOs.' });
-    }
+    // Verificar permissões por ação
+    const perfilAtual = inferirPerfil(req.usuario);
+    const podeAprovar = [PERFIS.GESTOR_GERAL, PERFIS.GESTOR_OBRA].includes(perfilAtual);
+    const podeReprovar = [PERFIS.GESTOR_GERAL, PERFIS.GESTOR_OBRA, PERFIS.FISCAL].includes(perfilAtual);
+    const podeReverter = podeAprovar; // apenas gestores
 
-    // Se RDO já estava aprovado, somente gestor pode revertê-lo
-    if (rdoAtual.status === 'Aprovado' && status !== 'Aprovado' && !req.usuario.is_gestor) {
+    if (status === 'Aprovado' && !podeAprovar) {
+      return res.status(403).json({ erro: 'Apenas Gestores Geral ou de Obra podem aprovar RDOs.' });
+    }
+    if (status === 'Reprovado' && !podeReprovar) {
+      return res.status(403).json({ erro: 'Apenas Gestores ou Fiscal podem reprovar RDOs.' });
+    }
+    // Se RDO já estava aprovado, somente gestores podem revertê-lo
+    if (rdoAtual.status === 'Aprovado' && status !== 'Aprovado' && !podeReverter) {
       return res.status(403).json({ erro: 'Apenas gestores podem reverter um RDO aprovado.' });
     }
 
@@ -771,7 +779,7 @@ router.patch('/:id/status', auth, async (req, res) => {
         if (rdoRow && rdoRow.historico_status) {
           try { hist = JSON.parse(rdoRow.historico_status); } catch (e) { hist = []; }
         }
-        hist.push({ status, por: req.usuario.id, em: new Date().toISOString() });
+        hist.push({ status, por: req.usuario.id, nome: req.usuario.nome || null, em: new Date().toISOString() });
 
         await runQuery(`
           UPDATE rdos SET status = ?, aprovado_por = ?, aprovado_em = ?, historico_status = ?, atualizado_em = CURRENT_TIMESTAMP
@@ -1020,9 +1028,11 @@ router.get('/:id/pdf', auth, async (req, res) => {
     };
 
     const msDia = 86400000;
-    const criadoEm = rdo.projeto_criado_em ? new Date(rdo.projeto_criado_em) : null;
-    const termino  = rdo.projeto_prazo_termino ? new Date(rdo.projeto_prazo_termino) : null;
-    const dataRel  = rdo.data_relatorio ? new Date(rdo.data_relatorio + 'T00:00:00') : new Date();
+    // Datas normalizadas para 00:00:00 local (contagem por dia-calendário)
+    const toMdn = (val) => { const str = String(val).trim(); const norm = /^\d{4}-\d{2}-\d{2}$/.test(str) ? str + 'T00:00:00' : str.replace(' ', 'T'); const d = new Date(norm); d.setHours(0, 0, 0, 0); return d; };
+    const criadoEm = rdo.projeto_criado_em ? toMdn(rdo.projeto_criado_em) : null;
+    const termino  = rdo.projeto_prazo_termino ? toMdn(rdo.projeto_prazo_termino) : null;
+    const dataRel  = rdo.data_relatorio ? new Date(rdo.data_relatorio + 'T00:00:00') : (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
     const prazoTotal   = (criadoEm && termino) ? Math.max(0, Math.round((termino - criadoEm) / msDia)) : null;
     const diasDecorridos = (criadoEm) ? Math.max(0, Math.round((dataRel - criadoEm) / msDia)) : null;
     const diasRestantes  = (prazoTotal != null && diasDecorridos != null) ? (prazoTotal - diasDecorridos) : null;

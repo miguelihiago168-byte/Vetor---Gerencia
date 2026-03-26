@@ -27,12 +27,12 @@ const ACAO_MAP = {
 const URG_ROW = {
   Emergencial: { background: '#fee2e2', borderLeft: '3px solid #ef4444' },
   Urgente:     { background: '#fef3c7', borderLeft: '3px solid #fbbf24' },
-  Normal:      { background: '#fff',    borderLeft: '3px solid transparent' },
+  Normal:      { background: 'var(--card-bg)', borderLeft: '3px solid transparent' },
 };
 const URG_BADGE = {
   Emergencial: { background: '#fee2e2', color: '#dc2626', fontWeight: 700 },
   Urgente:     { background: '#fef3c7', color: '#d97706', fontWeight: 700 },
-  Normal:      { background: '#f1f5f9', color: '#64748b', fontWeight: 600 },
+  Normal:      { background: 'var(--bg-tertiary)', color: 'var(--text-muted)', fontWeight: 600 },
 };
 
 const diasDesde = (iso) => {
@@ -180,20 +180,20 @@ export default function ComprasStatusList() {
                       </span>
                     </td>
                     {!projetoId && (
-                      <td style={{ fontSize: '0.85rem', color: '#475569', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <td style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {req.projeto_nome || '—'}
                       </td>
                     )}
-                    <td style={{ fontWeight: 600, fontSize: '0.88rem', color: '#1e293b' }}>
+                    <td style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--text-primary)' }}>
                       {req.tipo_material}
                     </td>
-                    <td style={{ textAlign: 'center', fontSize: '0.85rem', color: '#64748b' }}>
+                    <td style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                       {req.total_itens ?? 0}
                     </td>
-                    <td style={{ fontSize: '0.85rem', color: '#475569' }}>
+                    <td style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                       {req.solicitante_nome || '—'}
                     </td>
-                    <td style={{ fontSize: '0.83rem', color: '#64748b' }}>
+                    <td style={{ fontSize: '0.83rem', color: 'var(--text-muted)' }}>
                       {fmtData(req.criado_em)}
                     </td>
                     <td>
@@ -201,7 +201,7 @@ export default function ComprasStatusList() {
                         {req.urgencia}
                       </span>
                     </td>
-                    <td style={{ fontSize: '0.82rem', color: '#94a3b8' }}>
+                    <td style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
                       {diasDesde(req.atualizado_em || req.criado_em)}
                     </td>
                     <td

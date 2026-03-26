@@ -1,0 +1,6 @@
+
+Servidor inicializado na porta 3001
+Acesse http://localhost:3001/api/health
+Credenciais padrão: Login: 000001 Senha: 123456
+Conectado ao banco de dados SQLite
+EAP recalculada com sucesso.

@@ -149,8 +149,10 @@ function RDOForm2() {
 
   const statusObra = useMemo(() => {
     if (!projeto?.prazo_termino) return null;
-    const hoje = new Date();
-    const fim = new Date(projeto.prazo_termino);
+    const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+    const _prazoStr = String(projeto.prazo_termino).trim();
+    const fim = new Date(/^\d{4}-\d{2}-\d{2}$/.test(_prazoStr) ? _prazoStr + 'T00:00:00' : _prazoStr);
+    fim.setHours(0, 0, 0, 0);
     const diffDias = Math.floor((fim - hoje) / 86400000);
     if (diffDias < 0) return { label: 'Prazo vencido', cls: 'vermelho' };
     if (diffDias <= 30) return { label: `Vence em ${diffDias}d`, cls: 'amarelo' };
