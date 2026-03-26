@@ -1234,7 +1234,7 @@ router.get('/dashboard/projeto/:projetoId', [auth, requireReadPermission], async
     const ok = await ensureProjectAccess(req.usuario, req.perfilAlmox, Number(projetoId));
     if (!ok) return res.status(403).json({ erro: 'Sem acesso a esta obra.' });
 
-    const [ferramentasAlocadas, ferramentasAtrasadas, ferramentasManutencao, perdasResumo, listaAtivos] = await Promise.all([
+    const [ferramentasAlocadas, ferramentasAtrasadas, ferramentasManutencao, perdasResumo, listaAtivos, totalFerramentas] = await Promise.all([
       getQuery(`
         SELECT COALESCE(SUM(quantidade - quantidade_devolvida), 0) AS total
         FROM almox_alocacoes
@@ -1273,11 +1273,21 @@ router.get('/dashboard/projeto/:projetoId', [auth, requireReadPermission], async
         WHERE a.projeto_id = ?
           AND a.status IN ('ALOCADA', 'EM_MANUTENCAO')
         ORDER BY a.previsao_devolucao ASC
+      `, [Number(projetoId)]),
+      getQuery(`
+        SELECT COALESCE(SUM(quantidade_total), 0) AS total,
+               COALESCE(SUM(quantidade_disponivel), 0) AS disponiveis
+        FROM almox_ferramentas
+        WHERE projeto_id = ? AND ativo = 1
       `, [Number(projetoId)])
     ]);
 
+    const alocadas = Number(ferramentasAlocadas?.total || 0);
     res.json({
-      ferramentas_alocadas: Number(ferramentasAlocadas?.total || 0),
+      total_ferramentas: Number(totalFerramentas?.total || 0),
+      ferramentas_disponiveis: Number(totalFerramentas?.disponiveis || 0),
+      ferramentas_alocadas: alocadas,
+      alocacoes_abertas: alocadas,
       ferramentas_atrasadas: Number(ferramentasAtrasadas?.total || 0),
       ferramentas_manutencao: Number(ferramentasManutencao?.total || 0),
       total_perdas: Number(perdasResumo?.total_perdas || 0),

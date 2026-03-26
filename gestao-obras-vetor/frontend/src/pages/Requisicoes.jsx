@@ -160,6 +160,9 @@ export default function Requisicoes() {
                 <div>
                   <span style={{ color: 'var(--gray-400)', fontSize: '0.8rem' }}>{r.numero_requisicao}</span>
                   <h3 style={{ margin: '0.2rem 0 0', fontSize: '1rem', fontWeight: 700 }}>{r.tipo_material}</h3>
+                  {r.descricao_itens && (
+                    <p style={{ margin: '0.15rem 0 0', fontSize: '0.85rem', color: 'var(--gray-600)', fontWeight: 500 }}>{r.descricao_itens}</p>
+                  )}
                   {r.projeto_nome && !projetoId && <span style={{ color: 'var(--gray-500)', fontSize: '0.83rem' }}>{r.projeto_nome}</span>}
                 </div>
                 <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>

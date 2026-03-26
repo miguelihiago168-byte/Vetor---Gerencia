@@ -146,9 +146,12 @@ function DraggableCard({ req, colId, projetoId, onAprovar, canDrag }) {
         </span>
       </div>
 
-      <div style={{ fontSize: '0.83rem', fontWeight: 600, color: '#334155', marginBottom: 4 }}>
+      <div style={{ fontSize: '0.83rem', fontWeight: 600, color: '#334155', marginBottom: 2 }}>
         {req.tipo_material}
       </div>
+      {req.descricao_itens && (
+        <div style={{ fontSize: '0.76rem', color: '#64748b', marginBottom: 4 }}>{req.descricao_itens}</div>
+      )}
 
       {!projetoId && req.projeto_nome && (
         <div style={{ fontSize: '0.74rem', color: '#64748b', marginBottom: 6 }}>

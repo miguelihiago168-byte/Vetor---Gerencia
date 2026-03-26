@@ -87,12 +87,15 @@ function RDOForm2() {
     intervalo_almoco_inicio: '12:00',
     intervalo_almoco_fim: '13:00',
     atividades: [],
+    atividades_avulsas: [],
     climaRegistros: [],
     mao_obra_detalhada: [],
     ocorrencias_lista: [],
     comentarios_lista: [],
     materiais_lista: []
   });
+
+  const [draftAvulsa, setDraftAvulsa] = useState({ descricao: '', quantidade_executada: '', observacao: '' });
 
   const [draftAtividade, setDraftAtividade] = useState({
     atividade_eap_id: '', quantidade_executada: '', unidade_medida: '', percentual_executada: '', observacao: ''
@@ -232,6 +235,7 @@ function RDOForm2() {
               condicao_trabalho: c.condicao_trabalho || 'Praticável',
               pluviometria_mm: c.pluviometria_mm || 0
             })),
+            atividades_avulsas: Array.isArray(rdo.atividades_avulsas) ? rdo.atividades_avulsas : [],
             mao_obra_detalhada: Array.isArray(rdo.mao_obra_detalhada) ? rdo.mao_obra_detalhada : [],
             ocorrencias_lista: (rdo.ocorrencias || []).map(o => ({
               id: o.id,
@@ -731,7 +735,8 @@ function RDOForm2() {
             quantidade_executada: q,
             observacao: a.observacao || ''
           };
-        })
+        }),
+        atividades_avulsas: formData.atividades_avulsas
       };
 
       for (const atividade of body.atividades) {
@@ -1276,6 +1281,68 @@ function RDOForm2() {
               </tbody>
             </table>
           )}
+
+          {/* —— Atividades Avulsas —— */}
+          <div style={{ marginTop: '16px', borderTop: '1px dashed #F57F17', paddingTop: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+              <span style={{ fontWeight: 700, color: '#F57F17', fontSize: '14px' }}>Atividades Avulsas</span>
+              <span style={{ fontSize: '12px', color: '#64748b' }}>(sem vínculo EAP)</span>
+            </div>
+            <div className="rdo-grid-2" style={{ marginBottom: '8px' }}>
+              <div className="form-group">
+                <label className="form-label">Descrição</label>
+                <input className="form-input" type="text" placeholder="Ex: Limpeza do canteiro..."
+                  value={draftAvulsa.descricao}
+                  onChange={(e) => setDraftAvulsa({ ...draftAvulsa, descricao: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Quantidade</label>
+                <input className="form-input" type="number" min="0"
+                  value={draftAvulsa.quantidade_executada}
+                  onChange={(e) => setDraftAvulsa({ ...draftAvulsa, quantidade_executada: e.target.value })} />
+              </div>
+            </div>
+            <div className="form-group" style={{ marginBottom: '8px' }}>
+              <label className="form-label">Observação</label>
+              <textarea className="form-input" style={{ resize: 'vertical', minHeight: '44px' }}
+                value={draftAvulsa.observacao}
+                onChange={(e) => setDraftAvulsa({ ...draftAvulsa, observacao: e.target.value })} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
+              <button className="btn btn-primary" style={{ borderColor: '#F57F17', background: '#F57F17' }}
+                onClick={() => {
+                  if (!draftAvulsa.descricao.trim()) return;
+                  setFormData(prev => ({ ...prev, atividades_avulsas: [...prev.atividades_avulsas, { ...draftAvulsa, avulsa: true }] }));
+                  setDraftAvulsa({ descricao: '', quantidade_executada: '', observacao: '' });
+                }}>
+                <Plus size={15} /> Adicionar avulsa
+              </button>
+            </div>
+            {formData.atividades_avulsas.length === 0 ? (
+              <div className="rdo-empty" style={{ color: '#94a3b8' }}>Nenhuma atividade avulsa.</div>
+            ) : (
+              <table className="rdo-table">
+                <thead><tr>
+                  <th>Descrição</th><th>Qtd.</th><th>Observação</th><th className="td-actions"></th>
+                </tr></thead>
+                <tbody>
+                  {formData.atividades_avulsas.map((a, idx) => (
+                    <tr key={idx}>
+                      <td>{a.descricao}</td>
+                      <td>{a.quantidade_executada || '—'}</td>
+                      <td>{a.observacao || '—'}</td>
+                      <td className="td-actions">
+                        <button className="btn btn-danger" style={{ padding: '4px 8px' }}
+                          onClick={() => setFormData(prev => ({ ...prev, atividades_avulsas: prev.atividades_avulsas.filter((_, i) => i !== idx) }))}>
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </Section>
 
         {/* ══ SEÇÃO 6 — Fotos do RDO ═══════════════════ */}

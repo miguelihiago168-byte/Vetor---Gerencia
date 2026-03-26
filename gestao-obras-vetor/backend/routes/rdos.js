@@ -7,6 +7,11 @@ const { PERFIS, inferirPerfil } = require('../constants/access');
 
 const router = express.Router();
 
+// Auto-migration: adicionar coluna atividades_avulsas se não existir
+runQuery("ALTER TABLE rdos ADD COLUMN atividades_avulsas TEXT").catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] atividades_avulsas:', e.message);
+});
+
 // Gerar número sequencial e único no formato RDO-XXX, baseado em TODOS os RDOs existentes
 const gerarNumeroRDO = async () => {
   // 1) Buscar todos os IDs já existentes
@@ -290,6 +295,13 @@ router.get('/:id', auth, async (req, res) => {
       rdo.mao_obra_detalhada = [];
     }
 
+    // Parse atividades_avulsas JSON
+    try {
+      rdo.atividades_avulsas = rdo.atividades_avulsas ? JSON.parse(rdo.atividades_avulsas) : [];
+    } catch (e) {
+      rdo.atividades_avulsas = [];
+    }
+
     // Buscar colaboradores vinculados à obra (se existir tabela projeto_usuarios)
     try {
       const colaboradores = await allQuery(`
@@ -352,8 +364,9 @@ router.post('/', auth, [
     if (!eapCountRow || eapCountRow.c === 0) {
       return res.status(400).json({ erro: 'Projeto sem EAP: crie a EAP antes do RDO.' });
     }
-    if (!Array.isArray(atividades) || atividades.length === 0) {
-      return res.status(400).json({ erro: 'RDO deve conter ao menos uma atividade executada.' });
+    const atividades_avulsas = Array.isArray(req.body.atividades_avulsas) ? req.body.atividades_avulsas : [];
+    if ((!Array.isArray(atividades) || atividades.length === 0) && atividades_avulsas.length === 0) {
+      return res.status(400).json({ erro: 'RDO deve conter ao menos uma atividade (EAP ou avulsa).' });
     }
     // Validar que todas as atividades pertencem ao mesmo projeto
     for (const atividade of atividades) {
@@ -465,8 +478,8 @@ router.post('/', auth, [
         clima_manha, tempo_manha, praticabilidade_manha,
         clima_tarde, tempo_tarde, praticabilidade_tarde,
         mao_obra_direta, mao_obra_indireta, mao_obra_terceiros,
-        equipamentos, ocorrencias, comentarios, mao_obra_detalhada, criado_por, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        equipamentos, ocorrencias, comentarios, mao_obra_detalhada, atividades_avulsas, criado_por, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       numeroRdoFinal, projeto_id, dataRelatorioStr, dia_semana_calc,
       entrada_saida_inicio || '07:00', entrada_saida_fim || '17:00',
@@ -474,7 +487,7 @@ router.post('/', auth, [
       clima_manha || 'Claro', tempo_manha || '★', praticabilidade_manha || 'Praticável',
       clima_tarde || 'Claro', tempo_tarde || '★', praticabilidade_tarde || 'Praticável',
       mao_obra_direta || 0, mao_obra_indireta || 0, mao_obra_terceiros || 0,
-      equipamentos, ocorrencias, comentarios, (req.body.mao_obra_detalhada ? JSON.stringify(req.body.mao_obra_detalhada) : null), req.usuario.id, initialStatus
+      equipamentos, ocorrencias, comentarios, (req.body.mao_obra_detalhada ? JSON.stringify(req.body.mao_obra_detalhada) : null), (atividades_avulsas.length > 0 ? JSON.stringify(atividades_avulsas) : null), req.usuario.id, initialStatus
     ]);
 
     const rdoId = result.lastID;
@@ -628,6 +641,7 @@ router.put('/:id', auth, async (req, res) => {
         mao_obra_direta = ?, mao_obra_indireta = ?, mao_obra_terceiros = ?,
         equipamentos = ?, ocorrencias = ?, comentarios = ?,
         mao_obra_detalhada = ?,
+        atividades_avulsas = ?,
         atualizado_em = CURRENT_TIMESTAMP
       WHERE id = ?
     `, [
@@ -641,6 +655,10 @@ router.put('/:id', auth, async (req, res) => {
       (typeof req.body.mao_obra_detalhada !== 'undefined'
         ? (req.body.mao_obra_detalhada ? JSON.stringify(req.body.mao_obra_detalhada) : null)
         : rdoAtual.mao_obra_detalhada // se não veio no payload, preserva o valor atual
+      ),
+      (typeof req.body.atividades_avulsas !== 'undefined'
+        ? (Array.isArray(req.body.atividades_avulsas) && req.body.atividades_avulsas.length > 0 ? JSON.stringify(req.body.atividades_avulsas) : null)
+        : rdoAtual.atividades_avulsas
       ),
       id
     ]);

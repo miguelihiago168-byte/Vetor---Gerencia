@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Vetor Obras",
+    "slug": "vetor-gestao-de-obras",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1565C0"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1565C0"
+      },
+      "package": "com.vetor.gestaoobras",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.INTERNET",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      "expo-image-picker",
+      "expo-document-picker",
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "7fe0b254-885b-4e26-b244-a4b7eae4bee1"
+      }
+    },
+    "owner": "ihiagomiguels-organization"
+  }
+}

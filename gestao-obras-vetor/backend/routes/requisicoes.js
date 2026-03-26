@@ -455,7 +455,8 @@ const montarKanbanRequisicoes = async (where, params) => {
       COUNT(DISTINCT i.id) AS total_itens,
       COUNT(DISTINCT cx.id) AS total_cotacoes,
       COALESCE(SUM(CASE WHEN cx.selecionada = 1 THEN i.quantidade * cx.valor_unitario ELSE 0 END), 0) AS valor_total,
-      MAX(CASE WHEN cx.selecionada = 1 THEN COALESCE(cx.fornecedor_nome, f.razao_social) ELSE NULL END) AS fornecedor_selecionado
+      MAX(CASE WHEN cx.selecionada = 1 THEN COALESCE(cx.fornecedor_nome, f.razao_social) ELSE NULL END) AS fornecedor_selecionado,
+      (SELECT GROUP_CONCAT(sub_i.descricao, ' • ') FROM requisicao_itens sub_i WHERE sub_i.requisicao_id = r.id ORDER BY sub_i.id) AS descricao_itens
     FROM requisicoes r
     LEFT JOIN projetos p ON p.id = r.projeto_id
     LEFT JOIN usuarios u ON u.id = r.solicitante_id
@@ -700,7 +701,8 @@ router.get('/', async (req, res) => {
         u.nome AS solicitante_nome,
         (SELECT COUNT(*) FROM requisicao_itens i WHERE i.requisicao_id = r.id) AS total_itens,
         (SELECT COUNT(*) FROM requisicao_itens i WHERE i.requisicao_id = r.id AND i.status_item = 'Comprado') AS itens_comprados,
-        (SELECT COUNT(*) FROM requisicao_itens i WHERE i.requisicao_id = r.id AND i.status_item = 'Reprovado') AS itens_reprovados
+        (SELECT COUNT(*) FROM requisicao_itens i WHERE i.requisicao_id = r.id AND i.status_item = 'Reprovado') AS itens_reprovados,
+        (SELECT GROUP_CONCAT(i.descricao, ' • ') FROM requisicao_itens i WHERE i.requisicao_id = r.id ORDER BY i.id) AS descricao_itens
       FROM requisicoes r
       JOIN projetos p ON p.id = r.projeto_id
       LEFT JOIN usuarios u ON u.id = r.solicitante_id
@@ -756,7 +758,8 @@ router.get('/projeto/:projetoId', async (req, res) => {
         u.nome AS solicitante_nome,
         (SELECT COUNT(*) FROM requisicao_itens i WHERE i.requisicao_id = r.id) AS total_itens,
         (SELECT COUNT(*) FROM requisicao_itens i WHERE i.requisicao_id = r.id AND i.status_item = 'Comprado') AS itens_comprados,
-        (SELECT COUNT(*) FROM requisicao_itens i WHERE i.requisicao_id = r.id AND i.status_item = 'Reprovado') AS itens_reprovados
+        (SELECT COUNT(*) FROM requisicao_itens i WHERE i.requisicao_id = r.id AND i.status_item = 'Reprovado') AS itens_reprovados,
+        (SELECT GROUP_CONCAT(i.descricao, ' • ') FROM requisicao_itens i WHERE i.requisicao_id = r.id ORDER BY i.id) AS descricao_itens
       FROM requisicoes r
       LEFT JOIN usuarios u ON u.id = r.solicitante_id
       ${where}

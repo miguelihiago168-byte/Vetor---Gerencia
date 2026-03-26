@@ -178,7 +178,12 @@ export default function ComprasGlobal() {
                 <tr key={r.id}>
                   <td><span style={{ color: 'var(--primary)', fontSize: '0.82rem', fontWeight: 600 }}>{r.numero_requisicao}</span></td>
                   <td style={{ fontWeight: 600 }}>{r.projeto_nome || `#${r.projeto_id}`}</td>
-                  <td style={{ fontSize: '0.85rem' }}>{r.tipo_material}</td>
+                  <td style={{ fontSize: '0.85rem' }}>
+                    {r.tipo_material}
+                    {r.descricao_itens && (
+                      <div style={{ fontWeight: 400, fontSize: '0.78rem', color: 'var(--gray-500)', marginTop: 1 }}>{r.descricao_itens}</div>
+                    )}
+                  </td>
                   <td><span className={URG_BADGE[r.urgencia] || 'badge badge-gray'}>{r.urgencia}</span></td>
                   <td style={{ fontSize: '0.85rem' }}>{r.solicitante_nome || '—'}</td>
                   <td style={{ textAlign: 'center' }}>

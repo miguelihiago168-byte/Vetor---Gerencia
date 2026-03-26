@@ -186,6 +186,9 @@ export default function ComprasStatusList() {
                     )}
                     <td style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--text-primary)' }}>
                       {req.tipo_material}
+                      {req.descricao_itens && (
+                        <div style={{ fontWeight: 400, fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 1 }}>{req.descricao_itens}</div>
+                      )}
                     </td>
                     <td style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                       {req.total_itens ?? 0}
