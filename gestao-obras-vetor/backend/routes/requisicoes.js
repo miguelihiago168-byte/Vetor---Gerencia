@@ -77,10 +77,14 @@ const gerarNumeroRequisicao = async () => {
 
 // ─── Helper: registrar histórico ───────────────────────────────────────────
 const registrarHistorico = async (requisicaoId, itemId, usuarioId, tipoEvento, statusAnterior, statusNovo, detalhes) => {
+  // Usa o fuso do sistema operacional em vez de CURRENT_TIMESTAMP (UTC do SQLite)
+  const agora = new Date();
+  const localIso = new Date(agora.getTime() - agora.getTimezoneOffset() * 60000)
+    .toISOString().replace('T', ' ').slice(0, 19);
   await runQuery(
     `INSERT INTO requisicao_historico
-       (requisicao_id, item_id, usuario_id, tipo_evento, status_anterior, status_novo, detalhes)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       (requisicao_id, item_id, usuario_id, tipo_evento, status_anterior, status_novo, detalhes, criado_em)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       requisicaoId,
       itemId || null,
@@ -89,6 +93,7 @@ const registrarHistorico = async (requisicaoId, itemId, usuarioId, tipoEvento, s
       statusAnterior || null,
       statusNovo || null,
       detalhes ? JSON.stringify(detalhes) : null,
+      localIso,
     ]
   );
 };
@@ -144,6 +149,29 @@ const atualizarStatusRequisicao = async (requisicaoId, usuarioId) => {
       requisicaoId, null, usuarioId,
       'STATUS_REQUISICAO_ALTERADO', statusAnterior, novoStatus, null
     );
+
+    // Notificar solicitante da requisição sobre mudança de status
+    try {
+      const reqInfo = await getQuery(
+        `SELECT r.solicitante_id, r.numero_requisicao FROM requisicoes r WHERE r.id = ?`,
+        [requisicaoId]
+      );
+      if (reqInfo && reqInfo.solicitante_id && reqInfo.solicitante_id !== usuarioId) {
+        await runQuery(
+          `INSERT OR IGNORE INTO notificacoes (usuario_id, tipo, mensagem, referencia_tipo, referencia_id)
+           VALUES (?, ?, ?, ?, ?)`,
+          [
+            reqInfo.solicitante_id,
+            'requisicao_status',
+            `Requisição ${reqInfo.numero_requisicao || '#' + requisicaoId} agora está: ${novoStatus}`,
+            'requisicao',
+            requisicaoId
+          ]
+        );
+      }
+    } catch (e) {
+      console.warn('Falha ao notificar solicitante sobre status da requisição:', e?.message || e);
+    }
   }
 };
 
@@ -361,6 +389,50 @@ router.get('/finalizadas', async (req, res) => {
   } catch (err) {
     console.error('[requisicoes] Erro /finalizadas:', err);
     res.status(500).json({ erro: 'Erro ao buscar cotações finalizadas.' });
+  }
+});
+
+// ─── GET /api/requisicoes/encerradas ──────────────────────────────────────
+// Requisições com status Finalizada ou Encerrada sem compra — DEVE VIR ANTES DE /:id
+router.get('/encerradas', async (req, res) => {
+  try {
+    const usuario = await carregarPerfilUsuario(req.usuario.id);
+    const perfil  = inferirPerfil(usuario);
+    const { projeto_id } = req.query;
+
+    const PODE_VER = ['ADM', 'Gestor Geral', 'Gestor da Obra', 'Almoxarife'];
+    if (!PODE_VER.includes(perfil)) {
+      return res.status(403).json({ erro: 'Sem permissão.' });
+    }
+
+    let sql = `
+      SELECT r.*, u.nome AS solicitante_nome, p.nome AS projeto_nome
+      FROM requisicoes r
+      LEFT JOIN usuarios u ON u.id = r.solicitante_id
+      LEFT JOIN projetos p ON p.id = r.projeto_id
+      WHERE r.status_requisicao IN ('Finalizada', 'Encerrada sem compra')
+    `;
+    const params = [];
+
+    if (projeto_id) {
+      sql += ' AND r.projeto_id = ?';
+      params.push(Number(projeto_id));
+    } else if (!['ADM', 'Gestor Geral'].includes(perfil)) {
+      const projetosUsuario = await allQuery(
+        'SELECT projeto_id FROM projeto_usuarios WHERE usuario_id = ?',
+        [usuario.id]
+      );
+      if (projetosUsuario.length === 0) return res.json([]);
+      const ids = projetosUsuario.map((p) => p.projeto_id).join(',');
+      sql += ` AND r.projeto_id IN (${ids})`;
+    }
+
+    sql += ' ORDER BY r.atualizado_em DESC';
+    const rows = await allQuery(sql, params);
+    res.json(rows);
+  } catch (err) {
+    console.error('[requisicoes] Erro /encerradas:', err);
+    res.status(500).json({ erro: 'Erro ao buscar requisições encerradas.' });
   }
 });
 
@@ -797,6 +869,81 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// ─── PATCH /api/requisicoes/:id/editar ───────────────────────────────────
+// Gestor Geral edita dados gerais da requisição (header)
+router.patch('/:id/editar', async (req, res) => {
+  try {
+    const usuario = await carregarPerfilUsuario(req.usuario.id);
+    const perfil = inferirPerfil(usuario);
+
+    if (perfil !== 'Gestor Geral') {
+      return res.status(403).json({ erro: 'Sem permissão para editar a requisição.' });
+    }
+
+    const requisicao = await getQuery('SELECT * FROM requisicoes WHERE id = ?', [req.params.id]);
+    if (!requisicao) return res.status(404).json({ erro: 'Requisição não encontrada.' });
+
+    const STATUS_BLOQUEADOS = [STATUS_REQ.FINALIZADA, STATUS_REQ.ENCERRADA_SEM_COMPRA];
+    if (STATUS_BLOQUEADOS.includes(requisicao.status_requisicao)) {
+      return res.status(409).json({ erro: `Não é possível editar uma requisição com status "${requisicao.status_requisicao}".` });
+    }
+
+    const ok = await assertProjectAccess(req, res, Number(requisicao.projeto_id));
+    if (!ok) return;
+
+    const { urgencia, tipo_material, centro_custo, observacao_geral } = req.body;
+
+    if (urgencia && !URGENCIAS.includes(urgencia)) {
+      return res.status(400).json({ erro: `urgencia inválida. Opções: ${URGENCIAS.join(', ')}` });
+    }
+    if (tipo_material && !TIPOS_MATERIAL.includes(tipo_material)) {
+      return res.status(400).json({ erro: `tipo_material inválido. Opções: ${TIPOS_MATERIAL.join(', ')}` });
+    }
+
+    // Detecta quais campos mudaram para auditoria
+    const alteracoes = [];
+    if (urgencia && urgencia !== requisicao.urgencia) alteracoes.push({ campo: 'urgencia', anterior: requisicao.urgencia, novo: urgencia });
+    if (tipo_material && tipo_material !== requisicao.tipo_material) alteracoes.push({ campo: 'tipo_material', anterior: requisicao.tipo_material, novo: tipo_material });
+    const novoCentroCusto = centro_custo !== undefined ? (centro_custo?.trim() || null) : requisicao.centro_custo;
+    if (novoCentroCusto !== requisicao.centro_custo) alteracoes.push({ campo: 'centro_custo', anterior: requisicao.centro_custo, novo: novoCentroCusto });
+    const novaObs = observacao_geral !== undefined ? (observacao_geral?.trim() || null) : requisicao.observacao_geral;
+    if (novaObs !== requisicao.observacao_geral) alteracoes.push({ campo: 'observacao_geral', anterior: requisicao.observacao_geral, novo: novaObs });
+
+    if (alteracoes.length === 0) {
+      return res.status(400).json({ erro: 'Nenhuma alteração detectada.' });
+    }
+
+    await runQuery(
+      `UPDATE requisicoes
+         SET urgencia = COALESCE(?, urgencia),
+             tipo_material = COALESCE(?, tipo_material),
+             centro_custo = ?,
+             observacao_geral = ?,
+             atualizado_em = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [
+        urgencia || null,
+        tipo_material || null,
+        novoCentroCusto,
+        novaObs,
+        requisicao.id,
+      ]
+    );
+
+    await registrarHistorico(
+      Number(req.params.id), null, usuario.id,
+      'REQUISICAO_EDITADA', null, null,
+      { alteracoes, editado_por: usuario.nome }
+    );
+
+    const atualizada = await buscarRequisicaoCompleta(req.params.id);
+    res.json(atualizada);
+  } catch (err) {
+    console.error('[requisicoes] Erro ao editar requisição:', err);
+    res.status(500).json({ erro: 'Erro ao editar requisição.' });
+  }
+});
+
 // ─── PATCH /api/requisicoes/:id/itens/:itemId/analisar ───────────────────
 // Gestor da Obra aprova ou reprova item
 router.patch('/:id/itens/:itemId/analisar', async (req, res) => {
@@ -804,8 +951,8 @@ router.patch('/:id/itens/:itemId/analisar', async (req, res) => {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
 
-    if (!['Gestor da Obra', 'Gestor Geral', 'ADM'].includes(perfil)) {
-      return res.status(403).json({ erro: 'Apenas Gestor da Obra, Gestor Geral ou ADM podem analisar itens.' });
+    if (!['Gestor Geral'].includes(perfil)) {
+      return res.status(403).json({ erro: 'Apenas Gestor Geral pode analisar itens.' });
     }
 
     const { aprovado, motivo_reprovacao } = req.body;
@@ -868,7 +1015,7 @@ router.patch('/:id/aprovar-todos', async (req, res) => {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
 
-    if (!['Gestor da Obra', 'Gestor Geral', 'ADM'].includes(perfil)) {
+    if (!['Gestor Geral'].includes(perfil)) {
       return res.status(403).json({ erro: 'Sem permissão para aprovar itens em lote.' });
     }
 
@@ -1053,6 +1200,23 @@ router.patch('/:id/itens/:itemId/cotacoes/:cotacaoId', async (req, res) => {
       return res.status(400).json({ erro: 'valor_unitario inválido.' });
     }
 
+    // Monta diffs antes de atualizar
+    const alteracoes = [];
+    // isNumeric=true: null e 0 são equivalentes (evita falso diff quando DB guarda NULL)
+    const comparar = (campo, anterior, novo, isNumeric = false) => {
+      if (novo === undefined) return;
+      const a = isNumeric ? Number(anterior ?? 0) : (anterior ?? null);
+      const n = isNumeric ? Number(novo ?? 0) : (novo ?? null);
+      if (String(a) !== String(n)) alteracoes.push({ campo, anterior: anterior ?? null, novo: n });
+    };
+    comparar('fornecedor_nome', cotacao.fornecedor_nome, fornecedor_nome !== undefined ? String(fornecedor_nome).trim() || null : undefined);
+    comparar('cnpj',            cotacao.cnpj,            cnpj !== undefined ? cnpj || null : undefined);
+    comparar('telefone',        cotacao.telefone,         telefone !== undefined ? telefone || null : undefined);
+    comparar('email',           cotacao.email,            email !== undefined ? email || null : undefined);
+    comparar('valor_unitario',  cotacao.valor_unitario,   valor_unitario !== undefined ? Number(valor_unitario) : undefined, true);
+    comparar('frete',           cotacao.frete,            frete !== undefined ? Number(frete) : undefined, true);
+    comparar('prazo_entrega',   cotacao.prazo_entrega,    prazo_entrega !== undefined ? prazo_entrega || null : undefined);
+
     await runQuery(
       `UPDATE requisicao_cotacoes SET
          fornecedor_nome    = COALESCE(?, fornecedor_nome),
@@ -1079,10 +1243,12 @@ router.patch('/:id/itens/:itemId/cotacoes/:cotacaoId', async (req, res) => {
       ]
     );
 
-    await registrarHistorico(
-      Number(req.params.id), Number(req.params.itemId), usuario.id,
-      'COTACAO_EDITADA', null, null, null
-    );
+    if (alteracoes.length > 0) {
+      await registrarHistorico(
+        Number(req.params.id), Number(req.params.itemId), usuario.id,
+        'COTACAO_EDITADA', null, null, { alteracoes, fornecedor_nome: cotacao.fornecedor_nome }
+      );
+    }
 
     const atualizada = await getQuery(
       `SELECT c.*, COALESCE(c.fornecedor_nome, f.razao_social) AS fornecedor_nome
@@ -1095,6 +1261,59 @@ router.patch('/:id/itens/:itemId/cotacoes/:cotacaoId', async (req, res) => {
   } catch (err) {
     console.error('[requisicoes] Erro ao editar cotação:', err);
     res.status(500).json({ erro: 'Erro ao editar cotação.' });
+  }
+});
+
+// ─── PATCH /:id/itens/:itemId/finalizar-cotacao ──────────────────────────
+// ADM finaliza cotação após inserir/editar → item fica "Cotação finalizada" p/ gestor analisar
+router.patch('/:id/itens/:itemId/finalizar-cotacao', async (req, res) => {
+  try {
+    const usuario = await carregarPerfilUsuario(req.usuario.id);
+    const perfil = inferirPerfil(usuario);
+
+    if (!['ADM', 'Gestor Geral'].includes(perfil)) {
+      return res.status(403).json({ erro: 'Sem permissão para finalizar cotação.' });
+    }
+
+    const item = await getQuery(
+      'SELECT * FROM requisicao_itens WHERE id = ? AND requisicao_id = ?',
+      [req.params.itemId, req.params.id]
+    );
+    if (!item) return res.status(404).json({ erro: 'Item não encontrado.' });
+
+    if (![STATUS_ITEM.EM_COTACAO, STATUS_ITEM.COT_FINALIZADA].includes(item.status_item)) {
+      return res.status(409).json({ erro: `Item não está em cotação. Status: ${item.status_item}` });
+    }
+
+    const { count } = await getQuery(
+      'SELECT COUNT(*) AS count FROM requisicao_cotacoes WHERE item_id = ?',
+      [item.id]
+    );
+    if (count < 3) {
+      return res.status(400).json({ erro: `Preencha as 3 cotações antes de finalizar. Atual: ${count}/3` });
+    }
+
+    const req2 = await getQuery('SELECT projeto_id FROM requisicoes WHERE id = ?', [req.params.id]);
+    const ok = await assertProjectAccess(req, res, Number(req2.projeto_id));
+    if (!ok) return;
+
+    if (item.status_item !== STATUS_ITEM.COT_FINALIZADA) {
+      await runQuery(
+        `UPDATE requisicao_itens SET status_item = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?`,
+        [STATUS_ITEM.COT_FINALIZADA, item.id]
+      );
+      await registrarHistorico(
+        Number(req.params.id), item.id, usuario.id,
+        'COTACAO_FINALIZADA', item.status_item, STATUS_ITEM.COT_FINALIZADA, null
+      );
+      await atualizarStatusRequisicao(Number(req.params.id), usuario.id);
+    }
+
+    const itemAtualizado = await getQuery('SELECT * FROM requisicao_itens WHERE id = ?', [item.id]);
+    res.json(itemAtualizado);
+  } catch (err) {
+    console.error('[requisicoes] Erro ao finalizar cotação:', err);
+    res.status(500).json({ erro: 'Erro ao finalizar cotação.' });
   }
 });
 
@@ -1214,6 +1433,173 @@ router.patch('/:id/itens/:itemId/comprado', async (req, res) => {
   }
 });
 
+// ─── PATCH /:id/itens/:itemId/editar ─────────────────────────────────────
+// Gestor Geral edita todos os campos de um item
+router.patch('/:id/itens/:itemId/editar', async (req, res) => {
+  try {
+    const usuario = await carregarPerfilUsuario(req.usuario.id);
+    const perfil = inferirPerfil(usuario);
+
+    if (perfil !== 'Gestor Geral') {
+      return res.status(403).json({ erro: 'Sem permissão para editar item.' });
+    }
+
+    const item = await getQuery(
+      'SELECT * FROM requisicao_itens WHERE id = ? AND requisicao_id = ?',
+      [req.params.itemId, req.params.id]
+    );
+    if (!item) return res.status(404).json({ erro: 'Item não encontrado.' });
+
+    if ([STATUS_ITEM.COMPRADO, STATUS_ITEM.CANCELADO].includes(item.status_item)) {
+      return res.status(409).json({ erro: `Não é possível editar um item com status "${item.status_item}".` });
+    }
+
+    const req2 = await getQuery('SELECT projeto_id FROM requisicoes WHERE id = ?', [req.params.id]);
+    const ok = await assertProjectAccess(req, res, Number(req2.projeto_id));
+    if (!ok) return;
+
+    const {
+      descricao, quantidade, unidade, especificacao_tecnica,
+      justificativa, impacto_cronograma, impacto_seguranca, impacto_qualidade,
+    } = req.body;
+
+    if (descricao !== undefined && !String(descricao).trim()) {
+      return res.status(400).json({ erro: 'Descrição não pode ser vazia.' });
+    }
+    if (quantidade !== undefined && (isNaN(Number(quantidade)) || Number(quantidade) <= 0)) {
+      return res.status(400).json({ erro: 'Quantidade inválida.' });
+    }
+
+    // Detecta alterações para auditoria
+    const alteracoes = [];
+    if (descricao !== undefined && descricao.trim() !== item.descricao) alteracoes.push({ campo: 'descricao', anterior: item.descricao, novo: descricao.trim() });
+    const novaQtd = quantidade !== undefined ? Number(quantidade) : item.quantidade;
+    if (novaQtd !== item.quantidade) alteracoes.push({ campo: 'quantidade', anterior: item.quantidade, novo: novaQtd });
+    if (unidade !== undefined && (unidade || '') !== (item.unidade || '')) alteracoes.push({ campo: 'unidade', anterior: item.unidade, novo: unidade });
+    const novaEspec = especificacao_tecnica !== undefined ? (especificacao_tecnica?.trim() || null) : item.especificacao_tecnica;
+    if (novaEspec !== item.especificacao_tecnica) alteracoes.push({ campo: 'especificacao_tecnica', anterior: item.especificacao_tecnica, novo: novaEspec });
+    const novaJust = justificativa !== undefined ? (justificativa?.trim() || null) : item.justificativa;
+    if (novaJust !== item.justificativa) alteracoes.push({ campo: 'justificativa', anterior: item.justificativa, novo: novaJust });
+    const novoCrono = impacto_cronograma !== undefined ? (impacto_cronograma ? 1 : 0) : item.impacto_cronograma;
+    if (novoCrono !== item.impacto_cronograma) alteracoes.push({ campo: 'impacto_cronograma', anterior: item.impacto_cronograma, novo: novoCrono });
+    const novoSeg = impacto_seguranca !== undefined ? (impacto_seguranca ? 1 : 0) : item.impacto_seguranca;
+    if (novoSeg !== item.impacto_seguranca) alteracoes.push({ campo: 'impacto_seguranca', anterior: item.impacto_seguranca, novo: novoSeg });
+    const novoQual = impacto_qualidade !== undefined ? (impacto_qualidade ? 1 : 0) : item.impacto_qualidade;
+    if (novoQual !== item.impacto_qualidade) alteracoes.push({ campo: 'impacto_qualidade', anterior: item.impacto_qualidade, novo: novoQual });
+
+    if (alteracoes.length === 0) return res.status(400).json({ erro: 'Nenhuma alteração detectada.' });
+
+    // Mantém auditoria de quantidade se ela mudou
+    const quantidadeOriginal = novaQtd !== item.quantidade
+      ? (item.quantidade_original != null ? item.quantidade_original : item.quantidade)
+      : item.quantidade_original;
+    const alteradoEm     = novaQtd !== item.quantidade ? 'CURRENT_TIMESTAMP' : null;
+    const alteradoPorNome = novaQtd !== item.quantidade ? usuario.nome : item.alterado_por_nome;
+
+    await runQuery(
+      `UPDATE requisicao_itens
+         SET descricao = ?,
+             quantidade = ?,
+             unidade = ?,
+             especificacao_tecnica = ?,
+             justificativa = ?,
+             impacto_cronograma = ?,
+             impacto_seguranca = ?,
+             impacto_qualidade = ?,
+             quantidade_original = ?,
+             alterado_por_nome = ?,
+             alterado_em = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE alterado_em END,
+             atualizado_em = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [
+        descricao !== undefined ? descricao.trim() : item.descricao,
+        novaQtd,
+        unidade !== undefined ? (unidade || null) : item.unidade,
+        novaEspec,
+        novaJust,
+        novoCrono,
+        novoSeg,
+        novoQual,
+        quantidadeOriginal,
+        alteradoPorNome,
+        novaQtd !== item.quantidade ? 1 : 0,
+        item.id,
+      ]
+    );
+
+    await registrarHistorico(
+      Number(req.params.id), item.id, usuario.id,
+      'ITEM_EDITADO', null, null,
+      { alteracoes, editado_por: usuario.nome }
+    );
+
+    const itemAtualizado = await getQuery('SELECT * FROM requisicao_itens WHERE id = ?', [item.id]);
+    res.json(itemAtualizado);
+  } catch (err) {
+    console.error('[requisicoes] Erro ao editar item:', err);
+    res.status(500).json({ erro: 'Erro ao editar item.' });
+  }
+});
+
+// ─── PATCH /:id/itens/:itemId/alterar-quantidade ──────────────────────────
+// Gestor Geral altera a quantidade solicitada de um item, registrando auditoria
+router.patch('/:id/itens/:itemId/alterar-quantidade', async (req, res) => {
+  try {
+    const usuario = await carregarPerfilUsuario(req.usuario.id);
+    const perfil = inferirPerfil(usuario);
+
+    if (perfil !== 'Gestor Geral') {
+      return res.status(403).json({ erro: 'Sem permissão para alterar quantidade.' });
+    }
+
+    const quantidade = Number(req.body.quantidade);
+    if (!quantidade || quantidade <= 0) {
+      return res.status(400).json({ erro: 'Quantidade inválida. Informe um valor maior que zero.' });
+    }
+
+    const item = await getQuery(
+      'SELECT * FROM requisicao_itens WHERE id = ? AND requisicao_id = ?',
+      [req.params.itemId, req.params.id]
+    );
+    if (!item) return res.status(404).json({ erro: 'Item não encontrado.' });
+
+    if ([STATUS_ITEM.COMPRADO, STATUS_ITEM.CANCELADO].includes(item.status_item)) {
+      return res.status(409).json({ erro: `Não é possível alterar um item com status "${item.status_item}".` });
+    }
+
+    const req2 = await getQuery('SELECT projeto_id FROM requisicoes WHERE id = ?', [req.params.id]);
+    const ok = await assertProjectAccess(req, res, Number(req2.projeto_id));
+    if (!ok) return;
+
+    // Preserva a quantidade original somente na primeira alteração
+    const quantidadeOriginal = item.quantidade_original != null ? item.quantidade_original : item.quantidade;
+    const quantidadeAnterior = item.quantidade;
+
+    await runQuery(
+      `UPDATE requisicao_itens
+         SET quantidade = ?,
+             quantidade_original = ?,
+             alterado_em = CURRENT_TIMESTAMP,
+             alterado_por_nome = ?,
+             atualizado_em = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [quantidade, quantidadeOriginal, usuario.nome, item.id]
+    );
+
+    await registrarHistorico(
+      Number(req.params.id), item.id, usuario.id,
+      'QUANTIDADE_ALTERADA', String(quantidadeAnterior), String(quantidade),
+      { quantidade_anterior: quantidadeAnterior, quantidade_nova: quantidade }
+    );
+
+    const itemAtualizado = await getQuery('SELECT * FROM requisicao_itens WHERE id = ?', [item.id]);
+    res.json(itemAtualizado);
+  } catch (err) {
+    console.error('[requisicoes] Erro ao alterar quantidade:', err);
+    res.status(500).json({ erro: 'Erro ao alterar quantidade do item.' });
+  }
+});
+
 // ─── PATCH /:id/itens/:itemId/cancelar ────────────────────────────────────
 // ADM ou Gestor Geral cancela item individual
 router.patch('/:id/itens/:itemId/cancelar', async (req, res) => {
@@ -1266,12 +1652,68 @@ router.patch('/:id/itens/:itemId/cancelar', async (req, res) => {
 
 // ─── PATCH /api/requisicoes/:id/analisar-todos ────────────────────────────
 // Move todos os itens "Aguardando análise" para "Em cotação" (ação do DnD Solicitado→Em cotação)
+
+// ─── PATCH /api/requisicoes/:id/itens/:itemId/devolver-cotacao ───────────
+// Gestor Geral devolve item de "Em cotação" ou "Cotação finalizada" → "Aguardando análise" com motivo
+router.patch('/:id/itens/:itemId/devolver-cotacao', async (req, res) => {
+  try {
+    const usuario = await carregarPerfilUsuario(req.usuario.id);
+    const perfil = inferirPerfil(usuario);
+
+    if (!['Gestor Geral'].includes(perfil)) {
+      return res.status(403).json({ erro: 'Apenas Gestor Geral pode devolver item para cotação.' });
+    }
+
+    const { motivo } = req.body;
+    if (!motivo || !String(motivo).trim()) {
+      return res.status(400).json({ erro: 'Informe o motivo da devolução.' });
+    }
+
+    const item = await getQuery(
+      'SELECT * FROM requisicao_itens WHERE id = ? AND requisicao_id = ?',
+      [req.params.itemId, req.params.id]
+    );
+    if (!item) return res.status(404).json({ erro: 'Item não encontrado nesta requisição.' });
+
+    if (!['Em cotação', 'Cotação finalizada'].includes(item.status_item)) {
+      return res.status(409).json({ erro: `Só é possível devolver itens em "Em cotação" ou "Cotação finalizada". Status atual: ${item.status_item}` });
+    }
+
+    const req2 = await getQuery('SELECT projeto_id FROM requisicoes WHERE id = ?', [req.params.id]);
+    const ok = await assertProjectAccess(req, res, Number(req2.projeto_id));
+    if (!ok) return;
+
+    // Mantém cotações existentes — ADM corrige com base no motivo informado
+    await runQuery(
+      `UPDATE requisicao_itens
+         SET aprovado_para_cotacao = 1, status_item = 'Em cotação',
+             atualizado_em = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [item.id]
+    );
+
+    await registrarHistorico(
+      Number(req.params.id), item.id, usuario.id,
+      'COTACAO_DEVOLVIDA', item.status_item, 'Em cotação',
+      { motivo: String(motivo).trim(), devolvido_por: usuario.nome }
+    );
+
+    await atualizarStatusRequisicao(Number(req.params.id), usuario.id);
+
+    const itemAtualizado = await getQuery('SELECT * FROM requisicao_itens WHERE id = ?', [item.id]);
+    res.json(itemAtualizado);
+  } catch (err) {
+    console.error('[requisicoes] Erro ao devolver cotação:', err);
+    res.status(500).json({ erro: 'Erro ao devolver cotação.' });
+  }
+});
+
 router.patch('/:id/analisar-todos', async (req, res) => {
   try {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
 
-    if (!['Gestor da Obra', 'Gestor Geral', 'ADM'].includes(perfil)) {
+    if (!['Gestor Geral'].includes(perfil)) {
       return res.status(403).json({ erro: 'Sem permissão para iniciar cotação em lote.' });
     }
 

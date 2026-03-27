@@ -17,7 +17,7 @@ const SLUG_MAP = {
 
 // Botão de ação contextual por perfil + slug
 const ACAO_MAP = {
-  'solicitado':         { perfis: ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'ADM'], label: 'Analisar' },
+  'solicitado':         { perfis: ['Gestor Geral'], label: 'Analisar' },
   'em-cotacao':         { perfis: ['ADM', 'Gestor Geral'],                                   label: 'Cotar' },
   'aguardando-decisao': { perfis: ['Gestor Geral'],                                          label: 'Decidir' },
   'aprovado-compra':    { perfis: ['ADM', 'Gestor Geral'],                                   label: 'Registrar compra' },
@@ -113,7 +113,7 @@ export default function ComprasStatusList() {
       {/* Barra de busca */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: '1.25rem', maxWidth: 480 }}>
         <div style={{ position: 'relative', flex: 1 }}>
-          <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
+          <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', pointerEvents: 'none' }} />
           <input
             className="form-input"
             style={{ paddingLeft: 32, width: '100%' }}
@@ -123,7 +123,7 @@ export default function ComprasStatusList() {
           />
         </div>
         {busca && (
-          <button onClick={() => setBusca('')} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.82rem' }}>
+          <button onClick={() => setBusca('')} style={{ background: 'none', border: 'none', color: 'var(--gray-400)', cursor: 'pointer', fontSize: '0.82rem' }}>
             Limpar
           </button>
         )}
@@ -132,12 +132,12 @@ export default function ComprasStatusList() {
       {loading ? (
         <div className="card" style={{ padding: '3.5rem', textAlign: 'center' }}>
           <div className="spinner" style={{ margin: '0 auto' }} />
-          <p style={{ marginTop: 12, color: '#94a3b8', fontSize: '0.88rem' }}>Carregando...</p>
+          <p style={{ marginTop: 12, color: 'var(--gray-500)', fontSize: '0.88rem' }}>Carregando...</p>
         </div>
       ) : filtradas.length === 0 ? (
         <div className="card" style={{ padding: '3.5rem', textAlign: 'center' }}>
-          <FileText size={32} style={{ color: '#cbd5e1', marginBottom: 12 }} />
-          <p style={{ color: '#94a3b8', fontSize: '0.9rem', margin: 0 }}>
+          <FileText size={32} style={{ color: 'var(--gray-300)', marginBottom: 12 }} />
+          <p style={{ color: 'var(--gray-500)', fontSize: '0.9rem', margin: 0 }}>>
             Nenhuma requisição com status <strong>{config.label}</strong>
             {busca ? ` correspondendo a "${busca}"` : ''}.
           </p>
@@ -190,7 +190,7 @@ export default function ComprasStatusList() {
                         <div style={{ fontWeight: 400, fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 1 }}>{req.descricao_itens}</div>
                       )}
                     </td>
-                    <td style={{ textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                    <td style={{ textAlign: 'center', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                       {req.total_itens ?? 0}
                     </td>
                     <td style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>

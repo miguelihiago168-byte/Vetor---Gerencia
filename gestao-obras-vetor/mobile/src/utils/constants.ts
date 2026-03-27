@@ -1,10 +1,10 @@
 // Configurações globais do app
-// Para desenvolvimento local: IP da máquina na rede Wi-Fi
-// Exemplo: 'http://192.168.1.100:3001/api'
-// Para produção: domínio público
+// Altere "apiUrl" em app.json > extra para o IP atual da máquina na rede local
+// Exemplo: "http://192.168.1.100:3001/api"
+import Constants from 'expo-constants';
 
-// Altere para o IP da sua máquina na rede local
-export const API_URL = 'http://192.168.0.109:3001/api';
+const extra = Constants.expoConfig?.extra as { apiUrl?: string } | undefined;
+export const API_URL: string = extra?.apiUrl ?? 'http://localhost:3001/api';
 
 export const CORES = {
   primaria: '#1565C0',

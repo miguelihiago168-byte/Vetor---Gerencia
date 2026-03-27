@@ -386,7 +386,7 @@ function Projetos() {
         {erro && <div className="alert alert-error">{erro}</div>}
 
         {showArquivados && (
-          <div className="alert" style={{ backgroundColor: '#fff3cd', borderLeft: '4px solid #ffc107', marginBottom: '20px', color: '#856404' }}>
+          <div className="alert" style={{ backgroundColor: 'var(--badge-yellow-bg)', borderLeft: '4px solid var(--badge-yellow-color)', marginBottom: '20px', color: 'var(--badge-yellow-color)' }}>
             ⚠️ Mostrando projetos <strong>arquivados</strong>. Clique no botão acima para retornar aos projetos ativos.
           </div>
         )}

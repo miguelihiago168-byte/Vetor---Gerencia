@@ -548,8 +548,8 @@ function Usuarios() {
                 {/* Barra de ações em lote */}
                 {selecionados.length > 0 && (
                   <div className="card" style={{
-                    marginBottom: 14, padding: '12px 16px', background: 'var(--color-primary-light, #eff6ff)',
-                    border: '1px solid var(--color-primary, #3b82f6)',
+                    marginBottom: 14, padding: '12px 16px', background: 'var(--badge-blue-bg)',
+                    border: '1px solid var(--badge-blue-color)',
                     display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center'
                   }}>
                     <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -661,8 +661,8 @@ function Usuarios() {
                               <td>
                                 <span style={{
                                   fontSize: '0.78rem', fontWeight: 600, padding: '2px 8px',
-                                  borderRadius: 12, background: 'var(--color-primary-light, #eff6ff)',
-                                  color: 'var(--color-primary, #3b82f6)'
+                                  borderRadius: 12, background: 'var(--badge-blue-bg)',
+                                  color: 'var(--badge-blue-color)'
                                 }}>
                                   {normalizarPerfilTela(u.perfil)}
                                 </span>
@@ -677,8 +677,8 @@ function Usuarios() {
                                 <span style={{
                                   fontSize: '0.75rem', fontWeight: 700, padding: '2px 8px',
                                   borderRadius: 12,
-                                  background: isAtivo ? '#dcfce7' : '#fee2e2',
-                                  color: isAtivo ? '#16a34a' : '#dc2626'
+                                  background: isAtivo ? 'var(--badge-green-bg)' : 'var(--badge-red-bg)',
+                                  color: isAtivo ? 'var(--badge-green-color)' : 'var(--badge-red-color)'
                                 }}>
                                   {isAtivo ? 'Ativo' : 'Desativado'}
                                 </span>

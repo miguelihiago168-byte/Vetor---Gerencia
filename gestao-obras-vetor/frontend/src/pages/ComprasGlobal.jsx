@@ -55,7 +55,9 @@ export default function ComprasGlobal() {
       if (filtros.data_inicio)       params.data_inicio       = filtros.data_inicio;
       if (filtros.data_fim)          params.data_fim          = filtros.data_fim;
       const res = await listarRequisicoes(params);
-      setRequisicoes(res.data.requisicoes || []);
+      const STATUS_FINAIS = ['Finalizada', 'Negada', 'Cancelada', 'Encerrada sem compra'];
+      const todasReqs = res.data.requisicoes || [];
+      setRequisicoes(filtros.status_requisicao ? todasReqs : todasReqs.filter(r => !STATUS_FINAIS.includes(r.status_requisicao)));
       setResumo(res.data.resumo || {});
     } catch { /* ignore */ }
     finally { setLoading(false); }

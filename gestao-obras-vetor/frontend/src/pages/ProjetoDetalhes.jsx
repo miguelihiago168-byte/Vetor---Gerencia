@@ -294,7 +294,7 @@ function ProjetoDetalhes() {
                 </div>
                 <div style={{ fontSize: '12px', opacity: 0.8 }}>dias restantes</div>
                 {diasRestantes < 0 && (
-                  <div style={{ fontSize: '11px', background: '#ef4444', borderRadius: '4px', padding: '2px 6px', marginTop: '6px' }}>
+                  <div style={{ fontSize: '11px', background: 'var(--badge-red-color)', color: 'white', borderRadius: '4px', padding: '2px 6px', marginTop: '6px' }}>
                     VENCIDO
                   </div>
                 )}
@@ -321,7 +321,7 @@ function ProjetoDetalhes() {
                   <span>Início: {criadoEm ? criadoEm.toLocaleDateString('pt-BR') : '—'}</span>
                   <span>Término: {prazoTermino ? prazoTermino.toLocaleDateString('pt-BR') : '—'}</span>
                 </div>
-                <div style={{ background: '#e2e8f0', borderRadius: '999px', height: '12px', overflow: 'hidden', marginBottom: '8px' }}>
+                <div style={{ background: 'var(--gray-100)', borderRadius: '999px', height: '12px', overflow: 'hidden', marginBottom: '8px' }}>
                   <div style={{
                     width: `${prazoConsumidoPct}%`, height: '100%', borderRadius: '999px',
                     background: prazoStatus === 'verde' ? '#22c55e' : prazoStatus === 'amarelo' ? '#f59e0b' : '#ef4444',
@@ -363,13 +363,13 @@ function ProjetoDetalhes() {
             </div>
             <div style={{ marginTop: '14px', fontSize: '11px', color: '#94a3b8', display: 'flex', gap: '14px', justifyContent: 'center' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#4CAF50', display: 'inline-block' }} /> Ok
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--badge-green-color)', display: 'inline-block' }} /> Ok
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#FF9800', display: 'inline-block' }} /> Atenção
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--badge-yellow-color)', display: 'inline-block' }} /> Atenção
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f44336', display: 'inline-block' }} /> Crítico
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--badge-red-color)', display: 'inline-block' }} /> Crítico
               </span>
             </div>
           </div>

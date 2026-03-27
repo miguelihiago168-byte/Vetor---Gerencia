@@ -50,7 +50,7 @@ export default function Requisicoes() {
           }),
         ]);
         setProjeto(projRes.data);
-        const STATUS_FINAIS = ['Finalizada', 'Negada', 'Cancelada'];
+        const STATUS_FINAIS = ['Finalizada', 'Negada', 'Cancelada', 'Encerrada sem compra'];
         const listaProj = Array.isArray(reqRes.data) ? reqRes.data : (reqRes.data?.requisicoes || []);
         setRequisicoes(filtros.status_requisicao ? listaProj : listaProj.filter(r => !STATUS_FINAIS.includes(r.status_requisicao)));
       } else {
@@ -64,7 +64,7 @@ export default function Requisicoes() {
         ]);
         setProjetos(projsRes.data || []);
         const data = reqsRes.data;
-        const STATUS_FINAIS = ['Finalizada', 'Negada', 'Cancelada'];
+        const STATUS_FINAIS = ['Finalizada', 'Negada', 'Cancelada', 'Encerrada sem compra'];
         const lista = Array.isArray(data) ? data : (data?.requisicoes || []);
         setRequisicoes(filtros.status_requisicao ? lista : lista.filter(r => !STATUS_FINAIS.includes(r.status_requisicao)));
       }

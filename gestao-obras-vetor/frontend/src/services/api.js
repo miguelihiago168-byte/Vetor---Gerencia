@@ -138,6 +138,7 @@ export const enviarRncParaAprovacao = (id) => api.post(`/rnc/${id}/enviar-aprova
 // Notificações
 export const getNotificacoes = () => api.get('/notificacoes');
 export const marcarNotificacaoLida = (id) => api.patch(`/notificacoes/${id}/read`);
+export const marcarTodasNotificacoesLidas = () => api.patch('/notificacoes/marcar-todas-lidas');
 
 // ─── Fornecedores ─────────────────────────────────────────────────────────
 export const listarFornecedores = (params) => api.get('/fornecedores', { params });
@@ -162,8 +163,19 @@ export const marcarItemComprado = (reqId, itemId) =>
   api.patch(`/requisicoes/${reqId}/itens/${itemId}/comprado`);
 export const cancelarItemRequisicao = (reqId, itemId, data) =>
   api.patch(`/requisicoes/${reqId}/itens/${itemId}/cancelar`, data);
+export const devolverCotacaoItem = (reqId, itemId, data) =>
+  api.patch(`/requisicoes/${reqId}/itens/${itemId}/devolver-cotacao`, data);
+export const finalizarCotacaoItem = (reqId, itemId) =>
+  api.patch(`/requisicoes/${reqId}/itens/${itemId}/finalizar-cotacao`);
+export const alterarQuantidadeItem = (reqId, itemId, quantidade) =>
+  api.patch(`/requisicoes/${reqId}/itens/${itemId}/alterar-quantidade`, { quantidade });
+export const editarRequisicaoHeader = (reqId, data) =>
+  api.patch(`/requisicoes/${reqId}/editar`, data);
+export const editarItemRequisicao = (reqId, itemId, data) =>
+  api.patch(`/requisicoes/${reqId}/itens/${itemId}/editar`, data);
 export const listarCotacoesFinalizadas = (params) => api.get('/requisicoes/finalizadas', { params });
 export const listarCotacoesNegadas = (params) => api.get('/requisicoes/negadas', { params });
+export const listarRequisicoesEncerradas = (params) => api.get('/requisicoes/encerradas', { params });
 export const kanbanRequisicoes = (projetoId, params) =>
   api.get(`/requisicoes/kanban/projeto/${projetoId}`, { params });
 export const kanbanRequisicoesV2 = (projetoId, params) =>

@@ -329,7 +329,7 @@ export default function RequisicaoKanban() {
   const navigate = useNavigate();
   const { usuario } = useAuth();
   const perfil = usuario?.perfil || '';
-  const podeAprovar = ['ADM', 'Gestor Geral', 'Gestor da Obra'].includes(perfil);
+  const podeAprovar = ['Gestor Geral'].includes(perfil);
   const podeComprar = ['ADM', 'Gestor Geral'].includes(perfil);
 
   const [projeto, setProjeto] = useState(null);
@@ -428,7 +428,7 @@ export default function RequisicaoKanban() {
     const transicao = TRANSICOES[chave];
     if (!transicao) return;
 
-    if ((paraId === 'em_cotacao') && !['ADM', 'Gestor Geral', 'Gestor da Obra'].includes(perfil)) {
+    if ((paraId === 'em_cotacao') && !['Gestor Geral'].includes(perfil)) {
       showToast('Sem permissao para iniciar cotacao.'); setConfirmacao(null); return;
     }
     if (paraId === 'liberado' && !podeAprovar) {

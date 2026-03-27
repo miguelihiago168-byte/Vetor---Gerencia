@@ -34,4 +34,15 @@ router.patch('/:id/read', auth, async (req, res) => {
   }
 });
 
+// Marcar todas as notificações do usuário como lidas
+router.patch('/marcar-todas-lidas', auth, async (req, res) => {
+  try {
+    await runQuery('UPDATE notificacoes SET lido = 1 WHERE usuario_id = ? AND lido = 0', [req.usuario.id]);
+    res.json({ mensagem: 'Todas as notificações marcadas como lidas.' });
+  } catch (error) {
+    console.error('Erro ao marcar todas como lidas:', error);
+    res.status(500).json({ erro: 'Erro ao marcar todas como lidas.' });
+  }
+});
+
 module.exports = router;

@@ -553,6 +553,29 @@ router.post('/', auth, [
       }
     }
 
+    // Notificar gestores do projeto sobre novo RDO
+    try {
+      const criadorNome = req.usuario.nome || `Usuário #${req.usuario.id}`;
+      const gestoresProjeto = await allQuery(
+        `SELECT u.id FROM usuarios u
+         JOIN projeto_usuarios pu ON pu.usuario_id = u.id
+         WHERE pu.projeto_id = ?
+           AND u.id != ?
+           AND u.ativo = 1
+           AND (u.perfil IN ('Gestor Geral', 'Gestor da Obra') OR u.is_gestor = 1)`,
+        [projeto_id, req.usuario.id]
+      );
+      for (const g of gestoresProjeto) {
+        await runQuery(
+          `INSERT OR IGNORE INTO notificacoes (usuario_id, tipo, mensagem, referencia_tipo, referencia_id)
+           VALUES (?, ?, ?, ?, ?)`,
+          [g.id, 'rdo_criado', `Novo RDO criado por ${criadorNome}: ${numeroRdoFinal}`, 'rdo', rdoId]
+        );
+      }
+    } catch (e) {
+      console.warn('Falha ao notificar gestores sobre novo RDO:', e?.message || e);
+    }
+
     res.status(201).json({
       mensagem: 'RDO criado com sucesso.',
       rdo: { id: rdoId, data_relatorio: dataRelatorioStr }

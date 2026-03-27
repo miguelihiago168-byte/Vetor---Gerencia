@@ -52,6 +52,10 @@ try {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_notif_unique
     ON notificacoes (usuario_id, tipo, referencia_tipo, referencia_id)
   `);
+  // Migration: campos de auditoria de alteração de quantidade em requisicao_itens
+  db.run('ALTER TABLE requisicao_itens ADD COLUMN quantidade_original REAL', () => {});
+  db.run('ALTER TABLE requisicao_itens ADD COLUMN alterado_em DATETIME', () => {});
+  db.run('ALTER TABLE requisicao_itens ADD COLUMN alterado_por_nome TEXT', () => {});
 } catch (e) {
   console.warn('Aviso: não foi possível garantir índice único de notificações:', e?.message || e);
 }
