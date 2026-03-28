@@ -1,0 +1,15 @@
+node_modules/
+mobile/node_modules/
+
+.expo/
+.expo-shared/
+.cache/
+
+dist/
+build/
+
+android/
+ios/
+
+*.log
+.env
