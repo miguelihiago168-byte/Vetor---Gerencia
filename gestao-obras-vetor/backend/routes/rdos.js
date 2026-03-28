@@ -62,8 +62,8 @@ const atualizarStatusAtividade = async (atividadeId) => {
   );
 };
 
-// Recalcula EAP para uma lista de atividadeIds com base em TODOS os RDOs não-reprovados.
-// Chamado ao salvar (criar/atualizar) um RDO para que o avanço seja imediato.
+// Recalcula EAP para uma lista de atividadeIds com base apenas em RDOs aprovados.
+// Chamado ao salvar (criar/atualizar) e mudar status de RDO para refletir aprovações.
 const recalcularEapAtividades = async (atividadeIds) => {
   const ids = [...new Set(atividadeIds.filter(Boolean))];
   for (const atividadeId of ids) {
@@ -76,7 +76,7 @@ const recalcularEapAtividades = async (atividadeIds) => {
         SELECT COALESCE(SUM(COALESCE(ra.quantidade_executada, 0)), 0) AS total_executado_qt
         FROM rdo_atividades ra
         INNER JOIN rdos r ON ra.rdo_id = r.id
-        WHERE ra.atividade_eap_id = ? AND r.status != 'Reprovado'
+        WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
       `, [atividadeId]);
 
       let percentualExecutado = 0;
@@ -87,7 +87,7 @@ const recalcularEapAtividades = async (atividadeIds) => {
           SELECT COALESCE(SUM(ra.percentual_executado), 0) AS total_executado
           FROM rdo_atividades ra
           INNER JOIN rdos r ON ra.rdo_id = r.id
-          WHERE ra.atividade_eap_id = ? AND r.status != 'Reprovado'
+          WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
         `, [atividadeId]);
         percentualExecutado = Math.min(resultado?.total_executado || 0, 100);
       }
@@ -98,7 +98,7 @@ const recalcularEapAtividades = async (atividadeIds) => {
           SELECT MAX(r.data_relatorio) AS data_conclusao
           FROM rdo_atividades ra
           INNER JOIN rdos r ON ra.rdo_id = r.id
-          WHERE ra.atividade_eap_id = ? AND r.status != 'Reprovado'
+          WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
         `, [atividadeId]);
         dataConclusaoReal = ultima?.data_conclusao || null;
       }
@@ -115,7 +115,7 @@ const recalcularEapAtividades = async (atividadeIds) => {
   }
 };
 
-// Recalcula percentual da atividade pai de forma ponderada (recursiva)
+// Recalcula percentual da atividade pai por contribuição de peso dos filhos (recursiva)
 const recalcularPercentualPai = async (atividadeId) => {
   try {
     const paiRow = await getQuery('SELECT pai_id FROM atividades_eap WHERE id = ?', [atividadeId]);
@@ -124,26 +124,33 @@ const recalcularPercentualPai = async (atividadeId) => {
     const paiId = paiRow.pai_id;
 
     // Buscar filhos
-    const filhos = await allQuery('SELECT id, percentual_executado, quantidade_total FROM atividades_eap WHERE pai_id = ?', [paiId]);
+    const filhos = await allQuery(`
+      SELECT
+        id,
+        percentual_executado,
+        COALESCE(peso_percentual_projeto, percentual_previsto, 0) AS peso_percentual
+      FROM atividades_eap
+      WHERE pai_id = ?
+    `, [paiId]);
     if (!filhos || filhos.length === 0) return;
 
-    // Calcular média ponderada por quantidade_total se disponível
-    let somaPesada = 0;
+    // O pai avança pela contribuição de cada filho no intervalo [0..100].
+    let somaContribuicao = 0;
     let somaPeso = 0;
     let somaSimples = 0;
     for (const f of filhos) {
       const perc = parseFloat(f.percentual_executado || 0);
-      const peso = parseFloat(f.quantidade_total || 0);
+      const peso = parseFloat(f.peso_percentual || 0);
       somaSimples += perc;
       if (peso && peso > 0) {
-        somaPesada += perc * peso;
+        somaContribuicao += (perc * peso) / 100;
         somaPeso += peso;
       }
     }
 
     let novoPerc = 0;
     if (somaPeso > 0) {
-      novoPerc = Math.min(Math.round((somaPesada / somaPeso) * 100) / 100, 100);
+      novoPerc = Math.min(Math.round(somaContribuicao * 100) / 100, 100);
     } else {
       novoPerc = Math.min(Math.round((somaSimples / filhos.length) * 100) / 100, 100);
     }
@@ -222,7 +229,7 @@ router.get('/:id', auth, async (req, res) => {
 
     // Buscar fotos vinculadas às atividades do RDO
     const fotos = await allQuery(`
-      SELECT rf.*, ae.codigo_eap AS atividade_codigo, COALESCE(ae.nome, ae.descricao) AS atividade_descricao
+      SELECT rf.*, ae.codigo_eap AS atividade_codigo, COALESCE(ae.nome, ae.descricao) AS atividade_descricao, rf.atividade_avulsa_descricao
       FROM rdo_fotos rf
       LEFT JOIN rdo_atividades ra ON rf.rdo_atividade_id = ra.id
       LEFT JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
@@ -364,12 +371,37 @@ router.post('/', auth, [
     if (!eapCountRow || eapCountRow.c === 0) {
       return res.status(400).json({ erro: 'Projeto sem EAP: crie a EAP antes do RDO.' });
     }
+    const atividadesEapBody = Array.isArray(atividades) ? atividades : [];
     const atividades_avulsas = Array.isArray(req.body.atividades_avulsas) ? req.body.atividades_avulsas : [];
-    if ((!Array.isArray(atividades) || atividades.length === 0) && atividades_avulsas.length === 0) {
+    if (atividadesEapBody.length === 0 && atividades_avulsas.length === 0) {
       return res.status(400).json({ erro: 'RDO deve conter ao menos uma atividade (EAP ou avulsa).' });
     }
+
+    for (const avulsa of atividades_avulsas) {
+      const descricao = String(avulsa?.descricao || '').trim();
+      if (!descricao) {
+        return res.status(400).json({ erro: 'Atividade avulsa sem descrição.' });
+      }
+      const qtdPrevista = (avulsa?.quantidade_prevista !== undefined && avulsa?.quantidade_prevista !== null && avulsa?.quantidade_prevista !== '')
+        ? Number(avulsa.quantidade_prevista)
+        : null;
+      const qtdExecutada = (avulsa?.quantidade_executada !== undefined && avulsa?.quantidade_executada !== null && avulsa?.quantidade_executada !== '')
+        ? Number(avulsa.quantidade_executada)
+        : null;
+
+      if (qtdPrevista === null || !Number.isFinite(qtdPrevista) || qtdPrevista <= 0) {
+        return res.status(400).json({ erro: `Atividade avulsa ${descricao}: quantidade prevista deve ser maior que zero.` });
+      }
+      if (qtdExecutada === null || !Number.isFinite(qtdExecutada) || qtdExecutada < 0) {
+        return res.status(400).json({ erro: `Atividade avulsa ${descricao}: quantidade executada inválida.` });
+      }
+      if (qtdExecutada > qtdPrevista) {
+        return res.status(400).json({ erro: `Atividade avulsa ${descricao}: executado não pode ser maior que previsto.` });
+      }
+    }
+
     // Validar que todas as atividades pertencem ao mesmo projeto
-    for (const atividade of atividades) {
+    for (const atividade of atividadesEapBody) {
       const rowProj = await getQuery('SELECT projeto_id, quantidade_total FROM atividades_eap WHERE id = ?', [atividade.atividade_eap_id]);
       if (!rowProj) {
         return res.status(400).json({ erro: 'Atividade EAP inexistente no banco.' });
@@ -651,6 +683,30 @@ router.put('/:id', auth, async (req, res) => {
             return res.status(400).json({ erro: `Quantidade executada não pode ultrapassar o previsto da atividade (máx: ${quantidadeTotal}).` });
           }
         }
+      }
+    }
+
+    const atividadesAvulsasBody = Array.isArray(req.body.atividades_avulsas) ? req.body.atividades_avulsas : [];
+    for (const avulsa of atividadesAvulsasBody) {
+      const descricao = String(avulsa?.descricao || '').trim();
+      if (!descricao) {
+        return res.status(400).json({ erro: 'Atividade avulsa sem descrição.' });
+      }
+      const qtdPrevista = (avulsa?.quantidade_prevista !== undefined && avulsa?.quantidade_prevista !== null && avulsa?.quantidade_prevista !== '')
+        ? Number(avulsa.quantidade_prevista)
+        : null;
+      const qtdExecutada = (avulsa?.quantidade_executada !== undefined && avulsa?.quantidade_executada !== null && avulsa?.quantidade_executada !== '')
+        ? Number(avulsa.quantidade_executada)
+        : null;
+
+      if (qtdPrevista === null || !Number.isFinite(qtdPrevista) || qtdPrevista <= 0) {
+        return res.status(400).json({ erro: `Atividade avulsa ${descricao}: quantidade prevista deve ser maior que zero.` });
+      }
+      if (qtdExecutada === null || !Number.isFinite(qtdExecutada) || qtdExecutada < 0) {
+        return res.status(400).json({ erro: `Atividade avulsa ${descricao}: quantidade executada inválida.` });
+      }
+      if (qtdExecutada > qtdPrevista) {
+        return res.status(400).json({ erro: `Atividade avulsa ${descricao}: executado não pode ser maior que previsto.` });
       }
     }
 
@@ -999,6 +1055,14 @@ router.get('/:id/pdf', auth, async (req, res) => {
       WHERE ra.rdo_id = ? ORDER BY ae.codigo_eap
     `, [id]);
 
+    let atividadesAvulsas = [];
+    try {
+      atividadesAvulsas = rdo.atividades_avulsas ? JSON.parse(rdo.atividades_avulsas) : [];
+      if (!Array.isArray(atividadesAvulsas)) atividadesAvulsas = [];
+    } catch {
+      atividadesAvulsas = [];
+    }
+
     const maoObraLista = await allQuery(`
       SELECT rmo.*, mo.nome AS nome_colaborador, mo.funcao AS funcao_colaborador
       FROM rdo_mao_obra rmo
@@ -1021,7 +1085,7 @@ router.get('/:id/pdf', auth, async (req, res) => {
     }));
 
     const fotos = await allQuery(`
-      SELECT rf.*, ae.codigo_eap AS atividade_codigo, COALESCE(ae.nome, ae.descricao) AS atividade_descricao
+      SELECT rf.*, ae.codigo_eap AS atividade_codigo, COALESCE(ae.nome, ae.descricao) AS atividade_descricao, rf.atividade_avulsa_descricao
       FROM rdo_fotos rf
       LEFT JOIN rdo_atividades ra ON rf.rdo_atividade_id = ra.id
       LEFT JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
@@ -1031,6 +1095,13 @@ router.get('/:id/pdf', auth, async (req, res) => {
     const ocorrencias = await allQuery(
       'SELECT * FROM rdo_ocorrencias WHERE rdo_id = ? ORDER BY criado_em ASC', [id]
     );
+    const comentarios = await allQuery(`
+      SELECT rc.*, u.nome as autor_nome
+      FROM rdo_comentarios rc
+      LEFT JOIN usuarios u ON rc.usuario_id = u.id
+      WHERE rc.rdo_id = ?
+      ORDER BY rc.criado_em ASC
+    `, [id]);
     const materiais = await allQuery(
       'SELECT * FROM rdo_materiais WHERE rdo_id = ? ORDER BY criado_em ASC', [id]
     );
@@ -1111,6 +1182,49 @@ router.get('/:id/pdf', auth, async (req, res) => {
     // ── HTML template ─────────────────────────────────────────────────────
     const rows = (items, fn) => items.map(fn).join('');
 
+    const atividadesPdf = [
+      ...atividades.map((atividade) => ({
+        tipo: 'eap',
+        codigo_eap: atividade.codigo_eap,
+        descricao: atividade.atividade_descricao,
+        observacao: atividade.observacao,
+        unidade_medida: atividade.unidade_medida,
+        quantidade_prevista: Number(atividade.quantidade_total || 0),
+        quantidade_executada: Number(atividade.quantidade_executada || 0),
+        percentual_item: (() => {
+          const total = Number(atividade.quantidade_total || 0);
+          const executado = Number(atividade.quantidade_executada || 0);
+          return (total && executado)
+            ? Math.min(Math.round((executado / total) * 10000) / 100, 100)
+            : Number(atividade.percentual_executado || 0);
+        })(),
+        percentual_acumulado: Number(atividade.percentual_eap || 0)
+      })),
+      ...atividadesAvulsas.map((atividadeAvulsa) => {
+        const previsto = Number(atividadeAvulsa.quantidade_prevista || 0);
+        const executado = Number(atividadeAvulsa.quantidade_executada || 0);
+        const percentual = previsto > 0
+          ? Math.min(Math.round((executado / previsto) * 10000) / 100, 100)
+          : 0;
+        return {
+          tipo: 'avulsa',
+          codigo_eap: null,
+          descricao: atividadeAvulsa.descricao || 'Atividade avulsa',
+          observacao: atividadeAvulsa.observacao,
+          unidade_medida: atividadeAvulsa.unidade_medida || '—',
+          quantidade_prevista: previsto,
+          quantidade_executada: executado,
+          percentual_item: percentual,
+          percentual_acumulado: percentual
+        };
+      })
+    ];
+
+    const formatNumber = (value) => {
+      if (value == null || value === '' || Number.isNaN(Number(value))) return '—';
+      return Number(value).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+    };
+
     const climaSection = clima.length > 0 ? `
       <section>
         <h2>Condições Climáticas</h2>
@@ -1155,25 +1269,23 @@ router.get('/:id/pdf', auth, async (req, res) => {
         </table>
       </section>` : '';
 
-    const atividadesSection = atividades.length > 0 ? `
+    const atividadesSection = atividadesPdf.length > 0 ? `
       <section>
         <h2>Atividades Executadas</h2>
         <table>
-          <thead><tr><th>Atividade</th><th>Qtd</th><th>Unidade</th><th>% Exec.</th><th>% Acum.</th><th>Status</th></tr></thead>
-          <tbody>${rows(atividades, a => {
-            const total = Number(a.quantidade_total || 0);
-            const qtExec = Number(a.quantidade_executada || 0);
-            const percAuto = (total && qtExec) ? Math.min(Math.round((qtExec / total) * 10000) / 100, 100) : Number(a.percentual_executado || 0);
-            const acum = Number(a.percentual_eap || 0);
+          <thead><tr><th>Atividade</th><th>Prev.</th><th>Exec.</th><th>Unidade</th><th>% Exec.</th><th>% Acum.</th><th>Status</th></tr></thead>
+          <tbody>${rows(atividadesPdf, a => {
+            const acum = Number(a.percentual_acumulado || 0);
             const acumVirt = Math.min(acum, 100);
             const st = acumVirt >= 100 ? 'Concluída' : (acumVirt > 0 ? 'Em andamento' : 'Não iniciada');
             const stColor = acumVirt >= 100 ? '#10b981' : (acumVirt > 0 ? '#f59e0b' : '#6b7280');
             return `<tr>
-              <td>${a.codigo_eap ? `<strong>${a.codigo_eap}</strong> — ` : ''}${a.atividade_descricao || '—'}${a.observacao ? `<br><small style="color:#6b7280">${a.observacao}</small>` : ''}</td>
-              <td style="text-align:right">${qtExec}</td>
+              <td>${a.codigo_eap ? `<strong>${a.codigo_eap}</strong> — ` : '<strong>Avulsa</strong> — '}${a.descricao || '—'}${a.observacao ? `<br><small style="color:#6b7280">${a.observacao}</small>` : ''}</td>
+              <td style="text-align:right">${formatNumber(a.quantidade_prevista)}</td>
+              <td style="text-align:right">${formatNumber(a.quantidade_executada)}</td>
               <td>${a.unidade_medida || '—'}</td>
-              <td style="text-align:right">${percAuto}%</td>
-              <td style="text-align:right">${acum}%</td>
+              <td style="text-align:right">${formatNumber(a.percentual_item)}%</td>
+              <td style="text-align:right">${formatNumber(acum)}%</td>
               <td><span class="badge" style="background:${stColor}">${st}</span></td>
             </tr>`;
           })}</tbody>
@@ -1189,7 +1301,7 @@ router.get('/:id/pdf', auth, async (req, res) => {
             if (!b64) return '';
             return `<div class="foto-item">
               <img src="${b64}" alt="${f.nome_arquivo}" />
-              <p class="foto-desc">${f.atividade_descricao ? `<strong>${f.atividade_codigo ? f.atividade_codigo + ' — ' : ''}${f.atividade_descricao}</strong><br>` : ''}${f.descricao || f.nome_arquivo}</p>
+              <p class="foto-desc">${f.atividade_descricao ? `<strong>${f.atividade_codigo ? f.atividade_codigo + ' — ' : ''}${f.atividade_descricao}</strong><br>` : (f.atividade_avulsa_descricao ? `<strong>Avulsa — ${f.atividade_avulsa_descricao}</strong><br>` : '')}${f.descricao || f.nome_arquivo}</p>
             </div>`;
           })}
         </div>
@@ -1218,6 +1330,26 @@ router.get('/:id/pdf', auth, async (req, res) => {
               <span class="badge" style="background:${gravBadge(o.gravidade)}">${o.gravidade || '—'}</span>
             </div>
             <p>${o.descricao || '—'}</p>
+          </div>`)}
+      </section>` : '';
+
+    const comentariosSection = (comentarios.length > 0 || rdo.comentarios) ? `
+      <section>
+        <h2>Comentários</h2>
+        ${rdo.comentarios ? `
+          <div class="ocorrencia">
+            <div class="ocorrencia-header">
+              <strong>Comentário geral do RDO</strong>
+            </div>
+            <p>${String(rdo.comentarios).replace(/\n/g, '<br>')}</p>
+          </div>` : ''}
+        ${rows(comentarios, c => `
+          <div class="ocorrencia">
+            <div class="ocorrencia-header">
+              <strong>${c.autor_nome || 'Usuário'}</strong>
+              <span style="color:#64748b; font-size:10px;">${fmtDate(c.criado_em)}</span>
+            </div>
+            <p>${c.comentario ? String(c.comentario).replace(/\n/g, '<br>') : '—'}</p>
           </div>`)}
       </section>` : '';
 
@@ -1326,19 +1458,11 @@ router.get('/:id/pdf', auth, async (req, res) => {
   <div class="kpi-grid">
     <div class="kpi"><div class="kpi-val">${rdo.mao_obra_direta + rdo.mao_obra_indireta + rdo.mao_obra_terceiros}</div><div class="kpi-label">Pessoas no Dia</div></div>
     <div class="kpi"><div class="kpi-val">${equipamentosLista.length}</div><div class="kpi-label">Equipamentos</div></div>
-    <div class="kpi"><div class="kpi-val">${atividades.length}</div><div class="kpi-label">Atividades</div></div>
+    <div class="kpi"><div class="kpi-val">${atividadesPdf.length}</div><div class="kpi-label">Atividades</div></div>
     <div class="kpi"><div class="kpi-val">${ocorrencias.length}</div><div class="kpi-label">Ocorrências</div></div>
     <div class="kpi"><div class="kpi-val">${fotos.length}</div><div class="kpi-label">Fotos</div></div>
     <div class="kpi"><div class="kpi-val">${rdo.horas_trabalhadas || 0} h</div><div class="kpi-label">Horas Trabalhadas</div></div>
   </div>
-
-  ${clima.length > 0 ? `
-  <div class="info-card" style="margin-bottom:16px">
-    <h3>Condições Climáticas Resumo</h3>
-    <div class="resumo-row">
-      ${clima.map(c => `<span class="resumo-chip">${c.periodo}: ${c.condicao_tempo || '—'} / ${c.condicao_trabalho || '—'}</span>`).join('')}
-    </div>
-  </div>` : ''}
 
   ${rdo.observacoes || rdo.obs_geral ? `
   <div class="info-card">
@@ -1355,6 +1479,7 @@ ${atividadesSection}
 ${fotosSection}
 ${materiaisSection}
 ${ocorrenciasSection}
+${comentariosSection}
 ${anexosSection}
 
 </body>

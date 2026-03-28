@@ -426,7 +426,13 @@ function RDODetalhes() {
               <div key={foto.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
                 <div>
                   <div style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{foto.descricao || 'Foto'}</div>
-                  {foto.atividade_descricao && <div style={{ fontSize: '12px', color: '#9CA3AF' }}>Atividade: {foto.atividade_codigo ? `${foto.atividade_codigo} — ` : ''}{foto.atividade_descricao}</div>}
+                  {(foto.atividade_descricao || foto.atividade_avulsa_descricao) && (
+                    <div style={{ fontSize: '12px', color: '#9CA3AF' }}>
+                      Atividade: {foto.atividade_descricao
+                        ? `${foto.atividade_codigo ? `${foto.atividade_codigo} — ` : ''}${foto.atividade_descricao}`
+                        : `Avulsa — ${foto.atividade_avulsa_descricao}`}
+                    </div>
+                  )}
                 </div>
                 <span style={{ fontSize: '12px', color: '#9CA3AF' }}>{new Date(foto.criado_em).toLocaleString('pt-BR')}</span>
               </div>

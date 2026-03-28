@@ -13,8 +13,13 @@ import {
   getRdoEquipamentos, addRdoEquipamento, deleteRdoEquipamento,
   getAnexos, uploadAnexo, deleteAnexo
 } from '../services/api';
-import { ChevronDown, Plus, Trash2, Upload, FileText } from 'lucide-react';
+import { ChevronDown, Plus, Trash2, Upload, FileText, Pencil } from 'lucide-react';
 import './RDO.css';
+
+const AVULSA_OPTION = '__AVULSA__';
+
+const FOTO_EAP_PREFIX = 'eap:';
+const FOTO_AVULSA_PREFIX = 'avulsa:';
 
 const dias = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
 const weekdayFromLocalDateInput = (val) => {
@@ -95,11 +100,16 @@ function RDOForm2() {
     materiais_lista: []
   });
 
-  const [draftAvulsa, setDraftAvulsa] = useState({ descricao: '', quantidade_executada: '', observacao: '' });
-
   const [draftAtividade, setDraftAtividade] = useState({
-    atividade_eap_id: '', quantidade_executada: '', unidade_medida: '', percentual_executada: '', observacao: ''
+    atividade_eap_id: '',
+    descricao_avulsa: '',
+    quantidade_prevista_avulsa: '',
+    quantidade_executada: '',
+    unidade_medida: '',
+    percentual_executada: '',
+    observacao: ''
   });
+  const [editAtividade, setEditAtividade] = useState(null);
 
   /* ── Helpers de tempo ──────────────────────────────── */
   const toMinutes = (t) => {
@@ -142,7 +152,7 @@ function RDOForm2() {
     );
     const totalPessoas = (formData.mao_obra_detalhada || []).length;
     const totalEquip = equipamentosLista.length;
-    const totalAtiv = (formData.atividades || []).length;
+    const totalAtiv = ((formData.atividades || []).length + (formData.atividades_avulsas || []).length);
     const totalOcorr = (formData.ocorrencias_lista || []).length;
     const percMedio = totalAtiv > 0
       ? Math.round((formData.atividades.reduce((sum, a) => sum + Number(a.percentual_executado || 0), 0) / totalAtiv) * 10) / 10
@@ -220,6 +230,7 @@ function RDOForm2() {
             intervalo_almoco_inicio: rdo.intervalo_almoco_inicio || '12:00',
             intervalo_almoco_fim: rdo.intervalo_almoco_fim || '13:00',
             atividades: (rdo.atividades || []).map(a => ({
+              rdo_atividade_id: a.id,
               atividade_eap_id: a.atividade_eap_id,
               percentual_executado: a.percentual_executado,
               quantidade_executada: a.quantidade_executada || '',
@@ -235,7 +246,15 @@ function RDOForm2() {
               condicao_trabalho: c.condicao_trabalho || 'Praticável',
               pluviometria_mm: c.pluviometria_mm || 0
             })),
-            atividades_avulsas: Array.isArray(rdo.atividades_avulsas) ? rdo.atividades_avulsas : [],
+            atividades_avulsas: Array.isArray(rdo.atividades_avulsas)
+              ? rdo.atividades_avulsas.map(a => ({
+                avulsa: true,
+                descricao: a?.descricao || '',
+                quantidade_prevista: (a?.quantidade_prevista ?? ''),
+                quantidade_executada: (a?.quantidade_executada ?? ''),
+                observacao: a?.observacao || ''
+              }))
+              : [],
             mao_obra_detalhada: Array.isArray(rdo.mao_obra_detalhada) ? rdo.mao_obra_detalhada : [],
             ocorrencias_lista: (rdo.ocorrencias || []).map(o => ({
               id: o.id,
@@ -315,6 +334,25 @@ function RDOForm2() {
                       });
                   } catch { return []; }
                 })();
+                const atividadesAvulsasCopia = await (async () => {
+                  try {
+                    const det = await getRDO(ultimo.id);
+                    return (Array.isArray(det.data?.atividades_avulsas) ? det.data.atividades_avulsas : [])
+                      .map((a) => {
+                        const previsto = Number(a?.quantidade_prevista || 0);
+                        const executado = Number(a?.quantidade_executada || 0);
+                        const restante = Math.max(previsto - executado, 0);
+                        return {
+                          avulsa: true,
+                          descricao: a?.descricao || '',
+                          quantidade_prevista: restante,
+                          quantidade_executada: '',
+                          observacao: a?.observacao || ''
+                        };
+                      })
+                      .filter((a) => a.descricao && Number(a.quantidade_prevista || 0) > 0);
+                  } catch { return []; }
+                })();
                 const maoObraDetalhada = (() => {
                   if (Array.isArray(ultimo.mao_obra_detalhada)) return ultimo.mao_obra_detalhada;
                   try {
@@ -325,7 +363,8 @@ function RDOForm2() {
                 setFormData(prev => ({
                   ...prev,
                   mao_obra_detalhada: maoObraDetalhada,
-                  atividades: atividadesCopia
+                  atividades: atividadesCopia,
+                  atividades_avulsas: atividadesAvulsasCopia
                 }));
                 setEquipamentosLista(equipamentosJson);
               }
@@ -391,8 +430,135 @@ function RDOForm2() {
     return { atividadeSel, quantidadeTotal, execAprovado, restante };
   };
 
+  const getPercentualAvulsa = (previsto, executado) => {
+    const p = Number(previsto || 0);
+    const e = Number(executado || 0);
+    if (!p || p <= 0 || !Number.isFinite(e) || e <= 0) return 0;
+    return Math.min(Math.round((e / p) * 10000) / 100, 100);
+  };
+
+  const isDraftAvulsa = String(draftAtividade.atividade_eap_id) === AVULSA_OPTION;
+
+  const resetDraftAtividade = () => {
+    setDraftAtividade({
+      atividade_eap_id: '',
+      descricao_avulsa: '',
+      quantidade_prevista_avulsa: '',
+      quantidade_executada: '',
+      unidade_medida: '',
+      percentual_executada: '',
+      observacao: ''
+    });
+    setEditAtividade(null);
+  };
+
+  const startEditAtividadeEap = (atividade) => {
+    const sel = atividadesEap.find(x => String(x.id) === String(atividade.atividade_eap_id));
+    setDraftAtividade({
+      atividade_eap_id: String(atividade.atividade_eap_id || ''),
+      descricao_avulsa: '',
+      quantidade_prevista_avulsa: '',
+      quantidade_executada: atividade.quantidade_executada ?? '',
+      unidade_medida: atividade.unidade_medida || sel?.unidade_medida || '',
+      percentual_executada: atividade.percentual_executado ?? '',
+      observacao: atividade.observacao || ''
+    });
+    setEditAtividade({ tipo: 'eap', atividade_eap_id: atividade.atividade_eap_id });
+  };
+
+  const startEditAtividadeAvulsa = (atividade, index) => {
+    setDraftAtividade({
+      atividade_eap_id: AVULSA_OPTION,
+      descricao_avulsa: atividade.descricao || '',
+      quantidade_prevista_avulsa: atividade.quantidade_prevista ?? '',
+      quantidade_executada: atividade.quantidade_executada ?? '',
+      unidade_medida: '',
+      percentual_executada: getPercentualAvulsa(atividade.quantidade_prevista, atividade.quantidade_executada),
+      observacao: atividade.observacao || ''
+    });
+    setEditAtividade({ tipo: 'avulsa', index });
+  };
+
+  const fotoAtividadeOptions = useMemo(() => {
+    const eapOptions = formData.atividades.map((a) => {
+      const sel = atividadesEap.find(x => String(x.id) === String(a.atividade_eap_id));
+      return {
+        value: `${FOTO_EAP_PREFIX}${a.atividade_eap_id}`,
+        label: sel ? `${sel.codigo_eap ? `${sel.codigo_eap} — ` : ''}${sel.nome || sel.descricao || ''}` : `Atividade ${a.atividade_eap_id}`,
+        tipo: 'eap',
+        atividade_eap_id: a.atividade_eap_id,
+        rdo_atividade_id: a.rdo_atividade_id || null
+      };
+    });
+
+    const avulsaOptions = formData.atividades_avulsas.map((a, index) => ({
+      value: `${FOTO_AVULSA_PREFIX}${index}`,
+      label: a?.descricao ? `Avulsa — ${a.descricao}` : `Avulsa ${index + 1}`,
+      tipo: 'avulsa',
+      avulsaIndex: index,
+      atividade_avulsa_descricao: a?.descricao || ''
+    }));
+
+    return [...eapOptions, ...avulsaOptions];
+  }, [formData.atividades, formData.atividades_avulsas, atividadesEap]);
+
   const handleAddAtividade = () => {
     if (!draftAtividade.atividade_eap_id) return;
+
+    if (String(draftAtividade.atividade_eap_id) === AVULSA_OPTION) {
+      const descricao = String(draftAtividade.descricao_avulsa || '').trim();
+      if (!descricao) {
+        setErro('Descrição da atividade avulsa é obrigatória.');
+        return;
+      }
+
+      const qtdPrevista = draftAtividade.quantidade_prevista_avulsa !== ''
+        ? Number(draftAtividade.quantidade_prevista_avulsa)
+        : NaN;
+      const qtdExecutada = draftAtividade.quantidade_executada !== ''
+        ? Number(draftAtividade.quantidade_executada)
+        : NaN;
+
+      if (!Number.isFinite(qtdPrevista) || qtdPrevista <= 0) {
+        setErro('Quantidade prevista da atividade avulsa deve ser maior que zero.');
+        return;
+      }
+      if (!Number.isFinite(qtdExecutada) || qtdExecutada < 0) {
+        setErro('Quantidade executada da atividade avulsa é inválida.');
+        return;
+      }
+      if (qtdExecutada > qtdPrevista) {
+        setErro('Quantidade executada da atividade avulsa não pode ser maior que a prevista.');
+        return;
+      }
+
+      const itemAvulso = {
+        avulsa: true,
+        descricao,
+        quantidade_prevista: qtdPrevista,
+        quantidade_executada: qtdExecutada,
+        observacao: draftAtividade.observacao || ''
+      };
+
+      let novasAtividades = [...formData.atividades];
+      let novasAvulsas = [...formData.atividades_avulsas];
+
+      if (editAtividade?.tipo === 'avulsa') {
+        novasAvulsas = novasAvulsas.map((item, index) => index === editAtividade.index ? itemAvulso : item);
+      } else if (editAtividade?.tipo === 'eap') {
+        novasAtividades = novasAtividades.filter((item) => String(item.atividade_eap_id) !== String(editAtividade.atividade_eap_id));
+        novasAvulsas = [...novasAvulsas, itemAvulso];
+      } else {
+        novasAvulsas = [...novasAvulsas, itemAvulso];
+      }
+
+      setFormData({ ...formData, atividades: novasAtividades, atividades_avulsas: novasAvulsas });
+      setErro('');
+      resetDraftAtividade();
+      setDirty(true);
+      return;
+    }
+
     const { atividadeSel, quantidadeTotal, restante } = getAtividadeLimites(draftAtividade.atividade_eap_id);
     const qtdExec = draftAtividade.quantidade_executada !== '' ? Number(draftAtividade.quantidade_executada) : null;
     if (qtdExec !== null && !Number.isFinite(qtdExec)) {
@@ -415,18 +581,42 @@ function RDOForm2() {
       percentual_executado: percAuto,
       observacao: draftAtividade.observacao || ''
     };
-    const jaExiste = formData.atividades.some(a => a.atividade_eap_id === item.atividade_eap_id);
-    const novaLista = jaExiste
-      ? formData.atividades.map(a => a.atividade_eap_id === item.atividade_eap_id ? item : a)
-      : [...formData.atividades, item];
-    setFormData({ ...formData, atividades: novaLista });
+    let novaLista = [...formData.atividades];
+    let novasAvulsas = [...formData.atividades_avulsas];
+
+    if (editAtividade?.tipo === 'avulsa') {
+      novasAvulsas = novasAvulsas.filter((_, index) => index !== editAtividade.index);
+    }
+    if (editAtividade?.tipo === 'eap') {
+      novaLista = novaLista.filter((a) => String(a.atividade_eap_id) !== String(editAtividade.atividade_eap_id));
+    }
+
+    const jaExiste = novaLista.some(a => String(a.atividade_eap_id) === String(item.atividade_eap_id));
+    novaLista = jaExiste
+      ? novaLista.map(a => String(a.atividade_eap_id) === String(item.atividade_eap_id) ? item : a)
+      : [...novaLista, item];
+
+    setFormData({ ...formData, atividades: novaLista, atividades_avulsas: novasAvulsas });
     setErro('');
-    setDraftAtividade({ atividade_eap_id: '', quantidade_executada: '', percentual_executada: '', observacao: '' });
+    resetDraftAtividade();
     setDirty(true);
   };
 
   const removerAtividade = (id) => {
+    if (editAtividade?.tipo === 'eap' && String(editAtividade.atividade_eap_id) === String(id)) {
+      resetDraftAtividade();
+    }
     setFormData({ ...formData, atividades: formData.atividades.filter(a => a.atividade_eap_id !== id) });
+  };
+
+  const removerAtividadeAvulsa = (index) => {
+    if (editAtividade?.tipo === 'avulsa' && editAtividade.index === index) {
+      resetDraftAtividade();
+    }
+    setFormData({
+      ...formData,
+      atividades_avulsas: formData.atividades_avulsas.filter((_, i) => i !== index)
+    });
   };
 
   /* ── Clima ──────────────────────────────────────── */
@@ -636,11 +826,17 @@ function RDOForm2() {
   const handleFotoUpload = async () => {
     if (!fotoPendente.file) return;
     const { file, atividadeId, descricao } = fotoPendente;
+    const atividadeSelecionada = fotoAtividadeOptions.find((opt) => opt.value === atividadeId) || null;
     if (rdoId) {
       setIsUploadingFoto(true);
       const fd = new FormData();
       fd.append('arquivo', file);
-      if (atividadeId) fd.append('rdo_atividade_id', atividadeId);
+      if (atividadeSelecionada?.tipo === 'eap' && atividadeSelecionada?.rdo_atividade_id) {
+        fd.append('rdo_atividade_id', atividadeSelecionada.rdo_atividade_id);
+      }
+      if (atividadeSelecionada?.tipo === 'avulsa' && atividadeSelecionada?.atividade_avulsa_descricao) {
+        fd.append('atividade_avulsa_descricao', atividadeSelecionada.atividade_avulsa_descricao);
+      }
       if (descricao) fd.append('descricao', descricao);
       try {
         const resp = await uploadRdoFoto(rdoId, fd);
@@ -648,7 +844,8 @@ function RDOForm2() {
           id: resp.data?.id,
           nome_arquivo: resp.data?.arquivo?.nome_arquivo || file.name,
           descricao: descricao || file.name,
-          atividade_eap_id: atividadeId || null,
+          atividade_eap_id: atividadeSelecionada?.tipo === 'eap' ? atividadeSelecionada.atividade_eap_id : null,
+          atividade_avulsa_descricao: atividadeSelecionada?.tipo === 'avulsa' ? atividadeSelecionada.atividade_avulsa_descricao : null,
           criado_em: new Date().toISOString()
         }]);
       } catch (e) {
@@ -657,7 +854,15 @@ function RDOForm2() {
         setIsUploadingFoto(false);
       }
     } else {
-      setFotosQueue(prev => [...prev, { file, atividadeId, descricao }]);
+      setFotosQueue(prev => [...prev, {
+        file,
+        atividadeId,
+        descricao,
+        atividadeTipo: atividadeSelecionada?.tipo || null,
+        atividade_eap_id: atividadeSelecionada?.tipo === 'eap' ? atividadeSelecionada.atividade_eap_id : null,
+        atividade_avulsa_descricao: atividadeSelecionada?.tipo === 'avulsa' ? atividadeSelecionada.atividade_avulsa_descricao : null,
+        atividade_label: atividadeSelecionada?.label || ''
+      }]);
     }
     setFotoPendente({ file: null, atividadeId: '', descricao: '' });
     if (fotoInputRef.current) fotoInputRef.current.value = '';
@@ -736,7 +941,13 @@ function RDOForm2() {
             observacao: a.observacao || ''
           };
         }),
-        atividades_avulsas: formData.atividades_avulsas
+        atividades_avulsas: formData.atividades_avulsas.map(a => ({
+          avulsa: true,
+          descricao: String(a.descricao || '').trim(),
+          quantidade_prevista: a.quantidade_prevista === '' || a.quantidade_prevista == null ? null : Number(a.quantidade_prevista),
+          quantidade_executada: a.quantidade_executada === '' || a.quantidade_executada == null ? null : Number(a.quantidade_executada),
+          observacao: a.observacao || ''
+        }))
       };
 
       for (const atividade of body.atividades) {
@@ -747,6 +958,23 @@ function RDOForm2() {
         }
         if (quantidadeTotal > 0 && restante != null && atividade.quantidade_executada > restante) {
           throw new Error(`Atividade ${atividadeSel?.codigo_eap || atividade.atividade_eap_id}: quantidade maior que restante (${formatQtd(restante)} ${atividadeSel?.unidade_medida || ''}).`);
+        }
+      }
+
+      for (const avulsa of body.atividades_avulsas) {
+        if (!String(avulsa.descricao || '').trim()) {
+          throw new Error('Atividade avulsa sem descrição.');
+        }
+        const previsto = avulsa.quantidade_prevista;
+        const executado = avulsa.quantidade_executada;
+        if (!Number.isFinite(previsto) || previsto <= 0) {
+          throw new Error(`Atividade avulsa ${avulsa.descricao}: quantidade prevista deve ser maior que zero.`);
+        }
+        if (!Number.isFinite(executado) || executado < 0) {
+          throw new Error(`Atividade avulsa ${avulsa.descricao}: quantidade executada inválida.`);
+        }
+        if (executado > previsto) {
+          throw new Error(`Atividade avulsa ${avulsa.descricao}: executado não pode ser maior que previsto.`);
         }
       }
 
@@ -783,13 +1011,29 @@ function RDOForm2() {
         for (const eq of equipamentosLista) {
           try { await addRdoEquipamento(finalId, { nome: eq.nome, quantidade: eq.quantidade }); } catch {}
         }
+        let rdoCriadoDetalhado = null;
+        if (fotosQueue.length > 0) {
+          try {
+            const det = await getRDO(finalId);
+            rdoCriadoDetalhado = det.data || null;
+          } catch {}
+        }
+
         // Upload fotos da fila
-        for (const { file, atividadeId, descricao } of fotosQueue) {
+        for (const foto of fotosQueue) {
           try {
             const fd = new FormData();
-            fd.append('arquivo', file);
-            if (atividadeId) fd.append('rdo_atividade_id', atividadeId);
-            if (descricao) fd.append('descricao', descricao);
+            fd.append('arquivo', foto.file);
+            if (foto.atividadeTipo === 'eap' && foto.atividade_eap_id && rdoCriadoDetalhado?.atividades) {
+              const atividadeRdo = rdoCriadoDetalhado.atividades.find((a) => String(a.atividade_eap_id) === String(foto.atividade_eap_id));
+              if (atividadeRdo?.id) {
+                fd.append('rdo_atividade_id', atividadeRdo.id);
+              }
+            }
+            if (foto.atividadeTipo === 'avulsa' && foto.atividade_avulsa_descricao) {
+              fd.append('atividade_avulsa_descricao', foto.atividade_avulsa_descricao);
+            }
+            if (foto.descricao) fd.append('descricao', foto.descricao);
             await uploadRdoFoto(finalId, fd);
           } catch {}
         }
@@ -989,7 +1233,7 @@ function RDOForm2() {
           {formData.climaRegistros.length === 0 ? (
             <div className="rdo-empty">Nenhum registro climático adicionado.</div>
           ) : (
-            <table className="rdo-table">
+            <table className="rdo-table rdo-activities-table">
               <thead><tr>
                 <th>Período</th><th>Clima</th><th>Praticabilidade</th><th>Pluviometria</th>
                 <th className="td-actions"></th>
@@ -1137,7 +1381,7 @@ function RDOForm2() {
         </Section>
 
         {/* ══ SEÇÃO 5 — Atividades Executadas ══════════ */}
-        <Section id="atividades" num="5" title="Atividades Executadas" badge={formData.atividades.length || null} isOpen={openSections.atividades} onToggle={toggleSection}>
+        <Section id="atividades" num="5" title="Atividades Executadas" badge={(formData.atividades.length + formData.atividades_avulsas.length) || null} isOpen={openSections.atividades} onToggle={toggleSection}>
           <div className="rdo-grid-3" style={{ marginBottom: '8px' }}>
             <div className="form-group" style={{ gridColumn: 'span 2' }}>
               <label className="form-label">Atividade</label>
@@ -1145,9 +1389,14 @@ function RDOForm2() {
                 onChange={(e) => {
                   const id = e.target.value;
                   const sel = atividadesEap.find(a => String(a.id) === String(id));
-                  setDraftAtividade({ ...draftAtividade, atividade_eap_id: id, unidade_medida: sel ? (sel.unidade_medida || '') : '' });
+                  setDraftAtividade({
+                    ...draftAtividade,
+                    atividade_eap_id: id,
+                    unidade_medida: id === AVULSA_OPTION ? '' : (sel ? (sel.unidade_medida || '') : '')
+                  });
                 }}>
                 <option value="">Selecione a atividade...</option>
+                <option value={AVULSA_OPTION}>+ Atividade avulsa (sem vínculo EAP)</option>
                 {groupedLeafsByParent.map(group => (
                   <optgroup key={group.parentId} label={`${group.parent?.codigo_eap || ''} — ${group.parent?.nome || group.parent?.descricao || ''}`}>
                     {group.children.map(a => (
@@ -1160,6 +1409,7 @@ function RDOForm2() {
             <div className="form-group">
               <label className="form-label">Unidade de medida</label>
               <select className="form-select" value={draftAtividade.unidade_medida}
+                disabled={isDraftAvulsa}
                 onChange={(e) => setDraftAtividade({ ...draftAtividade, unidade_medida: e.target.value })}>
                 <option value="">—</option>
                 <option value="m">m — metro</option>
@@ -1176,15 +1426,54 @@ function RDOForm2() {
               </select>
             </div>
           </div>
+
+          {isDraftAvulsa && (
+            <div className="rdo-grid-2" style={{ marginBottom: '8px' }}>
+              <div className="form-group">
+                <label className="form-label">Descrição da atividade avulsa</label>
+                <input
+                  className="form-input"
+                  type="text"
+                  placeholder="Ex: Execução de base"
+                  value={draftAtividade.descricao_avulsa}
+                  onChange={(e) => setDraftAtividade({ ...draftAtividade, descricao_avulsa: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Quantidade prevista</label>
+                <input
+                  className="form-input"
+                  type="number"
+                  min="0"
+                  value={draftAtividade.quantidade_prevista_avulsa}
+                  onChange={(e) => setDraftAtividade({ ...draftAtividade, quantidade_prevista_avulsa: e.target.value })}
+                />
+              </div>
+            </div>
+          )}
+
           <div className="rdo-grid-2" style={{ marginBottom: '8px' }}>
             <div className="form-group">
               <label className="form-label">Quantidade executada</label>
               <input className="form-input" type="number" min="0"
-                max={(() => { const { restante } = getAtividadeLimites(draftAtividade.atividade_eap_id); return restante != null ? restante : undefined; })()}
+                max={(() => {
+                  if (isDraftAvulsa) {
+                    const prev = draftAtividade.quantidade_prevista_avulsa !== '' ? Number(draftAtividade.quantidade_prevista_avulsa) : null;
+                    return Number.isFinite(prev) && prev != null ? prev : undefined;
+                  }
+                  const { restante } = getAtividadeLimites(draftAtividade.atividade_eap_id);
+                  return restante != null ? restante : undefined;
+                })()}
                 value={draftAtividade.quantidade_executada}
                 onChange={(e) => setDraftAtividade({ ...draftAtividade, quantidade_executada: e.target.value })} />
               <small style={{ color: 'var(--gray-600)', fontSize: '11px' }}>
                 {(() => {
+                  if (isDraftAvulsa) {
+                    const prev = draftAtividade.quantidade_prevista_avulsa !== '' ? Number(draftAtividade.quantidade_prevista_avulsa) : 0;
+                    const exec = draftAtividade.quantidade_executada !== '' ? Number(draftAtividade.quantidade_executada) : 0;
+                    if (!prev || prev <= 0) return 'Informe a quantidade prevista para a atividade avulsa.';
+                    return `Previsto: ${formatQtd(prev)} | Executado: ${formatQtd(exec)} | Restante: ${formatQtd(Math.max(prev - exec, 0))}`;
+                  }
                   const { atividadeSel, quantidadeTotal, execAprovado, restante } = getAtividadeLimites(draftAtividade.atividade_eap_id);
                   if (!atividadeSel || !quantidadeTotal) return 'Selecione uma atividade.';
                   return `Restante: ${formatQtd(restante)} ${atividadeSel.unidade_medida || ''} (total ${formatQtd(quantidadeTotal)} − aprovado ${formatQtd(execAprovado)})`;
@@ -1194,6 +1483,9 @@ function RDOForm2() {
             <div className="form-group">
               <label className="form-label">% Executado (calculado)</label>
               <input className="form-input" type="number" readOnly value={(function () {
+                if (isDraftAvulsa) {
+                  return getPercentualAvulsa(draftAtividade.quantidade_prevista_avulsa, draftAtividade.quantidade_executada);
+                }
                 const sel = atividadesEap.find(a => String(a.id) === String(draftAtividade.atividade_eap_id));
                 const total = sel ? Number(sel.quantidade_total || 0) : 0;
                 const q = draftAtividade.quantidade_executada !== '' ? Number(draftAtividade.quantidade_executada) : 0;
@@ -1208,15 +1500,27 @@ function RDOForm2() {
               value={draftAtividade.observacao}
               onChange={(e) => setDraftAtividade({ ...draftAtividade, observacao: e.target.value })} />
           </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
-            <button className="btn btn-primary" onClick={handleAddAtividade}><Plus size={15} /> Adicionar atividade</button>
+          <div className="rdo-activity-toolbar" style={{ marginBottom: '10px' }}>
+            {editAtividade ? (
+              <div className="rdo-activity-edit-hint">
+                Editando atividade {editAtividade.tipo === 'avulsa' ? 'avulsa' : 'EAP'}. Clique em salvar para atualizar o item selecionado.
+              </div>
+            ) : <div />}
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {editAtividade && (
+                <button className="btn btn-secondary" onClick={resetDraftAtividade}>Cancelar edição</button>
+              )}
+              <button className="btn btn-primary" onClick={handleAddAtividade}>
+                <Plus size={15} /> {editAtividade ? 'Salvar edição' : 'Adicionar atividade'}
+              </button>
+            </div>
           </div>
-          {formData.atividades.length === 0 ? (
+          {(formData.atividades.length + formData.atividades_avulsas.length) === 0 ? (
             <div className="rdo-empty">Nenhuma atividade adicionada.</div>
           ) : (
             <table className="rdo-table">
               <thead><tr>
-                <th>Atividade</th><th>Qtd. Exec.</th><th>Unidade</th>
+                <th>Tipo</th><th>Atividade</th><th>Qtd. Prev.</th><th>Qtd. Exec.</th><th>Unidade</th>
                 <th>% Exec.</th><th>% Acumulado</th><th>Status</th><th className="td-actions"></th>
               </tr></thead>
               <tbody>
@@ -1231,7 +1535,11 @@ function RDOForm2() {
                   const statusCls = percAcum >= 100 ? 'aprovado' : percAcum > 0 ? 'em-analise' : 'preenchimento';
                   return (
                     <React.Fragment key={a.atividade_eap_id}>
-                      <tr>
+                      <tr
+                        className={`rdo-activity-main-row${editAtividade?.tipo === 'eap' && String(editAtividade.atividade_eap_id) === String(a.atividade_eap_id) ? ' is-selected' : ''}`}
+                        onClick={() => startEditAtividadeEap(a)}
+                      >
+                        <td><span className="rdo-badge em-analise">EAP</span></td>
                         <td>
                           <div style={{ fontWeight: 600 }}>{sel?.codigo_eap ? `${sel.codigo_eap} — ` : ''}{sel?.nome || sel?.descricao || ''}</div>
                           {total > 0 && (
@@ -1239,40 +1547,61 @@ function RDOForm2() {
                               {formatQtd(execAprov + q)}/{formatQtd(total)} {sel?.unidade_medida || ''}
                             </div>
                           )}
+                          {a.observacao && (
+                            <div className="rdo-activity-note">Obs.: {a.observacao}</div>
+                          )}
                         </td>
-                        <td>
-                          <input className="form-input" type="number" min="0"
-                            max={total ? Math.max(total - execAprov, 0) : undefined}
-                            value={a.quantidade_executada}
-                            onChange={(e) => {
-                              const valor = e.target.value;
-                              const qv = valor !== '' ? Number(valor) : 0;
-                              const restante = total ? Math.max(total - execAprov, 0) : null;
-                              if (valor !== '' && (!Number.isFinite(qv) || qv < 0)) { setErro('Quantidade inválida.'); return; }
-                              if (valor !== '' && total > 0 && restante != null && qv > restante) {
-                                setErro(`Máximo: ${formatQtd(restante)} ${sel?.unidade_medida || ''}.`); return;
-                              }
-                              const percAuto = (total && qv) ? Math.min(Math.round((qv / total) * 10000) / 100, 100) : 0;
-                              setFormData({ ...formData, atividades: formData.atividades.map(x => x.atividade_eap_id === a.atividade_eap_id ? { ...x, quantidade_executada: valor, percentual_executado: percAuto } : x) });
-                              setErro('');
-                            }} />
-                        </td>
-                        <td>{a.unidade_medida || '—'}</td>
-                        <td><input className="form-input" type="number" value={percDia} readOnly style={{ width: '70px' }} /></td>
-                        <td><input className="form-input" type="number" value={percAcum} readOnly style={{ width: '70px' }} /></td>
+                        <td><span className="rdo-activity-value">{total > 0 ? formatQtd(total) : '—'}</span></td>
+                        <td><span className="rdo-activity-value">{formatQtd(q)}</span></td>
+                        <td><span className="rdo-activity-muted">{a.unidade_medida || '—'}</span></td>
+                        <td><span className="rdo-activity-value">{formatPerc(percDia)}</span></td>
+                        <td><span className="rdo-activity-value">{formatPerc(percAcum)}</span></td>
                         <td><span className={`rdo-badge ${statusCls}`}>{statusLabel}</span></td>
                         <td className="td-actions">
-                          <button className="btn btn-danger" style={{ padding: '4px 8px' }} onClick={() => removerAtividade(a.atividade_eap_id)}>
+                          <button className="btn btn-secondary" style={{ padding: '4px 8px', marginRight: '6px' }} onClick={(e) => { e.stopPropagation(); startEditAtividadeEap(a); }}>
+                            <Pencil size={14} />
+                          </button>
+                          <button className="btn btn-danger" style={{ padding: '4px 8px' }} onClick={(e) => { e.stopPropagation(); removerAtividade(a.atividade_eap_id); }}>
                             <Trash2 size={14} />
                           </button>
                         </td>
                       </tr>
-                      <tr>
-                        <td colSpan={7} style={{ paddingTop: 0, paddingBottom: '8px' }}>
-                          <textarea className="form-input" style={{ resize: 'vertical', minHeight: '36px', fontSize: '12px' }}
-                            placeholder="Observação sobre a atividade..."
-                            value={a.observacao}
-                            onChange={(e) => setFormData({ ...formData, atividades: formData.atividades.map(x => x.atividade_eap_id === a.atividade_eap_id ? { ...x, observacao: e.target.value } : x) })} />
+                    </React.Fragment>
+                  );
+                })}
+
+                {formData.atividades_avulsas.map((a, idx) => {
+                  const qtdPrevista = Number(a.quantidade_prevista || 0);
+                  const qtdExecutada = Number(a.quantidade_executada || 0);
+                  const perc = getPercentualAvulsa(qtdPrevista, qtdExecutada);
+                  const statusLabel = perc >= 100 ? 'Concluída' : perc > 0 ? 'Em andamento' : 'Não iniciada';
+                  const statusCls = perc >= 100 ? 'aprovado' : perc > 0 ? 'em-analise' : 'preenchimento';
+                  return (
+                    <React.Fragment key={`avulsa-${idx}`}>
+                      <tr
+                        className={`rdo-activity-main-row${editAtividade?.tipo === 'avulsa' && editAtividade.index === idx ? ' is-selected' : ''}`}
+                        onClick={() => startEditAtividadeAvulsa(a, idx)}
+                      >
+                        <td><span className="rdo-badge preenchimento">Avulsa</span></td>
+                        <td>
+                          <div className="rdo-activity-title">{a.descricao || 'Atividade avulsa'}</div>
+                          {a.observacao && (
+                            <div className="rdo-activity-note">Obs.: {a.observacao}</div>
+                          )}
+                        </td>
+                        <td><span className="rdo-activity-value">{formatQtd(qtdPrevista)}</span></td>
+                        <td><span className="rdo-activity-value">{formatQtd(qtdExecutada)}</span></td>
+                        <td><span className="rdo-activity-muted">—</span></td>
+                        <td><span className="rdo-activity-value">{formatPerc(perc)}</span></td>
+                        <td><span className="rdo-activity-value">{formatPerc(perc)}</span></td>
+                        <td><span className={`rdo-badge ${statusCls}`}>{statusLabel}</span></td>
+                        <td className="td-actions">
+                          <button className="btn btn-secondary" style={{ padding: '4px 8px', marginRight: '6px' }} onClick={(e) => { e.stopPropagation(); startEditAtividadeAvulsa(a, idx); }}>
+                            <Pencil size={14} />
+                          </button>
+                          <button className="btn btn-danger" style={{ padding: '4px 8px' }} onClick={(e) => { e.stopPropagation(); removerAtividadeAvulsa(idx); }}>
+                            <Trash2 size={14} />
+                          </button>
                         </td>
                       </tr>
                     </React.Fragment>
@@ -1281,68 +1610,6 @@ function RDOForm2() {
               </tbody>
             </table>
           )}
-
-          {/* —— Atividades Avulsas —— */}
-          <div style={{ marginTop: '16px', borderTop: '1px dashed #F57F17', paddingTop: '14px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-              <span style={{ fontWeight: 700, color: '#F57F17', fontSize: '14px' }}>Atividades Avulsas</span>
-              <span style={{ fontSize: '12px', color: '#64748b' }}>(sem vínculo EAP)</span>
-            </div>
-            <div className="rdo-grid-2" style={{ marginBottom: '8px' }}>
-              <div className="form-group">
-                <label className="form-label">Descrição</label>
-                <input className="form-input" type="text" placeholder="Ex: Limpeza do canteiro..."
-                  value={draftAvulsa.descricao}
-                  onChange={(e) => setDraftAvulsa({ ...draftAvulsa, descricao: e.target.value })} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Quantidade</label>
-                <input className="form-input" type="number" min="0"
-                  value={draftAvulsa.quantidade_executada}
-                  onChange={(e) => setDraftAvulsa({ ...draftAvulsa, quantidade_executada: e.target.value })} />
-              </div>
-            </div>
-            <div className="form-group" style={{ marginBottom: '8px' }}>
-              <label className="form-label">Observação</label>
-              <textarea className="form-input" style={{ resize: 'vertical', minHeight: '44px' }}
-                value={draftAvulsa.observacao}
-                onChange={(e) => setDraftAvulsa({ ...draftAvulsa, observacao: e.target.value })} />
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
-              <button className="btn btn-primary" style={{ borderColor: '#F57F17', background: '#F57F17' }}
-                onClick={() => {
-                  if (!draftAvulsa.descricao.trim()) return;
-                  setFormData(prev => ({ ...prev, atividades_avulsas: [...prev.atividades_avulsas, { ...draftAvulsa, avulsa: true }] }));
-                  setDraftAvulsa({ descricao: '', quantidade_executada: '', observacao: '' });
-                }}>
-                <Plus size={15} /> Adicionar avulsa
-              </button>
-            </div>
-            {formData.atividades_avulsas.length === 0 ? (
-              <div className="rdo-empty" style={{ color: '#94a3b8' }}>Nenhuma atividade avulsa.</div>
-            ) : (
-              <table className="rdo-table">
-                <thead><tr>
-                  <th>Descrição</th><th>Qtd.</th><th>Observação</th><th className="td-actions"></th>
-                </tr></thead>
-                <tbody>
-                  {formData.atividades_avulsas.map((a, idx) => (
-                    <tr key={idx}>
-                      <td>{a.descricao}</td>
-                      <td>{a.quantidade_executada || '—'}</td>
-                      <td>{a.observacao || '—'}</td>
-                      <td className="td-actions">
-                        <button className="btn btn-danger" style={{ padding: '4px 8px' }}
-                          onClick={() => setFormData(prev => ({ ...prev, atividades_avulsas: prev.atividades_avulsas.filter((_, i) => i !== idx) }))}>
-                          <Trash2 size={14} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
         </Section>
 
         {/* ══ SEÇÃO 6 — Fotos do RDO ═══════════════════ */}
@@ -1358,10 +1625,9 @@ function RDOForm2() {
               <select className="form-select" value={fotoPendente.atividadeId}
                 onChange={(e) => setFotoPendente(prev => ({ ...prev, atividadeId: e.target.value }))}>
                 <option value="">Nenhuma</option>
-                {formData.atividades.map(a => {
-                  const sel = atividadesEap.find(x => String(x.id) === String(a.atividade_eap_id));
-                  return <option key={a.atividade_eap_id} value={a.atividade_eap_id}>{sel?.codigo_eap} — {sel?.nome || sel?.descricao || ''}</option>;
-                })}
+                {fotoAtividadeOptions.map((opcao) => (
+                  <option key={opcao.value} value={opcao.value}>{opcao.label}</option>
+                ))}
               </select>
             </div>
             <div className="form-group" style={{ flex: '2' }}>
@@ -1391,7 +1657,12 @@ function RDOForm2() {
                   <tr key={f.id}>
                     <td><FileText size={14} style={{ marginRight: '6px', color: '#94a3b8' }} />{f.nome_arquivo}</td>
                     <td>{f.descricao || '—'}</td>
-                    <td style={{ color: '#64748b', fontSize: '12px' }}>{(() => { const a = atividadesEap.find(x => String(x.id) === String(f.atividade_eap_id)); return a ? `${a.codigo_eap} — ${a.nome || a.descricao || ''}` : (f.atividade_descricao || '—'); })()}</td>
+                    <td style={{ color: '#64748b', fontSize: '12px' }}>{(() => {
+                      const a = atividadesEap.find(x => String(x.id) === String(f.atividade_eap_id));
+                      if (a) return `${a.codigo_eap} — ${a.nome || a.descricao || ''}`;
+                      if (f.atividade_avulsa_descricao) return `Avulsa — ${f.atividade_avulsa_descricao}`;
+                      return (f.atividade_descricao || '—');
+                    })()}</td>
                     <td style={{ color: '#94a3b8', fontSize: '12px' }}>{f.criado_em ? new Date(f.criado_em).toLocaleString('pt-BR') : '—'}</td>
                   </tr>
                 ))}
@@ -1399,7 +1670,7 @@ function RDOForm2() {
                   <tr key={`q-${i}`} style={{ background: '#fefce8' }}>
                     <td><FileText size={14} style={{ marginRight: '6px', color: '#94a3b8' }} />{f.file.name}</td>
                     <td>{f.descricao || '—'}</td>
-                    <td style={{ color: '#64748b', fontSize: '12px' }}>{(() => { const a = atividadesEap.find(x => String(x.id) === String(f.atividadeId)); return a ? `${a.codigo_eap} — ${a.nome || a.descricao || ''}` : (f.atividadeId ? '—' : '—'); })()}</td>
+                    <td style={{ color: '#64748b', fontSize: '12px' }}>{f.atividade_label || '—'}</td>
                     <td style={{ color: '#94a3b8', fontSize: '12px' }}>—</td>
                   </tr>
                 ))}

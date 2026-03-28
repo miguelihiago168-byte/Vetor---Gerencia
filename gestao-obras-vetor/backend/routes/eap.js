@@ -410,7 +410,7 @@ const atualizarStatusAtividade = async (atividadeId) => {
   );
 };
 
-// Recalcular percentual do pai com base nos filhos (média ponderada por quantidade_total)
+// Recalcular percentual do pai com base nos filhos (contribuição por peso percentual)
 const recalcularPercentualPaiLocal = async (atividadeId) => {
   try {
     const paiRow = await getQuery('SELECT pai_id FROM atividades_eap WHERE id = ?', [atividadeId]);
@@ -419,25 +419,32 @@ const recalcularPercentualPaiLocal = async (atividadeId) => {
     const paiId = paiRow.pai_id;
 
     // Buscar filhos do pai
-    const filhos = await allQuery('SELECT id, percentual_executado, quantidade_total FROM atividades_eap WHERE pai_id = ?', [paiId]);
+    const filhos = await allQuery(`
+      SELECT
+        id,
+        percentual_executado,
+        COALESCE(peso_percentual_projeto, percentual_previsto, 0) AS peso_percentual
+      FROM atividades_eap
+      WHERE pai_id = ?
+    `, [paiId]);
     if (!filhos || filhos.length === 0) return;
 
-    let somaPesada = 0;
+    let somaContribuicao = 0;
     let somaPeso = 0;
     let somaSimples = 0;
     for (const f of filhos) {
       const perc = parseFloat(f.percentual_executado || 0);
-      const peso = parseFloat(f.quantidade_total || 0);
+      const peso = parseFloat(f.peso_percentual || 0);
       somaSimples += perc;
       if (peso && peso > 0) {
-        somaPesada += perc * peso;
+        somaContribuicao += (perc * peso) / 100;
         somaPeso += peso;
       }
     }
 
     let novoPerc = 0;
     if (somaPeso > 0) {
-      novoPerc = Math.min(Math.round((somaPesada / somaPeso) * 100) / 100, 100);
+      novoPerc = Math.min(Math.round(somaContribuicao * 100) / 100, 100);
     } else {
       novoPerc = Math.min(Math.round((somaSimples / filhos.length) * 100) / 100, 100);
     }

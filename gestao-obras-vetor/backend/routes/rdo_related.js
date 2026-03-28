@@ -18,6 +18,10 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 
+runQuery("ALTER TABLE rdo_fotos ADD COLUMN atividade_avulsa_descricao TEXT").catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] atividade_avulsa_descricao:', e.message);
+});
+
 const garantirTabelaMaoObraDireta = async () => {
   await runQuery(`
     CREATE TABLE IF NOT EXISTS mao_obra_direta (
@@ -386,11 +390,14 @@ router.post('/:rdoId/foto', auth, upload.single('arquivo'), async (req, res) => 
   try {
     if (!req.file) return res.status(400).json({ erro: 'Nenhum arquivo enviado.' });
     const { rdoId } = req.params;
-    const { rdo_atividade_id, descricao } = req.body;
+    const { rdo_atividade_id, descricao, atividade_avulsa_descricao } = req.body;
     const { originalname, filename, mimetype, size } = req.file;
 
     // Salvar no table rdo_fotos
-    const result = await runQuery('INSERT INTO rdo_fotos (rdo_id, rdo_atividade_id, nome_arquivo, caminho_arquivo, descricao, criado_por) VALUES (?, ?, ?, ?, ?, ?)', [rdoId, rdo_atividade_id || null, originalname, filename, descricao || null, req.usuario.id]);
+    const result = await runQuery(
+      'INSERT INTO rdo_fotos (rdo_id, rdo_atividade_id, nome_arquivo, caminho_arquivo, descricao, atividade_avulsa_descricao, criado_por) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [rdoId, rdo_atividade_id || null, originalname, filename, descricao || null, atividade_avulsa_descricao || null, req.usuario.id]
+    );
 
     // Também manter em anexos para download se necessário
     await runQuery('INSERT INTO anexos (rdo_id, tipo, nome_arquivo, caminho_arquivo, tamanho) VALUES (?, ?, ?, ?, ?)', [rdoId, mimetype, originalname, filename, size]);

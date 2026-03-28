@@ -1,6 +1,6 @@
 /**
  * Recalcula percentual_executado de todas as atividades EAP ao iniciar o servidor.
- * Usa todos os RDOs que não estão Reprovados.
+ * Usa apenas RDOs aprovados.
  */
 const { getQuery, allQuery, runQuery } = require('../config/database');
 
@@ -11,7 +11,7 @@ async function recalcularTodasAtividades() {
       SELECT DISTINCT ra.atividade_eap_id AS id
       FROM rdo_atividades ra
       JOIN rdos r ON ra.rdo_id = r.id
-      WHERE r.status != 'Reprovado'
+      WHERE r.status = 'Aprovado'
     `);
 
     for (const { id: atividadeId } of atividades) {
@@ -23,7 +23,7 @@ async function recalcularTodasAtividades() {
         SELECT COALESCE(SUM(COALESCE(ra.quantidade_executada, 0)), 0) AS total
         FROM rdo_atividades ra
         JOIN rdos r ON ra.rdo_id = r.id
-        WHERE ra.atividade_eap_id = ? AND r.status != 'Reprovado'
+        WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
       `, [atividadeId]);
 
       let perc = 0;
@@ -34,7 +34,7 @@ async function recalcularTodasAtividades() {
           SELECT COALESCE(SUM(ra.percentual_executado), 0) AS total
           FROM rdo_atividades ra
           JOIN rdos r ON ra.rdo_id = r.id
-          WHERE ra.atividade_eap_id = ? AND r.status != 'Reprovado'
+          WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
         `, [atividadeId]);
         perc = Math.min(resPerc?.total || 0, 100);
       }
@@ -45,7 +45,7 @@ async function recalcularTodasAtividades() {
           SELECT MAX(r.data_relatorio) AS d
           FROM rdo_atividades ra
           JOIN rdos r ON ra.rdo_id = r.id
-          WHERE ra.atividade_eap_id = ? AND r.status != 'Reprovado'
+          WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
         `, [atividadeId]);
         dataConclusao = ultima?.d || null;
       }
@@ -64,19 +64,25 @@ async function recalcularTodasAtividades() {
 
     for (let pass = 0; pass < 5; pass++) {
       for (const { id: paiId } of pais) {
-        const filhos = await allQuery('SELECT percentual_executado, quantidade_total FROM atividades_eap WHERE pai_id = ?', [paiId]);
+        const filhos = await allQuery(`
+          SELECT
+            percentual_executado,
+            COALESCE(peso_percentual_projeto, percentual_previsto, 0) AS peso_percentual
+          FROM atividades_eap
+          WHERE pai_id = ?
+        `, [paiId]);
         if (!filhos.length) continue;
 
-        let somaPesada = 0, somaPeso = 0, somaSimples = 0;
+        let somaContribuicao = 0, somaPeso = 0, somaSimples = 0;
         for (const f of filhos) {
           const p = parseFloat(f.percentual_executado || 0);
-          const w = parseFloat(f.quantidade_total || 0);
+          const w = parseFloat(f.peso_percentual || 0);
           somaSimples += p;
-          if (w > 0) { somaPesada += p * w; somaPeso += w; }
+          if (w > 0) { somaContribuicao += (p * w) / 100; somaPeso += w; }
         }
 
         const novoPerc = somaPeso > 0
-          ? Math.min(Math.round((somaPesada / somaPeso) * 100) / 100, 100)
+          ? Math.min(Math.round(somaContribuicao * 100) / 100, 100)
           : Math.min(Math.round((somaSimples / filhos.length) * 100) / 100, 100);
 
         const novoStatus = novoPerc >= 100 ? 'Concluída' : (novoPerc > 0 ? 'Em andamento' : 'Não iniciada');
