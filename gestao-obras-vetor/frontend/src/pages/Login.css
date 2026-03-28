@@ -154,3 +154,128 @@
   font-weight: 500;
 }
 
+/* Link "Criar conta" / "Voltar ao login" */
+.login-register-link {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.login-register-link a {
+  color: #0ea5e9;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.login-register-link a:hover {
+  text-decoration: underline;
+}
+
+/* Tela Criar Conta */
+.criar-conta-heading {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 24px;
+  letter-spacing: -0.01em;
+}
+
+.criar-conta-dica {
+  font-size: 11px;
+  font-weight: 400;
+  color: #94a3b8;
+  letter-spacing: 0;
+}
+
+/* Tela de sucesso pós-cadastro */
+.criar-conta-sucesso {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+}
+
+.criar-conta-sucesso-icone {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #ffffff;
+  font-size: 26px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(34, 197, 94, 0.35);
+}
+
+.criar-conta-sucesso-titulo {
+  font-size: 20px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0;
+}
+
+.criar-conta-sucesso-desc {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.5;
+  max-width: 280px;
+}
+
+.criar-conta-login-box {
+  width: 100%;
+  border: 2px dashed #0ea5e9;
+  border-radius: 14px;
+  padding: 16px 20px;
+  background: #f0f9ff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+.criar-conta-login-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #0ea5e9;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.criar-conta-login-valor {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 28px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: 0.12em;
+}
+
+.criar-conta-copiar-btn {
+  border: none;
+  background: none;
+  color: #0ea5e9;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.criar-conta-copiar-btn:hover {
+  background: rgba(14, 165, 233, 0.1);
+}
+
+.criar-conta-ir-login {
+  width: 100%;
+  text-decoration: none;
+  margin-top: 8px;
+}
+

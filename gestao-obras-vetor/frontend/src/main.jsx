@@ -8,6 +8,7 @@ import { DialogProvider } from './context/DialogContext';
 import PrivateRoute from './components/PrivateRoute';
 import NotificationContainer from './components/NotificationContainer';
 import Login from './pages/Login';
+import CriarConta from './pages/CriarConta';
 // Dashboard removido como página inicial; manter rota para compatibilidade opcional
 import Dashboard from './pages/Dashboard';
 import Projetos from './pages/Projetos';
@@ -62,6 +63,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/criar-conta" element={<CriarConta />} />
           {/* Redirecionar Dashboard para Projetos */}
           <Route path="/dashboard" element={<Navigate to="/projetos" replace />} />
           <Route path="/projetos" element={

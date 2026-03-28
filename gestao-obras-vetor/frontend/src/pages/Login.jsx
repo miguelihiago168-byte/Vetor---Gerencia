@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { login as loginAPI } from '../services/api';
 import { ArrowRight } from 'lucide-react';
@@ -18,8 +18,13 @@ function Login() {
     e.preventDefault();
     setErro('');
 
-    if (loginValue.length !== 6 || senha.length !== 6) {
-      setErro('Login e senha devem ter 6 dígitos.');
+    if (loginValue.length !== 6) {
+      setErro('Login deve ter 6 dígitos numéricos.');
+      return;
+    }
+
+    if (senha.length !== 6) {
+      setErro('A senha deve ter 6 caracteres.');
       return;
     }
 
@@ -72,7 +77,7 @@ function Login() {
               className="login-input"
               maxLength="6"
               value={senha}
-              onChange={(e) => setSenha(e.target.value.replace(/\D/g, ''))}
+              onChange={(e) => setSenha(e.target.value)}
               placeholder="······"
               required
             />
@@ -83,6 +88,11 @@ function Login() {
             <ArrowRight size={18} />
           </button>
         </form>
+
+        <div className="login-register-link">
+          Não tem acesso?{' '}
+          <Link to="/criar-conta">Criar conta</Link>
+        </div>
       </div>
     </div>
   );
