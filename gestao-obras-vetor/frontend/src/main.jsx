@@ -45,7 +45,6 @@ import AlmoxRelatorios from './pages/AlmoxRelatorios';
 import './index.css';
 import './dark-mode.css';
 
-<<<<<<< HEAD
 const MOBILE_BREAKPOINT = 900;
 
 function MobileDisabledGate({ children }) {
@@ -94,12 +93,6 @@ const PERFIS_RDO = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da
 const PERFIS_RNC = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade', 'Fiscal'];
 const PERFIS_CURVA_S = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade', 'Fiscal'];
 const PERFIS_EAP = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade'];
-=======
-const PERFIS_RDO = ['Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade', 'Fiscal'];
-const PERFIS_RNC = ['Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade', 'Fiscal'];
-const PERFIS_CURVA_S = ['Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade', 'Fiscal'];
-const PERFIS_EAP = ['Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade'];
->>>>>>> Melhorias-fluxo-de-compras
 const PERFIS_COMPRAS = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'ADM', 'Almoxarife'];
 const PERFIS_GESTORES_ADM = ['Gestor Geral', 'ADM'];
 const PERFIS_ATIVOS = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'ADM', 'Almoxarife'];
@@ -316,20 +309,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/eap" element={<ProjetoSelector destino="eap" />} />
           <Route path="/curva-s" element={<ProjetoSelector destino="curva-s" />} />
           <Route path="/rnc" element={<ProjetoSelector destino="rnc" />} />
-<<<<<<< HEAD
-           <Route path="/compras" element={<ProjetoSelector destino="pedidos" />} />
-           <Route path="/financeiro" element={<ProjetoSelector destino="financeiro" />} />
-           <Route path="/ativos" element={<ProjetoSelector destino="almoxarifado" />} />
-           <Route path="/" element={<Navigate to="/projetos" replace />} />
-          </Routes>
-          <NotificationContainer />
-        </BrowserRouter>
-        </DialogProvider>
-      </LeaveGuardProvider>
-      </AuthProvider>
-    </NotificationProvider>
-    </MobileDisabledGate>
-=======
           <Route path="/compras" element={<PrivateRoute allowedPerfis={PERFIS_COMPRAS}><ComprasGlobal /></PrivateRoute>} />
           <Route path="/compras/status/:statusSlug" element={<PrivateRoute allowedPerfis={PERFIS_COMPRAS}><ComprasStatusList /></PrivateRoute>} />
           {/* FINANCEIRO DESATIVADO: <Route path="/financeiro" element={<ProjetoSelector destino="financeiro" />} /> */}
@@ -342,6 +321,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     </LeaveGuardProvider>
     </AuthProvider>
   </NotificationProvider>
->>>>>>> Melhorias-fluxo-de-compras
+    </MobileDisabledGate>
   </React.StrictMode>
 );
