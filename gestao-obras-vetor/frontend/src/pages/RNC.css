@@ -1,116 +1,221 @@
-/* Layout container */
+/* RNC list — minimal design inspired by Notion / Linear / Stripe */
+
+/* ── Layout ── */
 .rnc-container {
-  padding-top: 24px;
-  padding-bottom: 40px;
+  padding-top: 28px;
+  padding-bottom: 48px;
 }
 
 .rnc-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   flex-wrap: wrap;
   margin-bottom: 32px;
 }
 
+.rnc-header-text h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.rnc-header-text p {
+  font-size: 13px;
+  color: #94a3b8;
+  margin: 4px 0 0;
+  font-weight: 400;
+}
+
 .rnc-alert {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
-/* Empty state */
+/* ── Empty state ── */
 .rnc-empty {
-  padding: 60px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 64px 32px;
+  text-align: center;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
 }
 
-.rnc-empty-icon {
-  color: var(--gray-400);
-  margin-bottom: 16px;
-}
+.rnc-empty-icon { color: #cbd5e1; }
 
 .rnc-empty-title {
-  color: var(--gray-500);
+  color: #475569;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 12px 0 6px;
 }
 
 .rnc-empty-sub {
-  color: var(--gray-400);
-  margin-top: 8px;
+  color: #94a3b8;
+  font-size: 14px;
+  margin: 0;
 }
 
-/* Grid responsivo de cards */
+/* ── Grid responsivo ── */
 .rnc-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
   align-items: start;
 }
 
-/* Card */
+@media (max-width: 1024px) {
+  .rnc-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 640px) {
+  .rnc-grid { grid-template-columns: 1fr; gap: 12px; }
+}
+
+/* ── Card ── */
 .rnc-card {
-  width: 100%;
-  height: auto;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
   padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
   overflow: hidden;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+  /* override global .card glass */
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+  margin-bottom: 0 !important;
 }
 
-.rnc-card-header {
-  display: flex;
-  justify-content: space-between;
+.rnc-card:hover {
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.07) !important;
+  border-color: #cbd5e1;
+}
+
+/* ── Badge de status ── */
+.rnc-badge {
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.rnc-status {
-  padding: 8px 12px;
-  color: #ffffff;
-  border-radius: 16px;
-  font-size: 12px;
-  line-height: 16px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   white-space: nowrap;
+  align-self: flex-start;
+  margin-bottom: 10px;
 }
 
-.rnc-top-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
+.rnc-badge-encerrada { background: #dcfce7; color: #15803d; }
+.rnc-badge-analise   { background: #fef9c3; color: #92400e; }
+.rnc-badge-aberta    { background: #f1f5f9; color: #475569; }
 
+/* ── Conteúdo do card ── */
 .rnc-title {
-  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 8px;
+  letter-spacing: -0.01em;
   overflow-wrap: anywhere;
   word-break: break-word;
-}
-
-.rnc-card p,
-.rnc-card span,
-.rnc-card div {
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  line-height: 1.45;
 }
 
 .rnc-dates {
   display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  color: #94a3b8;
+  font-weight: 400;
   flex-wrap: wrap;
-  gap: 12px;
-  font-size: 14px;
-  color: var(--gray-600);
+  margin-bottom: 16px;
 }
 
+.rnc-dates-sep { color: #cbd5e1; }
+
+/* ── Separador ── */
+.rnc-divider {
+  height: 1px;
+  background: #f1f5f9;
+  margin-bottom: 14px;
+}
+
+/* ── Ações do card ── */
 .rnc-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
+  align-items: center;
 }
 
-/* Responsividade */
-@media (max-width: 768px) {
-  .rnc-card {
-    padding: 16px;
-  }
-  .rnc-grid {
-    gap: 16px;
-  }
+/* Ghost button */
+.rnc-btn-ghost {
+  background: transparent;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  border-radius: 8px;
+  padding: 6px 13px;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: background 0.13s ease, border-color 0.13s ease, color 0.13s ease;
+  white-space: nowrap;
+  font-family: inherit;
+  line-height: 1;
+}
+
+.rnc-btn-ghost:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+
+.rnc-btn-ghost:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Icon-only ghost (delete) */
+.rnc-btn-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.13s ease, border-color 0.13s ease, color 0.13s ease;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+
+.rnc-btn-icon:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
+}
+
+.rnc-btn-icon:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* ── Responsivo extra ── */
+@media (max-width: 640px) {
+  .rnc-card { padding: 16px; }
 }

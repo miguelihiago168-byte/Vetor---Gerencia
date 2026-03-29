@@ -6,7 +6,7 @@ services:
       dockerfile: backend/Dockerfile
     container_name: gestao-backend
     env_file:
-      - backend/.env.example
+      - backend/.env
     volumes:
       - ./backend/uploads:/app/uploads
       - ./backend/database:/app/database

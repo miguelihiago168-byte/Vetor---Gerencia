@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { fmtTs } from '../utils/date';
 import { useParams } from 'react-router-dom';
 import AlmoxarifadoLayout from '../components/AlmoxarifadoLayout';
 import { getRelatorioMovimentacoesAlmox } from '../services/api';
@@ -85,7 +86,7 @@ function AlmoxRelatorios() {
                   {movimentacoesFiltradas.map((m) => (
                     <tr key={m.id}>
                       <td>#{m.id}</td>
-                      <td>{new Date(m.criado_em).toLocaleString('pt-BR')}</td>
+                      <td>{fmtTs(m.criado_em)}</td>
                       <td>{m.tipo}</td>
                       <td>{m.ferramenta_nome}</td>
                       <td>{m.ferramenta_marca || '-'}</td>

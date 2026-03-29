@@ -418,7 +418,7 @@ function PedidosCompra() {
       </div>
 
       {showCotacaoModal && (
-        <div className="modal-overlay">
+        <div className="modal-overlay fade-in" role="dialog" aria-modal="true">
           <div className="modal-card" style={{ width: '100vw', height: '100vh', maxWidth: '100vw', maxHeight: '100vh', borderRadius: 0, padding: 16, display: 'flex', flexDirection: 'column' }}>
             <div className="flex-between mb-2">
               <h2>Inserir 3 Cotações</h2>
@@ -515,8 +515,8 @@ function PedidosCompra() {
       )}
 
       {showSelecionarModal && (
-        <div className="modal-overlay">
-          <div className="modal-card" style={{ maxWidth: '560px' }}>
+        <div className="modal-overlay fade-in" role="dialog" aria-modal="true" onClick={() => { setShowSelecionarModal(false); setSelecionarPedidoId(null); setSelecionarLista([]); setSelecionarEscolha(''); }}>
+          <div className="modal-card" style={{ maxWidth: '560px' }} onClick={(e) => e.stopPropagation()}>
             <div className="flex-between mb-2">
               <h2>Escolher Cotação</h2>
               <button className="btn btn-secondary" onClick={() => { setShowSelecionarModal(false); setSelecionarPedidoId(null); setSelecionarLista([]); setSelecionarEscolha(''); }}>Fechar</button>
@@ -542,8 +542,8 @@ function PedidosCompra() {
       )}
 
       {showNovaModal && (
-        <div className="modal-overlay">
-          <div className="modal-card" style={{ maxWidth: '560px' }}>
+        <div className="modal-overlay fade-in" role="dialog" aria-modal="true" onClick={() => setShowNovaModal(false)}>
+          <div className="modal-card" style={{ maxWidth: '560px' }} onClick={(e) => e.stopPropagation()}>
             <div className="flex-between mb-2">
               <h2>Nova Solicitação de Compra</h2>
               <button className="btn btn-secondary" onClick={() => { setShowNovaModal(false); }}>Fechar</button>
@@ -607,8 +607,8 @@ function PedidosCompra() {
       )}
 
       {showReprovarModal && (
-        <div className="modal-overlay">
-          <div className="modal-card" style={{ maxWidth: '560px' }}>
+        <div className="modal-overlay fade-in" role="dialog" aria-modal="true" onClick={() => { setShowReprovarModal(false); setReprovarForm({ id: null, motivo: '' }); }}>
+          <div className="modal-card" style={{ maxWidth: '560px' }} onClick={(e) => e.stopPropagation()}>
             <div className="flex-between mb-2">
               <h2>Reprovar Pedido</h2>
               <button className="btn btn-secondary" onClick={() => { setShowReprovarModal(false); setReprovarForm({ id: null, motivo: '' }); }}>Fechar</button>

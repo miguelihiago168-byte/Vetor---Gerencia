@@ -8,12 +8,22 @@ import { DialogProvider } from './context/DialogContext';
 import PrivateRoute from './components/PrivateRoute';
 import NotificationContainer from './components/NotificationContainer';
 import Login from './pages/Login';
+import CriarConta from './pages/CriarConta';
 // Dashboard removido como página inicial; manter rota para compatibilidade opcional
 import Dashboard from './pages/Dashboard';
 import Projetos from './pages/Projetos';
 import ProjetoDetalhes from './pages/ProjetoDetalhes';
 import PedidosCompra from './pages/PedidosCompra';
-import FinanceiroFluxoCaixa from './pages/FinanceiroFluxoCaixa';
+import Requisicoes from './pages/Requisicoes';
+import RequisicaoDetalhe from './pages/RequisicaoDetalhe';
+import RequisicaoKanban from './pages/RequisicaoKanban';
+import CotacoesFinalizadas from './pages/CotacoesFinalizadas';
+import CotacoesNegadas from './pages/CotacoesNegadas';
+import Fornecedores from './pages/Fornecedores';
+import ComprasStatusList from './pages/ComprasStatusList';
+import ComprasGlobal from './pages/ComprasGlobal';
+// FINANCEIRO DESATIVADO
+// import FinanceiroFluxoCaixa from './pages/FinanceiroFluxoCaixa';
 import EAP from './pages/EAP';
 import EAPForm from './pages/EAPForm';
 import CurvaS from './pages/CurvaS';
@@ -33,7 +43,9 @@ import AlmoxManutencao from './pages/AlmoxManutencao';
 import AlmoxPerdas from './pages/AlmoxPerdas';
 import AlmoxRelatorios from './pages/AlmoxRelatorios';
 import './index.css';
+import './dark-mode.css';
 
+<<<<<<< HEAD
 const MOBILE_BREAKPOINT = 900;
 
 function MobileDisabledGate({ children }) {
@@ -82,8 +94,15 @@ const PERFIS_RDO = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da
 const PERFIS_RNC = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade', 'Fiscal'];
 const PERFIS_CURVA_S = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade', 'Fiscal'];
 const PERFIS_EAP = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade'];
+=======
+const PERFIS_RDO = ['Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade', 'Fiscal'];
+const PERFIS_RNC = ['Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade', 'Fiscal'];
+const PERFIS_CURVA_S = ['Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade', 'Fiscal'];
+const PERFIS_EAP = ['Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade'];
+>>>>>>> Melhorias-fluxo-de-compras
 const PERFIS_COMPRAS = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'ADM', 'Almoxarife'];
-const PERFIS_ATIVOS = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade', 'ADM', 'Almoxarife'];
+const PERFIS_GESTORES_ADM = ['Gestor Geral', 'ADM'];
+const PERFIS_ATIVOS = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'ADM', 'Almoxarife'];
 const PERFIS_USUARIOS = ['Gestor Geral', 'ADM'];
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -96,6 +115,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <BrowserRouter>
           <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/criar-conta" element={<CriarConta />} />
           {/* Redirecionar Dashboard para Projetos */}
           <Route path="/dashboard" element={<Navigate to="/projetos" replace />} />
           <Route path="/projetos" element={
@@ -133,16 +153,55 @@ ReactDOM.createRoot(document.getElementById('root')).render(
               <RDOs />
             </PrivateRoute>
           } />
+          {/* Pedidos legados — mantidos para compatibilidade */}
           <Route path="/projeto/:projetoId/pedidos" element={
             <PrivateRoute allowedPerfis={PERFIS_COMPRAS}>
               <PedidosCompra />
             </PrivateRoute>
           } />
+          {/* Novo módulo de Requisições multi-itens */}
+          <Route path="/projeto/:projetoId/compras" element={
+            <PrivateRoute allowedPerfis={PERFIS_COMPRAS}>
+              <Requisicoes />
+            </PrivateRoute>
+          } />
+          <Route path="/projeto/:projetoId/compras/:id" element={
+            <PrivateRoute allowedPerfis={PERFIS_COMPRAS}>
+              <RequisicaoDetalhe />
+            </PrivateRoute>
+          } />
+          <Route path="/projeto/:projetoId/compras/kanban" element={
+            <PrivateRoute allowedPerfis={PERFIS_COMPRAS}>
+              <RequisicaoKanban />
+            </PrivateRoute>
+          } />
+          <Route path="/projeto/:projetoId/compras/status/:statusItem" element={
+            <PrivateRoute allowedPerfis={PERFIS_COMPRAS}>
+              <ComprasStatusList />
+            </PrivateRoute>
+          } />
+          <Route path="/projeto/:projetoId/compras/finalizadas" element={
+            <PrivateRoute allowedPerfis={PERFIS_COMPRAS}>
+              <CotacoesFinalizadas />
+            </PrivateRoute>
+          } />
+          <Route path="/projeto/:projetoId/compras/negadas" element={
+            <PrivateRoute allowedPerfis={PERFIS_COMPRAS}>
+              <CotacoesNegadas />
+            </PrivateRoute>
+          } />
+          <Route path="/projeto/:projetoId/compras/fornecedores" element={
+            <PrivateRoute allowedPerfis={PERFIS_GESTORES_ADM}>
+              <Fornecedores />
+            </PrivateRoute>
+          } />
+          {/* FINANCEIRO DESATIVADO
           <Route path="/projeto/:projetoId/financeiro" element={
             <PrivateRoute allowedPerfis={PERFIS_COMPRAS}>
               <FinanceiroFluxoCaixa />
             </PrivateRoute>
           } />
+          */}
           <Route path="/projeto/:projetoId/rdo/:rdoId" element={
             <PrivateRoute allowedPerfis={PERFIS_RDO}>
               <RDODetalhes />
@@ -226,11 +285,38 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             </PrivateRoute>
           } />
 
+          {/* Rotas globais de compras */}
+          <Route path="/compras/kanban" element={
+            <PrivateRoute allowedPerfis={PERFIS_COMPRAS}>
+              <RequisicaoKanban />
+            </PrivateRoute>
+          } />
+          <Route path="/compras/finalizadas" element={
+            <PrivateRoute allowedPerfis={PERFIS_COMPRAS}>
+              <CotacoesFinalizadas />
+            </PrivateRoute>
+          } />
+          <Route path="/compras/negadas" element={
+            <PrivateRoute allowedPerfis={PERFIS_COMPRAS}>
+              <CotacoesNegadas />
+            </PrivateRoute>
+          } />
+          <Route path="/compras/:id" element={
+            <PrivateRoute allowedPerfis={PERFIS_COMPRAS}>
+              <RequisicaoDetalhe />
+            </PrivateRoute>
+          } />
+          <Route path="/fornecedores" element={
+            <PrivateRoute allowedPerfis={PERFIS_GESTORES_ADM}>
+              <Fornecedores />
+            </PrivateRoute>
+          } />
           {/* Rotas globais para navegação lateral */}
           <Route path="/rdos" element={<ProjetoSelector destino="rdos" />} />
           <Route path="/eap" element={<ProjetoSelector destino="eap" />} />
           <Route path="/curva-s" element={<ProjetoSelector destino="curva-s" />} />
           <Route path="/rnc" element={<ProjetoSelector destino="rnc" />} />
+<<<<<<< HEAD
            <Route path="/compras" element={<ProjetoSelector destino="pedidos" />} />
            <Route path="/financeiro" element={<ProjetoSelector destino="financeiro" />} />
            <Route path="/ativos" element={<ProjetoSelector destino="almoxarifado" />} />
@@ -243,5 +329,19 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       </AuthProvider>
     </NotificationProvider>
     </MobileDisabledGate>
+=======
+          <Route path="/compras" element={<PrivateRoute allowedPerfis={PERFIS_COMPRAS}><ComprasGlobal /></PrivateRoute>} />
+          <Route path="/compras/status/:statusSlug" element={<PrivateRoute allowedPerfis={PERFIS_COMPRAS}><ComprasStatusList /></PrivateRoute>} />
+          {/* FINANCEIRO DESATIVADO: <Route path="/financeiro" element={<ProjetoSelector destino="financeiro" />} /> */}
+          <Route path="/ativos" element={<ProjetoSelector destino="almoxarifado" />} />
+          <Route path="/" element={<Navigate to="/projetos" replace />} />
+        </Routes>
+        <NotificationContainer />
+      </BrowserRouter>
+      </DialogProvider>
+    </LeaveGuardProvider>
+    </AuthProvider>
+  </NotificationProvider>
+>>>>>>> Melhorias-fluxo-de-compras
   </React.StrictMode>
 );

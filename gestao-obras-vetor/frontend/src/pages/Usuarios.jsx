@@ -36,7 +36,7 @@ const normalizarPerfilTela = (perfil) => {
 
 function Usuarios() {
   const { projetoId } = useParams();
-  const { perfil } = useAuth();
+  const { perfil, usuario: usuarioLogado, atualizarUsuarioLogado } = useAuth();
 
   const podeGerenciar = perfil === 'Gestor Geral' || perfil === 'ADM';
 
@@ -169,11 +169,16 @@ function Usuarios() {
 
     if (!editingUserId || formData.senha) payload.senha = formData.senha;
     if (!editingUserId && loginGerado) payload.login = loginGerado;
+    // Protege: usuário não pode alterar o próprio perfil de acesso
+    if (editingUserId === usuarioLogado?.id) delete payload.perfil;
 
     try {
       if (editingUserId) {
         await updateUsuario(editingUserId, payload);
         setSucesso('Usuário atualizado com sucesso.');
+        if (editingUserId === usuarioLogado?.id) {
+          atualizarUsuarioLogado({ nome: payload.nome, email: payload.email });
+        }
       } else {
         const res = await createUsuario(payload);
         setSucesso(`Usuário criado com sucesso! Login: ${res.data?.usuario?.login || ''}`);
@@ -543,8 +548,8 @@ function Usuarios() {
                 {/* Barra de ações em lote */}
                 {selecionados.length > 0 && (
                   <div className="card" style={{
-                    marginBottom: 14, padding: '12px 16px', background: 'var(--color-primary-light, #eff6ff)',
-                    border: '1px solid var(--color-primary, #3b82f6)',
+                    marginBottom: 14, padding: '12px 16px', background: 'var(--badge-blue-bg)',
+                    border: '1px solid var(--badge-blue-color)',
                     display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center'
                   }}>
                     <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -656,8 +661,8 @@ function Usuarios() {
                               <td>
                                 <span style={{
                                   fontSize: '0.78rem', fontWeight: 600, padding: '2px 8px',
-                                  borderRadius: 12, background: 'var(--color-primary-light, #eff6ff)',
-                                  color: 'var(--color-primary, #3b82f6)'
+                                  borderRadius: 12, background: 'var(--badge-blue-bg)',
+                                  color: 'var(--badge-blue-color)'
                                 }}>
                                   {normalizarPerfilTela(u.perfil)}
                                 </span>
@@ -672,8 +677,8 @@ function Usuarios() {
                                 <span style={{
                                   fontSize: '0.75rem', fontWeight: 700, padding: '2px 8px',
                                   borderRadius: 12,
-                                  background: isAtivo ? '#dcfce7' : '#fee2e2',
-                                  color: isAtivo ? '#16a34a' : '#dc2626'
+                                  background: isAtivo ? 'var(--badge-green-bg)' : 'var(--badge-red-bg)',
+                                  color: isAtivo ? 'var(--badge-green-color)' : 'var(--badge-red-color)'
                                 }}>
                                   {isAtivo ? 'Ativo' : 'Desativado'}
                                 </span>
@@ -712,7 +717,7 @@ function Usuarios() {
                 <div className="card" style={{ marginBottom: 16 }}>
                   <h2 className="card-header">Cadastro de Mão de Obra Direta</h2>
                   <form onSubmit={salvarMaoObra} className="grid grid-3" style={{ gap: 12 }}>
-                    <input className="form-input" value="ID gerado automaticamente" readOnly style={{ backgroundColor: '#f0f0f0' }} />
+                    <input className="form-input" value="ID gerado automaticamente" readOnly style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)', cursor: 'default' }} />
                     <input className="form-input" placeholder="Nome" value={maoForm.nome} onChange={(e) => setMaoForm({ ...maoForm, nome: e.target.value })} required />
                     <input className="form-input" placeholder="Função" value={maoForm.funcao} onChange={(e) => setMaoForm({ ...maoForm, funcao: e.target.value })} required />
                     <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8 }}>
@@ -766,8 +771,8 @@ function Usuarios() {
       </div>
 
       {showModal && (
-        <div className="modal-overlay">
-          <div className="modal-card" style={{ maxWidth: '640px' }}>
+        <div className="modal-overlay fade-in" role="dialog" aria-modal="true" onClick={() => { setShowModal(false); setEditingUserId(null); }}>
+          <div className="modal-card" style={{ maxWidth: '640px' }} onClick={(e) => e.stopPropagation()}>
             <div className="flex-between mb-2">
               <h2>{editingUserId ? 'Editar usuário' : 'Novo usuário'}</h2>
               <button className="btn btn-secondary" onClick={() => { setShowModal(false); setEditingUserId(null); }}>Fechar</button>
@@ -793,7 +798,7 @@ function Usuarios() {
 
               <div className="form-group">
                 <label className="form-label">Login (gerado automaticamente)</label>
-                <input type="text" className="form-input" value={loginGerado || '...gerando...'} readOnly style={{ backgroundColor: '#f0f0f0' }} />
+                <input type="text" className="form-input" value={loginGerado || '...gerando...'} readOnly style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)', cursor: 'default' }} />
               </div>
 
               <div className="form-group">
@@ -813,7 +818,13 @@ function Usuarios() {
 
                 <div className="form-group">
                   <label className="form-label">Perfil de acesso *</label>
-                  <select className="form-select" value={formData.perfil} onChange={(e) => setFormData({ ...formData, perfil: e.target.value })}>
+                  <select
+                    className="form-select"
+                    value={formData.perfil}
+                    onChange={(e) => setFormData({ ...formData, perfil: e.target.value })}
+                    disabled={editingUserId === usuarioLogado?.id}
+                    title={editingUserId === usuarioLogado?.id ? 'Você não pode alterar o próprio perfil de acesso.' : undefined}
+                  >
                     {PERFIS.map((item) => (
                       <option key={item} value={item}>{item}</option>
                     ))}

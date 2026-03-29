@@ -133,7 +133,7 @@ router.get('/:id', auth, async (req, res) => {
 
     // Buscar usuários do projeto
     const usuarios = await allQuery(`
-      SELECT u.id, u.login, u.nome, u.email, u.is_gestor
+      SELECT u.id, u.login, u.nome, u.email, u.is_gestor, u.perfil
       FROM usuarios u
       INNER JOIN projeto_usuarios pu ON u.id = pu.usuario_id
       WHERE pu.projeto_id = ?
@@ -184,13 +184,19 @@ router.get('/:id', auth, async (req, res) => {
     }
 
     // Calcular prazos: prazo contratual (dias), prazo decorrido e prazo a vencer
+    // Todas as datas normalizadas para 00:00:00 local (contagem por dia-calendário)
     try {
-      const criadoEm = projeto.criado_em ? new Date(projeto.criado_em) : null;
-      const prazoTermino = projeto.prazo_termino ? new Date(projeto.prazo_termino) : null;
+      const toMidnight = (val) => {
+        const str = String(val).trim();
+        const norm = /^\d{4}-\d{2}-\d{2}$/.test(str) ? str + 'T00:00:00' : str.replace(' ', 'T');
+        const d = new Date(norm); d.setHours(0, 0, 0, 0); return d;
+      };
+      const criadoEm = projeto.criado_em ? toMidnight(projeto.criado_em) : null;
+      const prazoTermino = projeto.prazo_termino ? toMidnight(projeto.prazo_termino) : null;
       if (criadoEm && prazoTermino) {
         const msDia = 1000 * 60 * 60 * 24;
         const prazoContratual = Math.round((prazoTermino - criadoEm) / msDia);
-        const hoje = new Date();
+        const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
         const prazoDecorrido = Math.max(0, Math.round((hoje - criadoEm) / msDia));
         const prazoAVencer = Math.max(0, prazoContratual - prazoDecorrido);
         projeto.prazo_contratual_dias = prazoContratual;
@@ -362,6 +368,75 @@ router.patch('/:id/desarquivar', [auth, isGestor], async (req, res) => {
   } catch (error) {
     console.error('Erro ao desarquivar projeto:', error);
     res.status(500).json({ erro: 'Erro ao desarquivar projeto.' });
+  }
+});
+
+// Copiar EAP de um projeto para outro
+router.post('/:destinoId/copiar-eap', [auth, isGestor], async (req, res) => {
+  try {
+    const destinoId = Number(req.params.destinoId);
+    const origemId = Number(req.body.origem_projeto_id);
+
+    if (!origemId || !destinoId || origemId === destinoId) {
+      return res.status(400).json({ erro: 'IDs de origem e destino inválidos.' });
+    }
+
+    const destino = await getQuery('SELECT id FROM projetos WHERE id = ? AND ativo = 1', [destinoId]);
+    if (!destino) return res.status(404).json({ erro: 'Projeto destino não encontrado.' });
+
+    const origem = await getQuery('SELECT id FROM projetos WHERE id = ? AND ativo = 1', [origemId]);
+    if (!origem) return res.status(404).json({ erro: 'Projeto origem não encontrado.' });
+
+    // Verificar se destino já tem atividades
+    const existentes = await getQuery('SELECT COUNT(*) as total FROM atividades_eap WHERE projeto_id = ?', [destinoId]);
+    if (existentes.total > 0) {
+      return res.status(409).json({ erro: 'O projeto destino já possui EAP configurada.' });
+    }
+
+    // Buscar todas as atividades da origem ordenadas por hierarquia (pai antes de filho)
+    const atividades = await allQuery(
+      'SELECT * FROM atividades_eap WHERE projeto_id = ? ORDER BY CASE WHEN pai_id IS NULL THEN 0 ELSE 1 END ASC, ordem ASC, id ASC',
+      [origemId]
+    );
+
+    if (atividades.length === 0) {
+      return res.status(404).json({ erro: 'O projeto origem não possui atividades EAP.' });
+    }
+
+    // Mapeia id original -> novo id inserido
+    const mapaIds = {};
+
+    for (const at of atividades) {
+      const novoPaiId = at.pai_id ? (mapaIds[at.pai_id] ?? null) : null;
+      const result = await runQuery(`
+        INSERT INTO atividades_eap
+          (projeto_id, id_atividade, codigo_eap, nome, descricao, percentual_previsto, peso_percentual_projeto,
+           data_inicio_planejada, data_fim_planejada, status, pai_id, ordem, unidade_medida, quantidade_total, criado_por)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Não iniciada', ?, ?, ?, ?, ?)
+      `, [
+        destinoId,
+        at.id_atividade,
+        at.codigo_eap,
+        at.nome,
+        at.descricao,
+        at.percentual_previsto,
+        at.peso_percentual_projeto,
+        at.data_inicio_planejada,
+        at.data_fim_planejada,
+        novoPaiId,
+        at.ordem,
+        at.unidade_medida,
+        at.quantidade_total,
+        req.usuario.id
+      ]);
+      mapaIds[at.id] = result.lastID;
+    }
+
+    res.status(201).json({ mensagem: `EAP copiada com sucesso. ${atividades.length} atividade(s) importada(s).`, total: atividades.length });
+
+  } catch (error) {
+    console.error('Erro ao copiar EAP:', error);
+    res.status(500).json({ erro: 'Erro ao copiar EAP.' });
   }
 });
 

@@ -86,7 +86,8 @@ Na raiz do projeto:
 ```powershell
 cd 'c:\Apps\Vetor - Gerencia\gestao-obras-vetor\backend'
 # em desenvolvimento (com nodemon):
-npm run dev
+
+
 # ou em produção/simulação com node direto:
 node server.js
 ```

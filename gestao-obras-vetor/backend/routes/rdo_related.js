@@ -18,6 +18,10 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 
+runQuery("ALTER TABLE rdo_fotos ADD COLUMN atividade_avulsa_descricao TEXT").catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] atividade_avulsa_descricao:', e.message);
+});
+
 const garantirTabelaMaoObraDireta = async () => {
   await runQuery(`
     CREATE TABLE IF NOT EXISTS mao_obra_direta (
@@ -313,16 +317,87 @@ router.post('/:rdoId/assinatura', auth, async (req, res) => {
   }
 });
 
+// ──────────────────────────────────────────────────────────────
+// EQUIPAMENTOS
+// ──────────────────────────────────────────────────────────────
+
+// Garantir tabela rdo_equipamentos
+const garantirTabelaEquipamentos = async () => {
+  await runQuery(`
+    CREATE TABLE IF NOT EXISTS rdo_equipamentos (
+      id        INTEGER PRIMARY KEY AUTOINCREMENT,
+      rdo_id    INTEGER NOT NULL,
+      nome      TEXT    NOT NULL,
+      quantidade REAL   NOT NULL DEFAULT 1,
+      criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE
+    )
+  `);
+};
+
+// Listar equipamentos de um RDO
+router.get('/:rdoId/equipamentos', auth, async (req, res) => {
+  try {
+    await garantirTabelaEquipamentos();
+    const { rdoId } = req.params;
+    const rows = await allQuery(
+      'SELECT * FROM rdo_equipamentos WHERE rdo_id = ? ORDER BY id',
+      [rdoId]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('Erro ao listar equipamentos do RDO', err);
+    res.status(500).json({ erro: 'Erro ao listar equipamentos.' });
+  }
+});
+
+// Adicionar equipamento a um RDO
+router.post('/:rdoId/equipamentos', auth, async (req, res) => {
+  try {
+    await garantirTabelaEquipamentos();
+    const { rdoId } = req.params;
+    const nome = String(req.body?.nome || '').trim();
+    const quantidade = Number(req.body?.quantidade ?? 1);
+    if (!nome) return res.status(400).json({ erro: 'Nome do equipamento é obrigatório.' });
+    const result = await runQuery(
+      'INSERT INTO rdo_equipamentos (rdo_id, nome, quantidade) VALUES (?, ?, ?)',
+      [rdoId, nome, isFinite(quantidade) ? quantidade : 1]
+    );
+    res.status(201).json({ mensagem: 'Equipamento adicionado.', id: result.lastID });
+  } catch (err) {
+    console.error('Erro ao adicionar equipamento', err);
+    res.status(500).json({ erro: 'Erro ao adicionar equipamento.' });
+  }
+});
+
+// Remover equipamento de um RDO
+router.delete('/:rdoId/equipamentos/:equipId', auth, async (req, res) => {
+  try {
+    const { rdoId, equipId } = req.params;
+    await runQuery(
+      'DELETE FROM rdo_equipamentos WHERE id = ? AND rdo_id = ?',
+      [equipId, rdoId]
+    );
+    res.json({ mensagem: 'Equipamento removido.' });
+  } catch (err) {
+    console.error('Erro ao remover equipamento', err);
+    res.status(500).json({ erro: 'Erro ao remover equipamento.' });
+  }
+});
+
 // Upload de fotos vinculadas a atividade do RDO
 router.post('/:rdoId/foto', auth, upload.single('arquivo'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ erro: 'Nenhum arquivo enviado.' });
     const { rdoId } = req.params;
-    const { rdo_atividade_id, descricao } = req.body;
+    const { rdo_atividade_id, descricao, atividade_avulsa_descricao } = req.body;
     const { originalname, filename, mimetype, size } = req.file;
 
     // Salvar no table rdo_fotos
-    const result = await runQuery('INSERT INTO rdo_fotos (rdo_id, rdo_atividade_id, nome_arquivo, caminho_arquivo, descricao, criado_por) VALUES (?, ?, ?, ?, ?, ?)', [rdoId, rdo_atividade_id || null, originalname, filename, descricao || null, req.usuario.id]);
+    const result = await runQuery(
+      'INSERT INTO rdo_fotos (rdo_id, rdo_atividade_id, nome_arquivo, caminho_arquivo, descricao, atividade_avulsa_descricao, criado_por) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [rdoId, rdo_atividade_id || null, originalname, filename, descricao || null, atividade_avulsa_descricao || null, req.usuario.id]
+    );
 
     // Também manter em anexos para download se necessário
     await runQuery('INSERT INTO anexos (rdo_id, tipo, nome_arquivo, caminho_arquivo, tamanho) VALUES (?, ?, ?, ?, ?)', [rdoId, mimetype, originalname, filename, size]);

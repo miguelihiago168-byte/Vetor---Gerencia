@@ -1,0 +1,657 @@
+/* ═══════════════════════════════════════════════════════════
+   RDO.css — Design system do módulo RDO
+   Usa variáveis de index.css (--primary, --success, etc.)
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Layout geral ─────────────────────────────────────────── */
+.rdo-page {
+  padding: 20px 0 48px;
+  max-width: 1320px;
+  margin: 0 auto;
+}
+
+/* ── Cabeçalho inteligente ─────────────────────────────────── */
+.rdo-header-card {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border-radius: 16px;
+  padding: 20px 24px;
+  margin-bottom: 16px;
+  color: #fff;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.rdo-header-left h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin-bottom: 4px;
+}
+
+.rdo-header-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.rdo-header-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.rdo-header-meta-row .lbl {
+  color: #94a3b8;
+  min-width: 120px;
+}
+
+.rdo-header-meta-row .val {
+  color: #e2e8f0;
+  font-weight: 500;
+}
+
+.rdo-header-right {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.rdo-kpi {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 10px 12px;
+  text-align: center;
+}
+
+.rdo-kpi-val {
+  font-size: 22px;
+  font-weight: 700;
+  color: #f8fafc;
+  line-height: 1.2;
+}
+
+.rdo-kpi-label {
+  font-size: 10px;
+  color: #94a3b8;
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.rdo-kpi.green .rdo-kpi-val  { color: #34d399; }
+.rdo-kpi.yellow .rdo-kpi-val { color: #fbbf24; }
+.rdo-kpi.red .rdo-kpi-val    { color: #f87171; }
+.rdo-kpi.blue .rdo-kpi-val   { color: #60a5fa; }
+
+/* Status da obra */
+.rdo-obra-status {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rdo-obra-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.rdo-obra-status-badge.verde    { background: rgba(16,185,129,0.2); color: #34d399; }
+.rdo-obra-status-badge.amarelo  { background: rgba(245,158,11,0.2);  color: #fbbf24; }
+.rdo-obra-status-badge.vermelho { background: rgba(239,68,68,0.2);   color: #f87171; }
+
+/* ── Seções do formulário ──────────────────────────────────── */
+.rdo-section {
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(15,23,42,0.05);
+}
+
+.rdo-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.rdo-section-header:hover {
+  background: #f1f5f9;
+}
+
+.rdo-section-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rdo-section-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--primary, #0ea5e9);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.rdo-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.rdo-section-badge {
+  font-size: 11px;
+  color: #64748b;
+  background: #e2e8f0;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.rdo-section-body {
+  padding: 16px 20px;
+}
+
+.rdo-section-body.collapsed {
+  display: none;
+}
+
+/* ── Grid de campos ────────────────────────────────────────── */
+.rdo-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.rdo-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.rdo-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.rdo-grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+.rdo-grid-auto { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+
+@media (max-width: 900px) {
+  .rdo-grid-4, .rdo-grid-5 { grid-template-columns: repeat(2, 1fr); }
+  .rdo-grid-3 { grid-template-columns: repeat(2, 1fr); }
+  .rdo-header-card { grid-template-columns: 1fr; }
+  .rdo-header-right { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* ── Tabelas inline ────────────────────────────────────────── */
+.rdo-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.rdo-table thead tr {
+  background: #f8fafc;
+}
+
+.rdo-table th {
+  padding: 9px 10px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 2px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.rdo-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #334155;
+  vertical-align: middle;
+}
+
+.rdo-table tr:last-child td {
+  border-bottom: none;
+}
+
+.rdo-table tr:hover td {
+  background: #f8fafc;
+}
+
+.rdo-table td input,
+.rdo-table td select {
+  padding: 5px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 12px;
+  width: 100%;
+  min-width: 60px;
+  background: #fff;
+  color: #1e293b;
+}
+
+.rdo-table td input:focus,
+.rdo-table td select:focus {
+  outline: none;
+  border-color: var(--primary, #0ea5e9);
+  box-shadow: 0 0 0 2px rgba(14,165,233,0.1);
+}
+
+.rdo-table .td-actions {
+  text-align: right;
+  white-space: nowrap;
+  width: 110px;
+}
+
+.rdo-activity-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0 6px;
+}
+
+.rdo-activity-edit-hint {
+  font-size: 12px;
+  color: #334155;
+  font-weight: 500;
+}
+
+.rdo-activity-main-row {
+  cursor: default;
+}
+
+.rdo-activity-main-row td {
+  border-bottom: none;
+  background: #ffffff;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.rdo-activity-main-row:hover td {
+  background: #f8fbff;
+}
+
+.rdo-activity-main-row td:first-child {
+  border-left: 3px solid transparent;
+}
+
+.rdo-activity-main-row.is-selected td {
+  background: #eff6ff;
+}
+
+.rdo-activity-main-row.is-selected td:first-child {
+  border-left-color: var(--primary, #0ea5e9);
+}
+
+.rdo-activity-note {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rdo-activity-title {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.rdo-activity-value {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.rdo-activity-muted {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  color: #94a3b8;
+}
+
+.rdo-activities-table {
+  border-collapse: separate;
+  border-spacing: 0 10px;
+}
+
+.rdo-activities-table thead tr {
+  background: transparent;
+}
+
+.rdo-activities-table th {
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.rdo-activities-table .rdo-activity-main-row td {
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.rdo-activities-table .rdo-activity-main-row td:first-child {
+  border-left: 1px solid #e2e8f0;
+  border-top-left-radius: 12px;
+  border-bottom-left-radius: 12px;
+}
+
+.rdo-activities-table .rdo-activity-main-row td:last-child {
+  border-right: 1px solid #e2e8f0;
+  border-top-right-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
+.rdo-activities-table .rdo-activity-main-row:hover td {
+  background: #f8fbff;
+}
+
+.rdo-activities-table .rdo-activity-main-row.is-selected td {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.rdo-activities-table .rdo-activity-main-row.is-selected td:first-child {
+  border-left-color: var(--primary, #0ea5e9);
+  box-shadow: inset 3px 0 0 var(--primary, #0ea5e9);
+}
+
+/* ── Linha de adição inline ────────────────────────────────── */
+.rdo-add-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  padding: 10px;
+  background: #f8fafc;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.rdo-add-row .form-group {
+  flex: 1;
+  min-width: 100px;
+  margin-bottom: 0;
+}
+
+/* ── Galeria de fotos ──────────────────────────────────────── */
+.rdo-foto-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.rdo-foto-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+  background: #f8fafc;
+}
+
+.rdo-foto-card img {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  display: block;
+}
+
+.rdo-foto-card-info {
+  padding: 6px 8px;
+  font-size: 11px;
+  color: #475569;
+  background: #fff;
+}
+
+.rdo-foto-card-info .atividade-tag {
+  font-size: 10px;
+  color: #0ea5e9;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.rdo-foto-card .btn-remove-foto {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(239,68,68,0.85);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+}
+
+/* ── Badges de gravidade ───────────────────────────────────── */
+.rdo-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rdo-badge.baixa   { background: #d1fae5; color: #065f46; }
+.rdo-badge.media   { background: #fef3c7; color: #92400e; }
+.rdo-badge.alta    { background: #ffedd5; color: #9a3412; }
+.rdo-badge.critica { background: #fee2e2; color: #991b1b; }
+
+/* Status RDO */
+.rdo-badge.aprovado      { background: #d1fae5; color: #065f46; }
+.rdo-badge.em-analise    { background: #fef9c3; color: #92400e; }
+.rdo-badge.preenchimento { background: #dbeafe; color: #1e40af; }
+.rdo-badge.reprovado     { background: #fee2e2; color: #991b1b; }
+
+/* ── Ocorrência card ───────────────────────────────────────── */
+.rdo-ocorrencia-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rdo-ocorrencia-item .ocorr-content {
+  flex: 1;
+}
+
+.rdo-ocorrencia-item .ocorr-titulo {
+  font-weight: 600;
+  font-size: 13px;
+  color: #1e293b;
+  margin-bottom: 4px;
+}
+
+.rdo-ocorrencia-item .ocorr-desc {
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.5;
+}
+
+/* ── Horas calculadas badge ────────────────────────────────── */
+.rdo-horas-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #dbeafe;
+  color: #1e40af;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* ── Empty state ───────────────────────────────────────────── */
+.rdo-empty {
+  text-align: center;
+  padding: 20px;
+  color: #94a3b8;
+  font-size: 13px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px dashed #e2e8f0;
+}
+
+/* ── Barra de ações ────────────────────────────────────────── */
+.rdo-actions-bar {
+  position: sticky;
+  bottom: 0;
+  background: rgba(255,255,255,0.96);
+  backdrop-filter: blur(8px);
+  border-top: 1px solid #e2e8f0;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  z-index: 100;
+  box-shadow: 0 -4px 16px rgba(15,23,42,0.07);
+}
+
+.rdo-actions-bar .rdo-status-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+/* ── Progresso bar ─────────────────────────────────────────── */
+.rdo-progress-bar-wrap {
+  width: 100%;
+  background: rgba(255,255,255,0.15);
+  border-radius: 4px;
+  height: 6px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+
+.rdo-progress-bar-fill {
+  height: 6px;
+  border-radius: 4px;
+  background: #34d399;
+  transition: width 0.4s ease;
+}
+
+/* ── Upload drop area ──────────────────────────────────────── */
+.rdo-upload-zone {
+  border: 2px dashed #cbd5e1;
+  border-radius: 10px;
+  padding: 20px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.rdo-upload-zone:hover {
+  border-color: var(--primary, #0ea5e9);
+  background: #f0f9ff;
+  color: #0288d1;
+}
+
+.rdo-upload-zone input[type="file"] {
+  display: none;
+}
+
+/* ── Anexo item ────────────────────────────────────────────── */
+.rdo-anexo-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 6px;
+}
+
+.rdo-anexo-item .anexo-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.rdo-anexo-item .anexo-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.rdo-anexo-item .anexo-nome {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rdo-anexo-item .anexo-meta {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+/* ── Util: separador ────────────────────────────────────────── */
+.rdo-sep {
+  height: 1px;
+  background: #f1f5f9;
+  margin: 14px 0;
+}
+
+/* ── Observacao geral ───────────────────────────────────────── */
+.rdo-obs-textarea {
+  width: 100%;
+  min-height: 120px;
+  resize: vertical;
+  padding: 12px 14px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #1e293b;
+  font-family: inherit;
+  transition: border-color 0.18s;
+}
+
+.rdo-obs-textarea:focus {
+  outline: none;
+  border-color: var(--primary, #0ea5e9);
+  box-shadow: 0 0 0 3px rgba(14,165,233,0.1);
+}
+
+/* ── Chevron collapse ───────────────────────────────────────── */
+.rdo-chevron {
+  transition: transform 0.2s;
+  color: #94a3b8;
+}
+
+.rdo-chevron.open {
+  transform: rotate(180deg);
+}

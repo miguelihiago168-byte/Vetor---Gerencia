@@ -27,7 +27,10 @@ const rdoRelatedRoutes = require('./routes/rdo_related');
 const dashboardRoutes = require('./routes/dashboard');
 const rncRoutes = require('./routes/rnc');
 const pedidosCompraRoutes = require('./routes/pedidos_compra');
-const financeiroRoutes = require('./routes/financeiro');
+const requisicoesRoutes = require('./routes/requisicoes');
+const fornecedoresRoutes = require('./routes/fornecedores');
+// FINANCEIRO DESATIVADO
+// const financeiroRoutes = require('./routes/financeiro');
 const notificacoesRoutes = require('./routes/notificacoes');
 const almoxarifadoRoutes = require('./routes/almoxarifado');
 // Garantir esquema de notificações e índice único para evitar duplicidades
@@ -49,6 +52,10 @@ try {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_notif_unique
     ON notificacoes (usuario_id, tipo, referencia_tipo, referencia_id)
   `);
+  // Migration: campos de auditoria de alteração de quantidade em requisicao_itens
+  db.run('ALTER TABLE requisicao_itens ADD COLUMN quantidade_original REAL', () => {});
+  db.run('ALTER TABLE requisicao_itens ADD COLUMN alterado_em DATETIME', () => {});
+  db.run('ALTER TABLE requisicao_itens ADD COLUMN alterado_por_nome TEXT', () => {});
 } catch (e) {
   console.warn('Aviso: não foi possível garantir índice único de notificações:', e?.message || e);
 }
@@ -64,7 +71,10 @@ app.use('/api/rdo', rdoRelatedRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/rnc', rncRoutes);
 app.use('/api/pedidos-compra', pedidosCompraRoutes);
-app.use('/api/financeiro', financeiroRoutes);
+app.use('/api/requisicoes', requisicoesRoutes);
+app.use('/api/fornecedores', fornecedoresRoutes);
+// FINANCEIRO DESATIVADO
+// app.use('/api/financeiro', financeiroRoutes);
 app.use('/api/notificacoes', notificacoesRoutes);
 app.use('/api/almoxarifado', almoxarifadoRoutes);
 
@@ -103,6 +113,15 @@ const startServer = (maxAttempts = 10) => {
       console.log(`\nServidor inicializado na porta ${PORT}`);
       console.log(`Acesse http://localhost:${PORT}/api/health`);
       console.log('Credenciais padrão: Login: 000001 Senha: 123456');
+
+      // Recalcular EAP ao iniciar para corrigir eventuais inconsistências
+      const path = require('path');
+      try {
+        const { recalcularTodasAtividades } = require('./scripts/recalcular_eap_startup');
+        recalcularTodasAtividades().catch(e => console.warn('Aviso: falha no recálculo EAP inicial:', e?.message));
+      } catch (e) {
+        // se o módulo não existir, ignora silenciosamente
+      }
     });
 
     server.on('error', (err) => {

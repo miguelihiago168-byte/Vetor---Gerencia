@@ -36,6 +36,7 @@ api.interceptors.response.use(
 
 // Auth
 export const login = (credentials) => api.post('/auth/login', credentials);
+export const register = (data) => api.post('/auth/register', data);
 
 // Usuários
 export const getUsuarios = (params) => api.get('/usuarios', { params });
@@ -62,6 +63,7 @@ export const updateProjeto = (id, data) => api.put(`/projetos/${id}`, data);
 export const deleteProjeto = (id) => api.delete(`/projetos/${id}`);
 export const arquivarProjeto = (id) => api.patch(`/projetos/${id}/arquivar`);
 export const desarquivarProjeto = (id) => api.patch(`/projetos/${id}/desarquivar`);
+export const copiarEapProjeto = (destinoId, origemProjetoId) => api.post(`/projetos/${destinoId}/copiar-eap`, { origem_projeto_id: origemProjetoId });
 
 // EAP
 export const getAtividadesEAP = (projetoId) => api.get(`/eap/projeto/${projetoId}`);
@@ -97,6 +99,10 @@ export const addRdoOcorrencia = (rdoId, data) => api.post(`/rdo/${rdoId}/ocorren
 export const addRdoAssinatura = (rdoId, data) => api.post(`/rdo/${rdoId}/assinatura`, data);
 // Backend espera o campo 'arquivo' no upload
 export const uploadRdoFoto = (rdoId, formData) => api.post(`/rdo/${rdoId}/foto`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+// Equipamentos
+export const getRdoEquipamentos = (rdoId) => api.get(`/rdo/${rdoId}/equipamentos`);
+export const addRdoEquipamento = (rdoId, data) => api.post(`/rdo/${rdoId}/equipamentos`, data);
+export const deleteRdoEquipamento = (rdoId, equipId) => api.delete(`/rdo/${rdoId}/equipamentos/${equipId}`);
 // Execução acumulada de atividades (somatório de quantidade_executada em RDOs aprovados)
 export const getExecucaoAcumulada = (projetoId) => api.get(`/rdo/projeto/${projetoId}/execucao-atividades`);
 // Colaboradores disponíveis para preenchimento de mão de obra (usuários + mão de obra direta)
@@ -133,8 +139,62 @@ export const enviarRncParaAprovacao = (id) => api.post(`/rnc/${id}/enviar-aprova
 // Notificações
 export const getNotificacoes = () => api.get('/notificacoes');
 export const marcarNotificacaoLida = (id) => api.patch(`/notificacoes/${id}/read`);
+export const marcarTodasNotificacoesLidas = () => api.patch('/notificacoes/marcar-todas-lidas');
 
-// Compras (Pedidos e Cotações)
+// ─── Fornecedores ─────────────────────────────────────────────────────────
+export const listarFornecedores = (params) => api.get('/fornecedores', { params });
+export const detalharFornecedor = (id) => api.get(`/fornecedores/${id}`);
+export const criarFornecedor = (data) => api.post('/fornecedores', data);
+export const editarFornecedor = (id, data) => api.patch(`/fornecedores/${id}`, data);
+export const toggleFornecedor = (id) => api.delete(`/fornecedores/${id}`);
+
+// ─── Requisições (módulo compras multi-itens) ─────────────────────────────
+export const listarRequisicoes = (params) => api.get('/requisicoes', { params });
+export const criarRequisicao = (data) => api.post('/requisicoes', data);
+export const listarRequisicoesProjeto = (projetoId, params) =>
+  api.get(`/requisicoes/projeto/${projetoId}`, { params });
+export const detalharRequisicao = (id) => api.get(`/requisicoes/${id}`);
+export const analisarItemRequisicao = (reqId, itemId, data) =>
+  api.patch(`/requisicoes/${reqId}/itens/${itemId}/analisar`, data);
+export const inserirCotacaoItem = (reqId, itemId, data) =>
+  api.post(`/requisicoes/${reqId}/itens/${itemId}/cotacoes`, data);
+export const selecionarCotacaoItem = (reqId, itemId, cotacaoId) =>
+  api.patch(`/requisicoes/${reqId}/itens/${itemId}/cotacoes/${cotacaoId}/selecionar`);
+export const marcarItemComprado = (reqId, itemId) =>
+  api.patch(`/requisicoes/${reqId}/itens/${itemId}/comprado`);
+export const cancelarItemRequisicao = (reqId, itemId, data) =>
+  api.patch(`/requisicoes/${reqId}/itens/${itemId}/cancelar`, data);
+export const devolverCotacaoItem = (reqId, itemId, data) =>
+  api.patch(`/requisicoes/${reqId}/itens/${itemId}/devolver-cotacao`, data);
+export const finalizarCotacaoItem = (reqId, itemId) =>
+  api.patch(`/requisicoes/${reqId}/itens/${itemId}/finalizar-cotacao`);
+export const alterarQuantidadeItem = (reqId, itemId, quantidade) =>
+  api.patch(`/requisicoes/${reqId}/itens/${itemId}/alterar-quantidade`, { quantidade });
+export const editarRequisicaoHeader = (reqId, data) =>
+  api.patch(`/requisicoes/${reqId}/editar`, data);
+export const editarItemRequisicao = (reqId, itemId, data) =>
+  api.patch(`/requisicoes/${reqId}/itens/${itemId}/editar`, data);
+export const listarCotacoesFinalizadas = (params) => api.get('/requisicoes/finalizadas', { params });
+export const listarCotacoesNegadas = (params) => api.get('/requisicoes/negadas', { params });
+export const listarRequisicoesEncerradas = (params) => api.get('/requisicoes/encerradas', { params });
+export const kanbanRequisicoes = (projetoId, params) =>
+  api.get(`/requisicoes/kanban/projeto/${projetoId}`, { params });
+export const kanbanRequisicoesV2 = (projetoId, params) =>
+  api.get(`/requisicoes/kanban/projeto/${projetoId}`, { params });
+export const kanbanGlobal = (params) =>
+  api.get('/requisicoes/kanban', { params });
+export const aprovarTodosItens = (reqId) =>
+  api.patch(`/requisicoes/${reqId}/aprovar-todos`);
+export const analisarTodosItens = (reqId) =>
+  api.patch(`/requisicoes/${reqId}/analisar-todos`);
+export const comprarTodosItens = (reqId) =>
+  api.patch(`/requisicoes/${reqId}/comprar-todos`);
+export const getRequisicoesBadges = (projetoId) =>
+  api.get('/requisicoes/badges', { params: projetoId ? { projeto_id: projetoId } : {} });
+export const editarCotacaoItem = (reqId, itemId, cotacaoId, data) =>
+  api.patch(`/requisicoes/${reqId}/itens/${itemId}/cotacoes/${cotacaoId}`, data);
+
+// Compras (Pedidos e Cotações) — legado
 export const criarPedidoCompra = (data) => api.post('/pedidos-compra', data);
 export const aprovarInicialPedido = (id) => api.patch(`/pedidos-compra/${id}/aprovar-inicial`);
 export const inserirCotacao = (id, dataOrForm) => {
@@ -166,6 +226,7 @@ export const getFinanceiroConsolidado = (params) => api.get('/financeiro/consoli
 export const getPerfilAlmoxarifado = () => api.get('/almoxarifado/perfil');
 export const getFerramentas = (params) => api.get('/almoxarifado/ferramentas', { params });
 export const getColaboradoresRetirada = (projetoId) => api.get('/almoxarifado/colaboradores', { params: { projeto_id: projetoId } });
+export const getProximoCodigoAtivo = (projetoId) => api.get('/almoxarifado/ferramentas/proximo-codigo', { params: { projeto_id: projetoId } });
 export const createFerramenta = (data) => api.post('/almoxarifado/ferramentas', data);
 export const transferirAtivoObra = (ferramentaId, data) => api.post(`/almoxarifado/ferramentas/${ferramentaId}/transferir`, data);
 export const getAlocacoesAbertas = (projetoId) => api.get('/almoxarifado/alocacoes-abertas', { params: { projeto_id: projetoId } });

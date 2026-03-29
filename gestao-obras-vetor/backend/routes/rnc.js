@@ -372,7 +372,7 @@ router.post('/:id/corrigir', auth, async (req, res) => {
     }
 
     await runQuery(
-      'UPDATE rnc SET descricao_correcao = ?, status = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+      'UPDATE rnc SET descricao_correcao = ?, descricao_correcao_em = CURRENT_TIMESTAMP, status = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
       [descricao_correcao || null, 'Em andamento', id]
     );
 

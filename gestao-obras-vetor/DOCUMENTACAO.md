@@ -1,59 +1,219 @@
-Documentação — Gestão de Obras - Vetor
+# Documentação — Gestão de Obras - Vetor
 
-Resumo do sistema
-- Backend: Node.js + Express, bancos SQLite
-- Frontend: React + Vite
-- APIs expostas em `/api/*`
+## Visão Geral
 
-Principais funcionalidades
-- Gestão de projetos (CRUD)
-- EAP (Estrutura Analítica do Projeto) — atividades principais e sub-atividades
-- RDO (Relatório Diário de Obra) — preenchimento diário, fotos, anexos, materiais, ocorrências e assinaturas
-- RNC — Relatórios de Não Conformidade
+Sistema web de gestão de obras civis. Permite acompanhar projetos, atividades (EAP), diários de obra (RDO), não conformidades (RNC), compras/requisições e almoxarifado.
 
-APIs relevantes
-- `GET /api/projetos` — lista de projetos
-- `GET /api/eap/projeto/:id` — atividades EAP do projeto
-- `GET /api/rdos/projeto/:id` — lista de RDOs do projeto
-- `GET /api/rdos/:id` — obter RDO por id
-- Operações de criação/atualização têm endpoints em `/api/rdos`, `/api/eap`, `/api/mao_obra`, etc. Veja `frontend/src/services/api.js` para mapeamento completo.
+| Camada    | Tecnologia                        |
+|-----------|-----------------------------------|
+| Backend   | Node.js + Express + SQLite        |
+| Frontend  | React 18 + Vite                   |
+| Uploads   | Multer (armazenamento local)      |
+| Infra     | Docker Compose (nginx + serviços) |
 
-Mudanças e melhorias aplicadas (interface RDO / EAP)
-- `frontend/src/pages/RDOForm.jsx`:
-  - Reposicionei a seção de `Assinaturas` para o final do formulário (fluxo natural: preencher → revisar → assinar).
-  - Removi o campo de ocorrências duplicado (mantido o formulário estruturado com `título`, `descrição` e `gravidade`).
-  - Reposicionei a seção de `Mão de obra` para ficar abaixo das `Condições Climáticas`, com exibição compacta e opção `Editar` para expandir os detalhes (melhora UX e reduz desordem visual).
-  - Adicionei seleção de `Trabalhabilidade` para o período `Noite` (Praticável / Impraticável).
-  - Lista de atividades foi convertida para uma tabela com barra de progresso, quantidade, % executado e ações (remover / enviar foto).
+---
 
-- `frontend/src/pages/RDOs.jsx`:
-  - Modal "Ver" melhorado: exibe tabela clara de atividades com barra de progresso e galeria de fotos do RDO.
+## Perfis de Usuário e Permissões
 
-- `frontend/src/pages/EAP.jsx`:
-  - Cálculo agregado de avanço para atividades principais: se houver sub-atividades, a atividade principal exibe avanço agregado (média ponderada por `percentual_previsto` quando disponível, fallback para média simples).
+Definidos em `backend/constants/access.js` e aplicados via middleware RBAC (`backend/middleware/rbac.js`).
 
-Checks realizados
-- Build do frontend (Vite): gerou `frontend/dist` com sucesso.
-- Backend `GET /api/health`: respondeu OK.
-- Teste inicial: frontend dev server em `http://localhost:3000/` (Vite ready).
+| Perfil              | Dashboard Projeto | RDO | RNC | EAP | Curva-S | Compras | Almoxarifado | Usuários |
+|---------------------|:-----------------:|:---:|:---:|:---:|:-------:|:-------:|:------------:|:--------:|
+| ADM                 | ✓                 | —   | —   | —   | —       | ✓       | ✓            | ✓        |
+| Gestor Geral        | ✓                 | ✓   | ✓   | ✓   | ✓       | ✓       | ✓            | ✓        |
+| Gestor da Obra      | ✓                 | ✓   | ✓   | ✓   | ✓       | ✓       | ✓            | —        |
+| Gestor da Qualidade | ✓                 | ✓   | ✓   | ✓   | ✓       | —       | ✓            | —        |
+| Fiscal              | ✓                 | ✓   | ✓   | —   | ✓       | —       | —            | —        |
+| **Almoxarife**      | **—**             | —   | —   | —   | —       | ✓       | ✓            | —        |
 
-Boas práticas e próximos passos sugeridos
-- Adicionar validações client-side mais explícitas (por exemplo, impedir salvar atividade com % inválido).
-- Melhorar feedback visual para ações longas (upload de fotos / assinaturas) com skeletons ou toasts.
-- Implementar testes automatizados (e2e com Playwright ou Cypress) cobrindo criação de RDO e fluxo de assinatura.
+> **Almoxarife**: ao clicar em um projeto na tela de Projetos, é redirecionado diretamente para `/compras`. O link "Dashboard" não aparece na navbar.
 
-Regras de Integridade (Projeto ↔ EAP ↔ RDO)
-- EAP requer Projeto: `atividades_eap.projeto_id` é obrigatório (FK com `ON DELETE CASCADE`).
-- RDO requer EAP: criação de RDO é bloqueada se o projeto não tiver nenhuma atividade EAP.
-- RDO deve conter atividades: não é permitido alterar status de um RDO sem atividades vinculadas.
-- Consistência de Projeto: cada `rdo_atividades` deve referenciar uma `atividade_eap` do mesmo `projeto_id` do RDO.
+Aliases aceitos: `Gestor Local` → `Gestor da Obra`; `Gestor de Qualidade` → `Gestor da Qualidade`.
 
-Implementação técnica
-- Banco: triggers SQLite garantem as regras acima.
-- API: validações adicionais em `POST /api/rdos` e `PATCH /api/rdos/:id/status` reforçam a integridade.
-- Índices: adicionados em `atividades_eap(projeto_id,pai_id)`, `rdos(projeto_id,data_relatorio)` e `rdo_atividades(rdo_id, atividade_eap_id)` para consultas e relatórios.
+---
 
-Se desejar, posso:
-- Gerar screenshots automáticos das telas (usando Puppeteer) para documentação visual.
-- Criar `docker-compose.yml` para facilitar execução local.
-- Ajustar estilos (cores/spacings) conforme guia de design.
+## Módulos do Sistema
+
+### 1. Projetos (`/projetos`)
+- CRUD completo de projetos (nome, empresa responsável/executante, prazo, cidade).
+- Vinculação de usuários por projeto.
+- Arquivamento/desarquivamento de projetos.
+- Card de progresso com avanço percentual calculado a partir da EAP.
+
+### 2. Dashboard do Projeto (`/projeto/:id`)
+- Visão geral do projeto: sinaleiros de status (RDO, RNC, Compras, Curva S).
+- Gráfico de Curva S (previsto × realizado).
+- Últimos RDOs e RNCs registrados.
+- Painel de compras com resumo por estágio (cotação, liberado, comprado).
+- **Acesso bloqueado para perfil Almoxarife.**
+
+### 3. EAP — Estrutura Analítica do Projeto (`/projeto/:id/eap`)
+- Árvore hierárquica de atividades (pai → filhos folhas).
+- Cada atividade possui: código EAP, nome/descrição, unidade de medida, quantidade total, peso percentual no projeto.
+- Cálculo agregado de avanço para nós pai (baseado nas folhas).
+- Rota de criação/edição: `/eap/novo` e `/eap/:atividadeId`.
+- Cópia de EAP entre projetos (`POST /api/eap/copiar`).
+
+### 4. RDO — Relatório Diário de Obra (`/projeto/:id/rdos`)
+- Formulário (`RDOForm2.jsx`) com seções colapsáveis:
+  1. Horário de trabalho (entrada, saída, intervalo)
+  2. Condições climáticas por período (Manhã / Tarde / Noite)
+  3. Mão de obra (colaboradores, tipo, horas)
+  4. Equipamentos
+  5. **Atividades executadas** — só exibe atividades com progresso < 100%
+  6. Fotos
+  7. Materiais utilizados
+  8. Ocorrências
+  9. Comentários
+  10. Anexos
+- Fluxo de status: `rascunho` → `enviado` → `aprovado` / `reprovado`.
+- Aprovação com assinatura digital (canvas).
+- Histórico de versões de RDO.
+- Execução acumulada: cálculo de quantidade restante por atividade considerando todos os RDOs aprovados anteriores.
+- **Atividades 100% concluídas** são ocultadas automaticamente do formulário de inserção.
+
+### 5. RNC — Relatório de Não Conformidade (`/projeto/:id/rnc`)
+- Registro de não conformidades com título, descrição, gravidade, fotos e anexos.
+- Fluxo: `aberto` → `em_correcao` → `corrigido` → `fechado`.
+- Timeline de histórico de status.
+- Campos extras: descrição da correção, data de correção.
+
+### 6. Compras / Requisições (`/projeto/:id/compras`)
+- Requisições multi-itens com fluxo Kanban por status do item:
+  - `solicitado` → `analisado` → `em_cotacao` → `cot_recebida` → `ag_decisao` →  `liberado` → `comprado` → `entregue`
+- Cotações por item com seleção de fornecedor vencedor.
+- Visualização global de compras (`/compras`) e por projeto.
+- Cotações finalizadas (`/compras/finalizadas`) e negadas (`/compras/negadas`).
+- Gestão de fornecedores (`/fornecedores`) — apenas ADM e Gestor Geral.
+- Pedidos legados mantidos em `/pedidos` para compatibilidade.
+
+### 7. Almoxarifado / Ativos (`/projeto/:id/almoxarifado`)
+Submódulos acessíveis via sidebar (`AlmoxarifadoLayout`):
+
+| Rota                        | Página               | Descrição                          |
+|-----------------------------|----------------------|------------------------------------|
+| `/almoxarifado`             | Dashboard            | Resumo de ferramentas e movimentos |
+| `/almoxarifado/ferramentas` | AlmoxFerramentas     | Cadastro e listagem de ferramentas |
+| `/almoxarifado/retirada`    | AlmoxRetirada        | Registro de retirada de itens      |
+| `/almoxarifado/devolucao`   | AlmoxDevolucao       | Registro de devolução              |
+| `/almoxarifado/manutencao`  | AlmoxManutencao      | Manutenções e baixas               |
+| `/almoxarifado/perdas`      | AlmoxPerdas          | Registro de perdas                 |
+| `/almoxarifado/relatorios`  | AlmoxRelatorios      | Relatórios consolidados            |
+
+### 8. Curva S (`/projeto/:id/curva-s`)
+- Gráfico de avanço físico previsto × realizado ao longo do tempo.
+- Dados calculados a partir da EAP e dos RDOs aprovados.
+
+### 9. Usuários (`/usuarios`, `/projeto/:id/usuarios`)
+- CRUD de usuários com perfil, setor e vínculo a projetos.
+- Acesso exclusivo para ADM e Gestor Geral.
+
+### 10. Financeiro
+- **Módulo desativado.** Código preservado em `FinanceiroFluxoCaixa.jsx` e rota comentada em `main.jsx`.
+
+---
+
+## Rotas de API (Backend)
+
+| Prefixo              | Arquivo de rota          | Descrição                                  |
+|----------------------|--------------------------|--------------------------------------------|
+| `/api/auth`          | `routes/auth.js`         | Login, logout, token                       |
+| `/api/usuarios`      | `routes/usuarios.js`     | CRUD de usuários                           |
+| `/api/projetos`      | `routes/projetos.js`     | CRUD de projetos                           |
+| `/api/eap`           | `routes/eap.js`          | EAP: atividades, cópia, métricas           |
+| `/api/rdos`          | `routes/rdos.js`         | CRUD de RDOs, status, versões              |
+| `/api/rdo-related`   | `routes/rdo_related.js`  | Execução acumulada, colaboradores          |
+| `/api/mao-obra`      | `routes/mao_obra.js`     | Colaboradores de mão de obra              |
+| `/api/rnc`           | `routes/rnc.js`          | CRUD de RNCs                               |
+| `/api/anexos`        | `routes/anexos.js`       | Upload e listagem de anexos               |
+| `/api/dashboard`     | `routes/dashboard.js`    | Métricas do dashboard do projeto           |
+| `/api/pedidos`       | `routes/pedidos_compra.js` | Pedidos de compra legados                |
+| `/api/requisicoes`   | `routes/requisicoes.js`  | Requisições multi-itens (compras)          |
+| `/api/fornecedores`  | `routes/fornecedores.js` | Cadastro de fornecedores                   |
+| `/api/almoxarifado`  | `routes/almoxarifado.js` | Ferramentas, retiradas, devoluções, etc.   |
+| `/api/notificacoes`  | `routes/notificacoes.js` | Notificações do usuário                    |
+| `/api/financeiro`    | `routes/financeiro.js`   | *(módulo desativado)*                      |
+
+Consulte `frontend/src/services/api.js` para o mapeamento completo de chamadas do frontend.
+
+---
+
+## Autenticação e Segurança
+
+- JWT com expiração configurável (`auth` middleware em `backend/middleware/auth.js`).
+- RBAC granular por permissão definido em `backend/middleware/rbac.js` com matriz `permissionMatrix`.
+- Auditoria de alterações registrada na tabela `auditoria` via `backend/middleware/auditoria.js`.
+- Frontend protege rotas com `PrivateRoute` — redireciona para `/projetos` se o perfil não tiver acesso.
+
+---
+
+## Regras de Integridade de Dados
+
+- **EAP requer Projeto**: `atividades_eap.projeto_id` é obrigatório (FK com `ON DELETE CASCADE`).
+- **RDO requer EAP**: criação bloqueada se o projeto não tiver atividades EAP cadastradas.
+- **RDO requer atividades**: mudança de status bloqueada se o RDO não tiver atividades vinculadas.
+- **Consistência projeto**: cada `rdo_atividades` deve referenciar uma `atividade_eap` do mesmo `projeto_id` do RDO.
+- **Atividade 100%**: atividades com execução acumulada ≥ quantidade total (ou `percentual_executado ≥ 100`) não aparecem no formulário de inserção de RDO.
+- Triggers SQLite e validações na API reforçam as regras acima.
+
+---
+
+## Índices de Performance (SQLite)
+
+- `atividades_eap(projeto_id, pai_id)`
+- `rdos(projeto_id, data_relatorio)`
+- `rdo_atividades(rdo_id, atividade_eap_id)`
+- `notificacoes` — índice único para evitar duplicatas
+
+---
+
+## Estrutura de Diretórios
+
+```
+gestao-obras-vetor/
+├── backend/
+│   ├── server.js              # Entry point Express
+│   ├── config/database.js     # Conexão SQLite + helpers
+│   ├── constants/access.js    # Perfis, setores, mapeamento de permissões
+│   ├── middleware/
+│   │   ├── auth.js            # Validação JWT
+│   │   ├── rbac.js            # Controle de acesso baseado em perfil
+│   │   └── auditoria.js       # Log de alterações
+│   ├── routes/                # Um arquivo por módulo de API
+│   ├── scripts/               # Migrações e utilitários de banco
+│   ├── services/              # Lógica de negócio desacoplada
+│   └── uploads/               # Arquivos enviados pelos usuários
+├── frontend/
+│   ├── src/
+│   │   ├── main.jsx           # Roteamento global (React Router)
+│   │   ├── pages/             # Uma página por módulo
+│   │   ├── components/        # Navbar, PrivateRoute, Layouts, Modais
+│   │   ├── context/           # AuthContext, NotificationContext, DialogContext, LeaveGuardContext
+│   │   ├── services/api.js    # Axios — todos os endpoints do backend
+│   │   └── utils/             # Formatadores (moeda, datas, etc.)
+│   └── index.html
+├── nginx/default.conf         # Proxy reverso (produção)
+├── docker-compose.yml
+└── start.ps1 / start.bat      # Scripts de inicialização local
+```
+
+---
+
+## Execução Local
+
+```bash
+# Backend
+cd backend
+npm install
+node server.js        # porta 3001
+
+# Frontend
+cd frontend
+npm install
+npm run dev           # porta 3000 (Vite)
+```
+
+Ou via Docker:
+```bash
+docker-compose up --build
+```

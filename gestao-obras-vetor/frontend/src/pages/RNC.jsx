@@ -4,7 +4,7 @@ import Navbar from '../components/Navbar';
 import { getRNCs, deleteRNC } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
-import { AlertTriangle, Plus, Eye, Edit, Trash2 } from 'lucide-react';
+import { AlertTriangle, Plus, Eye, Edit2, Trash2, FileText } from 'lucide-react';
 import './RNC.css';
 
 function RNC() {
@@ -15,15 +15,15 @@ function RNC() {
   const [rncs, setRncs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState('');
-  const formatLocalDate = (dstr) => {
-    if (!dstr) return 'N/A';
+
+  const formatShortDate = (dstr) => {
+    if (!dstr) return null;
     const m = dstr.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) {
-      const dt = new Date(parseInt(m[1],10), parseInt(m[2],10)-1, parseInt(m[3],10));
-      return dt.toLocaleDateString('pt-BR');
-    }
-    const dt = new Date(dstr);
-    return isNaN(dt.getTime()) ? dstr : dt.toLocaleDateString('pt-BR');
+    const dt = m
+      ? new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10))
+      : new Date(dstr);
+    if (isNaN(dt.getTime())) return null;
+    return dt.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
   const statusLabel = (s) => {
@@ -31,14 +31,11 @@ function RNC() {
     return s || 'N/A';
   };
 
-  const statusColor = (s) => {
-    // Consistência visual com RDO: Em aprovação (amarelo), Encerrada (verde), Aberta/Em andamento (azul)
-    if (s === 'Encerrada') return '#2E7D32';
-    if (s === 'Em análise') return '#F9A825';
-    return '#2962FF';
+  const getBadgeClass = (s) => {
+    if (s === 'Encerrada') return 'rnc-badge rnc-badge-encerrada';
+    if (s === 'Em análise') return 'rnc-badge rnc-badge-analise';
+    return 'rnc-badge rnc-badge-aberta';
   };
-
-  // Aprovação foi movida para a tela de detalhes (RNCDetalhes)
 
   useEffect(() => {
     carregarRNCs();
@@ -47,33 +44,28 @@ function RNC() {
   const carregarRNCs = async () => {
     try {
       setLoading(true);
-      console.log('Carregando RNCs para projeto:', projetoId);
       const response = await getRNCs(projetoId);
-      console.log('RNCs carregadas:', response.data);
-      console.log('Número de RNCs:', response.data?.length || 0);
       setRncs(response.data || []);
     } catch (error) {
-      console.error('Erro ao carregar RNCs:', error);
       setErro('Erro ao carregar RNCs: ' + (error.response?.data?.erro || error.message));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (e, id) => {
+    e.stopPropagation();
     const ok = await confirm({
       title: 'Excluir RNC',
       message: 'Deseja realmente deletar esta RNC?',
       confirmText: 'Excluir',
-      cancelText: 'Cancelar'
+      cancelText: 'Cancelar',
     });
     if (!ok) return;
-
     try {
       await deleteRNC(id);
-      setRncs(rncs.filter(rnc => rnc.id !== id));
+      setRncs(rncs.filter(r => r.id !== id));
     } catch (error) {
-      console.error('Erro ao deletar RNC:', error);
       setErro('Erro ao deletar RNC: ' + (error.response?.data?.erro || error.message));
     }
   };
@@ -93,10 +85,15 @@ function RNC() {
     <>
       <Navbar />
       <div className="container rnc-container">
+
+        {/* ── Cabeçalho ── */}
         <div className="rnc-header">
-          <h1>RNCs do Projeto</h1>
+          <div className="rnc-header-text">
+            <h1>Relatórios de Não Conformidade</h1>
+            <p>{rncs.length} {rncs.length === 1 ? 'registro' : 'registros'} neste projeto</p>
+          </div>
           <button className="btn btn-primary" onClick={() => navigate(`/projeto/${projetoId}/rnc/novo`)}>
-            <Plus size={16} />
+            <Plus size={15} />
             Nova RNC
           </button>
         </div>
@@ -104,70 +101,92 @@ function RNC() {
         {erro && <div className="alert alert-error rnc-alert">{erro}</div>}
 
         {rncs.length === 0 ? (
-          <div className="card rnc-empty">
-            <AlertTriangle size={48} className="rnc-empty-icon" />
+          <div className="rnc-empty">
+            <AlertTriangle size={40} className="rnc-empty-icon" />
             <h3 className="rnc-empty-title">Nenhuma RNC encontrada</h3>
             <p className="rnc-empty-sub">Crie a primeira RNC para este projeto.</p>
           </div>
         ) : (
           <div className="rnc-grid">
-            {rncs.map(rnc => (
-              <div key={rnc.id} className="card rnc-card">
-                <div className="rnc-card-header">
-                  <div className="rnc-status" style={{ background: statusColor(rnc.status) }}>
+            {rncs.map(rnc => {
+              const isEncerrada = rnc.status === 'Encerrada';
+              const dataAbertura = formatShortDate(rnc.criado_em);
+              const dataPrevista = formatShortDate(rnc.data_prevista_encerramento);
+
+              return (
+                <div
+                  key={rnc.id}
+                  className="card rnc-card"
+                  onClick={() => navigate(`/projeto/${projetoId}/rnc/${rnc.id}`)}
+                  title="Ver detalhes"
+                >
+                  {/* Badge de status */}
+                  <span className={getBadgeClass(rnc.status)}>
                     {statusLabel(rnc.status)}
+                  </span>
+
+                  {/* Título */}
+                  <h3 className="rnc-title">{rnc.titulo || `RNC #${rnc.id}`}</h3>
+
+                  {/* Datas compactas */}
+                  <div className="rnc-dates">
+                    {dataAbertura && <span>{dataAbertura}</span>}
+                    {dataAbertura && dataPrevista && <span className="rnc-dates-sep">•</span>}
+                    {dataPrevista && <span>Prevista {dataPrevista}</span>}
                   </div>
-                  <div className="rnc-top-actions">
+
+                  {/* Separador + ações */}
+                  <div className="rnc-divider" />
+                  <div
+                    className="rnc-actions"
+                    onClick={e => e.stopPropagation()}
+                  >
                     <button
-                      className="btn btn-secondary"
+                      className="rnc-btn-ghost"
                       onClick={() => navigate(`/projeto/${projetoId}/rnc/${rnc.id}`)}
                       title="Ver detalhes"
                     >
-                      <Eye size={16} /> Detalhes
+                      <Eye size={13} />
+                      Ver
                     </button>
+
                     <button
-                      className="btn btn-primary"
+                      className="rnc-btn-ghost"
                       onClick={() => window.open(`/api/rnc/${rnc.id}/pdf`, '_blank')}
                       title="Download PDF"
                     >
+                      <FileText size={13} />
                       PDF
                     </button>
-                  </div>
-                </div>
 
-                <h3 className="rnc-title">{rnc.titulo || `RNC #${rnc.id}`}</h3>
-
-                <div className="rnc-dates">
-                  <span>Data: {formatLocalDate(rnc.criado_em)}</span>
-                  <span>Prevista: {formatLocalDate(rnc.data_prevista_encerramento)}</span>
-                </div>
-
-                {rnc.status !== 'Encerrada' && (
-                  <div className="rnc-actions">
-                    <button
-                      className="btn btn-warning"
-                      onClick={() => navigate(`/projeto/${projetoId}/rnc/${rnc.id}?responder=1`)}
-                      title="Responder RNC"
-                      disabled={rnc.status === 'Encerrada'}
-                    >
-                      <Edit size={16} /> Responder
-                    </button>
-                    {isGestor && (
+                    {!isEncerrada && (
                       <button
-                        className="btn btn-danger"
-                        onClick={() => handleDelete(rnc.id)}
-                        title="Deletar RNC"
-                        disabled={rnc.status === 'Encerrada'}
+                        className="rnc-btn-ghost"
+                        onClick={() => navigate(`/projeto/${projetoId}/rnc/${rnc.id}?responder=1`)}
+                        title="Responder RNC"
                       >
-                        <Trash2 size={16} />
+                        <Edit2 size={13} />
+                        Responder
+                      </button>
+                    )}
+
+                    {isGestor && !isEncerrada && (
+                      <button
+                        className="rnc-btn-icon"
+                        onClick={e => handleDelete(e, rnc.id)}
+                        title="Excluir RNC"
+                        style={{ marginLeft: 'auto' }}
+                      >
+                        <Trash2 size={13} />
                       </button>
                     )}
                   </div>
-                )}
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
         )}
+
       </div>
     </>
   );

@@ -3,8 +3,14 @@ const { body, validationResult } = require('express-validator');
 const { allQuery, runQuery, getQuery } = require('../config/database');
 const { auth, isGestor } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
+const { PERFIS, inferirPerfil } = require('../constants/access');
 
 const router = express.Router();
+
+// Auto-migration: adicionar coluna atividades_avulsas se não existir
+runQuery("ALTER TABLE rdos ADD COLUMN atividades_avulsas TEXT").catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] atividades_avulsas:', e.message);
+});
 
 // Gerar número sequencial e único no formato RDO-XXX, baseado em TODOS os RDOs existentes
 const gerarNumeroRDO = async () => {
@@ -56,7 +62,60 @@ const atualizarStatusAtividade = async (atividadeId) => {
   );
 };
 
-// Recalcula percentual da atividade pai de forma ponderada (recursiva)
+// Recalcula EAP para uma lista de atividadeIds com base apenas em RDOs aprovados.
+// Chamado ao salvar (criar/atualizar) e mudar status de RDO para refletir aprovações.
+const recalcularEapAtividades = async (atividadeIds) => {
+  const ids = [...new Set(atividadeIds.filter(Boolean))];
+  for (const atividadeId of ids) {
+    try {
+      const infoAtividade = await getQuery('SELECT quantidade_total FROM atividades_eap WHERE id = ?', [atividadeId]);
+      if (!infoAtividade) continue;
+      const quantidadeTotal = Number(infoAtividade.quantidade_total || 0);
+
+      const resultadoQt = await getQuery(`
+        SELECT COALESCE(SUM(COALESCE(ra.quantidade_executada, 0)), 0) AS total_executado_qt
+        FROM rdo_atividades ra
+        INNER JOIN rdos r ON ra.rdo_id = r.id
+        WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
+      `, [atividadeId]);
+
+      let percentualExecutado = 0;
+      if (quantidadeTotal > 0 && resultadoQt && resultadoQt.total_executado_qt) {
+        percentualExecutado = Math.min(Math.round((resultadoQt.total_executado_qt / quantidadeTotal) * 10000) / 100, 100);
+      } else {
+        const resultado = await getQuery(`
+          SELECT COALESCE(SUM(ra.percentual_executado), 0) AS total_executado
+          FROM rdo_atividades ra
+          INNER JOIN rdos r ON ra.rdo_id = r.id
+          WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
+        `, [atividadeId]);
+        percentualExecutado = Math.min(resultado?.total_executado || 0, 100);
+      }
+
+      let dataConclusaoReal = null;
+      if (percentualExecutado >= 100) {
+        const ultima = await getQuery(`
+          SELECT MAX(r.data_relatorio) AS data_conclusao
+          FROM rdo_atividades ra
+          INNER JOIN rdos r ON ra.rdo_id = r.id
+          WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
+        `, [atividadeId]);
+        dataConclusaoReal = ultima?.data_conclusao || null;
+      }
+
+      await runQuery(
+        'UPDATE atividades_eap SET percentual_executado = ?, data_conclusao_real = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+        [percentualExecutado, dataConclusaoReal, atividadeId]
+      );
+      await atualizarStatusAtividade(atividadeId);
+      await recalcularPercentualPai(atividadeId);
+    } catch (err) {
+      console.warn('Erro ao recalcular EAP para atividade', atividadeId, err);
+    }
+  }
+};
+
+// Recalcula percentual da atividade pai por contribuição de peso dos filhos (recursiva)
 const recalcularPercentualPai = async (atividadeId) => {
   try {
     const paiRow = await getQuery('SELECT pai_id FROM atividades_eap WHERE id = ?', [atividadeId]);
@@ -65,26 +124,33 @@ const recalcularPercentualPai = async (atividadeId) => {
     const paiId = paiRow.pai_id;
 
     // Buscar filhos
-    const filhos = await allQuery('SELECT id, percentual_executado, quantidade_total FROM atividades_eap WHERE pai_id = ?', [paiId]);
+    const filhos = await allQuery(`
+      SELECT
+        id,
+        percentual_executado,
+        COALESCE(peso_percentual_projeto, percentual_previsto, 0) AS peso_percentual
+      FROM atividades_eap
+      WHERE pai_id = ?
+    `, [paiId]);
     if (!filhos || filhos.length === 0) return;
 
-    // Calcular média ponderada por quantidade_total se disponível
-    let somaPesada = 0;
+    // O pai avança pela contribuição de cada filho no intervalo [0..100].
+    let somaContribuicao = 0;
     let somaPeso = 0;
     let somaSimples = 0;
     for (const f of filhos) {
       const perc = parseFloat(f.percentual_executado || 0);
-      const peso = parseFloat(f.quantidade_total || 0);
+      const peso = parseFloat(f.peso_percentual || 0);
       somaSimples += perc;
       if (peso && peso > 0) {
-        somaPesada += perc * peso;
+        somaContribuicao += (perc * peso) / 100;
         somaPeso += peso;
       }
     }
 
     let novoPerc = 0;
     if (somaPeso > 0) {
-      novoPerc = Math.min(Math.round((somaPesada / somaPeso) * 100) / 100, 100);
+      novoPerc = Math.min(Math.round(somaContribuicao * 100) / 100, 100);
     } else {
       novoPerc = Math.min(Math.round((somaSimples / filhos.length) * 100) / 100, 100);
     }
@@ -141,7 +207,7 @@ router.get('/:id', auth, async (req, res) => {
 
     // Buscar atividades executadas
     const atividades = await allQuery(`
-      SELECT ra.*, ae.codigo_eap, ae.descricao
+      SELECT ra.*, ae.codigo_eap, COALESCE(ae.nome, ae.descricao) AS descricao
       FROM rdo_atividades ra
       INNER JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
       WHERE ra.rdo_id = ?
@@ -163,7 +229,7 @@ router.get('/:id', auth, async (req, res) => {
 
     // Buscar fotos vinculadas às atividades do RDO
     const fotos = await allQuery(`
-      SELECT rf.*, ae.descricao as atividade_descricao
+      SELECT rf.*, ae.codigo_eap AS atividade_codigo, COALESCE(ae.nome, ae.descricao) AS atividade_descricao, rf.atividade_avulsa_descricao
       FROM rdo_fotos rf
       LEFT JOIN rdo_atividades ra ON rf.rdo_atividade_id = ra.id
       LEFT JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
@@ -217,11 +283,30 @@ router.get('/:id', auth, async (req, res) => {
     rdo.ocorrencias = ocorrencias;
     rdo.assinaturas = assinaturas;
     rdo.clima = clima;
+
+    // Equipamentos da nova tabela rdo_equipamentos
+    try {
+      const equipamentosTabela = await allQuery(
+        'SELECT * FROM rdo_equipamentos WHERE rdo_id = ? ORDER BY id',
+        [id]
+      );
+      rdo.equipamentos_lista = equipamentosTabela || [];
+    } catch (e) {
+      rdo.equipamentos_lista = [];
+    }
+
     // Parse mao_obra_detalhada JSON if presente
     try {
       rdo.mao_obra_detalhada = rdo.mao_obra_detalhada ? JSON.parse(rdo.mao_obra_detalhada) : [];
     } catch (e) {
       rdo.mao_obra_detalhada = [];
+    }
+
+    // Parse atividades_avulsas JSON
+    try {
+      rdo.atividades_avulsas = rdo.atividades_avulsas ? JSON.parse(rdo.atividades_avulsas) : [];
+    } catch (e) {
+      rdo.atividades_avulsas = [];
     }
 
     // Buscar colaboradores vinculados à obra (se existir tabela projeto_usuarios)
@@ -286,11 +371,37 @@ router.post('/', auth, [
     if (!eapCountRow || eapCountRow.c === 0) {
       return res.status(400).json({ erro: 'Projeto sem EAP: crie a EAP antes do RDO.' });
     }
-    if (!Array.isArray(atividades) || atividades.length === 0) {
-      return res.status(400).json({ erro: 'RDO deve conter ao menos uma atividade executada.' });
+    const atividadesEapBody = Array.isArray(atividades) ? atividades : [];
+    const atividades_avulsas = Array.isArray(req.body.atividades_avulsas) ? req.body.atividades_avulsas : [];
+    if (atividadesEapBody.length === 0 && atividades_avulsas.length === 0) {
+      return res.status(400).json({ erro: 'RDO deve conter ao menos uma atividade (EAP ou avulsa).' });
     }
+
+    for (const avulsa of atividades_avulsas) {
+      const descricao = String(avulsa?.descricao || '').trim();
+      if (!descricao) {
+        return res.status(400).json({ erro: 'Atividade avulsa sem descrição.' });
+      }
+      const qtdPrevista = (avulsa?.quantidade_prevista !== undefined && avulsa?.quantidade_prevista !== null && avulsa?.quantidade_prevista !== '')
+        ? Number(avulsa.quantidade_prevista)
+        : null;
+      const qtdExecutada = (avulsa?.quantidade_executada !== undefined && avulsa?.quantidade_executada !== null && avulsa?.quantidade_executada !== '')
+        ? Number(avulsa.quantidade_executada)
+        : null;
+
+      if (qtdPrevista === null || !Number.isFinite(qtdPrevista) || qtdPrevista <= 0) {
+        return res.status(400).json({ erro: `Atividade avulsa ${descricao}: quantidade prevista deve ser maior que zero.` });
+      }
+      if (qtdExecutada === null || !Number.isFinite(qtdExecutada) || qtdExecutada < 0) {
+        return res.status(400).json({ erro: `Atividade avulsa ${descricao}: quantidade executada inválida.` });
+      }
+      if (qtdExecutada > qtdPrevista) {
+        return res.status(400).json({ erro: `Atividade avulsa ${descricao}: executado não pode ser maior que previsto.` });
+      }
+    }
+
     // Validar que todas as atividades pertencem ao mesmo projeto
-    for (const atividade of atividades) {
+    for (const atividade of atividadesEapBody) {
       const rowProj = await getQuery('SELECT projeto_id, quantidade_total FROM atividades_eap WHERE id = ?', [atividade.atividade_eap_id]);
       if (!rowProj) {
         return res.status(400).json({ erro: 'Atividade EAP inexistente no banco.' });
@@ -399,8 +510,8 @@ router.post('/', auth, [
         clima_manha, tempo_manha, praticabilidade_manha,
         clima_tarde, tempo_tarde, praticabilidade_tarde,
         mao_obra_direta, mao_obra_indireta, mao_obra_terceiros,
-        equipamentos, ocorrencias, comentarios, mao_obra_detalhada, criado_por, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        equipamentos, ocorrencias, comentarios, mao_obra_detalhada, atividades_avulsas, criado_por, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       numeroRdoFinal, projeto_id, dataRelatorioStr, dia_semana_calc,
       entrada_saida_inicio || '07:00', entrada_saida_fim || '17:00',
@@ -408,7 +519,7 @@ router.post('/', auth, [
       clima_manha || 'Claro', tempo_manha || '★', praticabilidade_manha || 'Praticável',
       clima_tarde || 'Claro', tempo_tarde || '★', praticabilidade_tarde || 'Praticável',
       mao_obra_direta || 0, mao_obra_indireta || 0, mao_obra_terceiros || 0,
-      equipamentos, ocorrencias, comentarios, (req.body.mao_obra_detalhada ? JSON.stringify(req.body.mao_obra_detalhada) : null), req.usuario.id, initialStatus
+      equipamentos, ocorrencias, comentarios, (req.body.mao_obra_detalhada ? JSON.stringify(req.body.mao_obra_detalhada) : null), (atividades_avulsas.length > 0 ? JSON.stringify(atividades_avulsas) : null), req.usuario.id, initialStatus
     ]);
 
     const rdoId = result.lastID;
@@ -464,6 +575,38 @@ router.post('/', auth, [
     }
 
     await registrarAuditoria('rdos', rdoId, 'CREATE', null, req.body, req.usuario.id);
+
+    // Recalcular avanço EAP imediatamente após criar o RDO
+    if (atividades && atividades.length > 0) {
+      try {
+        await recalcularEapAtividades(atividades.map(a => a.atividade_eap_id));
+      } catch (err) {
+        console.warn('Erro ao recalcular EAP após criar RDO:', err);
+      }
+    }
+
+    // Notificar gestores do projeto sobre novo RDO
+    try {
+      const criadorNome = req.usuario.nome || `Usuário #${req.usuario.id}`;
+      const gestoresProjeto = await allQuery(
+        `SELECT u.id FROM usuarios u
+         JOIN projeto_usuarios pu ON pu.usuario_id = u.id
+         WHERE pu.projeto_id = ?
+           AND u.id != ?
+           AND u.ativo = 1
+           AND (u.perfil IN ('Gestor Geral', 'Gestor da Obra') OR u.is_gestor = 1)`,
+        [projeto_id, req.usuario.id]
+      );
+      for (const g of gestoresProjeto) {
+        await runQuery(
+          `INSERT OR IGNORE INTO notificacoes (usuario_id, tipo, mensagem, referencia_tipo, referencia_id)
+           VALUES (?, ?, ?, ?, ?)`,
+          [g.id, 'rdo_criado', `Novo RDO criado por ${criadorNome}: ${numeroRdoFinal}`, 'rdo', rdoId]
+        );
+      }
+    } catch (e) {
+      console.warn('Falha ao notificar gestores sobre novo RDO:', e?.message || e);
+    }
 
     res.status(201).json({
       mensagem: 'RDO criado com sucesso.',
@@ -543,6 +686,30 @@ router.put('/:id', auth, async (req, res) => {
       }
     }
 
+    const atividadesAvulsasBody = Array.isArray(req.body.atividades_avulsas) ? req.body.atividades_avulsas : [];
+    for (const avulsa of atividadesAvulsasBody) {
+      const descricao = String(avulsa?.descricao || '').trim();
+      if (!descricao) {
+        return res.status(400).json({ erro: 'Atividade avulsa sem descrição.' });
+      }
+      const qtdPrevista = (avulsa?.quantidade_prevista !== undefined && avulsa?.quantidade_prevista !== null && avulsa?.quantidade_prevista !== '')
+        ? Number(avulsa.quantidade_prevista)
+        : null;
+      const qtdExecutada = (avulsa?.quantidade_executada !== undefined && avulsa?.quantidade_executada !== null && avulsa?.quantidade_executada !== '')
+        ? Number(avulsa.quantidade_executada)
+        : null;
+
+      if (qtdPrevista === null || !Number.isFinite(qtdPrevista) || qtdPrevista <= 0) {
+        return res.status(400).json({ erro: `Atividade avulsa ${descricao}: quantidade prevista deve ser maior que zero.` });
+      }
+      if (qtdExecutada === null || !Number.isFinite(qtdExecutada) || qtdExecutada < 0) {
+        return res.status(400).json({ erro: `Atividade avulsa ${descricao}: quantidade executada inválida.` });
+      }
+      if (qtdExecutada > qtdPrevista) {
+        return res.status(400).json({ erro: `Atividade avulsa ${descricao}: executado não pode ser maior que previsto.` });
+      }
+    }
+
     await runQuery(`
       UPDATE rdos SET
         dia_semana = ?,
@@ -553,6 +720,7 @@ router.put('/:id', auth, async (req, res) => {
         mao_obra_direta = ?, mao_obra_indireta = ?, mao_obra_terceiros = ?,
         equipamentos = ?, ocorrencias = ?, comentarios = ?,
         mao_obra_detalhada = ?,
+        atividades_avulsas = ?,
         atualizado_em = CURRENT_TIMESTAMP
       WHERE id = ?
     `, [
@@ -566,6 +734,10 @@ router.put('/:id', auth, async (req, res) => {
       (typeof req.body.mao_obra_detalhada !== 'undefined'
         ? (req.body.mao_obra_detalhada ? JSON.stringify(req.body.mao_obra_detalhada) : null)
         : rdoAtual.mao_obra_detalhada // se não veio no payload, preserva o valor atual
+      ),
+      (typeof req.body.atividades_avulsas !== 'undefined'
+        ? (Array.isArray(req.body.atividades_avulsas) && req.body.atividades_avulsas.length > 0 ? JSON.stringify(req.body.atividades_avulsas) : null)
+        : rdoAtual.atividades_avulsas
       ),
       id
     ]);
@@ -601,6 +773,16 @@ router.put('/:id', auth, async (req, res) => {
 
     await registrarAuditoria('rdos', id, 'UPDATE', rdoAtual, req.body, req.usuario.id);
 
+    // Recalcular avanço EAP imediatamente após salvar o RDO
+    if (atividades) {
+      try {
+        const todasAtividades = await allQuery('SELECT DISTINCT atividade_eap_id FROM rdo_atividades WHERE rdo_id = ?', [id]);
+        await recalcularEapAtividades(todasAtividades.map(r => r.atividade_eap_id));
+      } catch (err) {
+        console.warn('Erro ao recalcular EAP após atualizar RDO:', err);
+      }
+    }
+
     res.json({ mensagem: 'RDO atualizado com sucesso.' });
 
   } catch (error) {
@@ -627,13 +809,20 @@ router.patch('/:id/status', auth, async (req, res) => {
       return res.status(403).json({ erro: 'Apenas o criador pode enviar para análise.' });
     }
 
-    // Apenas gestor pode aprovar/reprovar
-    if ((status === 'Aprovado' || status === 'Reprovado') && !req.usuario.is_gestor) {
-      return res.status(403).json({ erro: 'Apenas gestores podem aprovar ou reprovar RDOs.' });
-    }
+    // Verificar permissões por ação
+    const perfilAtual = inferirPerfil(req.usuario);
+    const podeAprovar = [PERFIS.GESTOR_GERAL, PERFIS.GESTOR_OBRA].includes(perfilAtual);
+    const podeReprovar = [PERFIS.GESTOR_GERAL, PERFIS.GESTOR_OBRA, PERFIS.FISCAL].includes(perfilAtual);
+    const podeReverter = podeAprovar; // apenas gestores
 
-    // Se RDO já estava aprovado, somente gestor pode revertê-lo
-    if (rdoAtual.status === 'Aprovado' && status !== 'Aprovado' && !req.usuario.is_gestor) {
+    if (status === 'Aprovado' && !podeAprovar) {
+      return res.status(403).json({ erro: 'Apenas Gestores Geral ou de Obra podem aprovar RDOs.' });
+    }
+    if (status === 'Reprovado' && !podeReprovar) {
+      return res.status(403).json({ erro: 'Apenas Gestores ou Fiscal podem reprovar RDOs.' });
+    }
+    // Se RDO já estava aprovado, somente gestores podem revertê-lo
+    if (rdoAtual.status === 'Aprovado' && status !== 'Aprovado' && !podeReverter) {
       return res.status(403).json({ erro: 'Apenas gestores podem reverter um RDO aprovado.' });
     }
 
@@ -687,7 +876,7 @@ router.patch('/:id/status', auth, async (req, res) => {
         if (rdoRow && rdoRow.historico_status) {
           try { hist = JSON.parse(rdoRow.historico_status); } catch (e) { hist = []; }
         }
-        hist.push({ status, por: req.usuario.id, em: new Date().toISOString() });
+        hist.push({ status, por: req.usuario.id, nome: req.usuario.nome || null, em: new Date().toISOString() });
 
         await runQuery(`
           UPDATE rdos SET status = ?, aprovado_por = ?, aprovado_em = ?, historico_status = ?, atualizado_em = CURRENT_TIMESTAMP
@@ -701,124 +890,12 @@ router.patch('/:id/status', auth, async (req, res) => {
         `, [status, aprovadoPor, aprovadoEm, id]);
       }
 
-    // Se aprovado, atualizar percentuais executados nas atividades EAP
-    if (status === 'Aprovado') {
-      const atividades = await allQuery(
-        'SELECT atividade_eap_id FROM rdo_atividades WHERE rdo_id = ?',
-        [id]
-      );
-
-      for (const row of atividades) {
-        const atividadeId = row.atividade_eap_id;
-        try {
-          // Buscar quantidade_total da atividade
-          const infoAtividade = await getQuery('SELECT quantidade_total FROM atividades_eap WHERE id = ?', [atividadeId]);
-          const quantidadeTotal = infoAtividade ? (infoAtividade.quantidade_total || 0) : 0;
-
-          // Somar quantidades executadas em RDOs aprovados
-          const resultadoQt = await getQuery(`
-            SELECT COALESCE(SUM(COALESCE(ra.quantidade_executada,0)), 0) as total_executado_qt
-            FROM rdo_atividades ra
-            INNER JOIN rdos r ON ra.rdo_id = r.id
-            WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
-          `, [atividadeId]);
-
-          let percentualExecutado = 0;
-          if (quantidadeTotal && resultadoQt && resultadoQt.total_executado_qt) {
-            percentualExecutado = Math.min(Math.round((resultadoQt.total_executado_qt / quantidadeTotal) * 10000) / 100, 100);
-          } else {
-            // fallback: somar percentuais armazenados
-            const resultado = await getQuery(`
-              SELECT COALESCE(SUM(ra.percentual_executado), 0) as total_executado
-              FROM rdo_atividades ra
-              INNER JOIN rdos r ON ra.rdo_id = r.id
-              WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
-            `, [atividadeId]);
-            percentualExecutado = Math.min(resultado.total_executado || 0, 100);
-          }
-
-          let dataConclusaoReal = null;
-          if (percentualExecutado >= 100) {
-            const ultimaAprovacao = await getQuery(`
-              SELECT MAX(r.data_relatorio) AS data_conclusao
-              FROM rdo_atividades ra
-              INNER JOIN rdos r ON ra.rdo_id = r.id
-              WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
-            `, [atividadeId]);
-            dataConclusaoReal = ultimaAprovacao?.data_conclusao || rdoAtual.data_relatorio || null;
-          }
-
-          await runQuery('UPDATE atividades_eap SET percentual_executado = ?, data_conclusao_real = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?', [percentualExecutado, dataConclusaoReal, atividadeId]);
-
-          await atualizarStatusAtividade(atividadeId);
-          await recalcularPercentualPai(atividadeId);
-
-          // Atualizar histórico para este RDO/atividade
-          await runQuery(`
-            UPDATE historico_atividades 
-            SET percentual_novo = ?
-            WHERE rdo_id = ? AND atividade_eap_id = ?
-          `, [percentualExecutado, id, atividadeId]);
-        } catch (err) {
-          console.warn('Falha ao recalcular avanço para atividade', atividadeId, err);
-        }
-      }
-    }
-
-    // Se um RDO aprovado foi revertido, recalcular as atividades desse RDO (exclui efeito deste RDO)
-    if (rdoAtual.status === 'Aprovado' && status !== 'Aprovado') {
-      const atividades = await allQuery('SELECT atividade_eap_id FROM rdo_atividades WHERE rdo_id = ?', [id]);
-      for (const row of atividades) {
-        const atividadeId = row.atividade_eap_id;
-        try {
-          const infoAtividade = await getQuery('SELECT quantidade_total FROM atividades_eap WHERE id = ?', [atividadeId]);
-          const quantidadeTotal = infoAtividade ? (infoAtividade.quantidade_total || 0) : 0;
-
-          const resultadoQt = await getQuery(`
-            SELECT COALESCE(SUM(COALESCE(ra.quantidade_executada,0)),0) as total_executado_qt
-            FROM rdo_atividades ra
-            INNER JOIN rdos r ON ra.rdo_id = r.id
-            WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
-          `, [atividadeId]);
-
-          let percentualExecutado = 0;
-          if (quantidadeTotal && resultadoQt && resultadoQt.total_executado_qt) {
-            percentualExecutado = Math.min(Math.round((resultadoQt.total_executado_qt / quantidadeTotal) * 10000) / 100, 100);
-          } else {
-            const resultado = await getQuery(`
-              SELECT COALESCE(SUM(ra.percentual_executado), 0) as total_executado
-              FROM rdo_atividades ra
-              INNER JOIN rdos r ON ra.rdo_id = r.id
-              WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
-            `, [atividadeId]);
-            percentualExecutado = Math.min(resultado.total_executado || 0, 100);
-          }
-
-          let dataConclusaoReal = null;
-          if (percentualExecutado >= 100) {
-            const ultimaAprovacao = await getQuery(`
-              SELECT MAX(r.data_relatorio) AS data_conclusao
-              FROM rdo_atividades ra
-              INNER JOIN rdos r ON ra.rdo_id = r.id
-              WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
-            `, [atividadeId]);
-            dataConclusaoReal = ultimaAprovacao?.data_conclusao || null;
-          }
-
-          await runQuery('UPDATE atividades_eap SET percentual_executado = ?, data_conclusao_real = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?', [percentualExecutado, dataConclusaoReal, atividadeId]);
-          await atualizarStatusAtividade(atividadeId);
-          await recalcularPercentualPai(atividadeId);
-
-          // Atualizar historico para os registros correspondentes
-          await runQuery(`
-            UPDATE historico_atividades 
-            SET percentual_novo = ?
-            WHERE atividade_eap_id = ?
-          `, [percentualExecutado, atividadeId]);
-        } catch (err) {
-          console.warn('Falha ao recalcular avanço (reversão) para atividade', atividadeId, err);
-        }
-      }
+    // Recalcular EAP sempre que o status mudar (aprovado, reprovado ou reversão)
+    try {
+      const atividadesDoRdo = await allQuery('SELECT DISTINCT atividade_eap_id FROM rdo_atividades WHERE rdo_id = ?', [id]);
+      await recalcularEapAtividades(atividadesDoRdo.map(r => r.atividade_eap_id));
+    } catch (err) {
+      console.warn('Erro ao recalcular EAP após mudança de status:', err);
     }
 
     // Notificar criador em caso de reprovação (sem ressalvas)
@@ -920,14 +997,20 @@ router.delete('/:id', auth, async (req, res) => {
   }
 });
 
-// Gerar PDF do RDO
+// Gerar PDF do RDO (puppeteer — HTML → PDF com layout rico)
 router.get('/:id/pdf', auth, async (req, res) => {
+  const puppeteer = require('puppeteer');
+  const path = require('path');
+  const fs = require('fs');
+  const uploadsDir = path.join(__dirname, '..', 'uploads');
+
+  let browser;
   try {
     const { id } = req.params;
 
-    // Buscar RDO com detalhes
+    // ── Buscar dados do RDO ──────────────────────────────────────────────
     const rdo = await getQuery(`
-      SELECT r.*, 
+      SELECT r.*,
              p.nome AS projeto_nome,
              p.cidade AS projeto_cidade,
              p.empresa_responsavel AS projeto_contratante,
@@ -941,273 +1024,498 @@ router.get('/:id/pdf', auth, async (req, res) => {
       WHERE r.id = ?
     `, [id]);
 
-    if (!rdo) {
-      return res.status(404).json({ erro: 'RDO não encontrado.' });
-    }
+    if (!rdo) return res.status(404).json({ erro: 'RDO não encontrado.' });
 
-    // Totais de mão de obra a partir do próprio RDO
-    const maoObraTotais = {
-      direta: rdo.mao_obra_direta || 0,
-      indireta: rdo.mao_obra_indireta || 0,
-      terceiros: rdo.mao_obra_terceiros || 0
-    };
-
-    // Equipamentos: o campo rdo.equipamentos pode ser JSON; tentar parsear
-    let equipamentos = [];
+    // Responsável: gestor local da obra primeiro, depois gestor geral do sistema
+    let responsavelNome = rdo.criado_por_nome || '—';
     try {
-      equipamentos = rdo.equipamentos && rdo.equipamentos.startsWith('[') ? JSON.parse(rdo.equipamentos) : [];
-    } catch {
-      equipamentos = [];
-    }
+      const gestorLocal = await getQuery(`
+        SELECT u.nome FROM usuarios u
+        JOIN projeto_usuarios pu ON u.id = pu.usuario_id
+        WHERE pu.projeto_id = ? AND u.perfil = 'Gestor da Obra' AND u.ativo = 1
+        ORDER BY u.id LIMIT 1
+      `, [rdo.projeto_id]);
+      if (gestorLocal?.nome) {
+        responsavelNome = gestorLocal.nome;
+      } else {
+        const gestorGeral = await getQuery(`
+          SELECT u.nome FROM usuarios u
+          WHERE u.perfil = 'Gestor Geral' AND u.ativo = 1
+          ORDER BY u.id LIMIT 1
+        `, []);
+        if (gestorGeral?.nome) responsavelNome = gestorGeral.nome;
+      }
+    } catch {}
 
-    // Buscar atividades EAP
     const atividades = await allQuery(`
-      SELECT a.*, e.descricao AS atividade_descricao, e.codigo_eap, e.unidade_medida, e.quantidade_total, e.percentual_executado AS percentual_eap
-      FROM rdo_atividades a
-      JOIN atividades_eap e ON a.atividade_eap_id = e.id
-      WHERE a.rdo_id = ?
-      ORDER BY e.codigo_eap
+      SELECT ra.*, COALESCE(ae.nome, ae.descricao) AS atividade_descricao, ae.codigo_eap,
+             ae.unidade_medida, ae.quantidade_total, ae.percentual_executado AS percentual_eap
+      FROM rdo_atividades ra
+      JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
+      WHERE ra.rdo_id = ? ORDER BY ae.codigo_eap
     `, [id]);
 
-    // Gerar PDF com estilo semelhante à UI
-    const PDFDocument = require('pdfkit');
-    const path = require('path');
-    const fs = require('fs');
-    const doc = new PDFDocument({ size: 'A4', layout: 'portrait', margin: 32 });
-    const uploadsDir = path.join(__dirname, '..', 'uploads');
+    let atividadesAvulsas = [];
+    try {
+      atividadesAvulsas = rdo.atividades_avulsas ? JSON.parse(rdo.atividades_avulsas) : [];
+      if (!Array.isArray(atividadesAvulsas)) atividadesAvulsas = [];
+    } catch {
+      atividadesAvulsas = [];
+    }
 
-    // Configurar headers para download
-    res.setHeader('Content-Type', 'application/pdf');
-    const normalizeNumero = () => {
+    const maoObraLista = await allQuery(`
+      SELECT rmo.*, mo.nome AS nome_colaborador, mo.funcao AS funcao_colaborador
+      FROM rdo_mao_obra rmo
+      LEFT JOIN mao_obra mo ON rmo.mao_obra_id = mo.id
+      WHERE rmo.rdo_id = ? ORDER BY rmo.id
+    `, [id]);
+
+    // mao_obra_detalhada JSON
+    let maoObraDetalhada = [];
+    try { maoObraDetalhada = rdo.mao_obra_detalhada ? JSON.parse(rdo.mao_obra_detalhada) : []; } catch {}
+
+    const maoObraFinal = maoObraDetalhada.length > 0 ? maoObraDetalhada : maoObraLista.map(m => ({
+      nome: m.nome_colaborador || m.nome || '—',
+      funcao: m.funcao_colaborador || m.funcao || '—',
+      tipo: 'Direta',
+      entrada: m.horario_entrada || '—',
+      saida_almoco: m.horario_saida_almoco || '—',
+      retorno_almoco: m.horario_retorno_almoco || '—',
+      saida_final: m.horario_saida_final || '—'
+    }));
+
+    const fotos = await allQuery(`
+      SELECT rf.*, ae.codigo_eap AS atividade_codigo, COALESCE(ae.nome, ae.descricao) AS atividade_descricao, rf.atividade_avulsa_descricao
+      FROM rdo_fotos rf
+      LEFT JOIN rdo_atividades ra ON rf.rdo_atividade_id = ra.id
+      LEFT JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
+      WHERE rf.rdo_id = ? ORDER BY rf.criado_em ASC
+    `, [id]);
+
+    const ocorrencias = await allQuery(
+      'SELECT * FROM rdo_ocorrencias WHERE rdo_id = ? ORDER BY criado_em ASC', [id]
+    );
+    const comentarios = await allQuery(`
+      SELECT rc.*, u.nome as autor_nome
+      FROM rdo_comentarios rc
+      LEFT JOIN usuarios u ON rc.usuario_id = u.id
+      WHERE rc.rdo_id = ?
+      ORDER BY rc.criado_em ASC
+    `, [id]);
+    const materiais = await allQuery(
+      'SELECT * FROM rdo_materiais WHERE rdo_id = ? ORDER BY criado_em ASC', [id]
+    );
+    const clima = await allQuery(
+      'SELECT * FROM rdo_clima WHERE rdo_id = ? ORDER BY id', [id]
+    );
+    const anexos = await allQuery(
+      `SELECT * FROM anexos WHERE rdo_id = ?
+       AND tipo NOT LIKE 'image%'
+       ORDER BY criado_em ASC`, [id]
+    );
+
+    let equipamentosLista = [];
+    try {
+      equipamentosLista = await allQuery(
+        'SELECT * FROM rdo_equipamentos WHERE rdo_id = ? ORDER BY id', [id]
+      );
+    } catch {
+      try {
+        equipamentosLista = rdo.equipamentos ? JSON.parse(rdo.equipamentos) : [];
+      } catch { equipamentosLista = []; }
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────
+    const displayId = (() => {
       const raw = String(rdo.numero_rdo || '');
-      const m = raw.match(/(\d{1,})$/);
-      const seq = m ? parseInt(m[1], 10) : (rdo.id ? Number(rdo.id) : 1);
+      const m = raw.match(/(\d+)$/);
+      const seq = m ? parseInt(m[1], 10) : (rdo.id || 1);
       return `RDO-${String(seq).padStart(3, '0')}`;
+    })();
+
+    const fmtDate = (d) => {
+      if (!d) return '—';
+      const dt = new Date(String(d).includes('T') ? d : d + 'T00:00:00');
+      return dt.toLocaleDateString('pt-BR');
     };
-    const displayId = normalizeNumero();
+
+    const msDia = 86400000;
+    // Datas normalizadas para 00:00:00 local (contagem por dia-calendário)
+    const toMdn = (val) => { const str = String(val).trim(); const norm = /^\d{4}-\d{2}-\d{2}$/.test(str) ? str + 'T00:00:00' : str.replace(' ', 'T'); const d = new Date(norm); d.setHours(0, 0, 0, 0); return d; };
+    const criadoEm = rdo.projeto_criado_em ? toMdn(rdo.projeto_criado_em) : null;
+    const termino  = rdo.projeto_prazo_termino ? toMdn(rdo.projeto_prazo_termino) : null;
+    const dataRel  = rdo.data_relatorio ? new Date(rdo.data_relatorio + 'T00:00:00') : (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
+    const prazoTotal   = (criadoEm && termino) ? Math.max(0, Math.round((termino - criadoEm) / msDia)) : null;
+    const diasDecorridos = (criadoEm) ? Math.max(0, Math.round((dataRel - criadoEm) / msDia)) : null;
+    const diasRestantes  = (prazoTotal != null && diasDecorridos != null) ? (prazoTotal - diasDecorridos) : null;
+
+    const gravBadge = (g) => {
+      const map = { baixa: '#10b981', média: '#f59e0b', alta: '#f97316', crítica: '#ef4444' };
+      return map[(g || '').toLowerCase()] || '#6b7280';
+    };
+
+    const statusBadge = (s) => {
+      const map = { 'Aprovado': '#10b981', 'Em análise': '#f59e0b', 'Em preenchimento': '#0ea5e9', 'Reprovado': '#ef4444' };
+      return map[s] || '#6b7280';
+    };
+
+    const calcHorasColab = (c) => {
+      const tm = (t) => { if (!t || t === '—') return null; const m = String(t).match(/(\d{1,2}):(\d{2})/); return m ? parseInt(m[1])*60+parseInt(m[2]) : null; };
+      const i = tm(c.entrada), f = tm(c.saida_final), a1 = tm(c.saida_almoco), a2 = tm(c.retorno_almoco);
+      if (i == null || f == null) return '—';
+      let tot = Math.max(0, f - i);
+      if (a1 != null && a2 != null && a2 > a1) tot = Math.max(0, tot - (a2 - a1));
+      return (Math.round((tot / 60) * 100) / 100) + ' h';
+    };
+
+    // Fotos como base64 para inline no PDF
+    const fotoBase64 = (filename) => {
+      try {
+        const fp = path.join(uploadsDir, filename);
+        if (!fs.existsSync(fp)) return null;
+        const ext = path.extname(filename).toLowerCase().replace('.', '');
+        const mime = ext === 'jpg' ? 'jpeg' : ext;
+        return `data:image/${mime};base64,${fs.readFileSync(fp).toString('base64')}`;
+      } catch { return null; }
+    };
+
+    // ── HTML template ─────────────────────────────────────────────────────
+    const rows = (items, fn) => items.map(fn).join('');
+
+    const atividadesPdf = [
+      ...atividades.map((atividade) => ({
+        tipo: 'eap',
+        codigo_eap: atividade.codigo_eap,
+        descricao: atividade.atividade_descricao,
+        observacao: atividade.observacao,
+        unidade_medida: atividade.unidade_medida,
+        quantidade_prevista: Number(atividade.quantidade_total || 0),
+        quantidade_executada: Number(atividade.quantidade_executada || 0),
+        percentual_item: (() => {
+          const total = Number(atividade.quantidade_total || 0);
+          const executado = Number(atividade.quantidade_executada || 0);
+          return (total && executado)
+            ? Math.min(Math.round((executado / total) * 10000) / 100, 100)
+            : Number(atividade.percentual_executado || 0);
+        })(),
+        percentual_acumulado: Number(atividade.percentual_eap || 0)
+      })),
+      ...atividadesAvulsas.map((atividadeAvulsa) => {
+        const previsto = Number(atividadeAvulsa.quantidade_prevista || 0);
+        const executado = Number(atividadeAvulsa.quantidade_executada || 0);
+        const percentual = previsto > 0
+          ? Math.min(Math.round((executado / previsto) * 10000) / 100, 100)
+          : 0;
+        return {
+          tipo: 'avulsa',
+          codigo_eap: null,
+          descricao: atividadeAvulsa.descricao || 'Atividade avulsa',
+          observacao: atividadeAvulsa.observacao,
+          unidade_medida: atividadeAvulsa.unidade_medida || '—',
+          quantidade_prevista: previsto,
+          quantidade_executada: executado,
+          percentual_item: percentual,
+          percentual_acumulado: percentual
+        };
+      })
+    ];
+
+    const formatNumber = (value) => {
+      if (value == null || value === '' || Number.isNaN(Number(value))) return '—';
+      return Number(value).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+    };
+
+    const climaSection = clima.length > 0 ? `
+      <section>
+        <h2>Condições Climáticas</h2>
+        <table>
+          <thead><tr><th>Período</th><th>Clima</th><th>Praticabilidade</th><th>Pluviometria (mm)</th></tr></thead>
+          <tbody>${rows(clima, c => `<tr>
+            <td><strong>${c.periodo || '—'}</strong></td>
+            <td>${c.condicao_tempo || '—'}</td>
+            <td>${c.condicao_trabalho || '—'}</td>
+            <td>${c.pluviometria_mm ?? 0} mm</td>
+          </tr>`)}</tbody>
+        </table>
+      </section>` : '';
+
+    const maoObraSection = maoObraFinal.length > 0 ? `
+      <section>
+        <h2>Mão de Obra (${maoObraFinal.length} pessoa${maoObraFinal.length > 1 ? 's' : ''})</h2>
+        <table>
+          <thead><tr><th>Nome</th><th>Função</th><th>Categoria</th><th>Entrada</th><th>Saída Almoço</th><th>Retorno</th><th>Saída Final</th><th>Horas</th></tr></thead>
+          <tbody>${rows(maoObraFinal, c => `<tr>
+            <td><strong>${c.nome || '—'}</strong></td>
+            <td>${c.funcao || '—'}</td>
+            <td>${c.tipo || '—'}</td>
+            <td>${c.entrada || '—'}</td>
+            <td>${c.saida_almoco || '—'}</td>
+            <td>${c.retorno_almoco || '—'}</td>
+            <td>${c.saida_final || '—'}</td>
+            <td>${calcHorasColab(c)}</td>
+          </tr>`)}</tbody>
+        </table>
+      </section>` : '';
+
+    const equipSection = equipamentosLista.length > 0 ? `
+      <section>
+        <h2>Equipamentos</h2>
+        <table>
+          <thead><tr><th>Equipamento</th><th>Quantidade</th></tr></thead>
+          <tbody>${rows(equipamentosLista, e => `<tr>
+            <td>${e.nome || e.descricao || '—'}</td>
+            <td>${e.quantidade ?? 1}</td>
+          </tr>`)}</tbody>
+        </table>
+      </section>` : '';
+
+    const atividadesSection = atividadesPdf.length > 0 ? `
+      <section>
+        <h2>Atividades Executadas</h2>
+        <table>
+          <thead><tr><th>Atividade</th><th>Prev.</th><th>Exec.</th><th>Unidade</th><th>% Exec.</th><th>% Acum.</th><th>Status</th></tr></thead>
+          <tbody>${rows(atividadesPdf, a => {
+            const acum = Number(a.percentual_acumulado || 0);
+            const acumVirt = Math.min(acum, 100);
+            const st = acumVirt >= 100 ? 'Concluída' : (acumVirt > 0 ? 'Em andamento' : 'Não iniciada');
+            const stColor = acumVirt >= 100 ? '#10b981' : (acumVirt > 0 ? '#f59e0b' : '#6b7280');
+            return `<tr>
+              <td>${a.codigo_eap ? `<strong>${a.codigo_eap}</strong> — ` : '<strong>Avulsa</strong> — '}${a.descricao || '—'}${a.observacao ? `<br><small style="color:#6b7280">${a.observacao}</small>` : ''}</td>
+              <td style="text-align:right">${formatNumber(a.quantidade_prevista)}</td>
+              <td style="text-align:right">${formatNumber(a.quantidade_executada)}</td>
+              <td>${a.unidade_medida || '—'}</td>
+              <td style="text-align:right">${formatNumber(a.percentual_item)}%</td>
+              <td style="text-align:right">${formatNumber(acum)}%</td>
+              <td><span class="badge" style="background:${stColor}">${st}</span></td>
+            </tr>`;
+          })}</tbody>
+        </table>
+      </section>` : '';
+
+    const fotosSection = fotos.length > 0 ? `
+      <section>
+        <h2>Fotos do RDO</h2>
+        <div class="foto-grid">
+          ${rows(fotos, f => {
+            const b64 = fotoBase64(f.caminho_arquivo);
+            if (!b64) return '';
+            return `<div class="foto-item">
+              <img src="${b64}" alt="${f.nome_arquivo}" />
+              <p class="foto-desc">${f.atividade_descricao ? `<strong>${f.atividade_codigo ? f.atividade_codigo + ' — ' : ''}${f.atividade_descricao}</strong><br>` : (f.atividade_avulsa_descricao ? `<strong>Avulsa — ${f.atividade_avulsa_descricao}</strong><br>` : '')}${f.descricao || f.nome_arquivo}</p>
+            </div>`;
+          })}
+        </div>
+      </section>` : '';
+
+    const materiaisSection = materiais.length > 0 ? `
+      <section>
+        <h2>Materiais Recebidos</h2>
+        <table>
+          <thead><tr><th>Material</th><th>Quantidade</th><th>Unidade</th></tr></thead>
+          <tbody>${rows(materiais, m => `<tr>
+            <td>${m.nome_material || '—'}</td>
+            <td style="text-align:right">${m.quantidade ?? '—'}</td>
+            <td>${m.unidade || '—'}</td>
+          </tr>`)}</tbody>
+        </table>
+      </section>` : '';
+
+    const ocorrenciasSection = ocorrencias.length > 0 ? `
+      <section>
+        <h2>Ocorrências</h2>
+        ${rows(ocorrencias, o => `
+          <div class="ocorrencia">
+            <div class="ocorrencia-header">
+              <strong>${o.titulo || 'Ocorrência'}</strong>
+              <span class="badge" style="background:${gravBadge(o.gravidade)}">${o.gravidade || '—'}</span>
+            </div>
+            <p>${o.descricao || '—'}</p>
+          </div>`)}
+      </section>` : '';
+
+    const comentariosSection = (comentarios.length > 0 || rdo.comentarios) ? `
+      <section>
+        <h2>Comentários</h2>
+        ${rdo.comentarios ? `
+          <div class="ocorrencia">
+            <div class="ocorrencia-header">
+              <strong>Comentário geral do RDO</strong>
+            </div>
+            <p>${String(rdo.comentarios).replace(/\n/g, '<br>')}</p>
+          </div>` : ''}
+        ${rows(comentarios, c => `
+          <div class="ocorrencia">
+            <div class="ocorrencia-header">
+              <strong>${c.autor_nome || 'Usuário'}</strong>
+              <span style="color:#64748b; font-size:10px;">${fmtDate(c.criado_em)}</span>
+            </div>
+            <p>${c.comentario ? String(c.comentario).replace(/\n/g, '<br>') : '—'}</p>
+          </div>`)}
+      </section>` : '';
+
+    const anexosSection = anexos.length > 0 ? `
+      <section>
+        <h2>Anexos</h2>
+        <ol class="anexo-list">
+          ${rows(anexos, (a, i) => `<li><strong>${a.nome_arquivo}</strong> — ${a.tipo || '—'}${a.tamanho ? ` (${Math.round(a.tamanho / 1024)} KB)` : ''}</li>`)}
+        </ol>
+      </section>` : '';
+
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; font-size: 11px; color: #1e293b; background: #fff; }
+
+  /* CAPA */
+  .capa { page-break-after: always; padding: 48px 40px; }
+  .capa-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #0ea5e9; padding-bottom: 20px; margin-bottom: 32px; }
+  .capa-title { font-size: 28px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+  .capa-subtitle { font-size: 14px; color: #64748b; }
+  .capa-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }
+  .info-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; }
+  .info-card h3 { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; margin-bottom: 12px; }
+  .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 11px; }
+  .info-row .label { color: #64748b; }
+  .info-row .value { font-weight: 600; color: #0f172a; text-align: right; max-width: 60%; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 32px; }
+  .kpi { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; text-align: center; }
+  .kpi .kpi-val { font-size: 22px; font-weight: 700; color: #0f172a; }
+  .kpi .kpi-label { font-size: 10px; color: #64748b; margin-top: 4px; }
+  .status-pill { display: inline-block; padding: 4px 12px; border-radius: 20px; color: #fff; font-size: 11px; font-weight: 600; }
+  .resumo-row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .resumo-chip { background: #e0f2fe; color: #0369a1; padding: 6px 12px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+
+  /* SEÇÕES */
+  section { padding: 20px 40px; page-break-inside: avoid; }
+  section + section { border-top: 1px solid #f1f5f9; }
+  h2 { font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.06em; padding-bottom: 6px; border-bottom: 2px solid #0ea5e9; }
+
+  /* TABELAS */
+  table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 4px; }
+  thead tr { background: #f1f5f9; }
+  th { padding: 7px 10px; text-align: left; font-weight: 600; color: #475569; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 2px solid #e2e8f0; }
+  td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; color: #334155; }
+  tr:nth-child(even) td { background: #fafafa; }
+  code { font-family: monospace; background: #f1f5f9; padding: 1px 4px; border-radius: 3px; font-size: 9px; }
+
+  /* BADGES */
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; color: #fff; font-size: 9px; font-weight: 600; }
+
+  /* FOTOS */
+  .foto-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .foto-item { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+  .foto-item img { width: 100%; max-height: 220px; object-fit: cover; display: block; }
+  .foto-desc { padding: 8px 10px; font-size: 10px; color: #475569; background: #f8fafc; }
+
+  /* OCORRÊNCIAS */
+  .ocorrencia { background: #fafafa; border: 1px solid #f1f5f9; border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; }
+  .ocorrencia-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+
+  /* ANEXOS */
+  .anexo-list { padding-left: 20px; }
+  .anexo-list li { margin-bottom: 6px; font-size: 11px; color: #334155; }
+
+  /* RODAPÉ */
+  @page { size: A4; }
+</style>
+</head>
+<body>
+
+<!-- CAPA -->
+<div class="capa">
+  <div class="capa-header">
+    <div>
+      <div class="capa-title">Relatório Diário de Obra</div>
+      <div class="capa-subtitle">RDO ${displayId} &nbsp;·&nbsp; ${fmtDate(rdo.data_relatorio)} &nbsp;·&nbsp; ${rdo.dia_semana || ''}</div>
+    </div>
+    <div>
+      <span class="status-pill" style="background:${statusBadge(rdo.status)}">${rdo.status || 'Em preenchimento'}</span>
+    </div>
+  </div>
+
+  <div class="capa-info-grid">
+    <div class="info-card">
+      <h3>Dados da Obra</h3>
+      <div class="info-row"><span class="label">Projeto</span><span class="value">${rdo.projeto_nome || '—'}</span></div>
+      <div class="info-row"><span class="label">Local</span><span class="value">${rdo.projeto_cidade || '—'}</span></div>
+      <div class="info-row"><span class="label">Contratante</span><span class="value">${rdo.projeto_contratante || '—'}</span></div>
+      <div class="info-row"><span class="label">Executante</span><span class="value">${rdo.projeto_executante || '—'}</span></div>
+      <div class="info-row"><span class="label">Responsável</span><span class="value">${responsavelNome}</span></div>
+    </div>
+    <div class="info-card">
+      <h3>Prazos</h3>
+      <div class="info-row"><span class="label">Prazo Total</span><span class="value">${prazoTotal != null ? prazoTotal + ' dias' : '—'}</span></div>
+      <div class="info-row"><span class="label">Dias Decorridos</span><span class="value">${diasDecorridos != null ? diasDecorridos + ' dias' : '—'}</span></div>
+      <div class="info-row"><span class="label">Dias Restantes</span><span class="value">${diasRestantes != null ? diasRestantes + ' dias' : '—'}</span></div>
+      <div class="info-row"><span class="label">Previsão Término</span><span class="value">${termino ? fmtDate(termino.toISOString()) : '—'}</span></div>
+      <div class="info-row"><span class="label">Nº RDO</span><span class="value">${displayId}</span></div>
+    </div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-val">${rdo.mao_obra_direta + rdo.mao_obra_indireta + rdo.mao_obra_terceiros}</div><div class="kpi-label">Pessoas no Dia</div></div>
+    <div class="kpi"><div class="kpi-val">${equipamentosLista.length}</div><div class="kpi-label">Equipamentos</div></div>
+    <div class="kpi"><div class="kpi-val">${atividadesPdf.length}</div><div class="kpi-label">Atividades</div></div>
+    <div class="kpi"><div class="kpi-val">${ocorrencias.length}</div><div class="kpi-label">Ocorrências</div></div>
+    <div class="kpi"><div class="kpi-val">${fotos.length}</div><div class="kpi-label">Fotos</div></div>
+    <div class="kpi"><div class="kpi-val">${rdo.horas_trabalhadas || 0} h</div><div class="kpi-label">Horas Trabalhadas</div></div>
+  </div>
+
+  ${rdo.observacoes || rdo.obs_geral ? `
+  <div class="info-card">
+    <h3>Observação Geral</h3>
+    <p style="line-height:1.6; color:#334155">${(rdo.observacoes || rdo.obs_geral || '').replace(/\n/g, '<br>')}</p>
+  </div>` : ''}
+</div>
+
+<!-- SEÇÕES -->
+${climaSection}
+${maoObraSection}
+${equipSection}
+${atividadesSection}
+${fotosSection}
+${materiaisSection}
+${ocorrenciasSection}
+${comentariosSection}
+${anexosSection}
+
+</body>
+</html>`;
+
+    // ── Lançar puppeteer com Edge do sistema ─────────────────────────────
+    const edgePath = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
+    browser = await puppeteer.launch({
+      headless: true,
+      executablePath: fs.existsSync(edgePath) ? edgePath : undefined,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    });
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: 'load' });
+
+    const safeNomeProjeto = String(rdo.projeto_nome || 'Projeto').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      displayHeaderFooter: true,
+      headerTemplate: '<span></span>',
+      footerTemplate: `<div style="font-size:8px;color:#94a3b8;padding:0 40px;width:100%;box-sizing:border-box;display:flex;justify-content:space-between;font-family:'Segoe UI',sans-serif;align-items:center"><span>${safeNomeProjeto} &nbsp;&middot;&nbsp; ${displayId}</span><span>Pág. <span class="pageNumber"></span>&nbsp;/&nbsp;<span class="totalPages"></span> &nbsp;&mdash;&nbsp; Gerado em ${new Date().toLocaleString('pt-BR')}</span></div>`,
+      margin: { top: '10mm', bottom: '14mm', left: '0', right: '0' }
+    });
+
+    await browser.close();
+    browser = null;
+
+    res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${displayId}.pdf"`);
-
-    doc.pipe(res);
-
-    // Funções auxiliares para datas e prazos
-    const diaSemanaPt = (d) => {
-      const dias = ['Domingo', 'Segunda-Feira', 'Terça-Feira', 'Quarta-Feira', 'Quinta-Feira', 'Sexta-Feira', 'Sábado'];
-      return dias[d.getDay()];
-    };
-    const statusColor = (s) => {
-      if (s === 'Aprovado') return '#2E7D32';
-      if (s === 'Em análise') return '#F9A825';
-      if (s === 'Em preenchimento') return '#2962FF';
-      if (s === 'Reprovado') return '#C62828';
-      return '#6B7280';
-    };
-    const msDia = 24 * 60 * 60 * 1000;
-    const calcPrazos = () => {
-      const criadoEm = rdo.projeto_criado_em ? new Date(rdo.projeto_criado_em) : null;
-      const termino = rdo.projeto_prazo_termino ? new Date(rdo.projeto_prazo_termino) : null;
-      const hoje = new Date(rdo.data_relatorio || Date.now());
-      if (criadoEm && termino) {
-        const contratual = Math.max(0, Math.round((termino - criadoEm) / msDia));
-        const decorrido = Math.max(0, Math.round((hoje - criadoEm) / msDia));
-        const aVencer = contratual - decorrido;
-        return { contratual, decorrido, aVencer };
-      }
-      return { contratual: null, decorrido: null, aVencer: null };
-    };
-
-    // Cabeçalho no estilo da referência (grid com dados do relatório)
-    const logoPath = path.join(uploadsDir, 'logo.png');
-    const marginX = 32;
-    const headerTop = 40;
-    const headerWidth = doc.page.width - marginX * 2;
-    const leftW = Math.round(headerWidth * 0.55);
-    const rightW = headerWidth - leftW;
-
-    // Top row containers
-    const topH = 62;
-    // Left: logo + empresa
-    doc.save();
-    doc.rect(marginX, headerTop, leftW, topH).stroke('#CBD5E1');
-    if (fs.existsSync(logoPath)) {
-      doc.image(logoPath, marginX + 10, headerTop + 12, { width: 38 });
-    }
-    doc.fontSize(16).fillColor('#0F172A').text(rdo.projeto_contratante || 'Gestão de Obras', marginX + (fs.existsSync(logoPath) ? 60 : 12), headerTop + 14, { width: leftW - 72 });
-    doc.fontSize(10).fillColor('#475569').text('Relatório Diário de Obra (RDO)', marginX + (fs.existsSync(logoPath) ? 60 : 12), headerTop + 34, { width: leftW - 72 });
-    doc.restore();
-
-    // Right: caixa com dados do relatório
-    const prazos = calcPrazos();
-    doc.save();
-    doc.rect(marginX + leftW, headerTop, rightW, topH).stroke('#CBD5E1');
-    const rightPad = 8;
-    const linhaAlt = 18;
-    let yy = headerTop + 8;
-    doc.fontSize(9).fillColor('#334155').text('Relatório nº', marginX + leftW + rightPad, yy);
-    doc.fontSize(11).fillColor('#0F172A').text(displayId.replace('RDO-', ''), marginX + leftW + rightW - 70, yy, { width: 60, align: 'right' });
-    yy += linhaAlt;
-    const dataRel = rdo.data_relatorio ? new Date(rdo.data_relatorio) : new Date();
-    doc.fontSize(9).fillColor('#334155').text('Data do relatório', marginX + leftW + rightPad, yy);
-    doc.fontSize(11).fillColor('#0F172A').text(dataRel.toLocaleDateString('pt-BR'), marginX + leftW + rightW - 120, yy, { width: 110, align: 'right' });
-    yy += linhaAlt;
-    doc.fontSize(9).fillColor('#334155').text('Dia da semana', marginX + leftW + rightPad, yy);
-    doc.fontSize(11).fillColor('#0F172A').text(diaSemanaPt(dataRel), marginX + leftW + rightW - 120, yy, { width: 110, align: 'right' });
-    doc.restore();
-
-    // Segunda linha: contrato e prazos
-    const contractH = 54;
-    const secondTop = headerTop + topH;
-    doc.save();
-    doc.rect(marginX + leftW, secondTop, rightW, contractH).stroke('#CBD5E1');
-    let cy = secondTop + 8;
-    doc.fontSize(9).fillColor('#334155').text('Contrato', marginX + leftW + 8, cy);
-    cy += linhaAlt;
-    doc.fontSize(9).fillColor('#334155').text('Prazo contratual', marginX + leftW + 8, cy);
-    doc.fontSize(11).fillColor('#0F172A').text(prazos.contratual != null ? `${prazos.contratual} dias` : '—', marginX + leftW + rightW - 120, cy, { width: 110, align: 'right' });
-    cy += linhaAlt;
-    doc.fontSize(9).fillColor('#334155').text('Prazo decorrido', marginX + leftW + 8, cy);
-    doc.fontSize(11).fillColor('#0F172A').text(prazos.decorrido != null ? `${prazos.decorrido} dias` : '—', marginX + leftW + rightW - 120, cy, { width: 110, align: 'right' });
-    cy += linhaAlt;
-    doc.fontSize(9).fillColor('#334155').text('Prazo a vencer', marginX + leftW + 8, cy);
-    doc.fontSize(11).fillColor('#0F172A').text(prazos.aVencer != null ? `${prazos.aVencer} dias` : '—', marginX + leftW + rightW - 120, cy, { width: 110, align: 'right' });
-    doc.restore();
-
-    // Linha central com título
-    const titleH = 28;
-    doc.save();
-    doc.rect(marginX, secondTop, leftW, titleH).stroke('#CBD5E1');
-    doc.fontSize(12).fillColor('#0F172A').text('Relatório Diário de Obra (RDO)', marginX, secondTop + 6, { width: leftW, align: 'center' });
-    doc.restore();
-
-    // Bloco com dados da obra
-    const obraH = 76;
-    const obraTop = secondTop + titleH;
-    doc.save();
-    doc.rect(marginX, obraTop, leftW, obraH).stroke('#CBD5E1');
-    let ox = marginX + 8;
-    let oy = obraTop + 8;
-    const label = (t, y) => doc.fontSize(9).fillColor('#334155').text(t, ox, y, { width: 90 });
-    const val = (t, y) => doc.fontSize(11).fillColor('#0F172A').text(t, ox + 92, y, { width: leftW - 110 });
-    label('Obra'); val(rdo.projeto_nome || '—', oy); oy += linhaAlt;
-    label('Local'); val(rdo.projeto_cidade || '—', oy); oy += linhaAlt;
-    label('Contratante'); val(rdo.projeto_contratante || '—', oy); oy += linhaAlt;
-    label('Responsável'); val(rdo.criado_por_nome || '—', oy);
-    doc.restore();
-
-    // Avançar abaixo do cabeçalho
-    doc.y = obraTop + obraH + 12;
-
-    // Condições climáticas
-    if (rdo.condicoes_climaticas) {
-      doc.fontSize(12).text('Condições Climáticas:', { underline: true });
-      doc.text(rdo.condicoes_climaticas);
-      doc.moveDown();
-    }
-
-    // Observações
-    if (rdo.observacoes) {
-      doc.text('Observações:', { underline: true });
-      doc.text(rdo.observacoes);
-      doc.moveDown();
-    }
-
-    // Mão de obra (totais)
-    doc.fontSize(13).fillColor('#0F172A').text('Mão de Obra (totais)');
-    doc.moveTo(32, doc.y + 2).lineTo(doc.page.width - 32, doc.y + 2).stroke('#E5E7EB');
-    doc.moveDown(0.5);
-    doc.fontSize(11).fillColor('#1F2937').text(`Direta: ${maoObraTotais.direta} pessoa(s)`);
-    doc.fontSize(11).fillColor('#1F2937').text(`Indireta: ${maoObraTotais.indireta} pessoa(s)`);
-    doc.fontSize(11).fillColor('#1F2937').text(`Terceiros: ${maoObraTotais.terceiros} pessoa(s)`);
-    doc.moveDown();
-
-    // Equipamentos
-    if (equipamentos.length > 0) {
-      doc.fontSize(13).fillColor('#0F172A').text('Equipamentos');
-      doc.moveTo(32, doc.y + 2).lineTo(doc.page.width - 32, doc.y + 2).stroke('#E5E7EB');
-      doc.moveDown(0.5);
-      equipamentos.forEach(eq => {
-        const nome = eq.nome || eq.equipamento || 'Equipamento';
-        const qtd = eq.quantidade || 0;
-        doc.fontSize(11).fillColor('#1F2937').text(`${nome} — ${qtd} unidade(s)`);
-      });
-      doc.moveDown();
-    }
-
-    // Atividades (tabela com mesma semântica da UI)
-    if (atividades.length > 0) {
-      // Cabeçalho da seção
-      doc.fontSize(13).fillColor('#0F172A').text('Atividades Executadas');
-      doc.moveTo(32, doc.y + 2).lineTo(doc.page.width - 32, doc.y + 2).stroke('#E5E7EB');
-      doc.moveDown(0.5);
-
-      // Cabeçalho da tabela
-      const startX = 32; const col1 = 220; const col2 = 120; const col3 = 90; const col4 = 110; const col5 = 110; const col6 = 90;
-      doc.fontSize(10).fillColor('#64748B');
-      doc.text('Atividade', startX, doc.y, { width: col1 });
-      doc.text('Qtd. Executada', startX + col1, doc.y, { width: col2, align: 'right' });
-      doc.text('Unidade', startX + col1 + col2 + 8, doc.y, { width: col3 });
-      doc.text('% Exec. (auto)', startX + col1 + col2 + col3 + 16, doc.y, { width: col4, align: 'right' });
-      doc.text('% Acumulado', startX + col1 + col2 + col3 + col4 + 24, doc.y, { width: col5, align: 'right' });
-      doc.text('Status', startX + col1 + col2 + col3 + col4 + col5 + 32, doc.y, { width: col6 });
-      doc.moveDown(0.5);
-      doc.moveTo(32, doc.y).lineTo(doc.page.width - 32, doc.y).stroke('#E5E7EB');
-
-      atividades.forEach(at => {
-        const unidade = at.unidade_medida || '';
-        const qtExec = (at.quantidade_executada != null) ? at.quantidade_executada : 0;
-        const total = (at.quantidade_total != null) ? at.quantidade_total : 0;
-        const percAuto = (total && qtExec) ? Math.min(Math.round((qtExec / total) * 10000) / 100, 100) : (at.percentual_executado || 0);
-        const acum = (at.percentual_eap != null) ? at.percentual_eap : (at.percentual_executado || 0);
-        const acumVirt = Math.min(acum + percAuto, 100);
-        const status = acumVirt >= 100 ? 'Concluída' : (acumVirt > 0 ? 'Em andamento' : 'Não iniciada');
-        doc.fontSize(11).fillColor('#1F2937');
-        doc.text(`${at.codigo_eap} — ${at.atividade_descricao}`, startX, doc.y, { width: col1 });
-        doc.text(String(qtExec), startX + col1, doc.y, { width: col2, align: 'right' });
-        doc.text(unidade, startX + col1 + col2 + 8, doc.y, { width: col3 });
-        doc.text(String(percAuto), startX + col1 + col2 + col3 + 16, doc.y, { width: col4, align: 'right' });
-        doc.text(String(acum), startX + col1 + col2 + col3 + col4 + 24, doc.y, { width: col5, align: 'right' });
-        // status chip
-        const chipW = 70; const chipH = 18; const chipX = startX + col1 + col2 + col3 + col4 + col5 + 32; const chipY = doc.y - 2;
-        doc.save();
-        doc.roundedRect(chipX, chipY, chipW, chipH, 9).fill(statusColor(status === 'Concluída' ? 'Aprovado' : (status === 'Em andamento' ? 'Em análise' : 'Em preenchimento')));
-        doc.fillColor('#FFFFFF').fontSize(9).text(status, chipX, chipY + 4, { width: chipW, align: 'center' });
-        doc.restore();
-        doc.moveDown(0.8);
-        // Observação
-        if (at.observacao) {
-          doc.fontSize(10).fillColor('#6B7280').text(`Observação: ${at.observacao}`, startX, doc.y);
-          doc.moveDown(0.3);
-        }
-        doc.moveTo(32, doc.y).lineTo(doc.page.width - 32, doc.y).stroke('#F1F5F9');
-      });
-      doc.moveDown();
-    }
-
-    // Se houver fotos, adicionar seção específica
-    const fotos = await allQuery('SELECT nome_arquivo, caminho_arquivo, descricao FROM rdo_fotos WHERE rdo_id = ? ORDER BY criado_em ASC', [id]);
-    if (fotos.length > 0) {
-      doc.addPage();
-      doc.fontSize(16).fillColor('#0F172A').text('Fotos do Dia');
-      doc.moveTo(32, doc.y + 2).lineTo(doc.page.width - 32, doc.y + 2).stroke('#E5E7EB');
-      doc.moveDown(0.5);
-      fotos.forEach(f => {
-        const filePath = path.join(uploadsDir, f.caminho_arquivo);
-        if (fs.existsSync(filePath)) {
-          doc.image(filePath, { fit: [500, 300], align: 'center' });
-          if (f.descricao) doc.fontSize(10).fillColor('#6B7280').text(f.descricao, { align: 'center' });
-          else doc.fontSize(10).fillColor('#6B7280').text(f.nome_arquivo, { align: 'center' });
-          doc.moveDown();
-        }
-      });
-    }
-
-    // Rodapé
-    doc.fontSize(10).fillColor('#6B7280').text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, { align: 'center' });
-
-    doc.end();
+    res.send(Buffer.from(pdfBuffer));
 
   } catch (error) {
-    console.error('Erro ao gerar PDF:', error);
-    res.status(500).json({ erro: 'Erro ao gerar PDF.' });
+    if (browser) { try { await browser.close(); } catch {} }
+    console.error('Erro ao gerar PDF (puppeteer):', error);
+    res.status(500).json({ erro: 'Erro ao gerar PDF: ' + (error.message || 'erro desconhecido') });
   }
 });
 

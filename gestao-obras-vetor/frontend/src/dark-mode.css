@@ -1,0 +1,283 @@
+/* ═══════════════════════════════════════════════════════════
+   dark-mode.css — Overrides para tema escuro (azul-petróleo)
+   Complementa os tokens CSS do index.css.
+   Cobre cores hardcoded nos CSS de módulos (Login, RDO,
+   RDOs, RNC, RNCDetalhes, RDOTimeline).
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Navbar brand ───────────────────────────────────────── */
+body.dark-mode .navbar-brand { color: #e8edf3; }
+
+/* ── Login ──────────────────────────────────────────────── */
+body.dark-mode .login-page {
+  background: #0d1b2a;
+  background-image:
+    radial-gradient(ellipse 700px 500px at 20% 10%, rgba(14, 165, 233, 0.07), transparent 60%),
+    radial-gradient(ellipse 500px 400px at 85% 90%, rgba(249, 115, 22, 0.05), transparent 60%);
+}
+
+body.dark-mode .login-card {
+  background: #1b2836;
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.25),
+    0 8px 24px rgba(0, 0, 0, 0.35),
+    0 24px 56px rgba(0, 0, 0, 0.30);
+}
+
+body.dark-mode .login-brand-name { color: #e8edf3; }
+body.dark-mode .login-brand-sub  { color: #607080; }
+body.dark-mode .login-label      { color: #8fa3b9; }
+
+body.dark-mode .login-input {
+  background: #1f3044;
+  border-color: #2a4060;
+  color: #e8edf3;
+}
+
+body.dark-mode .login-input::placeholder { color: #3a5272; }
+
+body.dark-mode .login-input:focus {
+  border-color: #0ea5e9;
+  background: #1f3044;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
+}
+
+body.dark-mode .login-error {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+/* ── RDO Form (RDO.css) ─────────────────────────────────── */
+body.dark-mode .rdo-section {
+  background: #1b2836;
+  border-color: #2a4060;
+  box-shadow: none;
+}
+
+body.dark-mode .rdo-section-header {
+  background: #1f3044;
+  border-bottom-color: #2a4060;
+}
+
+body.dark-mode .rdo-section-header:hover { background: #243650; }
+
+body.dark-mode .rdo-section-title { color: #d8e3ec; }
+body.dark-mode .rdo-section-badge { color: #8fa3b9; background: #2a4060; }
+
+body.dark-mode .rdo-table thead tr { background: #1f3044; }
+
+body.dark-mode .rdo-table th {
+  color: #8fa3b9;
+  border-bottom-color: #2a4060;
+}
+
+body.dark-mode .rdo-table td {
+  border-bottom-color: #1f3044;
+  color: #c5d3de;
+}
+
+body.dark-mode .rdo-table tr:hover td { background: #1f3044; }
+
+body.dark-mode .rdo-table td input,
+body.dark-mode .rdo-table td select {
+  background: #243650;
+  border-color: #2a4060;
+  color: #e8edf3;
+}
+
+body.dark-mode .rdo-add-row { background: #1f3044; }
+
+body.dark-mode .rdo-foto-card { background: #1f3044; border-color: #2a4060; }
+body.dark-mode .rdo-foto-card-info { background: #1b2836; color: #8fa3b9; }
+
+body.dark-mode .rdo-ocorrencia-item              { background: #1f3044; border-color: #2a4060; }
+body.dark-mode .rdo-ocorrencia-item .ocorr-titulo { color: #d8e3ec; }
+body.dark-mode .rdo-ocorrencia-item .ocorr-desc   { color: #8fa3b9; }
+
+body.dark-mode .rdo-horas-badge { background: rgba(37, 99, 235, 0.2); color: #60a5fa; }
+
+body.dark-mode .rdo-empty {
+  background: #1f3044;
+  border-color: #2a4060;
+  color: #607080;
+}
+
+body.dark-mode .rdo-actions-bar {
+  background: rgba(27, 40, 54, 0.96);
+  border-top-color: #2a4060;
+}
+
+body.dark-mode .rdo-actions-bar .rdo-status-chip { color: #8fa3b9; }
+
+body.dark-mode .rdo-upload-zone {
+  border-color: #2a4060;
+  color: #607080;
+}
+
+body.dark-mode .rdo-upload-zone:hover {
+  border-color: #0ea5e9;
+  background: rgba(14, 165, 233, 0.06);
+  color: #38bdf8;
+}
+
+body.dark-mode .rdo-anexo-item             { background: #1f3044; border-color: #2a4060; }
+body.dark-mode .rdo-anexo-item .anexo-nome { color: #d8e3ec; }
+body.dark-mode .rdo-anexo-item .anexo-meta { color: #607080; }
+
+/* Badges de status/gravidade — formulário RDO */
+body.dark-mode .rdo-badge.aprovado      { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+body.dark-mode .rdo-badge.em-analise    { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+body.dark-mode .rdo-badge.preenchimento { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+body.dark-mode .rdo-badge.reprovado     { background: rgba(239, 68, 68, 0.15);  color: #f87171; }
+body.dark-mode .rdo-badge.baixa         { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+body.dark-mode .rdo-badge.media         { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+body.dark-mode .rdo-badge.alta          { background: rgba(249, 115, 22, 0.15); color: #fb923c; }
+body.dark-mode .rdo-badge.critica       { background: rgba(239, 68, 68, 0.15);  color: #f87171; }
+
+/* Header do RDO — já é escuro, ajuste sutil para harmonizar */
+body.dark-mode .rdo-header-card {
+  background: linear-gradient(135deg, #0d1b2a 0%, #0f2030 100%);
+}
+
+/* ── RDO List (RDOs.css) ────────────────────────────────── */
+body.dark-mode .rdo-card {
+  background: #1b2836 !important;
+  border-color: #2a4060 !important;
+}
+
+body.dark-mode .rdo-card:hover {
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25) !important;
+  border-color: #3a5272 !important;
+}
+
+body.dark-mode .rdo-card-title { color: #e8edf3; }
+body.dark-mode .rdo-card-meta  { color: #607080; }
+body.dark-mode .rdo-meta-pill  { color: #8fa3b9; background: #1f3044; }
+
+body.dark-mode .rdo-date-group-label { color: #607080; }
+body.dark-mode .rdo-date-group-line  { background: #2a4060; }
+
+body.dark-mode .rdo-badge-aprovado  { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+body.dark-mode .rdo-badge-reprovado { background: rgba(239, 68, 68, 0.15);  color: #f87171; }
+body.dark-mode .rdo-badge-analise   { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+body.dark-mode .rdo-badge-pendente  { background: #1f3044; color: #8fa3b9; }
+
+body.dark-mode .rdo-btn-ghost {
+  border-color: #2a4060;
+  color: #8fa3b9;
+}
+
+body.dark-mode .rdo-btn-ghost:hover {
+  background: #1f3044;
+  border-color: #3a5272;
+  color: #d8e3ec;
+}
+
+body.dark-mode .rdo-btn-icon {
+  border-color: #2a4060;
+  color: #8fa3b9;
+}
+
+body.dark-mode .rdo-btn-icon:hover {
+  background: #1f3044;
+  border-color: #3a5272;
+  color: #d8e3ec;
+}
+
+body.dark-mode .rdo-dropdown-menu {
+  background: #1b2836;
+  border-color: #2a4060;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+body.dark-mode .rdo-dropdown-item                { color: #c5d3de; }
+body.dark-mode .rdo-dropdown-item:hover          { background: #1f3044; color: #e8edf3; }
+body.dark-mode .rdo-dropdown-item.success        { color: #34d399; }
+body.dark-mode .rdo-dropdown-item.success:hover  { background: rgba(16, 185, 129, 0.08); }
+body.dark-mode .rdo-dropdown-item.danger         { color: #f87171; }
+body.dark-mode .rdo-dropdown-item.danger:hover   { background: rgba(239, 68, 68, 0.08); }
+body.dark-mode .rdo-dropdown-item.warning        { color: #fbbf24; }
+body.dark-mode .rdo-dropdown-item.warning:hover  { background: rgba(245, 158, 11, 0.08); }
+
+body.dark-mode .rdo-dropdown-divider { background: #2a4060; }
+
+body.dark-mode .rdo-empty             { background: #1b2836; border-color: #2a4060; }
+body.dark-mode .rdo-empty h3          { color: #8fa3b9; }
+body.dark-mode .rdo-empty p           { color: #607080; }
+
+/* ── RNC List (RNC.css) ─────────────────────────────────── */
+body.dark-mode .rnc-card {
+  background: #1b2836 !important;
+  border-color: #2a4060 !important;
+}
+
+body.dark-mode .rnc-card:hover {
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25) !important;
+  border-color: #3a5272 !important;
+}
+
+body.dark-mode .rnc-header-text h1 { color: #e8edf3; }
+body.dark-mode .rnc-header-text p  { color: #607080; }
+
+body.dark-mode .rnc-title      { color: #e8edf3; }
+body.dark-mode .rnc-dates      { color: #607080; }
+body.dark-mode .rnc-dates-sep  { color: #2a4060; }
+body.dark-mode .rnc-divider    { background: #2a4060; }
+
+body.dark-mode .rnc-empty {
+  background: #1b2836 !important;
+  border-color: #2a4060 !important;
+}
+
+body.dark-mode .rnc-empty-icon  { color: #2a4060; }
+body.dark-mode .rnc-empty-title { color: #8fa3b9; }
+body.dark-mode .rnc-empty-sub   { color: #607080; }
+
+body.dark-mode .rnc-badge-encerrada { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+body.dark-mode .rnc-badge-analise   { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+body.dark-mode .rnc-badge-aberta    { background: #1f3044; color: #8fa3b9; }
+
+body.dark-mode .rnc-btn-ghost                      { border-color: #2a4060; color: #8fa3b9; }
+body.dark-mode .rnc-btn-ghost:hover:not(:disabled) { background: #1f3044; border-color: #3a5272; color: #d8e3ec; }
+body.dark-mode .rnc-btn-icon                       { border-color: #2a4060; color: #607080; }
+body.dark-mode .rnc-btn-icon:hover:not(:disabled)  {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+/* ── RNC Detalhes (RNCDetalhes.css) ─────────────────────── */
+body.dark-mode .rnc-det-section     { border-top-color: #2a4060; }
+body.dark-mode .rnc-det-attach-item { border-color: #2a4060; }
+body.dark-mode .rnc-det-card        { background: #1b2836; border-color: #2a4060; }
+
+/* ── RDO Timeline (RDOTimeline.css) ─────────────────────── */
+body.dark-mode .rdo-kpi-card { background: #1b2836; border-color: #2a4060; }
+
+body.dark-mode .rdo-kpi-label        { color: #607080; }
+body.dark-mode .rdo-kpi-value        { color: #e8edf3; }
+body.dark-mode .rdo-kpi-value.danger { color: #f87171; }
+body.dark-mode .rdo-kpi-sub          { color: #8fa3b9; }
+
+body.dark-mode .rdo-timeline-wrapper { background: #1b2836; border-color: #2a4060; }
+body.dark-mode .rdo-timeline-title   { color: #607080; }
+
+body.dark-mode .rdo-timeline-list::before { background: #2a4060; }
+
+body.dark-mode .rdo-tl-dot    { border-color: #1b2836; }
+body.dark-mode .rdo-tl-time   { color: #607080; }
+body.dark-mode .rdo-tl-heading { color: #e8edf3; }
+body.dark-mode .rdo-tl-desc   { color: #8fa3b9; }
+
+body.dark-mode .rdo-tl-tag              { background: #1f3044; color: #8fa3b9; }
+body.dark-mode .rdo-tl-tag.tag-warn     { background: rgba(245, 158, 11, 0.12); color: #fbbf24; }
+body.dark-mode .rdo-tl-tag.tag-danger   { background: rgba(239, 68, 68, 0.12);  color: #f87171; }
+body.dark-mode .rdo-tl-tag.tag-ok       { background: rgba(16, 185, 129, 0.12); color: #34d399; }
+body.dark-mode .rdo-tl-tag.tag-info     { background: rgba(37, 99, 235, 0.12);  color: #60a5fa; }
+
+/* ── Selects nativos — esquema de cores ─────────────────── */
+body.dark-mode select,
+body.dark-mode select option {
+  color-scheme: dark;
+}

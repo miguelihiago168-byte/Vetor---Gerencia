@@ -3,9 +3,10 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LogOut, User, LineChart } from 'lucide-react';
 import { useLeaveGuard } from '../context/LeaveGuardContext';
-import { listarPedidosPorProjeto, getRDOs, getRNCs, getNotificacoes, marcarNotificacaoLida } from '../services/api';
+import { listarPedidosPorProjeto, getRDOs, getRNCs, getNotificacoes, marcarNotificacaoLida, getRequisicoesBadges } from '../services/api';
 import { useNotification } from '../context/NotificationContext';
 import { useDialog } from '../context/DialogContext';
+import ThemeToggle from './ThemeToggle';
 
 function Navbar() {
   const { usuario, logout, isGestor, isAdm, perfil } = useAuth();
@@ -21,19 +22,53 @@ function Navbar() {
 
   const [pendCompras, setPendCompras] = useState(0);
   const [pendComprasAdm, setPendComprasAdm] = useState(0);
+  const [pendRequisicoes, setPendRequisicoes] = useState(0);
   const [pendRdos, setPendRdos] = useState(0);
   const [pendRnc, setPendRnc] = useState(0);
   const [notifCompras, setNotifCompras] = useState(0);
+  const [notifTotal, setNotifTotal] = useState(0);
   const { info } = useNotification();
 
   useEffect(() => {
     const loadCounts = async () => {
-      if (!isGestor || !projetoId) {
+      if (!projetoId) {
         setPendCompras(0);
         setPendRdos(0);
+        setPendRequisicoes(0);
         return;
       }
       try {
+        // Badges de requisições por perfil
+        const BADGE_PERFIL = {
+          'ADM':            new Set(['em-cotacao', 'aprovado-compra']),
+          'Gestor Geral':   new Set(['solicitado', 'aguardando-decisao']),
+          'Gestor da Obra': new Set(['solicitado', 'aguardando-decisao']),
+          'Gestor Local':   new Set(['solicitado']),
+          'Almoxarife':     new Set(['solicitado']),
+        };
+        const STATUS_FLOW = [
+          { slug: 'solicitado',         statuses: ['Em análise'] },
+          { slug: 'em-cotacao',         statuses: ['Em cotação'] },
+          { slug: 'aguardando-decisao', statuses: ['Cotações recebidas', 'Aguardando decisão gestor geral'] },
+          { slug: 'aprovado-compra',    statuses: ['Compra autorizada'] },
+        ];
+        try {
+          const badgesRes = await getRequisicoesBadges(Number(projetoId));
+          const rows = badgesRes.data || [];
+          const meusBadges = BADGE_PERFIL[perfil] || new Set();
+          let totalReq = 0;
+          STATUS_FLOW.forEach((sf) => {
+            if (meusBadges.has(sf.slug)) {
+              totalReq += rows
+                .filter((r) => sf.statuses.includes(r.status))
+                .reduce((sum, r) => sum + Number(r.count), 0);
+            }
+          });
+          setPendRequisicoes(totalReq);
+        } catch { setPendRequisicoes(0); }
+
+        if (!isGestor) { setPendCompras(0); setPendComprasAdm(0); }
+        else {
         const pedidosRes = await listarPedidosPorProjeto(projetoId);
         const pedidos = pedidosRes.data || [];
         const comprasCountGestor = pedidos.filter(p => p.status === 'SOLICITADO').length;
@@ -41,6 +76,7 @@ function Navbar() {
 
         const comprasCountAdm = pedidos.filter(p => p.status === 'APROVADO_GESTOR_INICIAL').length;
         setPendComprasAdm(comprasCountAdm);
+        }
 
         const rdosRes = await getRDOs(projetoId);
         const rdos = rdosRes.data || [];
@@ -58,27 +94,24 @@ function Navbar() {
     loadCounts();
   }, [usuario, projetoId, location.pathname]);
 
-  // Buscar notificações e exibir como toast; marcar como lidas após exibir
+  // Buscar contagem de notificações não lidas; exibe como badge junto ao nome
   useEffect(() => {
     const fetchNotifs = async () => {
       if (!usuario?.id) return;
       try {
         const res = await getNotificacoes();
         const notifs = res.data || [];
+        setNotifTotal(notifs.length);
         const comprasPendentes = notifs.filter((n) => n.referencia_tipo === 'pedido').length;
         setNotifCompras(comprasPendentes);
-        for (const n of notifs) {
-          info(n.mensagem, 7000);
-          // marcar como lida para não repetir
-          try { await marcarNotificacaoLida(n.id); } catch {}
-        }
-        setNotifCompras(0);
       } catch (e) {
         // silenciar falhas de notificação
       }
     };
     fetchNotifs();
-  }, [usuario?.id, location.pathname]);
+    const id = setInterval(fetchNotifs, 30000);
+    return () => clearInterval(id);
+  }, [usuario?.id]);
 
   const confirmNav = async (e, to) => {
     if (!isDirty) return true;
@@ -104,7 +137,7 @@ function Navbar() {
 
   const rotaRdos = projetoId ? `/projeto/${projetoId}/rdos` : '/rdos';
   const rotaRnc = projetoId ? `/projeto/${projetoId}/rnc` : '/rnc';
-  const rotaCompras = projetoId ? `/projeto/${projetoId}/pedidos` : '/compras';
+  const rotaCompras = projetoId ? `/projeto/${projetoId}/compras` : '/compras';
   const rotaFinanceiro = projetoId ? `/projeto/${projetoId}/financeiro` : '/financeiro';
   const rotaAlmox = projetoId ? `/projeto/${projetoId}/almoxarifado` : '/ativos';
   const rotaEap = projetoId ? `/projeto/${projetoId}/eap` : '/eap';
@@ -123,8 +156,8 @@ function Navbar() {
   const canViewRnc = isGestorGeral || isGestorObra || isGestorQualidade || isFiscal;
   const canViewCurvaS = isGestorGeral || isGestorObra || isGestorQualidade || isFiscal;
   const canViewCompras = isGestorGeral || isGestorObra || isAdministrativo || isAlmoxarife;
-  const canViewFinanceiro = isGestorGeral || isGestorObra || isAdministrativo;
-  const canViewAtivos = isGestorGeral || isGestorObra || isGestorQualidade || isAdministrativo || isAlmoxarife;
+  const canViewFinanceiro = false; // FINANCEIRO DESATIVADO (era: isGestorGeral || isGestorObra || isAdministrativo)
+  const canViewAtivos = isGestorGeral || isGestorObra || isAdministrativo || isAlmoxarife;
   const canViewEap = isGestorGeral || isGestorObra || isGestorQualidade;
   const canViewUsuarios = isGestorGeral || isAdministrativo;
 
@@ -143,6 +176,16 @@ function Navbar() {
             </NavLink>
             {temProjetoSelecionado && (
               <>
+                {!isAlmoxarife && (
+                <NavLink
+                  to={`/projeto/${projetoId}`}
+                  end
+                  onClick={(e) => confirmNav(e, `/projeto/${projetoId}`)}
+                  className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}
+                >
+                  Dashboard
+                </NavLink>
+                )}
                 {canViewRdo && (
                 <NavLink to={rotaRdos} onClick={(e) => confirmNav(e, rotaRdos)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
                   RDOs {isGestor && pendRdos > 0 && (<span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendRdos}</span>)}
@@ -151,30 +194,6 @@ function Navbar() {
                 {canViewRnc && (
                 <NavLink to={rotaRnc} onClick={(e) => confirmNav(e, rotaRnc)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
                   RNC {isGestor && pendRnc > 0 && (<span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendRnc}</span>)}
-                </NavLink>
-                )}
-                {canViewCompras && (
-                <NavLink to={rotaCompras} onClick={(e) => confirmNav(e, rotaCompras)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-                  Compras
-                  {isGestor && pendCompras > 0 && (
-                    <span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendCompras}</span>
-                  )}
-                  {isAdm && pendComprasAdm > 0 && (
-                    <span className="badge badge-yellow" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendComprasAdm}</span>
-                  )}
-                  {notifCompras > 0 && (
-                    <span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{notifCompras}</span>
-                  )}
-                </NavLink>
-                )}
-                {canViewFinanceiro && (
-                <NavLink to={rotaFinanceiro} onClick={(e) => confirmNav(e, rotaFinanceiro)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-                  Financeiro
-                </NavLink>
-                )}
-                {canViewAtivos && (
-                <NavLink to={rotaAlmox} onClick={(e) => confirmNav(e, rotaAlmox)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-                  Ativos
                 </NavLink>
                 )}
                 {canViewEap && (
@@ -188,7 +207,45 @@ function Navbar() {
                   Curva S
                 </NavLink>
                 )}
+                {canViewCompras && (
+                <NavLink to={rotaCompras} onClick={(e) => confirmNav(e, rotaCompras)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+                  Compras
+                  {pendRequisicoes > 0 && (
+                    <span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendRequisicoes}</span>
+                  )}
+                  {isGestor && pendCompras > 0 && (
+                    <span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendCompras}</span>
+                  )}
+                  {isAdm && pendComprasAdm > 0 && (
+                    <span className="badge badge-yellow" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendComprasAdm}</span>
+                  )}
+                </NavLink>
+                )}
+                {canViewAtivos && (
+                <NavLink to={rotaAlmox} onClick={(e) => confirmNav(e, rotaAlmox)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+                  Ativos
+                </NavLink>
+                )}
+                {canViewFinanceiro && (
+                <NavLink to={rotaFinanceiro} onClick={(e) => confirmNav(e, rotaFinanceiro)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+                  Financeiro
+                </NavLink>
+                )}
               </>
+            )}
+            {!temProjetoSelecionado && canViewCompras && (
+            <NavLink to={rotaCompras} onClick={(e) => confirmNav(e, rotaCompras)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+              Compras
+              {pendRequisicoes > 0 && (
+                <span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendRequisicoes}</span>
+              )}
+              {isGestor && pendCompras > 0 && (
+                <span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendCompras}</span>
+              )}
+              {isAdm && pendComprasAdm > 0 && (
+                <span className="badge badge-yellow" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendComprasAdm}</span>
+              )}
+            </NavLink>
             )}
             {canViewUsuarios && (
               <NavLink to={rotaUsuarios} onClick={(e) => confirmNav(e, rotaUsuarios)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
@@ -202,12 +259,12 @@ function Navbar() {
             <span className="navbar-user">
               <User size={16} />
               {usuario?.nome}
-              {identificacaoTopo ? ` · ${identificacaoTopo}` : ''}
             </span>
             <button onClick={handleLogout} className="btn btn-danger" style={{ padding: '10px 14px' }}>
               <LogOut size={16} />
               Sair
             </button>
+            <ThemeToggle />
           </div>
         </div>
       </div>
