@@ -32,6 +32,12 @@ jobs:
           script: |
             sudo mkdir -p /home/ubuntu/app/gestao-obras-vetor && sudo chown -R ubuntu:ubuntu /home/ubuntu/app/
             rsync -avz /home/ubuntu/ /home/ubuntu/app/gestao-obras-vetor/ --exclude app
-            cd /home/ubuntu/app/gestao-obras-vetor && sudo docker-compose up -d --build
+            ls -R /home/ubuntu/app/
+            if [ -f /home/ubuntu/app/gestao-obras-vetor/gestao-obras-vetor/docker-compose.yml ]; then
+              cd /home/ubuntu/app/gestao-obras-vetor/gestao-obras-vetor
+            else
+              cd /home/ubuntu/app/gestao-obras-vetor
+            fi
+            sudo docker-compose up -d --build
 
 # Deploy com chaves configuradas
