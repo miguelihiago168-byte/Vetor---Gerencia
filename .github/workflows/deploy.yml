@@ -30,27 +30,7 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            set -e
-
-            APP_DIR="/home/ubuntu/app/gestao-obras-vetor"
-
-            echo ">>> Instalando Docker Compose..."
-            sudo apt-get update
-            sudo apt-get install -y docker-compose
-
-            sudo mkdir -p /home/ubuntu/app/gestao-obras-vetor && sudo cp -r /home/ubuntu/* /home/ubuntu/app/gestao-obras-vetor/.
-            cd "$APP_DIR"
-
-            echo ">>> Subindo containers..."
-            docker-compose up -d --build
-
-            echo ">>> Status dos containers:"
-            docker compose ps
-
-            echo ">>> Verificando health check..."
-            sleep 5
-            curl -sf http://localhost/api/health && echo " OK" || echo " FALHOU"
-
-            echo ">>> Deploy concluído!"
+            rsync -rr /home/ubuntu/ /home/ubuntu/app/gestao-obras-vetor/ --exclude app
+            cd /home/ubuntu/app/gestao-obras-vetor && docker-compose up -d --build
 
 # Deploy com chaves configuradas
