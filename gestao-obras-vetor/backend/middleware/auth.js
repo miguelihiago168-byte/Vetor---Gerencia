@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { carregarPerfilUsuario } = require('./rbac');
+const { allQuery } = require('../config/database');
 const { PERFIS, inferirPerfil } = require('../constants/access');
 
 const auth = async (req, res, next) => {
@@ -21,6 +22,45 @@ const auth = async (req, res, next) => {
       ...usuarioAtual,
       perfil: inferirPerfil(usuarioAtual)
     };
+
+    const tenantIds = Array.isArray(decoded.tenant_ids)
+      ? decoded.tenant_ids.map((t) => Number(t)).filter(Boolean)
+      : [];
+
+    const tenantDoToken = decoded.tenant_id ? Number(decoded.tenant_id) : null;
+    const tenantHeader = req.header('x-tenant-id') ? Number(req.header('x-tenant-id')) : null;
+
+    let tenantIdAtivo = tenantHeader || tenantDoToken || null;
+    if (!tenantIdAtivo && tenantIds.length > 0) {
+      tenantIdAtivo = tenantIds[0];
+    }
+
+    // Em tokens legados (sem tenant_ids), verificar vínculos no banco
+    if ((!tenantIdAtivo || tenantIds.length === 0) && req.usuario?.id) {
+      try {
+        const vinculos = await allQuery('SELECT tenant_id FROM usuario_tenants WHERE usuario_id = ? AND ativo = 1', [req.usuario.id]);
+        const idsBanco = vinculos.map(v => Number(v.tenant_id)).filter(Boolean);
+        if (!tenantIdAtivo && idsBanco.length > 0) tenantIdAtivo = idsBanco[0];
+        if (tenantIds.length === 0) req.usuario.tenant_ids = idsBanco;
+      } catch (_) {
+        // ignora fallback
+      }
+    }
+
+    const allowedTenantIds = Array.isArray(req.usuario.tenant_ids)
+      ? req.usuario.tenant_ids.map((t) => Number(t)).filter(Boolean)
+      : [];
+
+    if (!tenantIdAtivo) {
+      return res.status(403).json({ erro: 'Usuário sem tenant ativo.' });
+    }
+
+    if (allowedTenantIds.length > 0 && !allowedTenantIds.includes(tenantIdAtivo)) {
+      return res.status(403).json({ erro: 'Tenant inválido para este usuário.' });
+    }
+
+    req.tenantId = tenantIdAtivo;
+    req.usuario.tenant_id = tenantIdAtivo;
 
     next();
   } catch (error) {

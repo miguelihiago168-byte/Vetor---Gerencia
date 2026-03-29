@@ -36,6 +36,12 @@ const almoxarifadoRoutes = require('./routes/almoxarifado');
 // Garantir esquema de notificações e índice único para evitar duplicidades
 try {
   const { db } = require('./config/database');
+  const { ensureMultitenancySchema } = require('./scripts/migrate_multitenancy');
+
+  ensureMultitenancySchema().catch((e) => {
+    console.warn('Aviso: não foi possível aplicar schema de multitenancy:', e?.message || e);
+  });
+
   db.run(`
     CREATE TABLE IF NOT EXISTS notificacoes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

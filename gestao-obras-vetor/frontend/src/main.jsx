@@ -63,7 +63,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <BrowserRouter>
           <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/criar-conta" element={<CriarConta />} />
+          <Route path="/register/:token" element={<CriarConta />} />
+          <Route path="/criar-conta" element={<Navigate to="/login" replace />} />
           {/* Redirecionar Dashboard para Projetos */}
           <Route path="/dashboard" element={<Navigate to="/projetos" replace />} />
           <Route path="/projetos" element={

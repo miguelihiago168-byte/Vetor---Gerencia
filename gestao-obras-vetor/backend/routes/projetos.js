@@ -12,13 +12,16 @@ const usuarioPodeVerTodosProjetos = (usuario) => {
   return perfil === PERFIS.ADM || perfil === PERFIS.GESTOR_GERAL;
 };
 
-// Listar projetos do usuário
+// Listar projetos do usuário (tenant-aware)
 router.get('/', auth, async (req, res) => {
   try {
     let projetos;
-    
+    const tenantId = req.tenantId;
+    if (!tenantId) {
+      return res.status(400).json({ erro: 'Tenant não definido.' });
+    }
     if (usuarioPodeVerTodosProjetos(req.usuario)) {
-      // ADM e Gestor Geral veem todos os projetos
+      // ADM e Gestor Geral veem todos os projetos do tenant
       projetos = await allQuery(`
         SELECT p.*, u.nome as criador,
           (
@@ -31,11 +34,11 @@ router.get('/', auth, async (req, res) => {
           ) AS total_usuarios
         FROM projetos p
         LEFT JOIN usuarios u ON p.criado_por = u.id
-        WHERE p.ativo = 1
+        WHERE p.ativo = 1 AND p.tenant_id = ?
         ORDER BY p.criado_em DESC
-      `);
+      `, [tenantId]);
     } else {
-      // Demais perfis veem apenas projetos vinculados
+      // Demais perfis veem apenas projetos vinculados ao tenant
       projetos = await allQuery(`
         SELECT p.*, u.nome as criador,
           (
@@ -49,9 +52,9 @@ router.get('/', auth, async (req, res) => {
         FROM projetos p
         INNER JOIN projeto_usuarios pu ON p.id = pu.projeto_id
         LEFT JOIN usuarios u ON p.criado_por = u.id
-        WHERE pu.usuario_id = ? AND p.ativo = 1
+        WHERE pu.usuario_id = ? AND p.ativo = 1 AND p.tenant_id = ?
         ORDER BY p.criado_em DESC
-      `, [req.usuario.id]);
+      `, [req.usuario.id, tenantId]);
     }
     // Para cada projeto, agregar métricas da EAP (previsto/executado/percentual)
     for (const projeto of projetos) {
@@ -103,20 +106,24 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-// Obter detalhes de um projeto
+// Obter detalhes de um projeto (tenant-aware)
 router.get('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
-    
+    const tenantId = req.tenantId;
+    if (!tenantId) {
+      return res.status(400).json({ erro: 'Tenant não definido.' });
+    }
+    // Busca projeto apenas se pertencer ao tenant
     const projeto = await getQuery(`
       SELECT p.*, u.nome as criador
       FROM projetos p
       LEFT JOIN usuarios u ON p.criado_por = u.id
-      WHERE p.id = ? AND p.ativo = 1
-    `, [id]);
+      WHERE p.id = ? AND p.ativo = 1 AND p.tenant_id = ?
+    `, [id, tenantId]);
 
     if (!projeto) {
-      return res.status(404).json({ erro: 'Projeto não encontrado.' });
+      return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
     }
 
     // Verificar se usuário tem acesso
@@ -125,7 +132,6 @@ router.get('/:id', auth, async (req, res) => {
         'SELECT * FROM projeto_usuarios WHERE projeto_id = ? AND usuario_id = ?',
         [id, req.usuario.id]
       );
-      
       if (!acesso) {
         return res.status(403).json({ erro: 'Acesso negado a este projeto.' });
       }
@@ -220,7 +226,7 @@ router.get('/:id', auth, async (req, res) => {
   }
 });
 
-// Criar projeto
+// Criar projeto (tenant-aware)
 router.post('/', [auth, isGestor], [
   body('nome').trim().notEmpty(),
   body('empresa_responsavel').trim().notEmpty(),
@@ -236,11 +242,15 @@ router.post('/', [auth, isGestor], [
     }
 
     const { nome, empresa_responsavel, empresa_executante, prazo_termino, cidade, usuarios } = req.body;
+    const tenantId = req.tenantId;
+    if (!tenantId) {
+      return res.status(400).json({ erro: 'Tenant não definido.' });
+    }
 
     const result = await runQuery(`
-      INSERT INTO projetos (nome, empresa_responsavel, empresa_executante, prazo_termino, cidade, criado_por)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `, [nome, empresa_responsavel, empresa_executante, prazo_termino, cidade, req.usuario.id]);
+      INSERT INTO projetos (nome, empresa_responsavel, empresa_executante, prazo_termino, cidade, criado_por, tenant_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, [nome, empresa_responsavel, empresa_executante, prazo_termino, cidade, req.usuario.id, tenantId]);
 
     const projetoId = result.lastID;
 

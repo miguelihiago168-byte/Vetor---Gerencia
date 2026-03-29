@@ -1,7 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 
 const AuthContext = createContext(null);
-const APP_VERSION = '2';
+const APP_VERSION = '3';
 
 export const AuthProvider = ({ children }) => {
   const [usuario, setUsuario] = useState(null);

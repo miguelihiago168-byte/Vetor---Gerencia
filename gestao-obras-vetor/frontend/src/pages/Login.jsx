@@ -90,8 +90,7 @@ function Login() {
         </form>
 
         <div className="login-register-link">
-          Não tem acesso?{' '}
-          <Link to="/criar-conta">Criar conta</Link>
+          Não tem acesso? Solicite um convite ao administrador.
         </div>
       </div>
     </div>

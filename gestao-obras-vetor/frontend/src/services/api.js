@@ -36,7 +36,8 @@ api.interceptors.response.use(
 
 // Auth
 export const login = (credentials) => api.post('/auth/login', credentials);
-export const register = (data) => api.post('/auth/register', data);
+export const validateInviteToken = (token) => api.get(`/auth/register/${token}`);
+export const registerWithInviteToken = (token, data) => api.post(`/auth/register/${token}`, data);
 
 // Usuários
 export const getUsuarios = (params) => api.get('/usuarios', { params });

@@ -5,10 +5,13 @@ const { auth, isGestor } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
 
 const router = express.Router();
-// Gerar PDF da RNC
+// Gerar PDF da RNC (tenant-aware)
 router.get('/:id/pdf', auth, async (req, res) => {
   try {
     const { id } = req.params;
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(400).json({ erro: 'Tenant não definido.' });
+    // Busca RNC apenas se o projeto for do tenant
     const rnc = await getQuery(`
       SELECT r.*, p.nome AS projeto_nome, u.nome AS criado_por_nome, g.nome AS responsavel_nome, rd.data_relatorio AS rdo_data
       FROM rnc r
@@ -16,23 +19,19 @@ router.get('/:id/pdf', auth, async (req, res) => {
       LEFT JOIN usuarios u ON r.criado_por = u.id
       LEFT JOIN usuarios g ON r.responsavel_id = g.id
       LEFT JOIN rdos rd ON r.rdo_id = rd.id
-      WHERE r.id = ?
-    `, [id]);
-
-    if (!rnc) return res.status(404).json({ erro: 'RNC não encontrada.' });
-
+      WHERE r.id = ? AND p.tenant_id = ?
+    `, [id, tenantId]);
+    if (!rnc) return res.status(404).json({ erro: 'RNC não encontrada ou não pertence ao seu tenant.' });
+    // ...existing code PDF...
     const PDFDocument = require('pdfkit');
     const doc = new PDFDocument({ size: 'A4', layout: 'portrait', margin: 40 });
-
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="RNC-${id}.pdf"`);
     doc.pipe(res);
-
     doc.fontSize(20).text('RELATÓRIO DE NÃO CONFORMIDADE', { align: 'center' });
     doc.moveDown();
     doc.fontSize(16).text(`Projeto: ${rnc.projeto_nome || rnc.projeto_id}`, { align: 'center' });
     doc.moveDown();
-
     doc.fontSize(14).text(`Título: ${rnc.titulo}`);
     doc.text(`Status: ${rnc.status}`);
     doc.text(`Gravidade: ${rnc.gravidade}`);
@@ -46,29 +45,24 @@ router.get('/:id/pdf', auth, async (req, res) => {
     doc.text(`Criado em: ${rnc.criado_em ? new Date(rnc.criado_em).toLocaleString('pt-BR') : 'N/A'}`);
     if (rnc.resolvido_em) doc.text(`Encerrado em: ${new Date(rnc.resolvido_em).toLocaleString('pt-BR')}`);
     doc.moveDown();
-
     doc.fontSize(12).text('Descrição:', { underline: true });
     doc.text(rnc.descricao || '—');
     doc.moveDown();
-
     if (rnc.acao_corretiva) {
       doc.text('Ação Corretiva:', { underline: true });
       doc.text(rnc.acao_corretiva);
       doc.moveDown();
     }
-
     if (rnc.descricao_correcao) {
       doc.text('Correção realizada:', { underline: true });
       doc.text(rnc.descricao_correcao);
       doc.moveDown();
     }
-
     if (rnc.registros_fotograficos) {
       doc.text('Registros fotográficos:', { underline: true });
       doc.text(rnc.registros_fotograficos);
       doc.moveDown();
     }
-
     doc.fontSize(10).text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, { align: 'center' });
     doc.end();
   } catch (error) {
@@ -77,10 +71,17 @@ router.get('/:id/pdf', auth, async (req, res) => {
   }
 });
 
-// Listar RNC por projeto
+// Listar RNC por projeto (tenant-aware)
 router.get('/projeto/:projetoId', auth, async (req, res) => {
   try {
     const { projetoId } = req.params;
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(400).json({ erro: 'Tenant não definido.' });
+    // Verifica se o projeto pertence ao tenant
+    const projeto = await getQuery('SELECT id FROM projetos WHERE id = ? AND tenant_id = ?', [projetoId, tenantId]);
+    if (!projeto) {
+      return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
+    }
     const lista = await allQuery(`
       SELECT r.*, u.nome AS criado_por_nome, g.nome AS responsavel_nome, rd.data_relatorio AS rdo_data
       FROM rnc r
@@ -90,7 +91,6 @@ router.get('/projeto/:projetoId', auth, async (req, res) => {
       WHERE r.projeto_id = ?
       ORDER BY r.criado_em DESC
     `, [projetoId]);
-
     res.json(lista);
   } catch (error) {
     console.error('Erro ao listar RNC:', error);
@@ -98,7 +98,7 @@ router.get('/projeto/:projetoId', auth, async (req, res) => {
   }
 });
 
-// Criar RNC
+// Criar RNC (tenant-aware)
 router.post('/', auth, [
   body('projeto_id').isInt(),
   body('titulo').trim().notEmpty(),
@@ -125,6 +125,13 @@ router.post('/', auth, [
       norma_referencia,
       registros_fotograficos
     } = req.body;
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(400).json({ erro: 'Tenant não definido.' });
+    // Verifica se o projeto pertence ao tenant
+    const projeto = await getQuery('SELECT id FROM projetos WHERE id = ? AND tenant_id = ?', [projeto_id, tenantId]);
+    if (!projeto) {
+      return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
+    }
 
     const result = await runQuery(`
       INSERT INTO rnc (

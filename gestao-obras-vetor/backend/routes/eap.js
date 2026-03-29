@@ -45,10 +45,19 @@ const getSomaPesosIrmaos = async (projetoId, paiId, excluirId = null) => {
   return Number(row?.total || 0);
 };
 
-// Listar atividades EAP de um projeto
+// Listar atividades EAP de um projeto (tenant-aware)
 router.get('/projeto/:projetoId', auth, async (req, res) => {
   try {
     const { projetoId } = req.params;
+    const tenantId = req.tenantId;
+    if (!tenantId) {
+      return res.status(400).json({ erro: 'Tenant não definido.' });
+    }
+    // Verifica se o projeto pertence ao tenant
+    const projeto = await getQuery('SELECT id FROM projetos WHERE id = ? AND tenant_id = ?', [projetoId, tenantId]);
+    if (!projeto) {
+      return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
+    }
 
     const atividades = await allQuery(`
       SELECT *,
@@ -60,11 +69,10 @@ router.get('/projeto/:projetoId', auth, async (req, res) => {
       ORDER BY ordem, codigo_eap
     `, [projetoId]);
 
-    // Agregar métricas para atividades-mãe
+    // ...existing code...
     const byId = {};
     atividades.forEach(a => { byId[a.id] = { ...a, previsto_agregado: a.quantidade_total || 0, executado_agregado: (a.percentual_executado || 0) * ((a.quantidade_total||0)/100) } });
 
-    // calcular a partir das filhas
     atividades.forEach(a => {
       if (a.pai_id) {
         const pai = byId[a.pai_id];
@@ -76,7 +84,6 @@ router.get('/projeto/:projetoId', auth, async (req, res) => {
       }
     });
 
-    // construir lista com campos agregados para pais
     const atividadesOut = atividades.map(a => {
       const copy = { ...a };
       if (!a.pai_id) {
@@ -90,7 +97,7 @@ router.get('/projeto/:projetoId', auth, async (req, res) => {
           percentual_agregado = a.percentual_executado || 0;
         }
         copy.previsto_agregado = previsto;
-        copy.executado_agregado = Math.round((executado + 0.000001) * 100) / 100; // duas casas
+        copy.executado_agregado = Math.round((executado + 0.000001) * 100) / 100;
         copy.percentual_agregado = percentual_agregado;
       }
       return copy;
@@ -103,16 +110,23 @@ router.get('/projeto/:projetoId', auth, async (req, res) => {
   }
 });
 
-// Copiar EAP de um projeto para outro
+// Copiar EAP de um projeto para outro (tenant-aware)
 router.post('/copiar', [auth, isGestor], async (req, res) => {
   try {
     const { sourceProjetoId, targetProjetoId } = req.body;
+    const tenantId = req.tenantId;
     if (!sourceProjetoId || !targetProjetoId) return res.status(400).json({ erro: 'É necessário sourceProjetoId e targetProjetoId.' });
+    if (!tenantId) return res.status(400).json({ erro: 'Tenant não definido.' });
+    // Verifica se ambos os projetos pertencem ao tenant
+    const sourceProjeto = await getQuery('SELECT id FROM projetos WHERE id = ? AND tenant_id = ?', [sourceProjetoId, tenantId]);
+    const targetProjeto = await getQuery('SELECT id FROM projetos WHERE id = ? AND tenant_id = ?', [targetProjetoId, tenantId]);
+    if (!sourceProjeto || !targetProjeto) {
+      return res.status(404).json({ erro: 'Projetos de origem ou destino não pertencem ao seu tenant.' });
+    }
 
     const atividades = await allQuery('SELECT * FROM atividades_eap WHERE projeto_id = ? ORDER BY id', [sourceProjetoId]);
     const mapOldToNew = {};
 
-    // Inserir atividades na mesma ordem, mantendo pai mapping
     for (const a of atividades) {
       const result = await runQuery(`
         INSERT INTO atividades_eap (projeto_id, codigo_eap, descricao, percentual_previsto, pai_id, ordem, unidade_medida, quantidade_total, criado_por)
@@ -121,7 +135,6 @@ router.post('/copiar', [auth, isGestor], async (req, res) => {
       mapOldToNew[a.id] = result.lastID;
     }
 
-    // atualizar pai_id das atividades copiadas
     for (const a of atividades) {
       if (a.pai_id) {
         const newId = mapOldToNew[a.id];
@@ -139,7 +152,7 @@ router.post('/copiar', [auth, isGestor], async (req, res) => {
   }
 });
 
-// Criar atividade EAP
+// Criar atividade EAP (tenant-aware)
 router.post('/', auth, [
   body('projeto_id').isInt(),
   body('codigo_eap').trim().notEmpty(),
@@ -166,9 +179,17 @@ router.post('/', auth, [
       data_fim_planejada,
       peso_percentual_projeto
     } = req.body;
+    const tenantId = req.tenantId;
+    if (!tenantId) {
+      return res.status(400).json({ erro: 'Tenant não definido.' });
+    }
+    // Verifica se o projeto pertence ao tenant
+    const projeto = await getQuery('SELECT id FROM projetos WHERE id = ? AND tenant_id = ?', [projeto_id, tenantId]);
+    if (!projeto) {
+      return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
+    }
 
     const ehFilha = !!pai_id;
-
     const descricaoNormalizada = (typeof descricao === 'string')
       ? descricao.trim()
       : '';

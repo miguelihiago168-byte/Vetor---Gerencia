@@ -15,6 +15,12 @@ function PrivateRoute({ children, allowedPerfis }) {
 
   if (!usuario) return <Navigate to="/login" />;
 
+  const tenantValido = !!usuario?.tenant_id || (Array.isArray(usuario?.tenant_ids) && usuario.tenant_ids.length > 0);
+  const usuarioVerificado = usuario?.verificado !== false;
+  if (!tenantValido || !usuarioVerificado) {
+    return <Navigate to="/login" replace />;
+  }
+
   if (Array.isArray(allowedPerfis) && allowedPerfis.length > 0) {
     const perfilUsuario = usuario?.perfil;
     if (!allowedPerfis.includes(perfilUsuario)) {

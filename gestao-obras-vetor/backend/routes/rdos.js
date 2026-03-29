@@ -12,10 +12,13 @@ runQuery("ALTER TABLE rdos ADD COLUMN atividades_avulsas TEXT").catch(e => {
   if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] atividades_avulsas:', e.message);
 });
 
-// Gerar número sequencial e único no formato RDO-XXX, baseado em TODOS os RDOs existentes
-const gerarNumeroRDO = async () => {
+// Gerar número sequencial e único no formato RDO-XXX por tenant/projeto
+const gerarNumeroRDO = async (tenantId, projetoId) => {
   // 1) Buscar todos os IDs já existentes
-  const existentes = await allQuery('SELECT numero_rdo FROM rdos WHERE numero_rdo IS NOT NULL', []);
+  const existentes = await allQuery(
+    'SELECT numero_rdo FROM rdos WHERE numero_rdo IS NOT NULL AND tenant_id = ? AND projeto_id = ?',
+    [tenantId, projetoId]
+  );
 
   // 2) Extrair parte numérica, converter para inteiro e encontrar o maior
   let maior = 0;
@@ -34,7 +37,10 @@ const gerarNumeroRDO = async () => {
   // 4) Garantir unicidade: validar se já existe; se existir, incrementar novamente
   while (true) {
     const candidate = `RDO-${String(nextNum).padStart(3, '0')}`;
-    const exists = await getQuery('SELECT id FROM rdos WHERE numero_rdo = ?', [candidate]);
+    const exists = await getQuery(
+      'SELECT id FROM rdos WHERE numero_rdo = ? AND tenant_id = ? AND projeto_id = ?',
+      [candidate, tenantId, projetoId]
+    );
     if (!exists) return candidate;
     nextNum++;
   }
@@ -366,8 +372,17 @@ router.post('/', auth, [
       atividades
     } = req.body;
 
+    if (!req.tenantId) {
+      return res.status(403).json({ erro: 'Tenant inválido para operação de RDO.' });
+    }
+
+    const projetoTenant = await getQuery('SELECT tenant_id FROM projetos WHERE id = ?', [projeto_id]);
+    if (!projetoTenant || Number(projetoTenant.tenant_id) !== Number(req.tenantId)) {
+      return res.status(403).json({ erro: 'Projeto fora do tenant ativo.' });
+    }
+
     // Integridade: projeto precisa ter EAP e criação deve trazer ao menos uma atividade
-    const eapCountRow = await getQuery('SELECT COUNT(*) AS c FROM atividades_eap WHERE projeto_id = ?', [projeto_id]);
+    const eapCountRow = await getQuery('SELECT COUNT(*) AS c FROM atividades_eap WHERE projeto_id = ? AND tenant_id = ?', [projeto_id, req.tenantId]);
     if (!eapCountRow || eapCountRow.c === 0) {
       return res.status(400).json({ erro: 'Projeto sem EAP: crie a EAP antes do RDO.' });
     }
@@ -402,12 +417,15 @@ router.post('/', auth, [
 
     // Validar que todas as atividades pertencem ao mesmo projeto
     for (const atividade of atividadesEapBody) {
-      const rowProj = await getQuery('SELECT projeto_id, quantidade_total FROM atividades_eap WHERE id = ?', [atividade.atividade_eap_id]);
+      const rowProj = await getQuery('SELECT projeto_id, tenant_id, quantidade_total FROM atividades_eap WHERE id = ?', [atividade.atividade_eap_id]);
       if (!rowProj) {
         return res.status(400).json({ erro: 'Atividade EAP inexistente no banco.' });
       }
       if (rowProj.projeto_id !== projeto_id) {
         return res.status(400).json({ erro: 'Atividade EAP pertence a outro projeto.' });
+      }
+      if (Number(rowProj.tenant_id || 0) !== Number(req.tenantId)) {
+        return res.status(400).json({ erro: 'Atividade EAP pertence a outro tenant.' });
       }
       const quantidadeExec = (atividade.quantidade_executada !== undefined && atividade.quantidade_executada !== null && atividade.quantidade_executada !== '')
         ? Number(atividade.quantidade_executada)
@@ -459,8 +477,8 @@ router.post('/', auth, [
 
     // Verificar se já existe RDO para a data informada (ou fallback)
     const rdoExistente = await getQuery(
-      'SELECT id FROM rdos WHERE projeto_id = ? AND data_relatorio = ?',
-      [projeto_id, dataRelatorioStr]
+      'SELECT id FROM rdos WHERE tenant_id = ? AND projeto_id = ? AND data_relatorio = ?',
+      [req.tenantId, projeto_id, dataRelatorioStr]
     );
 
     if (rdoExistente) {
@@ -468,7 +486,7 @@ router.post('/', auth, [
     }
 
     // Gerar número único para RDO
-    const numero_rdo = await gerarNumeroRDO();
+    const numero_rdo = await gerarNumeroRDO(req.tenantId, projeto_id);
 
     // Calcular dia da semana em pt-BR a partir da data escolhida
     const dias = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
@@ -505,15 +523,15 @@ router.post('/', auth, [
 
     const result = await runQuery(`
       INSERT INTO rdos (
-        numero_rdo, projeto_id, data_relatorio, dia_semana,
+        tenant_id, numero_rdo, projeto_id, data_relatorio, dia_semana,
         entrada_saida_inicio, entrada_saida_fim, intervalo_almoco_inicio, intervalo_almoco_fim, horas_trabalhadas,
         clima_manha, tempo_manha, praticabilidade_manha,
         clima_tarde, tempo_tarde, praticabilidade_tarde,
         mao_obra_direta, mao_obra_indireta, mao_obra_terceiros,
         equipamentos, ocorrencias, comentarios, mao_obra_detalhada, atividades_avulsas, criado_por, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
-      numeroRdoFinal, projeto_id, dataRelatorioStr, dia_semana_calc,
+      req.tenantId, numeroRdoFinal, projeto_id, dataRelatorioStr, dia_semana_calc,
       entrada_saida_inicio || '07:00', entrada_saida_fim || '17:00',
       intervalo_almoco_inicio || '12:00', intervalo_almoco_fim || '13:00', horas_calc,
       clima_manha || 'Claro', tempo_manha || '★', praticabilidade_manha || 'Praticável',
