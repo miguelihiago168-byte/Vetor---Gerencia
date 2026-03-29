@@ -38,4 +38,4 @@ jobs:
 
             echo ">>> Deploy concluído!"
 
-# Forçando trigger de deploy
+# Deploy com chaves configuradas
