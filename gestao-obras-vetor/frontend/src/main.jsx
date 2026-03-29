@@ -45,50 +45,6 @@ import AlmoxRelatorios from './pages/AlmoxRelatorios';
 import './index.css';
 import './dark-mode.css';
 
-const MOBILE_BREAKPOINT = 900;
-
-function MobileDisabledGate({ children }) {
-  const [isMobileViewport, setIsMobileViewport] = React.useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.innerWidth <= MOBILE_BREAKPOINT;
-  });
-
-  React.useEffect(() => {
-    const onResize = () => {
-      setIsMobileViewport(window.innerWidth <= MOBILE_BREAKPOINT);
-    };
-
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
-
-  if (isMobileViewport) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px',
-        textAlign: 'center',
-        background: '#f5f7fa',
-        color: '#1f2937',
-        fontFamily: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif'
-      }}>
-        <div style={{ maxWidth: '480px' }}>
-          <h1 style={{ marginBottom: '12px', fontSize: '1.5rem' }}>Versão mobile desativada</h1>
-          <p style={{ margin: 0, lineHeight: 1.5 }}>
-            Este sistema está temporariamente disponível apenas para telas maiores.
-            Acesse por um computador ou aumente a largura da janela.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  return children;
-}
-
 const PERFIS_RDO = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade', 'Fiscal'];
 const PERFIS_RNC = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade', 'Fiscal'];
 const PERFIS_CURVA_S = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade', 'Fiscal'];
@@ -100,7 +56,6 @@ const PERFIS_USUARIOS = ['Gestor Geral', 'ADM'];
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <MobileDisabledGate>
       <NotificationProvider>
         <AuthProvider>
           <LeaveGuardProvider>
@@ -321,6 +276,5 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     </LeaveGuardProvider>
     </AuthProvider>
   </NotificationProvider>
-    </MobileDisabledGate>
   </React.StrictMode>
 );
