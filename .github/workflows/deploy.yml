@@ -33,13 +33,9 @@ jobs:
           script: |
             sudo mkdir -p /home/ubuntu/app/gestao-obras-vetor && sudo chown -R ubuntu:ubuntu /home/ubuntu/app/
             rsync -avz /home/ubuntu/ /home/ubuntu/app/gestao-obras-vetor/ --exclude app
-            ls -R /home/ubuntu/app/
-            if [ -f /home/ubuntu/app/gestao-obras-vetor/gestao-obras-vetor/docker-compose.yml ]; then
-              cd /home/ubuntu/app/gestao-obras-vetor/gestao-obras-vetor
-            else
-              cd /home/ubuntu/app/gestao-obras-vetor
-            fi
+            sudo apt-get update && sudo apt-get install -y docker-compose-plugin
             echo '${{ secrets.BACKEND_ENV }}' > /home/ubuntu/app/gestao-obras-vetor/gestao-obras-vetor/backend/.env
-            sudo docker-compose up -d --build
+            cd /home/ubuntu/app/gestao-obras-vetor/gestao-obras-vetor
+            sudo docker compose up -d --build
 
 # Deploy com chaves configuradas
