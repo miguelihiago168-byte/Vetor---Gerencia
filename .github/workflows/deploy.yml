@@ -11,6 +11,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Baixar código do repositório
+        uses: actions/checkout@v4
+
+      - name: Copiar arquivos para a EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "./*"
+          target: /home/ubuntu/app/gestao-obras-vetor
+
       - name: Conectar ao servidor e fazer deploy
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -21,21 +33,12 @@ jobs:
             set -e
 
             APP_DIR="/home/ubuntu/app/gestao-obras-vetor"
-            REPO_URL="https://github.com/miguelihiago168-byte/Vetor---Gerencia.git"
 
             mkdir -p "$APP_DIR"
-
-            if [ -z "$(ls -A "$APP_DIR")" ]; then
-              echo ">>> Clonando repositório pela primeira vez..."
-              git clone "$REPO_URL" "$APP_DIR"
-            fi
-
-            echo ">>> Atualizando código..."
             cd "$APP_DIR"
-            git pull origin principal
 
             echo ">>> Subindo containers..."
-            docker-compose up --build
+            docker-compose up -d --build
 
             echo ">>> Status dos containers:"
             docker compose ps
