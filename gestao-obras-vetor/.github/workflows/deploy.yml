@@ -3,7 +3,7 @@ name: Deploy para AWS EC2
 on:
   push:
     branches:
-      - main
+      - principal
 
 jobs:
   deploy:
@@ -24,10 +24,10 @@ jobs:
 
             echo ">>> Atualizando código..."
             cd "$APP_DIR"
-            git pull origin main
+            git pull origin principal
 
             echo ">>> Subindo containers..."
-            docker compose up -d --build
+            docker-compose up --build
 
             echo ">>> Status dos containers:"
             docker compose ps
