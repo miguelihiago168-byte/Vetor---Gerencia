@@ -222,12 +222,21 @@ router.get('/projeto/:projetoId/curva-s', auth, async (req, res) => {
     }
 
     const realRaw = await allQuery(`
-      SELECT r.data_relatorio, ra.atividade_eap_id, COALESCE(SUM(ra.percentual_executado), 0) AS percentual_dia
+      SELECT
+        r.data_relatorio,
+        ra.atividade_eap_id,
+        CASE
+          WHEN COALESCE(a.quantidade_total, 0) > 0 THEN
+            (COALESCE(SUM(COALESCE(ra.quantidade_executada, 0)), 0) / a.quantidade_total) * 100
+          ELSE
+            COALESCE(SUM(ra.percentual_executado), 0)
+        END AS percentual_dia
       FROM rdo_atividades ra
       INNER JOIN rdos r ON r.id = ra.rdo_id
+      INNER JOIN atividades_eap a ON a.id = ra.atividade_eap_id
       WHERE r.projeto_id = ?
         AND r.status = 'Aprovado'
-      GROUP BY r.data_relatorio, ra.atividade_eap_id
+      GROUP BY r.data_relatorio, ra.atividade_eap_id, a.quantidade_total
       ORDER BY r.data_relatorio ASC
     `, [projetoId]);
 
@@ -242,6 +251,16 @@ router.get('/projeto/:projetoId/curva-s', auth, async (req, res) => {
       });
     });
 
+    // Se houver execução real antes do início planejado, iniciar a série nessa data
+    // para refletir avanço adiantado na Curva S.
+    const primeiraDataReal = realRaw
+      .map(row => toDateOnly(row.data_relatorio))
+      .filter(Boolean)
+      .sort()[0] || null;
+    const inicioSerie = (primeiraDataReal && primeiraDataReal < inicioProjeto)
+      ? primeiraDataReal
+      : inicioProjeto;
+
     const acumuladoRealAtividade = {};
     atividades.forEach(a => {
       acumuladoRealAtividade[a.id] = 0;
@@ -251,9 +270,9 @@ router.get('/projeto/:projetoId/curva-s', auth, async (req, res) => {
     let acumuladoPlanejado = 0;
     let acumuladoReal = 0;
 
-    const totalDias = Math.max(0, diffDays(inicioProjeto, dataFimSerie));
+    const totalDias = Math.max(0, diffDays(inicioSerie, dataFimSerie));
     for (let i = 0; i <= totalDias; i += 1) {
-      const data = addDays(inicioProjeto, i);
+      const data = addDays(inicioSerie, i);
 
       acumuladoPlanejado = Math.min(100, acumuladoPlanejado + Number(planejadoPorDia[data] || 0));
 
