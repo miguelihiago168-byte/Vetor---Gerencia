@@ -37,3 +37,5 @@ jobs:
             curl -sf http://localhost/api/health && echo " OK" || echo " FALHOU"
 
             echo ">>> Deploy concluído!"
+
+#
