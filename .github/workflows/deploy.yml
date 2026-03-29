@@ -1,0 +1,39 @@
+name: Deploy para AWS EC2
+
+on:
+  push:
+    branches:
+      - principal
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Conectar ao servidor e fazer deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+
+            APP_DIR="/home/ubuntu/app/gestao-obras-vetor"
+
+            echo ">>> Atualizando código..."
+            cd "$APP_DIR"
+            git pull origin principal
+
+            echo ">>> Subindo containers..."
+            docker-compose up --build
+
+            echo ">>> Status dos containers:"
+            docker compose ps
+
+            echo ">>> Verificando health check..."
+            sleep 5
+            curl -sf http://localhost/api/health && echo " OK" || echo " FALHOU"
+
+            echo ">>> Deploy concluído!"
