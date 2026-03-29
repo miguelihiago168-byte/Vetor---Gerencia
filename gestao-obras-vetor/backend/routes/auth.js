@@ -38,8 +38,21 @@ router.post('/login', [
     }
 
     const perfil = inferirPerfil(usuario);
-    const projetos = await allQuery('SELECT projeto_id FROM projeto_usuarios WHERE usuario_id = ?', [usuario.id]);
-    const obrasVinculadas = projetos.map((item) => Number(item.projeto_id));
+    let obrasVinculadas = [];
+    try {
+      const projetos = await allQuery('SELECT projeto_id FROM projeto_usuarios WHERE usuario_id = ?', [usuario.id]);
+      obrasVinculadas = projetos.map((item) => Number(item.projeto_id));
+    } catch (schemaErr) {
+      // Em ambiente recém-inicializado, a tabela pode ainda não existir.
+      // Permitir login e retornar sem vínculos para evitar erro 500.
+      console.warn('Aviso no login (projeto_usuarios):', schemaErr?.message || schemaErr);
+      obrasVinculadas = [];
+    }
+
+    if (!process.env.JWT_SECRET) {
+      console.error('JWT_SECRET ausente no ambiente.');
+      return res.status(500).json({ erro: 'Configuração inválida do servidor (JWT_SECRET).' });
+    }
 
     const token = jwt.sign(
       { 
