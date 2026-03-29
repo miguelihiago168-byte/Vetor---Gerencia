@@ -67,6 +67,8 @@ const ensureAccessSchema = async () => {
       try { await runQuery('ALTER TABLE usuarios ADD COLUMN setor TEXT'); } catch (_) {}
       try { await runQuery('ALTER TABLE usuarios ADD COLUMN setor_outro TEXT'); } catch (_) {}
       try { await runQuery('ALTER TABLE usuarios ADD COLUMN funcao TEXT'); } catch (_) {}
+      try { await runQuery('ALTER TABLE usuarios ADD COLUMN perfil_almoxarifado TEXT'); } catch (_) {}
+      try { await runQuery('ALTER TABLE usuarios ADD COLUMN is_adm INTEGER DEFAULT 0'); } catch (_) {}
 
       await runQuery(`
         UPDATE usuarios
