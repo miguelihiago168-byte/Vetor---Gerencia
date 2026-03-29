@@ -37,5 +37,8 @@ jobs:
             cd /home/ubuntu/app/gestao-obras-vetor/gestao-obras-vetor
             sudo docker compose down --remove-orphans || true
             sudo docker compose up -d --build
+            echo ">>> Aguardando backend iniciar..."
+            sleep 10
+            sudo docker compose exec -T backend node scripts/initDatabase.js || true
 
 # Deploy com chaves configuradas
