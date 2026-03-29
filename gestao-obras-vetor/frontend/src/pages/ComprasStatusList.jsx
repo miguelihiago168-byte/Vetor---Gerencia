@@ -137,7 +137,7 @@ export default function ComprasStatusList() {
       ) : filtradas.length === 0 ? (
         <div className="card" style={{ padding: '3.5rem', textAlign: 'center' }}>
           <FileText size={32} style={{ color: 'var(--gray-300)', marginBottom: 12 }} />
-          <p style={{ color: 'var(--gray-500)', fontSize: '0.9rem', margin: 0 }}>>
+          <p style={{ color: 'var(--gray-500)', fontSize: '0.9rem', margin: 0 }}>
             Nenhuma requisição com status <strong>{config.label}</strong>
             {busca ? ` correspondendo a "${busca}"` : ''}.
           </p>
