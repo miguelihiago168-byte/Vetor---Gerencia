@@ -38,6 +38,7 @@ jobs:
             else
               cd /home/ubuntu/app/gestao-obras-vetor
             fi
+            echo '${{ secrets.BACKEND_ENV }}' > /home/ubuntu/app/gestao-obras-vetor/gestao-obras-vetor/backend/.env
             sudo docker-compose up -d --build
 
 # Deploy com chaves configuradas
