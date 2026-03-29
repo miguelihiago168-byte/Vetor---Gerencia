@@ -21,7 +21,7 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           source: "./*"
-          target: /home/ubuntu/app/gestao-obras-vetor
+          target: /home/ubuntu/
 
       - name: Conectar ao servidor e fazer deploy
         uses: appleboy/ssh-action@v1.0.3
@@ -38,7 +38,7 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y docker-compose
 
-            mkdir -p "$APP_DIR"
+            sudo mkdir -p /home/ubuntu/app/gestao-obras-vetor && sudo cp -r /home/ubuntu/* /home/ubuntu/app/gestao-obras-vetor/.
             cd "$APP_DIR"
 
             echo ">>> Subindo containers..."
