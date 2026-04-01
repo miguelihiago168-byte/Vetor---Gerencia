@@ -5,6 +5,10 @@ on:
     branches:
       - principal
 
+concurrency:
+  group: deploy-ec2-principal
+  cancel-in-progress: true
+
 jobs:
   deploy:
     name: Deploy
@@ -15,8 +19,11 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
+          port: 22
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
+          timeout: 60s
+          command_timeout: 30m
           script: |
             set -e
 
