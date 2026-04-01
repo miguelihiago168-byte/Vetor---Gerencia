@@ -19,6 +19,15 @@ jobs:
       - name: Baixar código do repositório
         uses: actions/checkout@v4
 
+      - name: Diagnóstico de arquivos no runner
+        run: |
+          pwd
+          ls -la
+          test -f docker-compose.yml && echo "OK docker-compose.yml" || echo "FALTA docker-compose.yml"
+          test -d backend && echo "OK backend/" || echo "FALTA backend/"
+          test -d frontend && echo "OK frontend/" || echo "FALTA frontend/"
+          test -d nginx && echo "OK nginx/" || echo "FALTA nginx/"
+
       - name: Copiar somente arquivos necessários para EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -26,12 +35,7 @@ jobs:
           port: 22
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: |
-            docker-compose.yml
-            .dockerignore
-            backend/**
-            frontend/**
-            nginx/**
+          source: "docker-compose.yml,.dockerignore,backend,frontend,nginx"
           target: /home/ubuntu/app/gestao-obras-vetor
           strip_components: 0
           overwrite: true
