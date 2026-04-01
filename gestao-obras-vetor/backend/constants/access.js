@@ -43,6 +43,9 @@ const inferirPerfil = (usuario = {}) => {
   const perfilNormalizado = normalizarPerfil(usuario.perfil);
   if (perfilNormalizado) return perfilNormalizado;
 
+  const perfilDaFuncao = normalizarPerfil(usuario.funcao);
+  if (perfilDaFuncao) return perfilDaFuncao;
+
   if (String(usuario.perfil_almoxarifado || '').toUpperCase() === LEGACY_PERFIS_ALMOX.ALMOXARIFE) {
     return PERFIS.ALMOXARIFE;
   }

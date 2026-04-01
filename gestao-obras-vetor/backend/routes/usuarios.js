@@ -107,6 +107,17 @@ const validarPerfilEObras = (perfil, projetosIds) => {
   return null;
 };
 
+const resolverPerfil = (perfilInformado, funcaoInformada, perfilAtual) => {
+  if (perfilInformado !== undefined) {
+    return normalizarPerfil(perfilInformado);
+  }
+
+  const perfilPorFuncao = normalizarPerfil(funcaoInformada);
+  if (perfilPorFuncao) return perfilPorFuncao;
+
+  return normalizarPerfil(perfilAtual);
+};
+
 const sincronizarVinculosProjeto = async (usuarioId, projetoIds) => {
   await runQuery('DELETE FROM projeto_usuarios WHERE usuario_id = ?', [usuarioId]);
   for (const projetoId of projetoIds) {
@@ -438,8 +449,30 @@ router.patch('/bulk-update', [auth, requirePermission(PERMISSIONS.USERS_MANAGE)]
         `UPDATE usuarios SET ativo = 1, deletado_em = NULL, deletado_por = NULL, atualizado_em = CURRENT_TIMESTAMP WHERE id IN (${placeholders})`,
         [...idsValidos]
       );
+      await runQueryMain(
+        `UPDATE usuarios SET ativo = 1, deletado_em = NULL, deletado_por = NULL, atualizado_em = CURRENT_TIMESTAMP WHERE id IN (${placeholders})`,
+        [...idsValidos]
+      );
+    } else if (campo === 'perfil') {
+      const legado = mapPerfilParaLegado(valorFinal);
+      await runQuery(
+        `UPDATE usuarios
+         SET perfil = ?, funcao = ?, is_gestor = ?, is_adm = ?, perfil_almoxarifado = ?, atualizado_em = CURRENT_TIMESTAMP
+         WHERE id IN (${placeholders})`,
+        [valorFinal, valorFinal, legado.is_gestor, legado.is_adm, legado.perfil_almoxarifado, ...idsValidos]
+      );
+      await runQueryMain(
+        `UPDATE usuarios
+         SET perfil = ?, funcao = ?, is_gestor = ?, is_adm = ?, perfil_almoxarifado = ?, atualizado_em = CURRENT_TIMESTAMP
+         WHERE id IN (${placeholders})`,
+        [valorFinal, valorFinal, legado.is_gestor, legado.is_adm, legado.perfil_almoxarifado, ...idsValidos]
+      );
     } else {
       await runQuery(
+        `UPDATE usuarios SET ${campo} = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id IN (${placeholders})`,
+        [valorFinal, ...idsValidos]
+      );
+      await runQueryMain(
         `UPDATE usuarios SET ${campo} = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id IN (${placeholders})`,
         [valorFinal, ...idsValidos]
       );
@@ -646,10 +679,15 @@ router.put('/:id', [
       params.push(senhaHash);
     }
 
-    const perfilEntrada = req.body.perfil !== undefined ? req.body.perfil : usuarioAnterior.perfil;
-    const perfil = normalizarPerfil(perfilEntrada);
-    const funcao = req.body.funcao !== undefined
+    const funcaoInformada = req.body.funcao !== undefined
       ? String(req.body.funcao || '').trim()
+      : undefined;
+    const perfil = resolverPerfil(req.body.perfil, funcaoInformada, usuarioAnterior.perfil);
+    if (!perfil || !PERFIS_LISTA.includes(perfil)) {
+      return res.status(400).json({ erro: 'Perfil de acesso inválido.' });
+    }
+    const funcao = req.body.funcao !== undefined
+      ? funcaoInformada
       : (usuarioAnterior.funcao || perfil);
     const setor = req.body.setor !== undefined ? req.body.setor : usuarioAnterior.setor;
     const setorOutro = req.body.setor_outro !== undefined ? String(req.body.setor_outro || '').trim() : (usuarioAnterior.setor_outro || '');
@@ -684,6 +722,7 @@ router.put('/:id', [
     if (updates.length > 0) {
       params.push(id);
       await runQuery(`UPDATE usuarios SET ${updates.join(', ')}, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?`, params);
+      await runQueryMain(`UPDATE usuarios SET ${updates.join(', ')}, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?`, params);
     }
 
     if (req.body.projeto_ids !== undefined || req.body.projeto_id !== undefined || perfil === PERFIS.GESTOR_OBRA || perfil === PERFIS.GESTOR_GERAL) {
@@ -711,6 +750,10 @@ router.patch('/:id/gestor', [auth, requirePermission(PERMISSIONS.USERS_MANAGE)],
       'UPDATE usuarios SET perfil = ?, is_gestor = ?, is_adm = ?, perfil_almoxarifado = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
       [perfil, legado.is_gestor, legado.is_adm, legado.perfil_almoxarifado, id]
     );
+    await runQueryMain(
+      'UPDATE usuarios SET perfil = ?, is_gestor = ?, is_adm = ?, perfil_almoxarifado = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+      [perfil, legado.is_gestor, legado.is_adm, legado.perfil_almoxarifado, id]
+    );
 
     res.json({ mensagem: 'Permissões atualizadas com sucesso.' });
   } catch (error) {
@@ -730,6 +773,10 @@ router.patch('/:id/adm', [auth, requirePermission(PERMISSIONS.USERS_MANAGE)], as
       'UPDATE usuarios SET perfil = ?, is_gestor = ?, is_adm = ?, perfil_almoxarifado = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
       [perfil, legado.is_gestor, legado.is_adm, legado.perfil_almoxarifado, id]
     );
+    await runQueryMain(
+      'UPDATE usuarios SET perfil = ?, is_gestor = ?, is_adm = ?, perfil_almoxarifado = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+      [perfil, legado.is_gestor, legado.is_adm, legado.perfil_almoxarifado, id]
+    );
 
     res.json({ mensagem: 'Permissões ADM atualizadas com sucesso.' });
   } catch (error) {
@@ -743,6 +790,10 @@ router.delete('/:id', [auth, requirePermission(PERMISSIONS.USERS_MANAGE)], async
     const { id } = req.params;
 
     await runQuery(
+      'UPDATE usuarios SET ativo = 0, deletado_em = CURRENT_TIMESTAMP, deletado_por = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+      [req.usuario.id, id]
+    );
+    await runQueryMain(
       'UPDATE usuarios SET ativo = 0, deletado_em = CURRENT_TIMESTAMP, deletado_por = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
       [req.usuario.id, id]
     );
@@ -792,6 +843,10 @@ router.patch('/:id/senha', [auth], async (req, res) => {
       'UPDATE usuarios SET senha = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
       [novaSenhaHash, id]
     );
+    await runQueryMain(
+      'UPDATE usuarios SET senha = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+      [novaSenhaHash, id]
+    );
 
     await registrarAuditoria('usuarios', id, 'UPDATE', { senha: '[REDACTED]' }, { senha: '[ALTERADA]' }, req.usuario.id);
 
@@ -822,16 +877,50 @@ router.patch('/me/primeiro-acesso', [
     const funcao = String(req.body.funcao || '').trim();
     const setor = String(req.body.setor || '').trim();
     const setorOutro = String(req.body.setor_outro || '').trim();
+    const perfilPorFuncao = normalizarPerfil(funcao);
 
     const erroSetor = validarSetor(setor, setorOutro);
     if (erroSetor) return res.status(400).json({ erro: erroSetor });
 
-    await runQuery(
-      `UPDATE usuarios
-       SET funcao = ?, setor = ?, setor_outro = ?, primeiro_acesso_pendente = 0, atualizado_em = CURRENT_TIMESTAMP
-       WHERE id = ?`,
-      [funcao, setor, setor === SETORES.OUTRO ? setorOutro : null, req.usuario.id]
-    );
+    if (perfilPorFuncao) {
+      const legado = mapPerfilParaLegado(perfilPorFuncao);
+      const paramsUpdate = [
+        funcao,
+        perfilPorFuncao,
+        setor,
+        setor === SETORES.OUTRO ? setorOutro : null,
+        legado.is_gestor,
+        legado.is_adm,
+        legado.perfil_almoxarifado,
+        req.usuario.id
+      ];
+
+      await runQuery(
+        `UPDATE usuarios
+         SET funcao = ?, perfil = ?, setor = ?, setor_outro = ?, is_gestor = ?, is_adm = ?, perfil_almoxarifado = ?, primeiro_acesso_pendente = 0, atualizado_em = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        paramsUpdate
+      );
+      await runQueryMain(
+        `UPDATE usuarios
+         SET funcao = ?, perfil = ?, setor = ?, setor_outro = ?, is_gestor = ?, is_adm = ?, perfil_almoxarifado = ?, primeiro_acesso_pendente = 0, atualizado_em = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        paramsUpdate
+      );
+    } else {
+      await runQuery(
+        `UPDATE usuarios
+         SET funcao = ?, setor = ?, setor_outro = ?, primeiro_acesso_pendente = 0, atualizado_em = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [funcao, setor, setor === SETORES.OUTRO ? setorOutro : null, req.usuario.id]
+      );
+      await runQueryMain(
+        `UPDATE usuarios
+         SET funcao = ?, setor = ?, setor_outro = ?, primeiro_acesso_pendente = 0, atualizado_em = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [funcao, setor, setor === SETORES.OUTRO ? setorOutro : null, req.usuario.id]
+      );
+    }
 
     const usuarioNovo = await carregarUsuarioComProjetos(req.usuario.id);
     await registrarAuditoria('usuarios', req.usuario.id, 'UPDATE', usuarioAnterior, usuarioNovo, req.usuario.id);

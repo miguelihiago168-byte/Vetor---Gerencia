@@ -352,7 +352,7 @@ router.post('/register', [
     const senhaHash = await bcrypt.hash(String(senha), 10);
     const userInsert = await runQuery(
       `INSERT INTO usuarios (login, senha, nome, email, perfil, funcao, setor, is_gestor, is_adm, tenant_id, ativo, primeiro_acesso_pendente)
-       VALUES (?, ?, ?, ?, 'ADM', 'ADM', 'Administrativo', 1, 1, ?, 1, 1)`,
+       VALUES (?, ?, ?, ?, 'Gestor Geral', 'Gestor Geral', 'Administrativo', 1, 0, ?, 1, 1)`,
       [usuarioLimpo, senhaHash, String(nome || '').trim(), emailNormalizado, tenantId]
     );
 

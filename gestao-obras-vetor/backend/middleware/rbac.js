@@ -94,6 +94,53 @@ const ensureAccessSchema = async () => {
 
       await runQuery(`
         UPDATE usuarios
+        SET
+          perfil = CASE
+            WHEN TRIM(funcao) = ? THEN ?
+            WHEN TRIM(funcao) = ? THEN ?
+            WHEN TRIM(funcao) = ? THEN ?
+            WHEN TRIM(funcao) = ? THEN ?
+            WHEN TRIM(funcao) = ? THEN ?
+            WHEN TRIM(funcao) = ? THEN ?
+            ELSE perfil
+          END,
+          is_gestor = CASE
+            WHEN TRIM(funcao) IN (?, ?) THEN 1
+            ELSE 0
+          END,
+          is_adm = CASE
+            WHEN TRIM(funcao) = ? THEN 1
+            ELSE 0
+          END,
+          perfil_almoxarifado = CASE
+            WHEN TRIM(funcao) = ? THEN 'ADMINISTRADOR'
+            WHEN TRIM(funcao) = ? THEN 'GESTOR_OBRA'
+            WHEN TRIM(funcao) = ? THEN 'ALMOXARIFE'
+            ELSE COALESCE(perfil_almoxarifado, 'VISUALIZADOR')
+          END
+        WHERE TRIM(COALESCE(funcao, '')) IN (?, ?, ?, ?, ?, ?)
+      `, [
+        PERFIS.GESTOR_GERAL, PERFIS.GESTOR_GERAL,
+        PERFIS.GESTOR_OBRA, PERFIS.GESTOR_OBRA,
+        PERFIS.GESTOR_QUALIDADE, PERFIS.GESTOR_QUALIDADE,
+        PERFIS.ALMOXARIFE, PERFIS.ALMOXARIFE,
+        PERFIS.FISCAL, PERFIS.FISCAL,
+        PERFIS.ADM, PERFIS.ADM,
+        PERFIS.GESTOR_GERAL, PERFIS.GESTOR_OBRA,
+        PERFIS.ADM,
+        PERFIS.GESTOR_GERAL,
+        PERFIS.GESTOR_OBRA,
+        PERFIS.ALMOXARIFE,
+        PERFIS.GESTOR_GERAL,
+        PERFIS.GESTOR_OBRA,
+        PERFIS.GESTOR_QUALIDADE,
+        PERFIS.ALMOXARIFE,
+        PERFIS.FISCAL,
+        PERFIS.ADM
+      ]);
+
+      await runQuery(`
+        UPDATE usuarios
         SET primeiro_acesso_pendente = COALESCE(primeiro_acesso_pendente, 0)
       `);
     })().catch((error) => {
