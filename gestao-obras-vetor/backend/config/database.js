@@ -110,7 +110,6 @@ const ensureTenantDatabase = async (tenantId) => {
   }
 
   const tenantPath = getTenantDbPath(numericTenantId);
-  if (!fs.existsSync(tenantPath)) {
   // Detectar banco stale (ex: arquivo de dev em produção): compara criado_em do tenant no banco principal
   if (fs.existsSync(tenantPath)) {
     try {
