@@ -3,7 +3,8 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { getAtividadesEAP, createAtividade, updateAtividade } from '../services/api';
 import { useDialog } from '../context/DialogContext';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft, Save, Info, Layers3, GitBranchPlus } from 'lucide-react';
+import './EAPForm.css';
 
 function EAPForm() {
   const { projetoId, atividadeId } = useParams();
@@ -177,164 +178,220 @@ function EAPForm() {
   return (
     <>
       <Navbar />
-      <div className="container" style={{ paddingTop: '24px', paddingBottom: '40px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '32px' }}>
+      <div className="container eap-form-page">
+        <div className="eap-form-header">
           <button className="btn btn-secondary" onClick={() => navigate(`/projeto/${projetoId}/eap`)}>
             <ArrowLeft size={16} />
           </button>
           <h1>{atividadeId ? 'Editar Atividade' : 'Nova Atividade'} - EAP</h1>
         </div>
 
-        <div className="card" style={{ padding: '24px', maxWidth: '600px' }}>
-          {erro && <div className="alert alert-error" style={{ marginBottom: '16px' }}>{erro}</div>}
-          <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                Código EAP e Nome da Atividade
-              </label>
-              <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: '10px' }}>
-                <input
-                  type="text"
-                  name="codigo_eap"
-                  value={formData.codigo_eap}
+        <div className="eap-form-layout">
+          <div className="card eap-form-card">
+            {erro && <div className="alert alert-error eap-form-alert">{erro}</div>}
+
+            <div className="eap-form-mode">
+              <span className={`eap-mode-badge ${isAtividadePai ? 'is-parent' : 'is-child'}`}>
+                {isAtividadePai ? 'Criando atividade pai (raiz)' : 'Criando atividade filha'}
+              </span>
+              <p>
+                {isAtividadePai
+                  ? 'Use atividades pai para organizar os grandes blocos do cronograma.'
+                  : 'Atividades filhas detalham o escopo e alimentam o avanço físico do projeto.'}
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmit}>
+              <div className="eap-field">
+                <label className="eap-label">
+                  Código EAP e Nome da Atividade
+                </label>
+                <div className="eap-grid-code-name">
+                  <input
+                    type="text"
+                    name="codigo_eap"
+                    value={formData.codigo_eap}
+                    onChange={handleChange}
+                    required
+                    placeholder="Ex: 2.1"
+                    className="eap-input"
+                  />
+                  <input
+                    type="text"
+                    name="nome"
+                    value={formData.nome}
+                    onChange={handleChange}
+                    required
+                    placeholder="Ex: Lançamento de módulos"
+                    className="eap-input"
+                  />
+                </div>
+              </div>
+
+              <div className="eap-field">
+                <label className="eap-label">
+                  Descrição (opcional)
+                </label>
+                <textarea
+                  name="descricao"
+                  value={formData.descricao}
                   onChange={handleChange}
-                  required
-                  placeholder="Ex: 2.1"
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-                />
-                <input
-                  type="text"
-                  name="nome"
-                  value={formData.nome}
-                  onChange={handleChange}
-                  required
-                  placeholder="Ex: Lançamento de módulos"
-                  style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                  rows={3}
+                  className="eap-input eap-textarea"
                 />
               </div>
+
+              <div className="eap-grid-2">
+                <div className="eap-field">
+                  <label className="eap-label">
+                    Data Início Planejada {isAtividadePai ? '(opcional para atividade pai)' : '*'}
+                  </label>
+                  <input
+                    type="date"
+                    name="data_inicio_planejada"
+                    value={formData.data_inicio_planejada}
+                    onChange={handleChange}
+                    required={!isAtividadePai}
+                    className="eap-input"
+                  />
+                </div>
+
+                <div className="eap-field">
+                  <label className="eap-label">
+                    Data Fim Planejada {isAtividadePai ? '(opcional para atividade pai)' : '*'}
+                  </label>
+                  <input
+                    type="date"
+                    name="data_fim_planejada"
+                    value={formData.data_fim_planejada}
+                    onChange={handleChange}
+                    required={!isAtividadePai}
+                    className="eap-input"
+                  />
+                </div>
+              </div>
+
+              <div className="eap-field">
+                <label className="eap-label">
+                  Atividade Pai (opcional)
+                </label>
+                <select
+                  name="pai_id"
+                  value={formData.pai_id}
+                  onChange={handleChange}
+                  className="eap-input"
+                >
+                  <option value="">Nenhuma (atividade raiz)</option>
+                  {atividadesPai.map(atividade => (
+                    <option key={atividade.id} value={atividade.id}>
+                      {atividade.codigo_eap} - {atividade.nome || atividade.descricao || 'Sem descrição'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="eap-grid-2">
+                <div className="eap-field">
+                  <label className="eap-label">
+                    Unidade de Medida
+                  </label>
+                  <input
+                    type="text"
+                    name="unidade_medida"
+                    value={formData.unidade_medida}
+                    onChange={handleChange}
+                    placeholder="Ex: m², m³, un, etc."
+                    className="eap-input"
+                  />
+                </div>
+
+                <div className="eap-field">
+                  <label className="eap-label">
+                    Quantidade Total
+                  </label>
+                  <input
+                    type="number"
+                    name="quantidade_total"
+                    value={formData.quantidade_total}
+                    onChange={handleChange}
+                    step="0.01"
+                    className="eap-input"
+                  />
+                </div>
+              </div>
+
+              {/* Removidos campos de unidade base/metros/volume; manter apenas quantidade total e unidade de medida */}
+
+              <div className="eap-field eap-field-last">
+                <label className="eap-label">
+                  Peso Percentual no Projeto (%) {isAtividadePai ? '(opcional para atividade pai)' : '*'}
+                </label>
+                <input
+                  type="number"
+                  name="peso_percentual_projeto"
+                  value={formData.peso_percentual_projeto}
+                  onChange={handleChange}
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  required={!isAtividadePai}
+                  className="eap-input"
+                />
+              </div>
+
+              <div className="eap-actions">
+                <button type="submit" className="btn btn-primary" disabled={loading}>
+                  <Save size={16} />
+                  {loading ? 'Salvando...' : 'Salvar'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => navigate(`/projeto/${projetoId}/eap`)}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <aside className="card eap-info-card">
+            <div className="eap-info-header">
+              <Info size={18} />
+              <h2>Como montar sua EAP</h2>
+            </div>
+            <p className="eap-info-intro">
+              Use este guia rápido para criar a estrutura corretamente e manter o cronograma organizado.
+            </p>
+
+            <div className="eap-info-block">
+              <div className="eap-info-block-title">
+                <Layers3 size={16} />
+                <strong>Atividade pai (raiz)</strong>
+              </div>
+              <ol>
+                <li>Deixe o campo Atividade Pai como Nenhuma (atividade raiz).</li>
+                <li>Cadastre o Código EAP principal (ex.: 2.1) e um nome claro.</li>
+                <li>Se quiser, deixe datas e peso para detalhar nas atividades filhas.</li>
+              </ol>
             </div>
 
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                Descrição (opcional)
-              </label>
-              <textarea
-                name="descricao"
-                value={formData.descricao}
-                onChange={handleChange}
-                rows={3}
-                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-              />
+            <div className="eap-info-block">
+              <div className="eap-info-block-title">
+                <GitBranchPlus size={16} />
+                <strong>Atividade filha</strong>
+              </div>
+              <ol>
+                <li>Selecione a Atividade Pai no campo correspondente.</li>
+                <li>O código da filha é sugerido automaticamente (ex.: 2.1.1).</li>
+                <li>Preencha datas e peso da filha para controle do avanço físico.</li>
+              </ol>
             </div>
 
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                Data Início Planejada {isAtividadePai ? '(opcional para atividade pai)' : '*'}
-              </label>
-              <input
-                type="date"
-                name="data_inicio_planejada"
-                value={formData.data_inicio_planejada}
-                onChange={handleChange}
-                required={!isAtividadePai}
-                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-              />
-            </div>
-
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                Data Fim Planejada {isAtividadePai ? '(opcional para atividade pai)' : '*'}
-              </label>
-              <input
-                type="date"
-                name="data_fim_planejada"
-                value={formData.data_fim_planejada}
-                onChange={handleChange}
-                required={!isAtividadePai}
-                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-              />
-            </div>
-
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                Atividade Pai (opcional)
-              </label>
-              <select
-                name="pai_id"
-                value={formData.pai_id}
-                onChange={handleChange}
-                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-              >
-                <option value="">Nenhuma (atividade raiz)</option>
-                {atividadesPai.map(atividade => (
-                  <option key={atividade.id} value={atividade.id}>
-                    {atividade.codigo_eap} - {atividade.nome || atividade.descricao || 'Sem descrição'}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                Unidade de Medida
-              </label>
-              <input
-                type="text"
-                name="unidade_medida"
-                value={formData.unidade_medida}
-                onChange={handleChange}
-                placeholder="Ex: m², m³, un, etc."
-                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-              />
-            </div>
-
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                Quantidade Total
-              </label>
-              <input
-                type="number"
-                name="quantidade_total"
-                value={formData.quantidade_total}
-                onChange={handleChange}
-                step="0.01"
-                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-              />
-            </div>
-
-            {/* Removidos campos de unidade base/metros/volume; manter apenas quantidade total e unidade de medida */}
-
-            <div style={{ marginBottom: '24px' }}>
-              <label style={{ display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>
-                Peso Percentual no Projeto (%) {isAtividadePai ? '(opcional para atividade pai)' : '*'}
-              </label>
-              <input
-                type="number"
-                name="peso_percentual_projeto"
-                value={formData.peso_percentual_projeto}
-                onChange={handleChange}
-                min="0"
-                max="100"
-                step="0.1"
-                required={!isAtividadePai}
-                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button type="submit" className="btn btn-primary" disabled={loading}>
-                <Save size={16} />
-                {loading ? 'Salvando...' : 'Salvar'}
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => navigate(`/projeto/${projetoId}/eap`)}
-              >
-                Cancelar
-              </button>
-            </div>
-          </form>
+            <p className="eap-info-tip">
+              Dica: comece pelas atividades pai e depois detalhe as filhas para evitar retrabalho.
+            </p>
+          </aside>
         </div>
       </div>
     </>

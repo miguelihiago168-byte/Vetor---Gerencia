@@ -111,6 +111,7 @@ function EAP() {
   const renderAtividade = (atividade, level = 0) => {
     const hasChildren = atividade.children && atividade.children.length > 0;
     const isExpanded = expandedItems.has(atividade.id);
+    const podeAdicionarFilha = !atividade.pai_id;
     const tituloAtividade = `${atividade.codigo_eap} ${atividade.nome || atividade.descricao || ''}`.trim();
     const descricaoExtra = (atividade.descricao && atividade.nome && atividade.descricao !== atividade.nome)
       ? atividade.descricao
@@ -169,13 +170,15 @@ function EAP() {
               >
                 <Eye size={16} />
               </button>
-              <button
-                className="btn btn-outline"
-                onClick={() => navigate(`/projeto/${projetoId}/eap/novo?pai=${atividade.id}`)}
-                title="Adicionar filha"
-              >
-                +
-              </button>
+              {podeAdicionarFilha && (
+                <button
+                  className="btn btn-outline"
+                  onClick={() => navigate(`/projeto/${projetoId}/eap/novo?pai=${atividade.id}`)}
+                  title="Adicionar filha"
+                >
+                  +
+                </button>
+              )}
               <button
                 className="btn btn-danger"
                 onClick={() => handleExcluirAtividade(atividade)}

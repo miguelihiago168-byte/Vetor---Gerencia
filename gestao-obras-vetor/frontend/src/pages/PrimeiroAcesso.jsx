@@ -68,7 +68,7 @@ function PrimeiroAcesso() {
               <ShieldCheck size={16} />
               <strong>Perfil de acesso</strong>
             </div>
-            <div style={{ color: 'var(--text-secondary)' }}>{usuario?.perfil || 'Nao informado'}</div>
+                <div style={{ color: 'var(--text-secondary)' }}>{usuario?.perfil || 'Não informado'}</div>
           </div>
           <div style={{ padding: '14px 16px', borderRadius: '16px', background: 'var(--bg-secondary)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>

@@ -31,7 +31,7 @@ const TIPOS_MATERIAL = [
 const URGENCIAS = ['Normal', 'Urgente', 'Emergencial'];
 
 const TRANSICOES = {
-  'solicitado->em_cotacao':  { label: 'Iniciar cotacao',     fn: (api, id) => api.analisarTodosItens(id) },
+  'solicitado->em_cotacao':  { label: 'Iniciar cotação',     fn: (api, id) => api.analisarTodosItens(id) },
   'ag_aprovacao->liberado':  { label: 'Aprovar para compra', fn: (api, id) => api.aprovarTodosItens(id) },
   'liberado->comprado':      { label: 'Confirmar compra',    fn: (api, id) => api.comprarTodosItens(id) },
 };
@@ -164,7 +164,7 @@ function DraggableCard({ req, colId, projetoId, onAprovar, canDrag }) {
           Itens: <strong>{req.total_itens}</strong>
         </span>
         <span style={{ fontSize: '0.73rem', color: '#64748b', background: '#f8fafc', borderRadius: 6, padding: '2px 7px', border: '1px solid #e2e8f0' }}>
-          {req.total_cotacoes} cotacao(oes)
+          {req.total_cotacoes} cotação(ões)
         </span>
       </div>
 
@@ -280,9 +280,9 @@ function ConfirmModal({ req, colFrom, colTo, onConfirm, onCancel, loading }) {
   return (
     <div style={overlayStyle} onClick={onCancel}>
       <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
-        <h3 style={{ margin: 0, marginBottom: 12, fontSize: '1rem', color: '#1e293b' }}>Confirmar movimentacao</h3>
+        <h3 style={{ margin: 0, marginBottom: 12, fontSize: '1rem', color: '#1e293b' }}>Confirmar movimentação</h3>
         <p style={{ margin: 0, marginBottom: 6, fontSize: '0.88rem', color: '#475569' }}>
-          Requisicao: <strong>{req.numero_requisicao}</strong>
+          Requisição: <strong>{req.numero_requisicao}</strong>
         </p>
         <p style={{ margin: 0, marginBottom: 16, fontSize: '0.88rem', color: '#475569' }}>
           <span style={{ background: '#f1f5f9', padding: '2px 8px', borderRadius: 6 }}>{colFrom}</span>
@@ -429,13 +429,13 @@ export default function RequisicaoKanban() {
     if (!transicao) return;
 
     if ((paraId === 'em_cotacao') && !['Gestor Geral'].includes(perfil)) {
-      showToast('Sem permissao para iniciar cotacao.'); setConfirmacao(null); return;
+      showToast('Sem permissão para iniciar cotação.'); setConfirmacao(null); return;
     }
     if (paraId === 'liberado' && !podeAprovar) {
-      showToast('Sem permissao para aprovar compra.'); setConfirmacao(null); return;
+      showToast('Sem permissão para aprovar compra.'); setConfirmacao(null); return;
     }
     if (paraId === 'comprado' && !podeComprar) {
-      showToast('Sem permissao para confirmar compra.'); setConfirmacao(null); return;
+      showToast('Sem permissão para confirmar compra.'); setConfirmacao(null); return;
     }
 
     setConfirmLoading(true);
@@ -444,7 +444,7 @@ export default function RequisicaoKanban() {
       showToast('Status atualizado com sucesso!');
       await carregar();
     } catch (e) {
-      showToast(e?.response?.data?.erro || 'Erro ao mover requisicao.');
+      showToast(e?.response?.data?.erro || 'Erro ao mover requisição.');
     } finally {
       setConfirmLoading(false);
       setConfirmacao(null);
@@ -477,7 +477,7 @@ export default function RequisicaoKanban() {
             {' / Kanban Global'}
           </>
         )}
-        <span style={{ marginLeft: 8, color: '#94a3b8' }}>{totalReqs} {totalReqs === 1 ? 'requisicao' : 'requisicoes'}</span>
+        <span style={{ marginLeft: 8, color: '#94a3b8' }}>{totalReqs} {totalReqs === 1 ? 'requisição' : 'requisições'}</span>
       </p>
 
       {/* Painel financeiro de compras */}

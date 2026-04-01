@@ -222,13 +222,16 @@ router.post('/', auth, [
       }
 
       const paiRow = await getQuery(`
-        SELECT id, COALESCE(peso_percentual_projeto, percentual_previsto, 0) AS peso,
+        SELECT id, pai_id, COALESCE(peso_percentual_projeto, percentual_previsto, 0) AS peso,
                EXISTS(SELECT 1 FROM atividades_eap c WHERE c.pai_id = atividades_eap.id) AS tem_filhos
         FROM atividades_eap
         WHERE id = ? AND projeto_id = ?
       `, [pai_id, projeto_id]);
       if (!paiRow) {
         return res.status(400).json({ erro: 'Atividade pai inválida para este projeto.' });
+      }
+      if (paiRow.pai_id) {
+        return res.status(400).json({ erro: 'Somente atividades pai (raiz) podem receber atividades filhas.' });
       }
     }
 
@@ -286,6 +289,23 @@ router.put('/:id', auth, async (req, res) => {
 
     const novoPaiId = (typeof pai_id !== 'undefined') ? (pai_id || null) : atividadeAnterior.pai_id;
     const ehFilha = !!novoPaiId;
+
+    if (ehFilha) {
+      if (Number(novoPaiId) === Number(id)) {
+        return res.status(400).json({ erro: 'Uma atividade não pode ser pai dela mesma.' });
+      }
+
+      const novoPai = await getQuery(
+        'SELECT id, pai_id FROM atividades_eap WHERE id = ? AND projeto_id = ?',
+        [novoPaiId, atividadeAnterior.projeto_id]
+      );
+      if (!novoPai) {
+        return res.status(400).json({ erro: 'Atividade pai inválida para este projeto.' });
+      }
+      if (novoPai.pai_id) {
+        return res.status(400).json({ erro: 'Somente atividades pai (raiz) podem receber atividades filhas.' });
+      }
+    }
 
     const dataInicioRaw = (typeof data_inicio_planejada !== 'undefined') ? data_inicio_planejada : atividadeAnterior.data_inicio_planejada;
     const dataFimRaw = (typeof data_fim_planejada !== 'undefined') ? data_fim_planejada : atividadeAnterior.data_fim_planejada;

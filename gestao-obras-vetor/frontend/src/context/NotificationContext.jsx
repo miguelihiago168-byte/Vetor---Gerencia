@@ -1,15 +1,32 @@
-import React, { createContext, useState, useContext } from 'react';
+import React, { createContext, useState, useContext, useRef } from 'react';
 
 const NotificationContext = createContext(null);
 
 export const NotificationProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
+  const lastNotificationRef = useRef(new Map());
 
   const addNotification = (message, type = 'info', duration = 5000, action = null) => {
-    const id = Date.now() + Math.random();
-    const notification = { id, message, type, duration, action };
+    const normalizedMessage = String(message || '').trim();
+    const dedupeKey = `${type}::${normalizedMessage}`;
+    const now = Date.now();
+    const lastAt = lastNotificationRef.current.get(dedupeKey) || 0;
 
-    setNotifications(prev => [...prev, notification]);
+    // Evita cards duplicados em sequência (ex.: StrictMode/effects duplicados).
+    if (now - lastAt < 1800) {
+      return null;
+    }
+
+    lastNotificationRef.current.set(dedupeKey, now);
+
+    const id = Date.now() + Math.random();
+    const notification = { id, message: normalizedMessage, type, duration, action };
+
+    setNotifications(prev => {
+      const jaExisteAtiva = prev.some((n) => n.type === type && String(n.message || '').trim() === normalizedMessage);
+      if (jaExisteAtiva) return prev;
+      return [...prev, notification];
+    });
 
     if (duration > 0) {
       setTimeout(() => {

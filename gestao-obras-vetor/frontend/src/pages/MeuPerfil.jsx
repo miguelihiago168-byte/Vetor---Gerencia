@@ -59,7 +59,7 @@ function MeuPerfil() {
 
   const nomeExibicao = usuario?.nome || usuario?.login;
   const perfilExibicao = usuario?.perfil || 'Sem perfil';
-  const funcaoExibicao = usuario?.funcao || 'Nao informada';
+  const funcaoExibicao = usuario?.funcao || 'Não informada';
 
   return (
     <>
@@ -97,7 +97,7 @@ function MeuPerfil() {
                     <strong>{perfilExibicao}</strong>
                   </div>
                   <div className="perfil-meta-item">
-                    <span className="perfil-meta-label">Funcao</span>
+                    <span className="perfil-meta-label">Função</span>
                     <strong>{funcaoExibicao}</strong>
                   </div>
                 </div>
@@ -106,7 +106,7 @@ function MeuPerfil() {
 
             <div className="perfil-section-header">
               <div>
-                <p className="perfil-section-eyebrow">Seguranca</p>
+                <p className="perfil-section-eyebrow">Segurança</p>
                 <h2 className="card-title">Alterar senha</h2>
               </div>
               <div className="perfil-section-icon">
@@ -115,7 +115,7 @@ function MeuPerfil() {
             </div>
 
             <p className="perfil-section-copy">
-              Sua senha deve conter 6 digitos numericos, seguindo o padrao operacional do sistema.
+              Sua senha deve conter 6 dígitos numéricos, seguindo o padrão operacional do sistema.
             </p>
 
             <form className="perfil-form" onSubmit={handleTrocarSenha} autoComplete="off">
@@ -144,7 +144,7 @@ function MeuPerfil() {
                     onChange={(e) => setNovaSenha(e.target.value)}
                     required
                     autoComplete="new-password"
-                    placeholder="6 digitos"
+                    placeholder="6 dígitos"
                     inputMode="numeric"
                   />
                 </div>
@@ -166,7 +166,7 @@ function MeuPerfil() {
               </div>
 
               <div className="perfil-form-footer">
-                <p className="perfil-helper-text">A alteracao e aplicada imediatamente apos a confirmacao.</p>
+                <p className="perfil-helper-text">A alteração é aplicada imediatamente após a confirmação.</p>
                 <button
                   className="btn btn-primary perfil-btn-salvar"
                   type="submit"
@@ -181,8 +181,8 @@ function MeuPerfil() {
           <aside className="card perfil-side-card">
             <div className="perfil-section-header">
               <div>
-                <p className="perfil-section-eyebrow">Orientacoes</p>
-                <h2 className="card-title">Boas praticas</h2>
+                <p className="perfil-section-eyebrow">Orientações</p>
+                <h2 className="card-title">Boas práticas</h2>
               </div>
               <div className="perfil-section-icon perfil-section-icon-soft">
                 <ShieldCheck size={18} />
@@ -194,7 +194,7 @@ function MeuPerfil() {
                 <User size={16} />
                 <div>
                   <strong>Conta vinculada ao seu login</strong>
-                  <p>Use sempre o login {usuario?.login} para manter a rastreabilidade das operacoes.</p>
+                  <p>Use sempre o login {usuario?.login} para manter a rastreabilidade das operações.</p>
                 </div>
               </div>
 
@@ -202,7 +202,7 @@ function MeuPerfil() {
                 <KeyRound size={16} />
                 <div>
                   <strong>Senha padronizada</strong>
-                  <p>O sistema utiliza senha numerica de 6 digitos para agilizar o acesso em campo.</p>
+                  <p>O sistema utiliza senha numérica de 6 dígitos para agilizar o acesso em campo.</p>
                 </div>
               </div>
 
@@ -210,7 +210,7 @@ function MeuPerfil() {
                 <ShieldCheck size={16} />
                 <div>
                   <strong>Troca imediata</strong>
-                  <p>Ao salvar, a nova senha passa a valer no mesmo instante para suas proximas sessoes.</p>
+                  <p>Ao salvar, a nova senha passa a valer no mesmo instante para suas próximas sessões.</p>
                 </div>
               </div>
             </div>

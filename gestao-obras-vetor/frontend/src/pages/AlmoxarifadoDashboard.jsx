@@ -70,6 +70,13 @@ function AlmoxarifadoDashboard() {
               </div>
             </div>
 
+            <div className="card mb-4">
+              <h2 className="card-header">Custo acumulado de manutenção</h2>
+              <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--info)' }}>
+                R$ {formatBRL(dados.custo_manutencao || 0)}
+              </div>
+            </div>
+
             <div className="card">
               <h2 className="card-header">Ativos da Obra</h2>
               <div style={{ overflowX: 'auto' }}>

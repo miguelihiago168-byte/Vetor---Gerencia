@@ -2,7 +2,8 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import ComprasLayout from '../components/ComprasLayout';
 import { useAuth } from '../context/AuthContext';
-import { listarRequisicoesProjeto, listarRequisicoes } from '../services/api';
+import { listarRequisicoesProjeto, listarRequisicoes, concluirRequisicao } from '../services/api';
+import { useNotification } from '../context/NotificationContext';
 import { Search, FileText, Clock } from 'lucide-react';
 
 // Mapeamento: slug → { label, statuses[] }
@@ -21,7 +22,7 @@ const ACAO_MAP = {
   'em-cotacao':         { perfis: ['ADM', 'Gestor Geral'],                                   label: 'Cotar' },
   'aguardando-decisao': { perfis: ['Gestor Geral'],                                          label: 'Decidir' },
   'aprovado-compra':    { perfis: ['ADM', 'Gestor Geral'],                                   label: 'Registrar compra' },
-  'comprado':           { perfis: [],                                                         label: null },
+  'comprado':           { perfis: ['ADM', 'Gestor Geral'],                                   label: 'Finalizar entrega' },
 };
 
 const URG_ROW = {
@@ -48,6 +49,7 @@ export default function ComprasStatusList() {
   const { projetoId, statusSlug, statusItem } = useParams();
   const navigate = useNavigate();
   const { usuario } = useAuth();
+  const { success, error } = useNotification();
   const perfil = usuario?.perfil || '';
 
   // Suporta ambos os nomes de param (:statusSlug e :statusItem legacy)
@@ -59,6 +61,7 @@ export default function ComprasStatusList() {
   const [requisicoes, setRequisicoes] = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [busca,       setBusca]       = useState('');
+  const [busyId,      setBusyId]      = useState(null);
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -216,9 +219,25 @@ export default function ComprasStatusList() {
                           <button
                             className="btn btn-primary"
                             style={{ padding: '4px 10px', fontSize: '0.78rem', whiteSpace: 'nowrap' }}
-                            onClick={() => verDetalhe(req)}
+                            disabled={busyId === req.id}
+                            onClick={slug === 'comprado'
+                              ? async () => {
+                                  if (busyId) return;
+                                  setBusyId(req.id);
+                                  try {
+                                    await concluirRequisicao(req.id);
+                                    success(`Pedido ${req.numero_requisicao} concluído e entregue.`, 5000);
+                                    carregar();
+                                  } catch (err) {
+                                    error(err?.response?.data?.erro || 'Erro ao finalizar entrega.', 7000);
+                                  } finally {
+                                    setBusyId(null);
+                                  }
+                                }
+                              : () => verDetalhe(req)
+                            }
                           >
-                            {acao.label}
+                            {busyId === req.id ? '...' : acao.label}
                           </button>
                         )}
                         <button

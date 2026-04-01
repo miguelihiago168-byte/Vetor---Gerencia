@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import AlmoxarifadoLayout from '../components/AlmoxarifadoLayout';
 import { enviarFerramentaManutencao, getAlocacoesAbertas, registrarDevolucaoFerramenta, registrarPerdaFerramenta } from '../services/api';
@@ -10,6 +10,8 @@ function AlmoxDevolucao() {
   const [alocacoes, setAlocacoes] = useState([]);
   const [showBaixaModal, setShowBaixaModal] = useState(false);
   const [alocacaoSelecionada, setAlocacaoSelecionada] = useState(null);
+  const carregandoRef = useRef(false);
+  const ultimoErroRef = useRef({ msg: '', at: 0 });
   const [baixaForm, setBaixaForm] = useState({
     acao: 'DEVOLVIDA',
     destinoDanificada: 'MANUTENCAO',
@@ -18,11 +20,22 @@ function AlmoxDevolucao() {
   });
 
   const carregar = async () => {
+    if (!projetoId || carregandoRef.current) return;
+    carregandoRef.current = true;
     try {
       const res = await getAlocacoesAbertas(projetoId);
       setAlocacoes(res.data || []);
     } catch (err) {
-      error(err?.response?.data?.erro || 'Erro ao carregar alocações.', 7000);
+      setAlocacoes([]);
+      const mensagem = err?.response?.data?.erro || 'Erro ao carregar alocações.';
+      const now = Date.now();
+      const repetido = ultimoErroRef.current.msg === mensagem && (now - ultimoErroRef.current.at) < 2500;
+      if (!repetido) {
+        error(mensagem, 7000);
+        ultimoErroRef.current = { msg: mensagem, at: now };
+      }
+    } finally {
+      carregandoRef.current = false;
     }
   };
 

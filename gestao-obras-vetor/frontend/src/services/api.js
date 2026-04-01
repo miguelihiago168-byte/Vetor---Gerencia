@@ -165,6 +165,8 @@ export const selecionarCotacaoItem = (reqId, itemId, cotacaoId) =>
   api.patch(`/requisicoes/${reqId}/itens/${itemId}/cotacoes/${cotacaoId}/selecionar`);
 export const marcarItemComprado = (reqId, itemId) =>
   api.patch(`/requisicoes/${reqId}/itens/${itemId}/comprado`);
+export const concluirRequisicao = (reqId) =>
+  api.patch(`/requisicoes/${reqId}/concluir`);
 export const cancelarItemRequisicao = (reqId, itemId, data) =>
   api.patch(`/requisicoes/${reqId}/itens/${itemId}/cancelar`, data);
 export const devolverCotacaoItem = (reqId, itemId, data) =>

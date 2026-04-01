@@ -1,8 +1,6 @@
 const { getQuery, allQuery, runQuery } = require('../config/database');
 const { PERFIS, inferirPerfil } = require('../constants/access');
 
-let schemaReadyPromise = null;
-
 const PERMISSIONS = {
   USERS_MANAGE: 'users.manage',
   USERS_VIEW: 'users.view',
@@ -61,95 +59,16 @@ const perfisAcessoGlobalProjeto = new Set([
 ]);
 
 const ensureAccessSchema = async () => {
-  if (!schemaReadyPromise) {
-    schemaReadyPromise = (async () => {
-      try { await runQuery('ALTER TABLE usuarios ADD COLUMN perfil TEXT'); } catch (_) {}
-      try { await runQuery('ALTER TABLE usuarios ADD COLUMN setor TEXT'); } catch (_) {}
-      try { await runQuery('ALTER TABLE usuarios ADD COLUMN setor_outro TEXT'); } catch (_) {}
-      try { await runQuery('ALTER TABLE usuarios ADD COLUMN funcao TEXT'); } catch (_) {}
-      try { await runQuery('ALTER TABLE usuarios ADD COLUMN perfil_almoxarifado TEXT'); } catch (_) {}
-      try { await runQuery('ALTER TABLE usuarios ADD COLUMN is_adm INTEGER DEFAULT 0'); } catch (_) {}
-      try { await runQuery('ALTER TABLE usuarios ADD COLUMN primeiro_acesso_pendente INTEGER DEFAULT 0'); } catch (_) {}
+  try { await runQuery('ALTER TABLE usuarios ADD COLUMN perfil TEXT'); } catch (_) {}
+  try { await runQuery('ALTER TABLE usuarios ADD COLUMN setor TEXT'); } catch (_) {}
+  try { await runQuery('ALTER TABLE usuarios ADD COLUMN setor_outro TEXT'); } catch (_) {}
+  try { await runQuery('ALTER TABLE usuarios ADD COLUMN funcao TEXT'); } catch (_) {}
+  try { await runQuery('ALTER TABLE usuarios ADD COLUMN perfil_almoxarifado TEXT'); } catch (_) {}
+  try { await runQuery('ALTER TABLE usuarios ADD COLUMN is_adm INTEGER DEFAULT 0'); } catch (_) {}
+  try { await runQuery('ALTER TABLE usuarios ADD COLUMN primeiro_acesso_pendente INTEGER DEFAULT 0'); } catch (_) {}
 
-      await runQuery(`
-        UPDATE usuarios
-        SET perfil = CASE
-          WHEN perfil IS NOT NULL AND TRIM(perfil) <> '' THEN perfil
-          WHEN UPPER(COALESCE(perfil_almoxarifado, '')) = 'ALMOXARIFE' THEN ?
-          WHEN COALESCE(is_adm, 0) = 1 THEN ?
-          WHEN COALESCE(is_gestor, 0) = 1 THEN ?
-          ELSE ?
-        END
-      `, [PERFIS.ALMOXARIFE, PERFIS.ADM, PERFIS.GESTOR_GERAL, PERFIS.ADM]);
-
-      await runQuery(`
-        UPDATE usuarios
-        SET setor = COALESCE(NULLIF(TRIM(setor), ''), 'Administrativo')
-      `);
-
-      await runQuery(`
-        UPDATE usuarios
-        SET funcao = COALESCE(NULLIF(TRIM(funcao), ''), perfil)
-      `);
-
-      await runQuery(`
-        UPDATE usuarios
-        SET
-          perfil = CASE
-            WHEN TRIM(funcao) = ? THEN ?
-            WHEN TRIM(funcao) = ? THEN ?
-            WHEN TRIM(funcao) = ? THEN ?
-            WHEN TRIM(funcao) = ? THEN ?
-            WHEN TRIM(funcao) = ? THEN ?
-            WHEN TRIM(funcao) = ? THEN ?
-            ELSE perfil
-          END,
-          is_gestor = CASE
-            WHEN TRIM(funcao) IN (?, ?) THEN 1
-            ELSE 0
-          END,
-          is_adm = CASE
-            WHEN TRIM(funcao) = ? THEN 1
-            ELSE 0
-          END,
-          perfil_almoxarifado = CASE
-            WHEN TRIM(funcao) = ? THEN 'ADMINISTRADOR'
-            WHEN TRIM(funcao) = ? THEN 'GESTOR_OBRA'
-            WHEN TRIM(funcao) = ? THEN 'ALMOXARIFE'
-            ELSE COALESCE(perfil_almoxarifado, 'VISUALIZADOR')
-          END
-        WHERE TRIM(COALESCE(funcao, '')) IN (?, ?, ?, ?, ?, ?)
-      `, [
-        PERFIS.GESTOR_GERAL, PERFIS.GESTOR_GERAL,
-        PERFIS.GESTOR_OBRA, PERFIS.GESTOR_OBRA,
-        PERFIS.GESTOR_QUALIDADE, PERFIS.GESTOR_QUALIDADE,
-        PERFIS.ALMOXARIFE, PERFIS.ALMOXARIFE,
-        PERFIS.FISCAL, PERFIS.FISCAL,
-        PERFIS.ADM, PERFIS.ADM,
-        PERFIS.GESTOR_GERAL, PERFIS.GESTOR_OBRA,
-        PERFIS.ADM,
-        PERFIS.GESTOR_GERAL,
-        PERFIS.GESTOR_OBRA,
-        PERFIS.ALMOXARIFE,
-        PERFIS.GESTOR_GERAL,
-        PERFIS.GESTOR_OBRA,
-        PERFIS.GESTOR_QUALIDADE,
-        PERFIS.ALMOXARIFE,
-        PERFIS.FISCAL,
-        PERFIS.ADM
-      ]);
-
-      await runQuery(`
-        UPDATE usuarios
-        SET primeiro_acesso_pendente = COALESCE(primeiro_acesso_pendente, 0)
-      `);
-    })().catch((error) => {
-      schemaReadyPromise = null;
-      throw error;
-    });
-  }
-
-  return schemaReadyPromise;
+  // Evita UPDATEs globais por requisição (podem causar SQLITE_BUSY em cargas concorrentes).
+  // A inferência de perfil já trata fallback por flags/funcao em tempo de execução.
 };
 
 const carregarPerfilUsuario = async (usuarioId) => {
