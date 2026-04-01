@@ -27,13 +27,13 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           source: |
-            gestao-obras-vetor/docker-compose.yml
-            gestao-obras-vetor/.dockerignore
-            gestao-obras-vetor/backend/**
-            gestao-obras-vetor/frontend/**
-            gestao-obras-vetor/nginx/**
+            docker-compose.yml
+            .dockerignore
+            backend/**
+            frontend/**
+            nginx/**
           target: /home/ubuntu/app/gestao-obras-vetor
-          strip_components: 1
+          strip_components: 0
           overwrite: true
           rm: false
 
