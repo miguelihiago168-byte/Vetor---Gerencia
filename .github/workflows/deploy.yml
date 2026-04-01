@@ -23,10 +23,30 @@ jobs:
         run: |
           pwd
           ls -la
-          test -f docker-compose.yml && echo "OK docker-compose.yml" || echo "FALTA docker-compose.yml"
-          test -d backend && echo "OK backend/" || echo "FALTA backend/"
-          test -d frontend && echo "OK frontend/" || echo "FALTA frontend/"
-          test -d nginx && echo "OK nginx/" || echo "FALTA nginx/"
+
+      - name: Preparar pacote de deploy
+        run: |
+          set -e
+          BASE_DIR="$(dirname "$(find . -maxdepth 4 -type f -name docker-compose.yml | head -n 1)")"
+          if [ -z "$BASE_DIR" ] || [ "$BASE_DIR" = "." ]; then
+            echo "Nao foi possivel localizar a raiz do projeto com docker-compose.yml"
+            exit 1
+          fi
+
+          echo "BASE_DIR detectado: $BASE_DIR"
+          test -f "$BASE_DIR/docker-compose.yml"
+          test -d "$BASE_DIR/backend"
+          test -d "$BASE_DIR/frontend"
+          test -d "$BASE_DIR/nginx"
+
+          rm -rf deploy_bundle
+          mkdir -p deploy_bundle
+          cp -R "$BASE_DIR/docker-compose.yml" deploy_bundle/
+          if [ -f "$BASE_DIR/.dockerignore" ]; then cp -R "$BASE_DIR/.dockerignore" deploy_bundle/; fi
+          cp -R "$BASE_DIR/backend" deploy_bundle/
+          cp -R "$BASE_DIR/frontend" deploy_bundle/
+          cp -R "$BASE_DIR/nginx" deploy_bundle/
+          ls -la deploy_bundle
 
       - name: Copiar somente arquivos necessários para EC2
         uses: appleboy/scp-action@v0.1.7
@@ -35,9 +55,9 @@ jobs:
           port: 22
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "docker-compose.yml,.dockerignore,backend,frontend,nginx"
+          source: "deploy_bundle/docker-compose.yml,deploy_bundle/.dockerignore,deploy_bundle/backend,deploy_bundle/frontend,deploy_bundle/nginx"
           target: /home/ubuntu/app/gestao-obras-vetor
-          strip_components: 0
+          strip_components: 1
           overwrite: true
           rm: false
 
