@@ -24,10 +24,14 @@ jobs:
 
             echo ">>> Atualizando código..."
             cd "$APP_DIR"
-            git pull origin principal
+            git fetch origin principal
+            git reset --hard origin/principal
+
+            echo '${{ secrets.BACKEND_ENV }}' > backend/.env
 
             echo ">>> Subindo containers..."
-            docker-compose up --build
+            sudo docker compose down --remove-orphans || true
+            sudo docker compose up -d --build
 
             echo ">>> Status dos containers:"
             docker compose ps

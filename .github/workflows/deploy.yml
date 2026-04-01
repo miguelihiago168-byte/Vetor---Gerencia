@@ -12,18 +12,6 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Baixar código do repositório
-        uses: actions/checkout@v4
-
-      - name: Copiar arquivos para a EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "./*"
-          target: /home/ubuntu/
-
       - name: Conectar ao servidor e fazer deploy
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -31,10 +19,24 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            sudo mkdir -p /home/ubuntu/app/gestao-obras-vetor && sudo chown -R ubuntu:ubuntu /home/ubuntu/app/
-            rsync -avz /home/ubuntu/ /home/ubuntu/app/gestao-obras-vetor/ --exclude app
-            echo '${{ secrets.BACKEND_ENV }}' > /home/ubuntu/app/gestao-obras-vetor/gestao-obras-vetor/backend/.env
-            cd /home/ubuntu/app/gestao-obras-vetor/gestao-obras-vetor
+            set -e
+
+            APP_DIR="/home/ubuntu/app/gestao-obras-vetor"
+
+            sudo mkdir -p "$APP_DIR"
+            sudo chown -R ubuntu:ubuntu /home/ubuntu/app
+
+            if [ ! -d "$APP_DIR/.git" ]; then
+              echo "Repositório não encontrado em $APP_DIR"
+              exit 1
+            fi
+
+            cd "$APP_DIR"
+            git fetch origin principal
+            git reset --hard origin/principal
+
+            echo '${{ secrets.BACKEND_ENV }}' > backend/.env
+
             sudo docker compose down --remove-orphans || true
             sudo docker compose up -d --build
 
