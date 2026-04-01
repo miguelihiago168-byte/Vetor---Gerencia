@@ -24,7 +24,7 @@ jobs:
           pwd
           ls -la
 
-      - name: Preparar pacote de deploy
+      - name: Detectar raiz do projeto
         run: |
           set -e
           BASE_DIR="$(dirname "$(find . -maxdepth 4 -type f -name docker-compose.yml | head -n 1)")"
@@ -38,49 +38,47 @@ jobs:
           test -d "$BASE_DIR/backend"
           test -d "$BASE_DIR/frontend"
           test -d "$BASE_DIR/nginx"
+          echo "BASE_DIR=$BASE_DIR" >> "$GITHUB_ENV"
 
-          rm -rf deploy_bundle
-          mkdir -p deploy_bundle/backend deploy_bundle/frontend deploy_bundle/nginx
+      - name: Configurar SSH para rsync
+        run: |
+          set -e
+          mkdir -p ~/.ssh
+          printf '%s\n' '${{ secrets.EC2_SSH_KEY }}' > ~/.ssh/id_ec2
+          chmod 600 ~/.ssh/id_ec2
+          ssh-keyscan -H '${{ secrets.EC2_HOST }}' >> ~/.ssh/known_hosts
 
-          cp -R "$BASE_DIR/docker-compose.yml" deploy_bundle/
-          if [ -f "$BASE_DIR/.dockerignore" ]; then cp -R "$BASE_DIR/.dockerignore" deploy_bundle/; fi
+      - name: Sincronizar arquivos para EC2 (rápido)
+        run: |
+          set -e
+          APP_DIR="/home/ubuntu/app/gestao-obras-vetor"
+          SSH_OPTS="-i ~/.ssh/id_ec2 -o StrictHostKeyChecking=yes"
 
-          # Backend: envia somente código/config necessários para build, excluindo dados e artefatos pesados
-          rsync -a --delete \
+          ssh $SSH_OPTS ubuntu@${{ secrets.EC2_HOST }} "mkdir -p '$APP_DIR/backend' '$APP_DIR/frontend' '$APP_DIR/nginx'"
+
+          rsync -az -e "ssh $SSH_OPTS" "$BASE_DIR/docker-compose.yml" ubuntu@${{ secrets.EC2_HOST }}:"$APP_DIR/"
+
+          if [ -f "$BASE_DIR/.dockerignore" ]; then
+            rsync -az -e "ssh $SSH_OPTS" "$BASE_DIR/.dockerignore" ubuntu@${{ secrets.EC2_HOST }}:"$APP_DIR/"
+          fi
+
+          rsync -az -e "ssh $SSH_OPTS" \
             --exclude node_modules \
             --exclude database \
             --exclude uploads \
             --exclude logs \
             --exclude "*.log" \
             --exclude .env \
-            "$BASE_DIR/backend/" "deploy_bundle/backend/"
+            "$BASE_DIR/backend/" ubuntu@${{ secrets.EC2_HOST }}:"$APP_DIR/backend/"
 
-          # Frontend: exclui dependências e artefatos de build locais
-          rsync -a --delete \
+          rsync -az -e "ssh $SSH_OPTS" \
             --exclude node_modules \
             --exclude dist \
             --exclude build \
             --exclude .vite \
-            "$BASE_DIR/frontend/" "deploy_bundle/frontend/"
+            "$BASE_DIR/frontend/" ubuntu@${{ secrets.EC2_HOST }}:"$APP_DIR/frontend/"
 
-          rsync -a --delete "$BASE_DIR/nginx/" "deploy_bundle/nginx/"
-
-          echo "Tamanho do pacote de deploy:"
-          du -sh deploy_bundle
-          du -sh deploy_bundle/* || true
-
-      - name: Copiar somente arquivos necessários para EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          port: 22
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "deploy_bundle/docker-compose.yml,deploy_bundle/.dockerignore,deploy_bundle/backend,deploy_bundle/frontend,deploy_bundle/nginx"
-          target: /home/ubuntu/app/gestao-obras-vetor
-          strip_components: 1
-          overwrite: true
-          rm: false
+          rsync -az -e "ssh $SSH_OPTS" "$BASE_DIR/nginx/" ubuntu@${{ secrets.EC2_HOST }}:"$APP_DIR/nginx/"
 
       - name: Conectar ao servidor e fazer deploy
         uses: appleboy/ssh-action@v1.0.3
