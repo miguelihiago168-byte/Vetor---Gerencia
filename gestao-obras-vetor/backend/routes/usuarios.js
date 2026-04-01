@@ -1,7 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { body, validationResult } = require('express-validator');
-const { allQuery, runQuery, getQuery } = require('../config/database');
+const { allQuery, runQuery, getQuery, runQueryMain, getQueryMain } = require('../config/database');
 const { auth } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
 const { PERMISSIONS, requirePermission, ensureAccessSchema } = require('../middleware/rbac');
@@ -518,8 +518,8 @@ router.post('/', [
     const legado = mapPerfilParaLegado(perfil);
 
     const result = await runQuery(`
-      INSERT INTO usuarios (login, senha, pin, nome, email, perfil, funcao, setor, setor_outro, is_gestor, is_adm, perfil_almoxarifado, criado_por, primeiro_acesso_pendente)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+      INSERT INTO usuarios (login, senha, pin, nome, email, perfil, funcao, setor, setor_outro, is_gestor, is_adm, perfil_almoxarifado, tenant_id, criado_por, primeiro_acesso_pendente)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
     `, [
       login,
       senhaHash,
@@ -533,8 +533,35 @@ router.post('/', [
       legado.is_gestor,
       legado.is_adm,
       legado.perfil_almoxarifado,
+      req.usuario.tenant_id,
       req.usuario.id
     ]);
+
+    // Gravar no banco principal para que o usuário consiga fazer login
+    await runQueryMain(`
+      INSERT OR IGNORE INTO usuarios (id, login, senha, pin, nome, email, perfil, funcao, setor, setor_outro, is_gestor, is_adm, perfil_almoxarifado, tenant_id, ativo, criado_por, primeiro_acesso_pendente)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 0)
+    `, [
+      result.lastID,
+      login,
+      senhaHash,
+      pinFinal,
+      nome,
+      email,
+      perfil,
+      funcao || perfil,
+      setor,
+      setor === SETORES.OUTRO ? setorOutro : null,
+      legado.is_gestor,
+      legado.is_adm,
+      legado.perfil_almoxarifado,
+      req.usuario.tenant_id,
+      req.usuario.id
+    ]);
+    await runQueryMain(
+      'INSERT OR IGNORE INTO usuario_tenants (usuario_id, tenant_id, ativo) VALUES (?, ?, 1)',
+      [result.lastID, req.usuario.tenant_id]
+    );
 
     await sincronizarVinculosProjeto(result.lastID, projetoIds);
 

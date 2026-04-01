@@ -145,9 +145,10 @@ function Login() {
         codigo_acesso: cadastroForm.codigo_acesso.trim(),
       });
 
-      setSucesso(`Conta criada com 30 dias de teste. Usuário: ${response.data?.usuario || usuario}`);
+      const loginCriado = response.data?.usuario || usuario;
+      setSucesso(`Conta criada com 30 dias de teste. Usuário: ${loginCriado}`);
       setModo('login');
-      setLoginForm((prev) => ({ ...prev, usuario }));
+      setLoginForm((prev) => ({ ...prev, usuario: loginCriado }));
       setCadastroForm({ nome: '', empresa: '', email: '', usuario: '', senha: '', codigo_acesso: '' });
       setUsuarioManual(false);
     } catch (error) {

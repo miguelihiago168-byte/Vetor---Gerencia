@@ -13,7 +13,13 @@ const { auth, isAdm } = require('../middleware/auth');
 const router = express.Router();
 const GLOBAL_SIGNUP_CODE = process.env.GLOBAL_SIGNUP_CODE || '052298';
 
-const normalizeLogin = (value) => String(value || '').trim().replace(/\s+/g, '').toLowerCase();
+const normalizeLogin = (value) => String(value || '')
+  .trim()
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/\s+/g, '')
+  .replace(/[^a-zA-Z0-9._-]/g, '')
+  .toLowerCase();
 const normalizeName = (value) => String(value || '')
   .normalize('NFD')
   .replace(/[\u0300-\u036f]/g, '')
@@ -345,8 +351,8 @@ router.post('/register', [
 
     const senhaHash = await bcrypt.hash(String(senha), 10);
     const userInsert = await runQuery(
-      `INSERT INTO usuarios (login, senha, nome, email, perfil, funcao, setor, is_gestor, is_adm, tenant_id, ativo)
-       VALUES (?, ?, ?, ?, 'ADM', 'ADM', 'Administrativo', 1, 1, ?, 1)`,
+      `INSERT INTO usuarios (login, senha, nome, email, perfil, funcao, setor, is_gestor, is_adm, tenant_id, ativo, primeiro_acesso_pendente)
+       VALUES (?, ?, ?, ?, 'ADM', 'ADM', 'Administrativo', 1, 1, ?, 1, 1)`,
       [usuarioLimpo, senhaHash, String(nome || '').trim(), emailNormalizado, tenantId]
     );
 

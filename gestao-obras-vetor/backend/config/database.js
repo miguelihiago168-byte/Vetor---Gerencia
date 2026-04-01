@@ -111,6 +111,27 @@ const ensureTenantDatabase = async (tenantId) => {
 
   const tenantPath = getTenantDbPath(numericTenantId);
   if (!fs.existsSync(tenantPath)) {
+  // Detectar banco stale (ex: arquivo de dev em produção): compara criado_em do tenant no banco principal
+  if (fs.existsSync(tenantPath)) {
+    try {
+      const mainTenant = await withDbGet(mainDb, 'SELECT criado_em FROM tenants WHERE id = ?', [numericTenantId]);
+      if (mainTenant && mainTenant.criado_em) {
+        const testConn = await createConnection(tenantPath);
+        const fileRecord = await withDbGet(testConn, 'SELECT criado_em FROM tenants WHERE id = ?', [numericTenantId]).catch(() => null);
+        await new Promise((r) => testConn.close(() => r()));
+        if (!fileRecord || fileRecord.criado_em !== mainTenant.criado_em) {
+          // Arquivo stale: metadados do tenant não batem com banco principal → recriar
+          if (tenantDbMap.has(numericTenantId)) {
+            try { const old = tenantDbMap.get(numericTenantId); await new Promise((r) => old.close(() => r())); } catch (_) {}
+            tenantDbMap.delete(numericTenantId);
+          }
+          fs.unlinkSync(tenantPath);
+        }
+      }
+    } catch (_) { /* em caso de erro na verificação, usa o arquivo existente */ }
+  }
+
+  if (!fs.existsSync(tenantPath)) {
     fs.copyFileSync(dbPath, tenantPath);
     const conn = await createConnection(tenantPath);
     try {
@@ -168,11 +189,16 @@ const allQuery = async (sql, params = []) => {
   return withDbAll(conn, sql, params);
 };
 
+const runQueryMain = (sql, params = []) => withDbRun(mainDb, sql, params);
+const getQueryMain = (sql, params = []) => withDbGet(mainDb, sql, params);
+
 module.exports = {
   db: mainDb,
   runQuery,
   getQuery,
   allQuery,
+  runQueryMain,
+  getQueryMain,
   runWithTenantContext,
   ensureTenantDatabase
 };
