@@ -40,13 +40,34 @@ jobs:
           test -d "$BASE_DIR/nginx"
 
           rm -rf deploy_bundle
-          mkdir -p deploy_bundle
+          mkdir -p deploy_bundle/backend deploy_bundle/frontend deploy_bundle/nginx
+
           cp -R "$BASE_DIR/docker-compose.yml" deploy_bundle/
           if [ -f "$BASE_DIR/.dockerignore" ]; then cp -R "$BASE_DIR/.dockerignore" deploy_bundle/; fi
-          cp -R "$BASE_DIR/backend" deploy_bundle/
-          cp -R "$BASE_DIR/frontend" deploy_bundle/
-          cp -R "$BASE_DIR/nginx" deploy_bundle/
-          ls -la deploy_bundle
+
+          # Backend: envia somente código/config necessários para build, excluindo dados e artefatos pesados
+          rsync -a --delete \
+            --exclude node_modules \
+            --exclude database \
+            --exclude uploads \
+            --exclude logs \
+            --exclude "*.log" \
+            --exclude .env \
+            "$BASE_DIR/backend/" "deploy_bundle/backend/"
+
+          # Frontend: exclui dependências e artefatos de build locais
+          rsync -a --delete \
+            --exclude node_modules \
+            --exclude dist \
+            --exclude build \
+            --exclude .vite \
+            "$BASE_DIR/frontend/" "deploy_bundle/frontend/"
+
+          rsync -a --delete "$BASE_DIR/nginx/" "deploy_bundle/nginx/"
+
+          echo "Tamanho do pacote de deploy:"
+          du -sh deploy_bundle
+          du -sh deploy_bundle/* || true
 
       - name: Copiar somente arquivos necessários para EC2
         uses: appleboy/scp-action@v0.1.7
@@ -81,7 +102,6 @@ jobs:
 
             echo '${{ secrets.BACKEND_ENV }}' > backend/.env
 
-            sudo docker compose down --remove-orphans || true
             sudo docker compose up -d --build
 
 # Deploy com chaves configuradas
