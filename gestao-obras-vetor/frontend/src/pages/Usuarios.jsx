@@ -240,15 +240,13 @@ function Usuarios() {
     };
 
     if (!editingUserId || formData.senha) payload.senha = formData.senha;
-    // Protege: usuário não pode alterar o próprio perfil de acesso
-    if (editingUserId === usuarioLogado?.id) delete payload.perfil;
 
     try {
       if (editingUserId) {
-        await updateUsuario(editingUserId, payload);
+        const res = await updateUsuario(editingUserId, payload);
         setSucesso('Usuário atualizado com sucesso.');
         if (editingUserId === usuarioLogado?.id) {
-          atualizarUsuarioLogado({ nome: payload.nome, email: payload.email });
+          atualizarUsuarioLogado(res?.data?.usuario || payload);
         }
       } else {
         const res = await createUsuario(payload);
@@ -931,8 +929,6 @@ function Usuarios() {
                     className="form-select"
                     value={formData.perfil}
                     onChange={(e) => setFormData({ ...formData, perfil: e.target.value })}
-                    disabled={editingUserId === usuarioLogado?.id}
-                    title={editingUserId === usuarioLogado?.id ? 'Você não pode alterar o próprio perfil de acesso.' : undefined}
                   >
                     {PERFIS.map((item) => (
                       <option key={item} value={item}>{item}</option>

@@ -2,6 +2,8 @@
 
 Sistema completo de gestão de obras com controle de EAP e RDO.
 
+Última atualização de documentação: 01/04/2026.
+
 ## 🚀 Tecnologias
 
 ### Backend
