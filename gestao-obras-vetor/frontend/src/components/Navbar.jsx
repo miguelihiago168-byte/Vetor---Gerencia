@@ -166,7 +166,11 @@ function Navbar() {
       <div className="navbar-container">
         <div className="navbar-content">
           <NavLink to="/projetos" className="navbar-brand">
-            <span>Vetor</span> Gestão de Obras
+            <div className="navbar-brand-left">
+              <img src="/logo_vetor.png" alt="Vetor" className="navbar-logo-img" />
+              <span className="navbar-brand-name">Vetor</span>
+            </div>
+            <span className="navbar-brand-subtitle">Gestão de Obras</span>
           </NavLink>
 
           <div className="navbar-main">
@@ -256,10 +260,10 @@ function Navbar() {
           </div>
 
           <div className="navbar-account">
-            <span className="navbar-user">
+            <NavLink to="/perfil" className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`} style={{ marginRight: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
               <User size={16} />
-              {usuario?.nome}
-            </span>
+              Perfil
+            </NavLink>
             <button onClick={handleLogout} className="btn btn-danger" style={{ padding: '10px 14px' }}>
               <LogOut size={16} />
               Sair

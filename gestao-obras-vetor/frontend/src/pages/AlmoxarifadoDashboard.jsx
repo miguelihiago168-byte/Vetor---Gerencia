@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import AlmoxarifadoLayout from '../components/AlmoxarifadoLayout';
 import { getDashboardAlmoxarifado } from '../services/api';
+import { useNotification } from '../context/NotificationContext';
 import { formatMoneyBR } from '../utils/currency';
 
 const formatBRL = formatMoneyBR;
@@ -9,9 +10,9 @@ const formatBRL = formatMoneyBR;
 function AlmoxarifadoDashboard() {
   const { projetoId } = useParams();
   const navigate = useNavigate();
+  const { error } = useNotification();
   const [dados, setDados] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [erro, setErro] = useState('');
 
   useEffect(() => {
     const carregar = async () => {
@@ -19,8 +20,8 @@ function AlmoxarifadoDashboard() {
         setLoading(true);
         const res = await getDashboardAlmoxarifado(projetoId);
         setDados(res.data);
-      } catch (error) {
-        setErro(error?.response?.data?.erro || 'Erro ao carregar dashboard do almoxarifado.');
+      } catch (err) {
+        error(err?.response?.data?.erro || 'Erro ao carregar dashboard do almoxarifado.', 7000);
       } finally {
         setLoading(false);
       }
@@ -39,7 +40,6 @@ function AlmoxarifadoDashboard() {
       )}
     >
 
-        {erro && <div className="alert alert-error">{erro}</div>}
         {loading && <div className="loading"><div className="spinner"></div></div>}
 
         {!loading && dados && (

@@ -282,14 +282,17 @@ router.put('/:id', [auth, isGestor], async (req, res) => {
   try {
     const { id } = req.params;
     const { nome, empresa_responsavel, empresa_executante, prazo_termino, cidade, usuarios } = req.body;
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(400).json({ erro: 'Tenant não definido.' });
 
-    const projetoAnterior = await getQuery('SELECT * FROM projetos WHERE id = ?', [id]);
+    const projetoAnterior = await getQuery('SELECT * FROM projetos WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    if (!projetoAnterior) return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
 
     await runQuery(`
       UPDATE projetos 
       SET nome = ?, empresa_responsavel = ?, empresa_executante = ?, prazo_termino = ?, cidade = ?, atualizado_em = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `, [nome, empresa_responsavel, empresa_executante, prazo_termino, cidade, id]);
+      WHERE id = ? AND tenant_id = ?
+    `, [nome, empresa_responsavel, empresa_executante, prazo_termino, cidade, id, tenantId]);
 
     // Atualizar usuários do projeto
     if (usuarios) {
@@ -317,13 +320,18 @@ router.put('/:id', [auth, isGestor], async (req, res) => {
 router.delete('/:id', [auth, isGestor], async (req, res) => {
   try {
     const { id } = req.params;
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(400).json({ erro: 'Tenant não definido.' });
+
+    const projetoAnterior = await getQuery('SELECT * FROM projetos WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    if (!projetoAnterior) return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
 
     await runQuery(
-      'UPDATE projetos SET ativo = 0, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
-      [id]
+      'UPDATE projetos SET ativo = 0, atualizado_em = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?',
+      [id, tenantId]
     );
 
-    await registrarAuditoria('projetos', id, 'DELETE', null, { ativo: 0 }, req.usuario.id);
+    await registrarAuditoria('projetos', id, 'DELETE', projetoAnterior, { ativo: 0 }, req.usuario.id);
 
     res.json({ mensagem: 'Projeto desativado com sucesso.' });
 
@@ -337,16 +345,18 @@ router.delete('/:id', [auth, isGestor], async (req, res) => {
 router.patch('/:id/arquivar', [auth, isGestor], async (req, res) => {
   try {
     const { id } = req.params;
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(400).json({ erro: 'Tenant não definido.' });
 
-    const projetoAnterior = await getQuery('SELECT * FROM projetos WHERE id = ?', [id]);
-    if (!projetoAnterior) return res.status(404).json({ erro: 'Projeto não encontrado.' });
+    const projetoAnterior = await getQuery('SELECT * FROM projetos WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    if (!projetoAnterior) return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
 
     await runQuery(
-      'UPDATE projetos SET arquivado = 1, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
-      [id]
+      'UPDATE projetos SET arquivado = 1, atualizado_em = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?',
+      [id, tenantId]
     );
 
-    const projetoNovo = await getQuery('SELECT * FROM projetos WHERE id = ?', [id]);
+    const projetoNovo = await getQuery('SELECT * FROM projetos WHERE id = ? AND tenant_id = ?', [id, tenantId]);
     await registrarAuditoria('projetos', id, 'ARCHIVE', projetoAnterior, projetoNovo, req.usuario.id);
 
     res.json({ mensagem: 'Projeto arquivado com sucesso.', projeto: projetoNovo });
@@ -361,16 +371,18 @@ router.patch('/:id/arquivar', [auth, isGestor], async (req, res) => {
 router.patch('/:id/desarquivar', [auth, isGestor], async (req, res) => {
   try {
     const { id } = req.params;
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(400).json({ erro: 'Tenant não definido.' });
 
-    const projetoAnterior = await getQuery('SELECT * FROM projetos WHERE id = ?', [id]);
-    if (!projetoAnterior) return res.status(404).json({ erro: 'Projeto não encontrado.' });
+    const projetoAnterior = await getQuery('SELECT * FROM projetos WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    if (!projetoAnterior) return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
 
     await runQuery(
-      'UPDATE projetos SET arquivado = 0, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
-      [id]
+      'UPDATE projetos SET arquivado = 0, atualizado_em = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?',
+      [id, tenantId]
     );
 
-    const projetoNovo = await getQuery('SELECT * FROM projetos WHERE id = ?', [id]);
+    const projetoNovo = await getQuery('SELECT * FROM projetos WHERE id = ? AND tenant_id = ?', [id, tenantId]);
     await registrarAuditoria('projetos', id, 'UNARCHIVE', projetoAnterior, projetoNovo, req.usuario.id);
 
     res.json({ mensagem: 'Projeto desarchivado com sucesso.', projeto: projetoNovo });
@@ -386,27 +398,29 @@ router.post('/:destinoId/copiar-eap', [auth, isGestor], async (req, res) => {
   try {
     const destinoId = Number(req.params.destinoId);
     const origemId = Number(req.body.origem_projeto_id);
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(400).json({ erro: 'Tenant não definido.' });
 
     if (!origemId || !destinoId || origemId === destinoId) {
       return res.status(400).json({ erro: 'IDs de origem e destino inválidos.' });
     }
 
-    const destino = await getQuery('SELECT id FROM projetos WHERE id = ? AND ativo = 1', [destinoId]);
-    if (!destino) return res.status(404).json({ erro: 'Projeto destino não encontrado.' });
+    const destino = await getQuery('SELECT id FROM projetos WHERE id = ? AND ativo = 1 AND tenant_id = ?', [destinoId, tenantId]);
+    if (!destino) return res.status(404).json({ erro: 'Projeto destino não encontrado ou não pertence ao seu tenant.' });
 
-    const origem = await getQuery('SELECT id FROM projetos WHERE id = ? AND ativo = 1', [origemId]);
-    if (!origem) return res.status(404).json({ erro: 'Projeto origem não encontrado.' });
+    const origem = await getQuery('SELECT id FROM projetos WHERE id = ? AND ativo = 1 AND tenant_id = ?', [origemId, tenantId]);
+    if (!origem) return res.status(404).json({ erro: 'Projeto origem não encontrado ou não pertence ao seu tenant.' });
 
     // Verificar se destino já tem atividades
-    const existentes = await getQuery('SELECT COUNT(*) as total FROM atividades_eap WHERE projeto_id = ?', [destinoId]);
+    const existentes = await getQuery('SELECT COUNT(*) as total FROM atividades_eap WHERE projeto_id = ? AND tenant_id = ?', [destinoId, tenantId]);
     if (existentes.total > 0) {
       return res.status(409).json({ erro: 'O projeto destino já possui EAP configurada.' });
     }
 
     // Buscar todas as atividades da origem ordenadas por hierarquia (pai antes de filho)
     const atividades = await allQuery(
-      'SELECT * FROM atividades_eap WHERE projeto_id = ? ORDER BY CASE WHEN pai_id IS NULL THEN 0 ELSE 1 END ASC, ordem ASC, id ASC',
-      [origemId]
+      'SELECT * FROM atividades_eap WHERE projeto_id = ? AND tenant_id = ? ORDER BY CASE WHEN pai_id IS NULL THEN 0 ELSE 1 END ASC, ordem ASC, id ASC',
+      [origemId, tenantId]
     );
 
     if (atividades.length === 0) {

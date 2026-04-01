@@ -2,15 +2,16 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import AlmoxarifadoLayout from '../components/AlmoxarifadoLayout';
 import { getRelatorioPerdasAlmox } from '../services/api';
+import { useNotification } from '../context/NotificationContext';
 import { formatMoneyBR } from '../utils/currency';
 
 const formatBRL = formatMoneyBR;
 
 function AlmoxPerdas() {
   const { projetoId } = useParams();
+  const { error } = useNotification();
   const [perdas, setPerdas] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [erro, setErro] = useState('');
 
   useEffect(() => {
     const carregar = async () => {
@@ -18,8 +19,8 @@ function AlmoxPerdas() {
         setLoading(true);
         const res = await getRelatorioPerdasAlmox(projetoId);
         setPerdas(res.data || []);
-      } catch (error) {
-        setErro(error?.response?.data?.erro || 'Erro ao carregar perdas.');
+      } catch (err) {
+        error(err?.response?.data?.erro || 'Erro ao carregar perdas.', 7000);
       } finally {
         setLoading(false);
       }
@@ -30,7 +31,6 @@ function AlmoxPerdas() {
 
   return (
     <AlmoxarifadoLayout title="Perdas">
-      {erro && <div className="alert alert-error">{erro}</div>}
       {loading ? (
         <div className="loading"><div className="spinner"></div></div>
       ) : (

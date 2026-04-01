@@ -4,16 +4,17 @@ import Navbar from '../components/Navbar';
 import { getAtividadesEAP, recalcularEapProjeto, deleteAtividade } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
+import { useNotification } from '../context/NotificationContext';
 import { Activity, Plus, Eye, ChevronRight, ChevronDown, Trash2 } from 'lucide-react';
 
 function EAP() {
   const { projetoId } = useParams();
   const navigate = useNavigate();
   const { isGestor } = useAuth();
-  const { confirm, alert } = useDialog();
+  const { confirm } = useDialog();
+  const { success, error } = useNotification();
   const [atividades, setAtividades] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [erro, setErro] = useState('');
   const [expandedItems, setExpandedItems] = useState(new Set());
 
   useEffect(() => {
@@ -27,9 +28,9 @@ function EAP() {
       const response = await getAtividadesEAP(projetoId);
       console.log('EAP carregada:', response.data);
       setAtividades(response.data || []);
-    } catch (error) {
-      console.error('Erro ao carregar EAP:', error);
-      setErro('Erro ao carregar EAP: ' + (error.response?.data?.erro || error.message));
+    } catch (err) {
+      console.error('Erro ao carregar EAP:', err);
+      error('Erro ao carregar EAP: ' + (err.response?.data?.erro || err.message), 7000);
     } finally {
       setLoading(false);
     }
@@ -56,13 +57,10 @@ function EAP() {
 
     try {
       await deleteAtividade(atividade.id);
-      await alert({ title: 'EAP', message: 'Atividade excluída com sucesso.' });
+      success('Atividade excluída com sucesso.', 5000);
       await carregarAtividades();
-    } catch (error) {
-      await alert({
-        title: 'Erro',
-        message: 'Erro ao excluir atividade: ' + (error.response?.data?.erro || error.message)
-      });
+    } catch (err) {
+      error('Erro ao excluir atividade: ' + (err.response?.data?.erro || err.message), 7000);
     }
   };
 
@@ -256,10 +254,10 @@ function EAP() {
                 if (!ok) return;
                 try {
                   const resp = await recalcularEapProjeto(projetoId);
-                  await alert({ title: 'EAP', message: resp.data?.mensagem || 'EAP recalculada.' });
+                  success(resp.data?.mensagem || 'EAP recalculada.', 5000);
                   carregarAtividades();
-                } catch (error) {
-                  await alert({ title: 'Erro', message: 'Erro ao recalcular EAP: ' + (error.response?.data?.erro || error.message) });
+                } catch (err) {
+                  error('Erro ao recalcular EAP: ' + (err.response?.data?.erro || err.message), 7000);
                 }
               }}>
                 Recalcular EAP
@@ -267,8 +265,6 @@ function EAP() {
             )}
           </div>
         </div>
-
-        {erro && <div className="alert alert-error" style={{ marginBottom: '16px' }}>{erro}</div>}
 
         {hierarchy.length === 0 ? (
           <div className="card text-center" style={{ padding: '60px' }}>

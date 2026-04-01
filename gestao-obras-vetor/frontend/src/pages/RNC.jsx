@@ -110,23 +110,30 @@ function RNC() {
           <div className="rnc-grid">
             {rncs.map(rnc => {
               const isEncerrada = rnc.status === 'Encerrada';
+              const cardStatusClass = rnc.status === 'Encerrada'
+                ? 'rnc-card-encerrada'
+                : rnc.status === 'Em análise'
+                  ? 'rnc-card-analise'
+                  : 'rnc-card-aberta';
               const dataAbertura = formatShortDate(rnc.criado_em);
               const dataPrevista = formatShortDate(rnc.data_prevista_encerramento);
 
               return (
                 <div
                   key={rnc.id}
-                  className="card rnc-card"
+                  className={`card rnc-card ${cardStatusClass}`}
                   onClick={() => navigate(`/projeto/${projetoId}/rnc/${rnc.id}`)}
                   title="Ver detalhes"
                 >
-                  {/* Badge de status */}
-                  <span className={getBadgeClass(rnc.status)}>
-                    {statusLabel(rnc.status)}
-                  </span>
+                  <div className="rnc-card-head">
+                    {/* Título */}
+                    <h3 className="rnc-title">{rnc.titulo || `RNC #${rnc.id}`}</h3>
 
-                  {/* Título */}
-                  <h3 className="rnc-title">{rnc.titulo || `RNC #${rnc.id}`}</h3>
+                    {/* Badge de status */}
+                    <span className={getBadgeClass(rnc.status)}>
+                      {statusLabel(rnc.status)}
+                    </span>
+                  </div>
 
                   {/* Datas compactas */}
                   <div className="rnc-dates">

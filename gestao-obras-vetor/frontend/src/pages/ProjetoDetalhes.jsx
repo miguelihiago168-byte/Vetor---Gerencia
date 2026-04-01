@@ -266,17 +266,21 @@ function ProjetoDetalhes() {
 
         {/* ── CABEÇALHO ──────────────────────────────────────────────────── */}
         <div style={{
-          background: 'linear-gradient(135deg, #1e40af 0%, #7c3aed 100%)',
-          borderRadius: '16px', padding: '28px 32px', color: 'white',
-          marginBottom: '28px', boxShadow: '0 4px 20px rgba(30,64,175,0.25)'
+          background: 'linear-gradient(135deg, var(--project-panel-bg-start) 0%, var(--project-panel-bg-end) 100%)',
+          border: '1px solid var(--border-default)',
+          borderRadius: '16px',
+          padding: '24px 28px',
+          color: 'var(--text-primary)',
+          marginBottom: '28px',
+          boxShadow: 'var(--shadow-soft)'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
             <div>
-              <div style={{ fontSize: '11px', opacity: 0.7, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              <div style={{ fontSize: '11px', color: 'var(--gray-400)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>
                 Painel do Projeto
               </div>
               <h1 style={{ margin: 0, fontSize: '26px', fontWeight: 700 }}>{projeto?.nome}</h1>
-              <div style={{ marginTop: '10px', fontSize: '13px', opacity: 0.85, display: 'flex', gap: '18px', flexWrap: 'wrap' }}>
+              <div style={{ marginTop: '10px', fontSize: '13px', color: 'var(--gray-500)', display: 'flex', gap: '18px', flexWrap: 'wrap', fontWeight: 600 }}>
                 <span>🏢 {projeto?.empresa_responsavel}</span>
                 <span>🏗️ {projeto?.empresa_executante}</span>
                 <span>📍 {projeto?.cidade}</span>
@@ -284,17 +288,37 @@ function ProjetoDetalhes() {
             </div>
             {diasRestantes !== null && (
               <div style={{
-                background: 'rgba(255,255,255,0.15)', borderRadius: '12px',
-                padding: '14px 22px', textAlign: 'center', backdropFilter: 'blur(4px)',
+                background: diasRestantes < 0
+                  ? 'var(--badge-red-bg)'
+                  : diasRestantes <= 30
+                    ? 'var(--badge-yellow-bg)'
+                    : 'var(--badge-blue-bg)',
+                border: diasRestantes < 0
+                  ? '1px solid var(--badge-red-color)'
+                  : diasRestantes <= 30
+                    ? '1px solid var(--badge-yellow-color)'
+                    : '1px solid var(--badge-blue-color)',
+                borderRadius: '12px',
+                padding: '12px 18px',
+                textAlign: 'center',
                 minWidth: '120px',
               }}>
-                <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '4px', textTransform: 'uppercase' }}>Prazo</div>
-                <div style={{ fontSize: '32px', fontWeight: 800, lineHeight: 1 }}>
+                <div style={{ fontSize: '11px', color: 'var(--gray-500)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: 700 }}>Prazo</div>
+                <div style={{
+                  fontSize: '32px',
+                  fontWeight: 800,
+                  lineHeight: 1,
+                  color: diasRestantes < 0
+                    ? 'var(--badge-red-color)'
+                    : diasRestantes <= 30
+                      ? 'var(--badge-yellow-color)'
+                      : 'var(--badge-blue-color)'
+                }}>
                   {diasRestantes >= 0 ? diasRestantes : 0}
                 </div>
-                <div style={{ fontSize: '12px', opacity: 0.8 }}>dias restantes</div>
+                <div style={{ fontSize: '12px', color: 'var(--gray-500)', fontWeight: 600 }}>dias restantes</div>
                 {diasRestantes < 0 && (
-                  <div style={{ fontSize: '11px', background: 'var(--badge-red-color)', color: 'white', borderRadius: '4px', padding: '2px 6px', marginTop: '6px' }}>
+                  <div style={{ fontSize: '11px', background: 'var(--badge-red-color)', color: 'white', borderRadius: '4px', padding: '2px 6px', marginTop: '6px', fontWeight: 700 }}>
                     VENCIDO
                   </div>
                 )}

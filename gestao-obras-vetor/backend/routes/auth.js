@@ -2,6 +2,8 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
+const fs = require('fs');
+const path = require('path');
 const { body, validationResult } = require('express-validator');
 const { getQuery, allQuery, runQuery } = require('../config/database');
 const { inferirPerfil } = require('../constants/access');
@@ -9,34 +11,192 @@ const { ensureAccessSchema } = require('../middleware/rbac');
 const { auth, isAdm } = require('../middleware/auth');
 
 const router = express.Router();
+const GLOBAL_SIGNUP_CODE = process.env.GLOBAL_SIGNUP_CODE || '052298';
+
+const normalizeLogin = (value) => String(value || '').trim().replace(/\s+/g, '').toLowerCase();
+const normalizeName = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .replace(/\s+/g, '')
+  .replace(/[^a-z0-9]/g, '');
+
+const generateUniqueLoginFromName = async (name) => {
+  const base = normalizeName(name).slice(0, 14) || 'usuario';
+  for (let i = 0; i < 50; i += 1) {
+    const suffix = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+    const candidate = `${base}${suffix}`;
+    const exists = await getQuery('SELECT id FROM usuarios WHERE login = ?', [candidate]);
+    if (!exists) return candidate;
+  }
+  throw new Error('Não foi possível gerar login único.');
+};
+
+const isBcryptHash = (value) => /^\$2[aby]\$\d{2}\$/.test(String(value || ''));
+
+const verifyPasswordWithLegacySupport = async (plainPassword, storedPassword) => {
+  const senhaDigitada = String(plainPassword || '');
+  const senhaArmazenada = String(storedPassword || '');
+
+  if (!senhaArmazenada) return false;
+
+  if (isBcryptHash(senhaArmazenada)) {
+    return bcrypt.compare(senhaDigitada, senhaArmazenada);
+  }
+
+  // Compatibilidade com bases antigas que possam ter senha sem hash.
+  return senhaDigitada === senhaArmazenada;
+};
+
+const ensureTenantTrialColumns = async () => {
+  try { await runQuery('ALTER TABLE tenants ADD COLUMN trial_expires_at DATETIME'); } catch (_) {}
+  try { await runQuery('ALTER TABLE tenants ADD COLUMN trial_ativo INTEGER DEFAULT 1'); } catch (_) {}
+};
+
+const generateSlug = (nomeEmpresa) => {
+  const base = String(nomeEmpresa || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)+/g, '')
+    .slice(0, 40);
+  const suffix = Math.random().toString(36).slice(2, 7);
+  return `${base || 'empresa'}-${suffix}`;
+};
+
+const deleteRowsByIn = async (table, column, ids) => {
+  if (!Array.isArray(ids) || ids.length === 0) return;
+  const placeholders = ids.map(() => '?').join(',');
+  try {
+    await runQuery(`DELETE FROM ${table} WHERE ${column} IN (${placeholders})`, ids);
+  } catch (_) {}
+};
+
+const purgeTenantData = async (tenantId) => {
+  const numericTenantId = Number(tenantId);
+  if (!Number.isInteger(numericTenantId) || numericTenantId <= 0) return;
+
+  const projectRows = await allQuery('SELECT id FROM projetos WHERE tenant_id = ?', [numericTenantId]).catch(() => []);
+  const projetoIds = projectRows.map((r) => Number(r.id)).filter(Boolean);
+
+  const rdoRows = await allQuery('SELECT id FROM rdos WHERE tenant_id = ?', [numericTenantId]).catch(() => []);
+  const rdoIds = rdoRows.map((r) => Number(r.id)).filter(Boolean);
+
+  const rncRows = await allQuery('SELECT id FROM rnc WHERE tenant_id = ?', [numericTenantId]).catch(() => []);
+  const rncIds = rncRows.map((r) => Number(r.id)).filter(Boolean);
+
+  const atividadeRows = await allQuery('SELECT id FROM atividades_eap WHERE tenant_id = ?', [numericTenantId]).catch(() => []);
+  const atividadeIds = atividadeRows.map((r) => Number(r.id)).filter(Boolean);
+
+  await deleteRowsByIn('projeto_usuarios', 'projeto_id', projetoIds);
+  await deleteRowsByIn('requisicoes', 'projeto_id', projetoIds);
+  await deleteRowsByIn('pedidos_compra', 'projeto_id', projetoIds);
+  await deleteRowsByIn('anexos', 'rdo_id', rdoIds);
+  await deleteRowsByIn('rdo_atividades', 'rdo_id', rdoIds);
+  await deleteRowsByIn('rdo_logs', 'rdo_id', rdoIds);
+  await deleteRowsByIn('rdo_mao_obra', 'rdo_id', rdoIds);
+  await deleteRowsByIn('rdo_clima', 'rdo_id', rdoIds);
+  await deleteRowsByIn('rdo_comentarios', 'rdo_id', rdoIds);
+  await deleteRowsByIn('rdo_materiais', 'rdo_id', rdoIds);
+  await deleteRowsByIn('rdo_ocorrencias', 'rdo_id', rdoIds);
+  await deleteRowsByIn('rdo_assinaturas', 'rdo_id', rdoIds);
+  await deleteRowsByIn('rdo_fotos', 'rdo_id', rdoIds);
+  await deleteRowsByIn('historico_atividades', 'rdo_id', rdoIds);
+  await deleteRowsByIn('rnc_anexos', 'rnc_id', rncIds);
+  await deleteRowsByIn('historico_atividades', 'atividade_eap_id', atividadeIds);
+
+  try { await runQuery('DELETE FROM atividades_eap WHERE tenant_id = ?', [numericTenantId]); } catch (_) {}
+  try { await runQuery('DELETE FROM rdos WHERE tenant_id = ?', [numericTenantId]); } catch (_) {}
+  try { await runQuery('DELETE FROM rnc WHERE tenant_id = ?', [numericTenantId]); } catch (_) {}
+  try { await runQuery('DELETE FROM projetos WHERE tenant_id = ?', [numericTenantId]); } catch (_) {}
+  try { await runQuery('DELETE FROM auditoria WHERE tenant_id = ?', [numericTenantId]); } catch (_) {}
+  try { await runQuery('DELETE FROM convites WHERE tenant_id = ?', [numericTenantId]); } catch (_) {}
+
+  const vinculos = await allQuery('SELECT usuario_id FROM usuario_tenants WHERE tenant_id = ?', [numericTenantId]).catch(() => []);
+  const userIds = vinculos.map((r) => Number(r.usuario_id)).filter(Boolean);
+
+  for (const userId of userIds) {
+    const otherTenants = await allQuery(
+      'SELECT tenant_id FROM usuario_tenants WHERE usuario_id = ? AND tenant_id != ? AND ativo = 1',
+      [userId, numericTenantId]
+    ).catch(() => []);
+
+    if (otherTenants.length === 0) {
+      try { await runQuery('DELETE FROM usuarios WHERE id = ?', [userId]); } catch (_) {}
+    }
+  }
+
+  try { await runQuery('DELETE FROM usuario_tenants WHERE tenant_id = ?', [numericTenantId]); } catch (_) {}
+  try { await runQuery('DELETE FROM tenants WHERE id = ?', [numericTenantId]); } catch (_) {}
+
+  const tenantDbPath = path.join(__dirname, '..', 'database', 'tenants', `tenant_${numericTenantId}.db`);
+  try {
+    if (fs.existsSync(tenantDbPath)) fs.unlinkSync(tenantDbPath);
+  } catch (_) {}
+};
+
+const cleanupExpiredTrials = async () => {
+  await ensureTenantTrialColumns();
+  const expired = await allQuery(
+    `SELECT id FROM tenants
+     WHERE trial_ativo = 1
+       AND trial_expires_at IS NOT NULL
+       AND datetime(trial_expires_at) <= datetime('now')`
+  ).catch(() => []);
+
+  for (const t of expired) {
+    await purgeTenantData(Number(t.id));
+  }
+};
+
+setInterval(() => {
+  cleanupExpiredTrials().catch((err) => {
+    console.warn('Falha na limpeza periódica de trials:', err?.message || err);
+  });
+}, 60 * 60 * 1000).unref();
 
 // Login
 router.post('/login', [
-  body('login').isLength({ min: 6, max: 6 }).isNumeric(),
-  body('senha').isLength({ min: 6, max: 6 })
+  body('usuario').optional().isString(),
+  body('login').optional().isString(),
+  body('senha').isString().isLength({ min: 1, max: 72 })
 ], async (req, res) => {
   try {
     await ensureAccessSchema();
+    await cleanupExpiredTrials();
 
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ erro: 'Login ou senha inválidos.' });
+      return res.status(400).json({ erro: 'Usuário ou senha inválidos.' });
     }
 
-    const { login, senha } = req.body;
+    const usuarioInput = String(req.body.usuario || req.body.login || '').trim();
+    const { senha } = req.body;
+
+    if (!usuarioInput) {
+      return res.status(400).json({ erro: 'Informe usuário ou e-mail.' });
+    }
 
     const usuario = await getQuery(
-      'SELECT * FROM usuarios WHERE login = ? AND ativo = 1',
-      [login]
+      'SELECT * FROM usuarios WHERE ativo = 1 AND (login = ? OR lower(email) = lower(?))',
+      [usuarioInput, usuarioInput]
     );
 
     if (!usuario) {
       return res.status(401).json({ erro: 'Credenciais inválidas.' });
     }
 
-    const senhaValida = await bcrypt.compare(senha, usuario.senha);
+    const senhaValida = await verifyPasswordWithLegacySupport(senha, usuario.senha);
     if (!senhaValida) {
       return res.status(401).json({ erro: 'Credenciais inválidas.' });
+    }
+
+    // Migra automaticamente senha legada para bcrypt após login bem-sucedido.
+    if (!isBcryptHash(usuario.senha)) {
+      const senhaHashAtualizada = await bcrypt.hash(String(senha), 10);
+      await runQuery('UPDATE usuarios SET senha = ? WHERE id = ?', [senhaHashAtualizada, usuario.id]);
+      usuario.senha = senhaHashAtualizada;
     }
 
     const perfil = inferirPerfil(usuario);
@@ -57,6 +217,19 @@ router.post('/login', [
     }
 
     const tenantIdAtivo = tenantIds[0] || null;
+    if (!tenantIdAtivo) {
+      return res.status(403).json({ erro: 'Conta sem tenant ativo.' });
+    }
+
+    const tenant = await getQuery('SELECT id, trial_expires_at FROM tenants WHERE id = ? AND ativo = 1', [tenantIdAtivo]);
+    if (!tenant) {
+      return res.status(403).json({ erro: 'Tenant inativo ou inexistente.' });
+    }
+
+    if (tenant.trial_expires_at && new Date(tenant.trial_expires_at) <= new Date()) {
+      await purgeTenantData(tenantIdAtivo);
+      return res.status(403).json({ erro: 'Período de teste expirado. Conta e dados removidos.' });
+    }
 
     let obrasVinculadas = [];
     try {
@@ -105,6 +278,7 @@ router.post('/login', [
         perfil,
         setor: usuario.setor || null,
         setor_outro: usuario.setor_outro || null,
+        primeiro_acesso_pendente: Number(usuario.primeiro_acesso_pendente) === 1,
         obras_vinculadas: obrasVinculadas,
         is_gestor: usuario.is_gestor,
         is_adm: usuario.is_adm || 0,
@@ -121,15 +295,73 @@ router.post('/login', [
   }
 });
 
-// Registro público desativado
+// Registro público: cria tenant de teste por 30 dias
 router.post('/register', [
   body('nome').trim().notEmpty().withMessage('Nome é obrigatório.'),
+  body('empresa').trim().notEmpty().withMessage('Empresa é obrigatória.'),
   body('email').trim().isEmail().withMessage('E-mail inválido.'),
-  body('senha').isLength({ min: 6, max: 6 }).withMessage('A senha deve ter exatamente 6 caracteres.')
-], async (_req, res) => {
-  return res.status(403).json({
-    erro: 'Cadastro público desativado. Solicite um convite ao administrador.'
-  });
+  body('usuario').optional().isString(),
+  body('senha').isString().isLength({ min: 1, max: 72 }).withMessage('Senha inválida.'),
+  body('codigo_acesso').isString().notEmpty().withMessage('Código de acesso é obrigatório.')
+], async (req, res) => {
+  try {
+    await ensureTenantTrialColumns();
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ erro: errors.array()[0].msg });
+    }
+
+    const { nome, empresa, email, usuario, senha, codigo_acesso } = req.body;
+
+    if (String(codigo_acesso).trim() !== GLOBAL_SIGNUP_CODE) {
+      return res.status(403).json({ erro: 'Código global inválido para criação de conta.' });
+    }
+
+    const emailNormalizado = String(email || '').trim().toLowerCase();
+    const emailExistente = await getQuery('SELECT id FROM usuarios WHERE lower(email) = lower(?)', [emailNormalizado]);
+    if (emailExistente) {
+      return res.status(409).json({ erro: 'Já existe conta cadastrada com este e-mail.' });
+    }
+
+    let usuarioLimpo = normalizeLogin(usuario);
+    if (!usuarioLimpo) {
+      usuarioLimpo = await generateUniqueLoginFromName(nome);
+    }
+
+    const existente = await getQuery('SELECT id FROM usuarios WHERE login = ?', [usuarioLimpo]);
+    if (existente) {
+      return res.status(409).json({ erro: 'Usuário já existe. Tente novamente para gerar outro.' });
+    }
+
+    const trialExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const tenantNome = String(empresa || '').trim();
+    const tenantSlug = generateSlug(tenantNome);
+
+    const tenantInsert = await runQuery(
+      'INSERT INTO tenants (nome, slug, ativo, trial_expires_at, trial_ativo) VALUES (?, ?, 1, ?, 1)',
+      [tenantNome, tenantSlug, trialExpiresAt]
+    );
+    const tenantId = Number(tenantInsert.lastID);
+
+    const senhaHash = await bcrypt.hash(String(senha), 10);
+    const userInsert = await runQuery(
+      `INSERT INTO usuarios (login, senha, nome, email, perfil, funcao, setor, is_gestor, is_adm, tenant_id, ativo)
+       VALUES (?, ?, ?, ?, 'ADM', 'ADM', 'Administrativo', 1, 1, ?, 1)`,
+      [usuarioLimpo, senhaHash, String(nome || '').trim(), emailNormalizado, tenantId]
+    );
+
+    await runQuery('INSERT INTO usuario_tenants (usuario_id, tenant_id, ativo) VALUES (?, ?, 1)', [Number(userInsert.lastID), tenantId]);
+
+    return res.status(201).json({
+      mensagem: 'Conta de teste criada com sucesso.',
+      usuario: usuarioLimpo,
+      trial_expires_at: trialExpiresAt,
+      dias_teste: 30
+    });
+  } catch (error) {
+    console.error('Erro no cadastro público:', error);
+    return res.status(500).json({ erro: 'Erro ao criar conta de teste.' });
+  }
 });
 
 // Geração de convite (somente ADM)
@@ -269,8 +501,8 @@ router.post('/register/:token', [
 
     const senhaHash = await bcrypt.hash(senha, 10);
     const insertUser = await runQuery(
-      `INSERT INTO usuarios (login, senha, nome, email, perfil, funcao, setor, setor_outro, is_gestor, is_adm, tenant_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO usuarios (login, senha, nome, email, perfil, funcao, setor, setor_outro, is_gestor, is_adm, tenant_id, primeiro_acesso_pendente)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       [
         login,
         senhaHash,
@@ -321,6 +553,10 @@ router.post('/register/:token', [
         nome: String(nome).trim(),
         email,
         perfil: perfilConvite,
+        funcao: perfilConvite,
+        setor: convite.setor || 'Administrativo',
+        setor_outro: convite.setor_outro || null,
+        primeiro_acesso_pendente: true,
         tenant_id: Number(convite.tenant_id),
         tenant_ids: [Number(convite.tenant_id)],
         verificado: true

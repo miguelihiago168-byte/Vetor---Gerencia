@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { carregarPerfilUsuario } = require('./rbac');
 const { allQuery } = require('../config/database');
+const { runWithTenantContext, ensureTenantDatabase } = require('../config/database');
 const { PERFIS, inferirPerfil } = require('../constants/access');
 
 const auth = async (req, res, next) => {
@@ -62,7 +63,13 @@ const auth = async (req, res, next) => {
     req.tenantId = tenantIdAtivo;
     req.usuario.tenant_id = tenantIdAtivo;
 
-    next();
+    const isAuthRoute = String(req.originalUrl || '').startsWith('/api/auth');
+    if (isAuthRoute) {
+      return next();
+    }
+
+    await ensureTenantDatabase(tenantIdAtivo);
+    return runWithTenantContext(tenantIdAtivo, () => next());
   } catch (error) {
     res.status(401).json({ erro: 'Token inválido.' });
   }

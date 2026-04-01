@@ -89,7 +89,11 @@ cd 'c:\Apps\Vetor - Gerencia\gestao-obras-vetor\backend'
 
 
 # ou em produção/simulação com node direto:
+
 node server.js
+
+# (ou, se já estiver no diretório backend, apenas)
+# node server.js
 ```
 
 - **Passo 2 — Frontend:** depois que o backend estiver com `/api/health` retornando OK, inicie o Vite.

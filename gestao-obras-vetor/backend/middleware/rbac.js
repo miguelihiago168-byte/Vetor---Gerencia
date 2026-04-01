@@ -69,6 +69,7 @@ const ensureAccessSchema = async () => {
       try { await runQuery('ALTER TABLE usuarios ADD COLUMN funcao TEXT'); } catch (_) {}
       try { await runQuery('ALTER TABLE usuarios ADD COLUMN perfil_almoxarifado TEXT'); } catch (_) {}
       try { await runQuery('ALTER TABLE usuarios ADD COLUMN is_adm INTEGER DEFAULT 0'); } catch (_) {}
+      try { await runQuery('ALTER TABLE usuarios ADD COLUMN primeiro_acesso_pendente INTEGER DEFAULT 0'); } catch (_) {}
 
       await runQuery(`
         UPDATE usuarios
@@ -90,6 +91,11 @@ const ensureAccessSchema = async () => {
         UPDATE usuarios
         SET funcao = COALESCE(NULLIF(TRIM(funcao), ''), perfil)
       `);
+
+      await runQuery(`
+        UPDATE usuarios
+        SET primeiro_acesso_pendente = COALESCE(primeiro_acesso_pendente, 0)
+      `);
     })().catch((error) => {
       schemaReadyPromise = null;
       throw error;
@@ -103,7 +109,7 @@ const carregarPerfilUsuario = async (usuarioId) => {
   await ensureAccessSchema();
 
   const usuario = await getQuery(`
-    SELECT id, login, nome, email, funcao, is_gestor, COALESCE(is_adm, 0) AS is_adm, perfil_almoxarifado, perfil, setor, setor_outro, ativo, deletado_em
+    SELECT id, login, nome, email, funcao, is_gestor, COALESCE(is_adm, 0) AS is_adm, perfil_almoxarifado, perfil, setor, setor_outro, COALESCE(primeiro_acesso_pendente, 0) AS primeiro_acesso_pendente, ativo, deletado_em
     FROM usuarios
     WHERE id = ?
   `, [usuarioId]);

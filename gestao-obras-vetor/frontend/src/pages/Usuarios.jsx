@@ -7,7 +7,6 @@ import {
   createUsuario,
   updateUsuario,
   bulkUpdateUsuarios,
-  getNovoLogin,
   getProjetos,
   getMaoObraDireta,
   createMaoObraDireta,
@@ -16,7 +15,8 @@ import {
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
-import { Shield, UserPlus, Trash2, RotateCcw, Search, X, Users, UserCheck } from 'lucide-react';
+import { useNotification } from '../context/NotificationContext';
+import { Shield, UserPlus, Trash2, RotateCcw, Search, X, Users, UserCheck, Eye, EyeOff } from 'lucide-react';
 
 const PERFIS = ['ADM', 'Gestor Geral', 'Gestor Local', 'Gestor de Qualidade', 'Almoxarife', 'Fiscal'];
 const SETORES = ['Administrativo', 'Engenharia', 'Qualidade', 'Almoxarifado', 'Financeiro', 'Outro'];
@@ -34,9 +34,52 @@ const normalizarPerfilTela = (perfil) => {
   return perfil || 'ADM';
 };
 
+const normalizeName = (value) => {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[^a-z0-9]/g, '');
+};
+
+const buildUsernameFromName = (name) => {
+  const base = normalizeName(name).slice(0, 14) || 'usuario';
+  const suffix = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+  return `${base}${suffix}`;
+};
+
+const getPasswordStrength = (value) => {
+  const pwd = String(value || '');
+  if (!pwd) return { level: 'fraca', label: 'Fraca', color: '#ef4444', width: '0%' };
+
+  const upper = (pwd.match(/[A-Z]/g) || []).length;
+  const lower = (pwd.match(/[a-z]/g) || []).length;
+  const digits = (pwd.match(/\d/g) || []).length;
+  const special = (pwd.match(/[^A-Za-z0-9]/g) || []).length;
+
+  let score = 0;
+  if (pwd.length >= 6) score += 1;
+  if (pwd.length >= 8) score += 1;
+  if (pwd.length >= 12) score += 1;
+  if (upper > 0) score += 1;
+  if (lower > 0) score += 1;
+  if (digits > 0) score += 1;
+  if (digits >= 3) score += 1;
+  if (special > 0) score += 1;
+  if (special >= 2) score += 1;
+
+  if (score <= 3) return { level: 'fraca', label: 'Fraca', color: '#ef4444', width: '25%' };
+  if (score <= 6) return { level: 'medio', label: 'Médio', color: '#f59e0b', width: '50%' };
+  if (score <= 8) return { level: 'forte', label: 'Forte', color: '#10b981', width: '75%' };
+  return { level: 'extraforte', label: 'Extraforte', color: '#0ea5e9', width: '100%' };
+};
+
 function Usuarios() {
   const { projetoId } = useParams();
   const { perfil, usuario: usuarioLogado, atualizarUsuarioLogado } = useAuth();
+  const { confirm } = useDialog();
+  const { success: notifySuccess, error: notifyError } = useNotification();
 
   const podeGerenciar = perfil === 'Gestor Geral' || perfil === 'ADM';
 
@@ -49,6 +92,8 @@ function Usuarios() {
   const [showModal, setShowModal] = useState(false);
   const [editingUserId, setEditingUserId] = useState(null);
   const [loginGerado, setLoginGerado] = useState('');
+  const [usuarioManual, setUsuarioManual] = useState(false);
+  const [showSenha, setShowSenha] = useState(false);
 
   // Filtros
   const [filtroTexto, setFiltroTexto] = useState('');
@@ -65,9 +110,9 @@ function Usuarios() {
 
   const [formData, setFormData] = useState({
     nome: '',
+    login: '',
     email: '',
     senha: '',
-    pin: '',
     funcao: 'Administrativo',
     perfil: 'ADM',
     setor: 'Administrativo',
@@ -79,6 +124,35 @@ function Usuarios() {
   const [maoObra, setMaoObra] = useState([]);
   const [maoForm, setMaoForm] = useState({ nome: '', funcao: '' });
   const [maoEditId, setMaoEditId] = useState(null);
+
+  const resetFormularioUsuario = () => {
+    setEditingUserId(null);
+    setFormData({
+      nome: '',
+      login: '',
+      email: '',
+      senha: '',
+      funcao: 'Administrativo',
+      perfil: 'ADM',
+      setor: 'Administrativo',
+      setor_outro: '',
+      projeto_ids: [],
+      ativo: 1
+    });
+    setLoginGerado('');
+    setUsuarioManual(false);
+    setShowSenha(false);
+  };
+
+  const fecharModalUsuario = () => {
+    setShowModal(false);
+    resetFormularioUsuario();
+  };
+
+  const abrirNovoUsuario = () => {
+    resetFormularioUsuario();
+    setShowModal(true);
+  };
 
   const carregarDados = async (setor = filtroSetor) => {
     setLoading(true);
@@ -110,31 +184,29 @@ function Usuarios() {
   }, []);
 
   useEffect(() => {
-    if (showModal && !editingUserId) {
-      handleGerarLogin();
-    }
-  }, [showModal, editingUserId]);
+    if (!sucesso) return;
+    notifySuccess(sucesso, 5000);
+    setSucesso('');
+  }, [sucesso, notifySuccess]);
 
-  const handleGerarLogin = async () => {
-    try {
-      const res = await getNovoLogin();
-      setLoginGerado(res.data.login || '');
-    } catch (error) {
-      setErro('Erro ao gerar login.');
-    }
-  };
+  useEffect(() => {
+    if (!erro) return;
+    notifyError(erro, 7000);
+    setErro('');
+  }, [erro, notifyError]);
 
   const validarFormulario = () => {
     if (!formData.nome.trim()) return 'Preencha o nome.';
+    if (!formData.login.trim()) return 'Usuário é obrigatório.';
     if (formData.email.trim() && !/^\S+@\S+\.\S+$/.test(formData.email.trim())) return 'E-mail inválido.';
 
     if (!editingUserId) {
-      if (!/^\d{6}$/.test(formData.senha || '')) return 'A senha deve ter 6 dígitos numéricos.';
-    } else if (formData.senha && !/^\d{6}$/.test(formData.senha)) {
-      return 'A senha deve ter 6 dígitos numéricos.';
+      if (!formData.senha) return 'Preencha a senha.';
+    } else if (formData.senha && formData.senha.length > 72) {
+      return 'A senha deve ter no máximo 72 caracteres.';
     }
 
-    if (formData.pin && !/^\d{6}$/.test(formData.pin)) return 'O PIN deve ter 6 dígitos numéricos.';
+    if (!editingUserId && formData.senha.length > 72) return 'A senha deve ter no máximo 72 caracteres.';
     if (!FUNCOES.includes(formData.funcao)) return 'Função inválida.';
     if (!PERFIS.includes(formData.perfil)) return 'Perfil inválido.';
     if (!SETORES.includes(formData.setor)) return 'Setor inválido.';
@@ -157,8 +229,8 @@ function Usuarios() {
 
     const payload = {
       nome: formData.nome.trim(),
+      login: formData.login.trim(),
       email: formData.email.trim() || null,
-      pin: formData.pin || undefined,
       funcao: formData.funcao,
       perfil: normalizarPerfilParaApi(formData.perfil),
       setor: formData.setor,
@@ -168,7 +240,6 @@ function Usuarios() {
     };
 
     if (!editingUserId || formData.senha) payload.senha = formData.senha;
-    if (!editingUserId && loginGerado) payload.login = loginGerado;
     // Protege: usuário não pode alterar o próprio perfil de acesso
     if (editingUserId === usuarioLogado?.id) delete payload.perfil;
 
@@ -184,21 +255,7 @@ function Usuarios() {
         setSucesso(`Usuário criado com sucesso! Login: ${res.data?.usuario?.login || ''}`);
       }
 
-      setShowModal(false);
-      setEditingUserId(null);
-      setFormData({
-        nome: '',
-        email: '',
-        senha: '',
-        pin: '',
-        funcao: 'Administrativo',
-        perfil: 'ADM',
-        setor: 'Administrativo',
-        setor_outro: '',
-        projeto_ids: [],
-        ativo: 1
-      });
-      setLoginGerado('');
+      fecharModalUsuario();
       await carregarDados();
     } catch (error) {
       setErro(error.response?.data?.erro || 'Erro ao salvar usuário.');
@@ -213,9 +270,9 @@ function Usuarios() {
       setLoginGerado(dados.login || '');
       setFormData({
         nome: dados.nome || '',
+        login: dados.login || '',
         email: dados.email || '',
         senha: '',
-        pin: dados.pin || '',
         funcao: FUNCOES.includes(dados.funcao) ? dados.funcao : 'Administrativo',
         perfil: normalizarPerfilTela(dados.perfil),
         setor: dados.setor || 'Administrativo',
@@ -223,6 +280,8 @@ function Usuarios() {
         projeto_ids: dados.projeto_ids || (dados.projeto_id ? [dados.projeto_id] : []),
         ativo: dados.ativo ? 1 : 0
       });
+      setUsuarioManual(true);
+      setShowSenha(false);
       setShowModal(true);
     } catch (error) {
       setErro('Erro ao carregar usuário para edição.');
@@ -242,8 +301,8 @@ function Usuarios() {
   const desativar = async (id) => {
     const ok = await confirm({
       title: 'Desativar usuário',
-      message: 'Deseja desativar este usuário?',
-      confirmText: 'Desativar',
+      message: 'Tem certeza que deseja desativar este usuário?',
+      confirmText: 'Confirmar',
       cancelText: 'Cancelar'
     });
     if (!ok) return;
@@ -473,9 +532,6 @@ function Usuarios() {
           </div>
         </div>
 
-        {sucesso && <div className="alert alert-success">{sucesso}</div>}
-        {erro && <div className="alert alert-error">{erro}</div>}
-
         <div className="almox-layout">
           <aside className="almox-sidebar card">
             <h3 className="card-header" style={{ marginBottom: 12 }}>Menu</h3>
@@ -490,7 +546,7 @@ function Usuarios() {
               <>
                 {/* Barra de ações */}
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
-                  <button className="btn btn-primary" onClick={() => setShowModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <button className="btn btn-primary" onClick={abrirNovoUsuario} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <UserPlus size={16} /> Novo usuário
                   </button>
                   {filtrosAtivos && (
@@ -771,19 +827,46 @@ function Usuarios() {
       </div>
 
       {showModal && (
-        <div className="modal-overlay fade-in" role="dialog" aria-modal="true" onClick={() => { setShowModal(false); setEditingUserId(null); }}>
+        <div className="modal-overlay fade-in" role="dialog" aria-modal="true" onClick={fecharModalUsuario}>
           <div className="modal-card" style={{ maxWidth: '640px' }} onClick={(e) => e.stopPropagation()}>
             <div className="flex-between mb-2">
               <h2>{editingUserId ? 'Editar usuário' : 'Novo usuário'}</h2>
-              <button className="btn btn-secondary" onClick={() => { setShowModal(false); setEditingUserId(null); }}>Fechar</button>
+              <button className="btn btn-secondary" onClick={fecharModalUsuario}>Fechar</button>
             </div>
 
-            {erro && <div className="alert alert-error">{erro}</div>}
 
             <form onSubmit={handleSubmit}>
               <div className="form-group">
                 <label className="form-label">Nome *</label>
-                <input className="form-input" value={formData.nome} onChange={(e) => setFormData({ ...formData, nome: e.target.value })} required />
+                <input
+                  className="form-input"
+                  value={formData.nome}
+                  onChange={(e) => {
+                    const nome = e.target.value;
+                    const usuarioGerado = !editingUserId && !usuarioManual ? buildUsernameFromName(nome) : formData.login;
+                    setFormData({ ...formData, nome, login: usuarioGerado });
+                    if (!editingUserId && !usuarioManual) setLoginGerado(usuarioGerado);
+                  }}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Usuário *</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={editingUserId ? (formData.login || loginGerado) : formData.login}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\s+/g, '').toLowerCase();
+                    setUsuarioManual(true);
+                    setFormData({ ...formData, login: value });
+                    setLoginGerado(value);
+                  }}
+                  readOnly={!!editingUserId}
+                  style={editingUserId ? { backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)', cursor: 'default' } : undefined}
+                  required
+                />
               </div>
 
               <div className="form-group">
@@ -792,18 +875,44 @@ function Usuarios() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Senha (6 dígitos) {editingUserId ? '(opcional)' : '*'}</label>
-                <input type="password" maxLength="6" className="form-input" value={formData.senha} onChange={(e) => setFormData({ ...formData, senha: e.target.value.replace(/\D/g, '') })} required={!editingUserId} />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Login (gerado automaticamente)</label>
-                <input type="text" className="form-input" value={loginGerado || '...gerando...'} readOnly style={{ backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-muted)', cursor: 'default' }} />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">PIN (6 dígitos)</label>
-                <input type="text" maxLength="6" className="form-input" value={formData.pin} onChange={(e) => setFormData({ ...formData, pin: e.target.value.replace(/\D/g, '') })} />
+                <label className="form-label">Senha {editingUserId ? '(opcional)' : '*'}</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showSenha ? 'text' : 'password'}
+                    maxLength="72"
+                    className="form-input"
+                    value={formData.senha}
+                    onChange={(e) => setFormData({ ...formData, senha: e.target.value })}
+                    required={!editingUserId}
+                    style={{ paddingRight: '44px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSenha((v) => !v)}
+                    style={{
+                      position: 'absolute',
+                      right: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      color: 'var(--text-muted)'
+                    }}
+                  >
+                    {showSenha ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                {formData.senha && (
+                  <>
+                    <div style={{ width: '100%', height: '6px', borderRadius: '999px', backgroundColor: 'rgba(148, 163, 184, 0.2)', marginTop: '8px', overflow: 'hidden' }}>
+                      <div style={{ width: getPasswordStrength(formData.senha).width, backgroundColor: getPasswordStrength(formData.senha).color, height: '100%', borderRadius: '999px', transition: 'all 0.2s ease' }} />
+                    </div>
+                    <small style={{ color: getPasswordStrength(formData.senha).color, display: 'inline-block', marginTop: '6px', fontSize: '0.82rem' }}>
+                      Nível da senha: {getPasswordStrength(formData.senha).label}
+                    </small>
+                  </>
+                )}
               </div>
 
               <div className="grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -865,7 +974,7 @@ function Usuarios() {
               </div>
 
               <div className="flex-between mt-3">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancelar</button>
+                <button type="button" className="btn btn-secondary" onClick={fecharModalUsuario}>Cancelar</button>
                 <button type="submit" className="btn btn-primary">Salvar usuário</button>
               </div>
             </form>

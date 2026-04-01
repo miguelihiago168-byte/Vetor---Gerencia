@@ -331,6 +331,30 @@ router.get('/:id', auth, async (req, res) => {
 
     res.json(rdo);
 
+    // Registrar log de visualização (com deduplicação em janela curta)
+    try {
+      const viewRecente = await getQuery(
+        `SELECT id
+         FROM rdo_logs
+         WHERE rdo_id = ?
+           AND usuario_id = ?
+           AND acao = 'VIEW'
+           AND criado_em >= datetime('now', '-10 seconds')
+         ORDER BY id DESC
+         LIMIT 1`,
+        [id, req.usuario.id]
+      );
+
+      if (!viewRecente) {
+        await runQuery(
+          'INSERT INTO rdo_logs (rdo_id, usuario_id, acao, criado_em) VALUES (?, ?, ?, CURRENT_TIMESTAMP)',
+          [id, req.usuario.id, 'VIEW']
+        );
+      }
+    } catch (logError) {
+      console.error('Erro ao registrar log de visualização:', logError);
+    }
+
   } catch (error) {
     console.error('Erro ao obter RDO:', error);
     res.status(500).json({ erro: 'Erro ao obter RDO.' });
@@ -790,6 +814,16 @@ router.put('/:id', auth, async (req, res) => {
     }
 
     await registrarAuditoria('rdos', id, 'UPDATE', rdoAtual, req.body, req.usuario.id);
+
+    // Registrar log de atualização
+    try {
+      await runQuery(
+        'INSERT INTO rdo_logs (rdo_id, usuario_id, acao, criado_em) VALUES (?, ?, ?, CURRENT_TIMESTAMP)',
+        [id, req.usuario.id, 'UPDATE']
+      );
+    } catch (logError) {
+      console.error('Erro ao registrar log de atualização:', logError);
+    }
 
     // Recalcular avanço EAP imediatamente após salvar o RDO
     if (atividades) {
@@ -1674,6 +1708,24 @@ router.delete('/projeto/:projetoId/todos', [auth, isGestor], async (req, res) =>
   } catch (error) {
     console.error('Erro ao excluir todos os RDOs do projeto:', error);
     res.status(500).json({ erro: 'Erro ao excluir todos os RDOs do projeto.' });
+  }
+});
+
+// Endpoint para consultar logs de visualização e edição de um RDO
+router.get('/:id/logs', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const logs = await allQuery(`
+      SELECT rl.*, u.nome as usuario_nome
+      FROM rdo_logs rl
+      LEFT JOIN usuarios u ON rl.usuario_id = u.id
+      WHERE rl.rdo_id = ?
+      ORDER BY rl.criado_em DESC, rl.id DESC
+    `, [id]);
+    res.json({ logs });
+  } catch (error) {
+    console.error('Erro ao buscar logs do RDO:', error);
+    res.status(500).json({ erro: 'Erro ao buscar logs do RDO.' });
   }
 });
 

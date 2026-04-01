@@ -134,10 +134,9 @@ function CriarConta() {
         <div className="login-card">
           <div className="login-brand">
             <div className="login-logo-wrap">
-              <img src="/logo.svg" alt="Vetor" className="login-logo-img" />
+              <img src="/logo_vetor.png" alt="Vetor" className="login-logo-img" />
             </div>
             <div>
-              <p className="login-brand-name">Vetor</p>
               <p className="login-brand-sub">Gestão de Obras</p>
             </div>
           </div>
@@ -179,10 +178,9 @@ function CriarConta() {
       <div className="login-card">
         <div className="login-brand">
           <div className="login-logo-wrap">
-            <img src="/logo.svg" alt="Vetor" className="login-logo-img" />
+            <img src="/logo_vetor.png" alt="Vetor" className="login-logo-img" />
           </div>
           <div>
-            <p className="login-brand-name">Vetor</p>
             <p className="login-brand-sub">Gestão de Obras</p>
           </div>
         </div>

@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
 import { useLeaveGuard } from '../context/LeaveGuardContext';
 import { useDialog } from '../context/DialogContext';
+import { useNotification } from '../context/NotificationContext';
 import {
   getProjeto,
   getAtividadesEAP, getRDO, createRDO, updateRDO,
@@ -15,6 +16,8 @@ import {
 } from '../services/api';
 import { ChevronDown, Plus, Trash2, Upload, FileText, Pencil } from 'lucide-react';
 import './RDO.css';
+import Modal from '../components/Modal';
+import { getRdoLogs } from '../services/api';
 
 const AVULSA_OPTION = '__AVULSA__';
 
@@ -51,11 +54,17 @@ const Section = ({ id, num, title, badge, children, isOpen, onToggle }) => (
 function RDOForm2() {
   const { projetoId, rdoId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { setDirty } = useLeaveGuard();
   const { usuario } = useAuth();
   const { alert, confirm } = useDialog();
+  const { success: notifySuccess, error: notifyError, info: notifyInfo } = useNotification();
 
   /* ── Estado existente ───────────────────────────── */
+  // Estado para modal de logs (edição/visualização)
+  const [showLogModal, setShowLogModal] = useState(null);
+  const [logsEdicao, setLogsEdicao] = useState([]);
+  const [logsVisualizacao, setLogsVisualizacao] = useState([]);
   const [atividadesEap, setAtividadesEap] = useState([]);
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
@@ -110,6 +119,43 @@ function RDOForm2() {
     observacao: ''
   });
   const [editAtividade, setEditAtividade] = useState(null);
+
+  const normalizarAcaoLog = (log) => {
+    const acao = String(log?.acao || log?.tipo || '').toUpperCase();
+    return acao === 'VIEW' ? 'VIEW' : 'UPDATE';
+  };
+
+  const carregarLogsRdo = async (targetRdoId = rdoId) => {
+    if (!targetRdoId) {
+      setLogsEdicao([]);
+      setLogsVisualizacao([]);
+      return;
+    }
+
+    try {
+      const response = await getRdoLogs(targetRdoId);
+      const logs = (response.data?.logs || []).map((log) => ({
+        ...log,
+        acao: normalizarAcaoLog(log)
+      }));
+
+      setLogsEdicao(logs.filter((log) => log.acao === 'UPDATE'));
+      setLogsVisualizacao(logs.filter((log) => log.acao === 'VIEW'));
+    } catch (error) {
+      console.error('Erro ao carregar logs do RDO:', error);
+      setLogsEdicao([]);
+      setLogsVisualizacao([]);
+    }
+  };
+
+  const ultimaAlteracao = useMemo(() => {
+    if (!logsEdicao.length) return null;
+    return logsEdicao[0];
+  }, [logsEdicao]);
+
+  useEffect(() => {
+    carregarLogsRdo();
+  }, [rdoId]);
 
   /* ── Helpers de tempo ──────────────────────────────── */
   const toMinutes = (t) => {
@@ -222,6 +268,12 @@ function RDOForm2() {
           }
           if (!rdo) return;
 
+          if (rdo.status !== 'Em preenchimento') {
+            notifyInfo('Este RDO está em modo de visualização. Para editar, use "Voltar para edição".', 5000);
+            navigate(`/projeto/${projetoId}/rdos/${rdoId}`);
+            return;
+          }
+
           setFormData({
             data_relatorio: rdo.data_relatorio,
             dia_semana: rdo.dia_semana,
@@ -290,94 +342,104 @@ function RDOForm2() {
 
         } else {
           // Novo RDO: copiar mão de obra e equipamentos do último RDO
-          try {
-            const { getRDOs } = await import('../services/api');
-            const lista = (await getRDOs(projetoId)).data || [];
-            if (lista.length > 0) {
-              const listaAprovados = lista.filter(item => String(item.status || '') === 'Aprovado');
-              const baseLista = listaAprovados.length > 0 ? listaAprovados : lista;
-              const ultimo = baseLista.reduce((acc, cur) => {
-                const toDate = (s) => {
-                  const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-                  return m ? new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10)) : new Date(s);
-                };
-                const dAcc = acc ? toDate(acc.data_relatorio) : null;
-                const dCur = toDate(cur.data_relatorio);
-                return (!acc || dCur.getTime() > dAcc.getTime()) ? cur : acc;
-              }, null);
-              if (ultimo) {
-                const equipamentosJson = (() => {
+          const copyLast = location.state?.copyLast;
+          if (copyLast) {
+            try {
+              const { getRDOs } = await import('../services/api');
+              const lista = (await getRDOs(projetoId)).data || [];
+              if (lista.length > 0) {
+                const listaAprovados = lista.filter(item => String(item.status || '') === 'Aprovado');
+                const baseLista = listaAprovados.length > 0 ? listaAprovados : lista;
+                const ultimo = baseLista.reduce((acc, cur) => {
+                  const toDate = (s) => {
+                    const m = String(s).match(/^(d{4})-(\d{2})-(\d{2})$/);
+                    return m ? new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10)) : new Date(s);
+                  };
+                  const dAcc = acc ? toDate(acc.data_relatorio) : null;
+                  const dCur = toDate(cur.data_relatorio);
+                  return (!acc || dCur.getTime() > dAcc.getTime()) ? cur : acc;
+                }, null);
+                if (ultimo) {
+                  // Copiar dados do último RDO
+                  setFormData({
+                    data_relatorio: ultimo.data_relatorio,
+                    dia_semana: ultimo.dia_semana,
+                    entrada_saida_inicio: ultimo.entrada_saida_inicio || '07:00',
+                    entrada_saida_fim: ultimo.entrada_saida_fim || '17:00',
+                    intervalo_almoco_inicio: ultimo.intervalo_almoco_inicio || '12:00',
+                    intervalo_almoco_fim: ultimo.intervalo_almoco_fim || '13:00',
+                    atividades: (ultimo.atividades || []).map(a => ({
+                      rdo_atividade_id: a.id,
+                      atividade_eap_id: a.atividade_eap_id,
+                      percentual_executado: a.percentual_executado,
+                      quantidade_executada: a.quantidade_executada || '',
+                      unidade_medida: (() => {
+                        const sel = eapRes.data?.find(x => String(x.id) === String(a.atividade_eap_id));
+                        return sel ? (sel.unidade_medida || '') : '';
+                      })(),
+                      observacao: a.observacao || ''
+                    })),
+                    climaRegistros: (ultimo.clima || []).map(c => ({
+                      periodo: c.periodo,
+                      condicao_tempo: c.condicao_tempo || 'Claro',
+                      condicao_trabalho: c.condicao_trabalho || 'Praticável',
+                      pluviometria_mm: c.pluviometria_mm || 0
+                    })),
+                    atividades_avulsas: Array.isArray(ultimo.atividades_avulsas)
+                      ? ultimo.atividades_avulsas.map(a => ({
+                        avulsa: true,
+                        descricao: a?.descricao || '',
+                        quantidade_prevista: (a?.quantidade_prevista ?? ''),
+                        quantidade_executada: (a?.quantidade_executada ?? ''),
+                        observacao: a?.observacao || ''
+                      }))
+                      : [],
+                    mao_obra_detalhada: Array.isArray(ultimo.mao_obra_detalhada) ? ultimo.mao_obra_detalhada : [],
+                    ocorrencias_lista: (ultimo.ocorrencias || []).map(o => ({
+                      id: o.id,
+                      titulo: o.titulo || '',
+                      descricao: o.descricao || '',
+                      gravidade: o.gravidade || 'Baixa'
+                    })),
+                    comentarios_lista: [],
+                    materiais_lista: (ultimo.materiais || []).map(m => ({
+                      id: m.id,
+                      nome: m.nome_material || '',
+                      quantidade: Number(m.quantidade || 0),
+                      unidade: m.unidade || null
+                    }))
+                  });
+
+                  // Equipamentos vêm da nova tabela
+                  setEquipamentosLista(ultimo.equipamentos_lista || []);
+
+                  // Fotos
+                  setRdoFotos(ultimo.fotos || []);
+
+                  // Comentários existentes
+                  setComentariosExistentes((ultimo.comentarios || []).map(c => ({
+                    id: c.id, comentario: c.comentario, autor_nome: c.autor_nome, criado_em: c.criado_em
+                  })));
+
+                  // Anexos
                   try {
-                    return ultimo.equipamentos && String(ultimo.equipamentos).startsWith('[')
-                      ? JSON.parse(ultimo.equipamentos) : [];
-                  } catch { return []; }
-                })();
-                const atividadesCopia = await (async () => {
-                  try {
-                    const det = await getRDO(ultimo.id);
-                    return (det.data?.atividades || [])
-                      .filter(a => {
-                        const sel = (eapRes.data || []).find(x => String(x.id) === String(a.atividade_eap_id));
-                        const total = sel ? Number(sel.quantidade_total || 0) : 0;
-                        const execAprov = Number(acumMap[String(a.atividade_eap_id)] || 0);
-                        return !(total > 0 && execAprov >= total);
-                      })
-                      .map(a => {
-                        const sel = (eapRes.data || []).find(x => String(x.id) === String(a.atividade_eap_id));
-                        return {
-                          atividade_eap_id: a.atividade_eap_id,
-                          quantidade_executada: '',
-                          unidade_medida: sel ? (sel.unidade_medida || '') : '',
-                          percentual_executado: 0,
-                          observacao: ''
-                        };
-                      });
-                  } catch { return []; }
-                })();
-                const atividadesAvulsasCopia = await (async () => {
-                  try {
-                    const det = await getRDO(ultimo.id);
-                    return (Array.isArray(det.data?.atividades_avulsas) ? det.data.atividades_avulsas : [])
-                      .map((a) => {
-                        const previsto = Number(a?.quantidade_prevista || 0);
-                        const executado = Number(a?.quantidade_executada || 0);
-                        const restante = Math.max(previsto - executado, 0);
-                        return {
-                          avulsa: true,
-                          descricao: a?.descricao || '',
-                          quantidade_prevista: restante,
-                          quantidade_executada: '',
-                          observacao: a?.observacao || ''
-                        };
-                      })
-                      .filter((a) => a.descricao && Number(a.quantidade_prevista || 0) > 0);
-                  } catch { return []; }
-                })();
-                const maoObraDetalhada = (() => {
-                  if (Array.isArray(ultimo.mao_obra_detalhada)) return ultimo.mao_obra_detalhada;
-                  try {
-                    const parsed = ultimo.mao_obra_detalhada ? JSON.parse(ultimo.mao_obra_detalhada) : [];
-                    return Array.isArray(parsed) ? parsed : [];
-                  } catch { return []; }
-                })();
-                setFormData(prev => ({
-                  ...prev,
-                  mao_obra_detalhada: maoObraDetalhada,
-                  atividades: atividadesCopia,
-                  atividades_avulsas: atividadesAvulsasCopia
-                }));
-                setEquipamentosLista(equipamentosJson);
+                    const anx = await getAnexos(ultimo.id);
+                    setAnexos(anx.data || []);
+                  } catch {}
+
+                }
               }
-            }
-          } catch {}
+            } catch {}
+          }
         }
+        // ...existing code...
       } catch {
         setErro('Erro ao carregar dados do formulário.');
       }
     };
     carregar();
     return () => { try { setDirty(false); } catch {} };
-  }, [projetoId, rdoId]);
+  }, [projetoId, rdoId, location.state]);
 
   /* ── Ordenação EAP ──────────────────────────────── */
   const compareCodigo = (a, b) => {
@@ -991,7 +1053,9 @@ function RDOForm2() {
           await addRdoMaterial(rdoId, { nome_material: m.nome, quantidade: Number(m.quantidade || 0), unidade: m.unidade || null });
         }
         try { await updateStatusRDO(rdoId, 'Em análise'); } catch {}
+        await carregarLogsRdo(rdoId);
         setSucesso('RDO atualizado e enviado para análise.');
+        notifySuccess('RDO atualizado e enviado para análise.', 4500);
       } else {
         const res = await createRDO(body);
         finalId = res.data?.rdo?.id;
@@ -1053,11 +1117,14 @@ function RDOForm2() {
         }
         try { if (finalId) await updateStatusRDO(finalId, 'Em análise'); } catch {}
         setSucesso('RDO criado e enviado para análise.');
+        notifySuccess('RDO criado e enviado para análise.', 4500);
       }
 
       try { setDirty(false); } catch {}
     } catch (error) {
-      setErro(error.response?.data?.erro || error.message || 'Erro ao salvar RDO.');
+      const msg = error.response?.data?.erro || error.message || 'Erro ao salvar RDO.';
+      setErro(msg);
+      notifyError(msg, 6000);
     } finally {
       setIsSaving(false);
     }
@@ -1874,16 +1941,65 @@ function RDOForm2() {
               <span style={{ color: '#94a3b8' }}>— {new Date(formData.data_relatorio + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
             )}
           </div>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button className="btn btn-secondary" onClick={() => navigate(`/projeto/${projetoId}/rdos`)}>
-              Voltar
-            </button>
-            <button className="btn btn-success" onClick={salvar}
-              disabled={isSaving || !formData.data_relatorio}>
-              {isSaving ? 'Salvando...' : rdoId ? 'Salvar alterações' : 'Salvar RDO'}
-            </button>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+            {rdoId && (
+              <>
+                {ultimaAlteracao && (
+                  <div style={{ fontSize: 12, color: '#64748b', textAlign: 'right' }}>
+                    Última alteração: {ultimaAlteracao.usuario_nome || 'Usuário removido'} em {new Date(ultimaAlteracao.criado_em).toLocaleString('pt-BR')}
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: '16px', marginBottom: 4 }}>
+                  <a href="#" style={{ color: '#2563eb', fontSize: 13, textDecoration: 'underline' }} onClick={(e) => { e.preventDefault(); setShowLogModal('edicao'); }}>
+                    Log de edições {logsEdicao.length > 0 ? `(${logsEdicao.length})` : ''}
+                  </a>
+                  <a href="#" style={{ color: '#2563eb', fontSize: 13, textDecoration: 'underline' }} onClick={(e) => { e.preventDefault(); setShowLogModal('visualizacao'); }}>
+                    Visualizações {logsVisualizacao.length > 0 ? `(${logsVisualizacao.length})` : '(0)'}
+                  </a>
+                </div>
+              </>
+            )}
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button className="btn btn-secondary" onClick={() => navigate(`/projeto/${projetoId}/rdos`)}>
+                Voltar
+              </button>
+              <button className="btn btn-success" onClick={salvar}
+                disabled={isSaving || !formData.data_relatorio}>
+                {isSaving ? 'Salvando...' : rdoId ? 'Salvar alterações' : 'Salvar RDO'}
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Modal de logs */}
+        <Modal open={!!showLogModal} title={showLogModal === 'edicao' ? 'Log de edições' : 'Visualizações'} onClose={() => setShowLogModal(null)}>
+          {showLogModal && (
+            <div style={{ minWidth: 320 }}>
+              <table className="rdo-table" style={{ fontSize: 13 }}>
+                <thead>
+                  <tr>
+                    <th>Usuário</th>
+                    <th>Ação</th>
+                    <th>Data/Hora</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(showLogModal === 'edicao' ? logsEdicao : logsVisualizacao).length === 0 ? (
+                    <tr><td colSpan={3} style={{ textAlign: 'center', color: '#64748b' }}>Nenhum registro.</td></tr>
+                  ) : (
+                    (showLogModal === 'edicao' ? logsEdicao : logsVisualizacao).map((log, idx) => (
+                      <tr key={log.id || idx}>
+                        <td>{log.usuario_nome || '—'}</td>
+                          <td>{log.acao === 'UPDATE' ? 'Edição' : 'Visualização'}</td>
+                        <td>{new Date(log.criado_em).toLocaleString('pt-BR')}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Modal>
 
       </div>
     </>

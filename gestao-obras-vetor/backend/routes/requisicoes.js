@@ -126,10 +126,10 @@ const atualizarStatusRequisicao = async (requisicaoId, usuarioId) => {
     novoStatus = STATUS_REQ.ENCERRADA_SEM_COMPRA;
   } else if (todosEmTerminal() && algum(STATUS_ITEM.COMPRADO)) {
     novoStatus = STATUS_REQ.FINALIZADA;
-  } else if (algum(STATUS_ITEM.COMPRADO)) {
+  } else if (algum(STATUS_ITEM.APROVADO) || algum(STATUS_ITEM.COMPRADO)) {
+    // Após seleção do fornecedor, o item fica "Aprovado para compra" e
+    // a requisição deve avançar para a etapa de fechamento (ADM).
     novoStatus = STATUS_REQ.AUTORIZADA;
-  } else if (algum(STATUS_ITEM.APROVADO)) {
-    novoStatus = STATUS_REQ.AG_DECISAO;
   } else if (algum(STATUS_ITEM.COT_FINALIZADA)) {
     novoStatus = STATUS_REQ.COT_RECEBIDAS;
   } else if (algum(STATUS_ITEM.EM_COTACAO)) {

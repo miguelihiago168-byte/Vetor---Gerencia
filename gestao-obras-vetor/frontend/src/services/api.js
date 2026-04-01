@@ -36,6 +36,7 @@ api.interceptors.response.use(
 
 // Auth
 export const login = (credentials) => api.post('/auth/login', credentials);
+export const registerTrialAccount = (data) => api.post('/auth/register', data);
 export const validateInviteToken = (token) => api.get(`/auth/register/${token}`);
 export const registerWithInviteToken = (token, data) => api.post(`/auth/register/${token}`, data);
 
@@ -46,6 +47,7 @@ export const getNovoLogin = () => api.get('/usuarios/novo-login');
 export const getUsuariosDeletados = () => api.get('/usuarios/deletados/lista');
 export const createUsuario = (data) => api.post('/usuarios', data);
 export const updateUsuario = (id, data) => api.put(`/usuarios/${id}`, data);
+export const concluirPrimeiroAcesso = (data) => api.patch('/usuarios/me/primeiro-acesso', data);
 export const updateUsuarioGestor = (id, isGestor) => api.patch(`/usuarios/${id}/gestor`, { is_gestor: isGestor });
 export const updateUsuarioAdm = (id, isAdm) => api.patch(`/usuarios/${id}/adm`, { is_adm: isAdm });
 export const deleteUsuario = (id) => api.delete(`/usuarios/${id}`);
@@ -243,5 +245,7 @@ export const getRelatorioPerdasAlmox = (projetoId) => api.get('/almoxarifado/rel
 export const getRdoFerramentasDisponiveis = (rdoId) => api.get(`/almoxarifado/rdo/${rdoId}/ferramentas-disponiveis`);
 export const getRdoFerramentas = (rdoId) => api.get(`/almoxarifado/rdo/${rdoId}/ferramentas`);
 export const addRdoFerramenta = (rdoId, data) => api.post(`/almoxarifado/rdo/${rdoId}/ferramentas`, data);
+
+export const getRdoLogs = (rdoId) => api.get(`/rdos/${rdoId}/logs`);
 
 export default api;

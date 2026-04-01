@@ -3,12 +3,13 @@ import { fmtTs } from '../utils/date';
 import { useParams } from 'react-router-dom';
 import AlmoxarifadoLayout from '../components/AlmoxarifadoLayout';
 import { getRelatorioMovimentacoesAlmox } from '../services/api';
+import { useNotification } from '../context/NotificationContext';
 
 function AlmoxRelatorios() {
   const { projetoId } = useParams();
+  const { error } = useNotification();
   const [movimentacoes, setMovimentacoes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [erro, setErro] = useState('');
   const [filtroRelatorios, setFiltroRelatorios] = useState('');
 
   const movimentacoesFiltradas = useMemo(() => {
@@ -38,8 +39,8 @@ function AlmoxRelatorios() {
         setLoading(true);
         const res = await getRelatorioMovimentacoesAlmox(projetoId);
         setMovimentacoes(res.data || []);
-      } catch (error) {
-        setErro(error?.response?.data?.erro || 'Erro ao carregar relatório de movimentações.');
+      } catch (err) {
+        error(err?.response?.data?.erro || 'Erro ao carregar relatório de movimentações.', 7000);
       } finally {
         setLoading(false);
       }
@@ -50,7 +51,6 @@ function AlmoxRelatorios() {
 
   return (
     <AlmoxarifadoLayout title="Relatórios">
-        {erro && <div className="alert alert-error">{erro}</div>}
         {loading ? (
           <div className="loading"><div className="spinner"></div></div>
         ) : (

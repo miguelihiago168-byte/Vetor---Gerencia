@@ -256,6 +256,11 @@ const ensureSchema = async () => {
           quantidade INTEGER NOT NULL DEFAULT 1,
           status TEXT NOT NULL DEFAULT 'EM_MANUTENCAO',
           justificativa TEXT,
+          local_manutencao TEXT,
+          prazo_estimado_dias INTEGER,
+          endereco_manutencao TEXT,
+          responsavel_retirada TEXT,
+          retirada_necessaria INTEGER NOT NULL DEFAULT 0,
           retorna_estoque INTEGER NOT NULL DEFAULT 1,
           custo REAL,
           data_envio DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -271,6 +276,26 @@ const ensureSchema = async () => {
           FOREIGN KEY (finalizado_por) REFERENCES usuarios(id)
         )
       `);
+
+      try {
+        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN local_manutencao TEXT`);
+      } catch (_) {}
+
+      try {
+        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN prazo_estimado_dias INTEGER`);
+      } catch (_) {}
+
+      try {
+        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN endereco_manutencao TEXT`);
+      } catch (_) {}
+
+      try {
+        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN responsavel_retirada TEXT`);
+      } catch (_) {}
+
+      try {
+        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN retirada_necessaria INTEGER NOT NULL DEFAULT 0`);
+      } catch (_) {}
 
       await runQuery(`
         CREATE TABLE IF NOT EXISTS almox_perdas (
@@ -656,6 +681,12 @@ router.get('/alocacoes-abertas', [auth, requireReadPermission], async (req, res)
       SELECT
         a.*,
         m.id AS manutencao_id,
+        m.local_manutencao,
+        m.prazo_estimado_dias,
+        m.endereco_manutencao,
+        m.responsavel_retirada,
+        m.retirada_necessaria,
+        m.custo AS custo_manutencao,
         f.nome AS ferramenta_nome,
         f.codigo AS ferramenta_codigo,
         f.valor_reposicao,
@@ -857,7 +888,12 @@ router.post('/manutencao/enviar', [auth, requireWritePermission], async (req, re
       quantidade,
       justificativa,
       enviar_para_manutencao: enviarParaManutencao,
-      custo
+      custo,
+      local_manutencao: localManutencao,
+      prazo_estimado_dias: prazoEstimadoDias,
+      endereco_manutencao: enderecoManutencao,
+      responsavel_retirada: responsavelRetirada,
+      retirada_necessaria: retiradaNecessaria
     } = req.body;
 
     if (!alocacaoId || !Number.isInteger(Number(quantidade || 1))) {
@@ -876,8 +912,30 @@ router.post('/manutencao/enviar', [auth, requireWritePermission], async (req, re
       return res.status(400).json({ erro: 'Quantidade inválida para manutenção/baixa.' });
     }
 
+    const prazoManutencaoInt = prazoEstimadoDias != null && String(prazoEstimadoDias).trim() !== ''
+      ? Number(prazoEstimadoDias)
+      : null;
+    if (prazoManutencaoInt != null && (!Number.isInteger(prazoManutencaoInt) || prazoManutencaoInt < 0)) {
+      return res.status(400).json({ erro: 'Prazo estimado deve ser um número inteiro maior ou igual a zero.' });
+    }
+
     const ferramenta = await getQuery('SELECT * FROM almox_ferramentas WHERE id = ?', [Number(alocacao.ferramenta_id)]);
     if (!ferramenta) return res.status(404).json({ erro: 'Ativo não encontrado.' });
+
+    if (enviarParaManutencao !== false) {
+      if (!localManutencao || !String(localManutencao).trim()) {
+        return res.status(400).json({ erro: 'Informe onde será feita a manutenção.' });
+      }
+      if (!enderecoManutencao || !String(enderecoManutencao).trim()) {
+        return res.status(400).json({ erro: 'Informe o endereço da manutenção.' });
+      }
+      if (prazoManutencaoInt == null) {
+        return res.status(400).json({ erro: 'Informe o prazo estimado em dias.' });
+      }
+      if (retiradaNecessaria && (!responsavelRetirada || !String(responsavelRetirada).trim())) {
+        return res.status(400).json({ erro: 'Informe quem vai retirar o ativo para manutenção.' });
+      }
+    }
 
     await runQuery('BEGIN TRANSACTION');
     try {
@@ -931,14 +989,33 @@ router.post('/manutencao/enviar', [auth, requireWritePermission], async (req, re
       } else {
         const manutResult = await runQuery(`
           INSERT INTO almox_manutencoes
-          (ferramenta_id, alocacao_id, projeto_id, quantidade, justificativa, retorna_estoque, custo, criado_por)
-          VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+          (
+            ferramenta_id,
+            alocacao_id,
+            projeto_id,
+            quantidade,
+            justificativa,
+            local_manutencao,
+            prazo_estimado_dias,
+            endereco_manutencao,
+            responsavel_retirada,
+            retirada_necessaria,
+            retorna_estoque,
+            custo,
+            criado_por
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
         `, [
           Number(alocacao.ferramenta_id),
           Number(alocacaoId),
           Number(alocacao.projeto_id),
           qtd,
           justificativa || null,
+          localManutencao ? String(localManutencao).trim() : null,
+          prazoManutencaoInt,
+          enderecoManutencao ? String(enderecoManutencao).trim() : null,
+          responsavelRetirada ? String(responsavelRetirada).trim() : null,
+          retiradaNecessaria ? 1 : 0,
           custo != null ? normalizarValorMonetario(custo) : null,
           req.usuario.id
         ]);

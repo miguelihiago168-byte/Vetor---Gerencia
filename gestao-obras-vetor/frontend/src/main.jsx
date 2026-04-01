@@ -1,3 +1,8 @@
+          <Route path="/perfil" element={
+            <PrivateRoute>
+              <MeuPerfil />
+            </PrivateRoute>
+          } />
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
@@ -5,6 +10,7 @@ import { AuthProvider } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { LeaveGuardProvider } from './context/LeaveGuardContext';
 import { DialogProvider } from './context/DialogContext';
+import { UserPreferencesProvider } from './context/UserPreferencesContext';
 import PrivateRoute from './components/PrivateRoute';
 import NotificationContainer from './components/NotificationContainer';
 import Login from './pages/Login';
@@ -42,6 +48,8 @@ import AlmoxDevolucao from './pages/AlmoxDevolucao';
 import AlmoxManutencao from './pages/AlmoxManutencao';
 import AlmoxPerdas from './pages/AlmoxPerdas';
 import AlmoxRelatorios from './pages/AlmoxRelatorios';
+import MeuPerfil from './pages/MeuPerfil';
+import PrimeiroAcesso from './pages/PrimeiroAcesso';
 import './index.css';
 import './dark-mode.css';
 
@@ -56,15 +64,18 @@ const PERFIS_USUARIOS = ['Gestor Geral', 'ADM'];
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-      <NotificationProvider>
-        <AuthProvider>
+    <NotificationProvider>
+      <AuthProvider>
+        <UserPreferencesProvider>
           <LeaveGuardProvider>
-          <DialogProvider>
-          <BrowserRouter>
-          <Routes>
+            <DialogProvider>
+              <BrowserRouter>
+                <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register/:token" element={<CriarConta />} />
           <Route path="/criar-conta" element={<Navigate to="/login" replace />} />
+          <Route path="/primeiro-acesso" element={<PrivateRoute allowPendingFirstAccess><PrimeiroAcesso /></PrivateRoute>} />
+          <Route path="/perfil" element={<PrivateRoute><MeuPerfil /></PrivateRoute>} />
           {/* Redirecionar Dashboard para Projetos */}
           <Route path="/dashboard" element={<Navigate to="/projetos" replace />} />
           <Route path="/projetos" element={
@@ -234,7 +245,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             </PrivateRoute>
           } />
 
-          {/* Rotas globais de compras */}
+
+
           <Route path="/compras/kanban" element={
             <PrivateRoute allowedPerfis={PERFIS_COMPRAS}>
               <RequisicaoKanban />
@@ -270,12 +282,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           {/* FINANCEIRO DESATIVADO: <Route path="/financeiro" element={<ProjetoSelector destino="financeiro" />} /> */}
           <Route path="/ativos" element={<ProjetoSelector destino="almoxarifado" />} />
           <Route path="/" element={<Navigate to="/projetos" replace />} />
-        </Routes>
-        <NotificationContainer />
-      </BrowserRouter>
-      </DialogProvider>
-    </LeaveGuardProvider>
-    </AuthProvider>
-  </NotificationProvider>
+                </Routes>
+                <NotificationContainer />
+              </BrowserRouter>
+            </DialogProvider>
+          </LeaveGuardProvider>
+        </UserPreferencesProvider>
+      </AuthProvider>
+    </NotificationProvider>
   </React.StrictMode>
 );

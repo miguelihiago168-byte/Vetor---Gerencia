@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import AlmoxarifadoLayout from '../components/AlmoxarifadoLayout';
 import { createFerramenta, getFerramentas, getProjetos, getProximoCodigoAtivo, transferirAtivoObra } from '../services/api';
 import { useDialog } from '../context/DialogContext';
+import { useNotification } from '../context/NotificationContext';
 import { formatMoneyBR, parseMoneyBR, formatMoneyInputBR } from '../utils/currency';
 
 const CATEGORIAS_ATIVO = ['Ferramenta', 'Equipamento', 'Máquina', 'Veículo', 'EPI', 'Eletrônico', 'Outros'];
@@ -11,13 +12,12 @@ const formatBRL = formatMoneyBR;
 function AlmoxFerramentas() {
   const { projetoId } = useParams();
   const { confirm } = useDialog();
+  const { success, error } = useNotification();
   const [aba, setAba] = useState('lista');
   const [ferramentas, setFerramentas] = useState([]);
   const [projetos, setProjetos] = useState([]);
   const [destinosTransferencia, setDestinosTransferencia] = useState({});
   const [loading, setLoading] = useState(true);
-  const [erro, setErro] = useState('');
-  const [sucesso, setSucesso] = useState('');
   const [filtroAtivos, setFiltroAtivos] = useState('');
   const [form, setForm] = useState({ codigo: '', nome: '', categoria: 'Outros', nf_compra: '', marca: '', modelo: '', descricao: '', unidade: 'UN', quantidade_total: '', valor_reposicao: '' });
   const [proximoCodigo, setProximoCodigo] = useState('');
@@ -58,8 +58,8 @@ function AlmoxFerramentas() {
       } else {
         setForm((prev) => ({ ...prev, codigo: '' }));
       }
-    } catch (error) {
-      setErro(error?.response?.data?.erro || 'Erro ao carregar ativos.');
+    } catch (err) {
+      error(err?.response?.data?.erro || 'Erro ao carregar ativos.', 7000);
     } finally {
       setLoading(false);
     }
@@ -81,8 +81,6 @@ function AlmoxFerramentas() {
 
   const salvar = async (e) => {
     e.preventDefault();
-    setErro('');
-    setSucesso('');
     try {
       await createFerramenta({
         ...form,
@@ -91,20 +89,18 @@ function AlmoxFerramentas() {
         valor_reposicao: parseMoneyBR(form.valor_reposicao)
       });
       setForm({ codigo: '', nome: '', categoria: 'Outros', nf_compra: '', marca: '', modelo: '', descricao: '', unidade: 'UN', quantidade_total: '', valor_reposicao: '' });
-      setSucesso('Ativo cadastrado com sucesso.');
+      success('Ativo cadastrado com sucesso.', 5000);
       await carregar();
       setAba('lista');
-    } catch (error) {
-      setErro(error?.response?.data?.erro || 'Erro ao cadastrar ativo.');
+    } catch (err) {
+      error(err?.response?.data?.erro || 'Erro ao cadastrar ativo.', 7000);
     }
   };
 
   const transferir = async (ferramenta) => {
-    setErro('');
-    setSucesso('');
     const destinoId = Number(destinosTransferencia[ferramenta.id] || 0);
     if (!destinoId) {
-      setErro('Selecione a obra de destino para transferir o ativo.');
+      error('Selecione a obra de destino para transferir o ativo.', 6000);
       return;
     }
 
@@ -118,11 +114,11 @@ function AlmoxFerramentas() {
 
     try {
       await transferirAtivoObra(ferramenta.id, { obra_destino_id: destinoId });
-      setSucesso('Ativo transferido com sucesso.');
+      success('Ativo transferido com sucesso.', 5000);
       setDestinosTransferencia((prev) => ({ ...prev, [ferramenta.id]: '' }));
       await carregar();
-    } catch (error) {
-      setErro(error?.response?.data?.erro || 'Erro ao transferir ativo.');
+    } catch (err) {
+      error(err?.response?.data?.erro || 'Erro ao transferir ativo.', 7000);
     }
   };
 
@@ -142,14 +138,11 @@ function AlmoxFerramentas() {
 
   return (
     <AlmoxarifadoLayout title="Ativos">
-      {erro && <div className="alert alert-error">{erro}</div>}
-      {sucesso && <div className="alert alert-success">{sucesso}</div>}
-
       <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
-        <button style={tabStyle('lista')} onClick={() => { setErro(''); setSucesso(''); setAba('lista'); }}>
+        <button style={tabStyle('lista')} onClick={() => setAba('lista')}>
           Ativos cadastrados {ferramentas.length > 0 && <span style={{ fontSize: 12, marginLeft: 4, opacity: 0.7 }}>({ferramentas.length})</span>}
         </button>
-        <button style={tabStyle('novo')} onClick={() => { setErro(''); setSucesso(''); setAba('novo'); }}>
+        <button style={tabStyle('novo')} onClick={() => setAba('novo')}>
           + Novo ativo
         </button>
       </div>

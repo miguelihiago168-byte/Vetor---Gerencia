@@ -2,14 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import AlmoxarifadoLayout from '../components/AlmoxarifadoLayout';
 import { getFerramentas, getColaboradoresRetirada, registrarRetiradaFerramenta } from '../services/api';
+import { useNotification } from '../context/NotificationContext';
 
 function AlmoxRetirada() {
   const { projetoId } = useParams();
+  const { success, error } = useNotification();
   const [ferramentas, setFerramentas] = useState([]);
   const [colaboradores, setColaboradores] = useState([]);
   const [buscaColaborador, setBuscaColaborador] = useState('');
-  const [erro, setErro] = useState('');
-  const [sucesso, setSucesso] = useState('');
   const [form, setForm] = useState({ colaborador_id: '', colaborador_nome: '', ferramenta_id: '', quantidade: 1, previsao_devolucao: '', observacao: '' });
 
   const formatarOpcaoColaborador = (item) => {
@@ -54,8 +54,8 @@ function AlmoxRetirada() {
         ]);
         setFerramentas((fRes.data || []).filter((f) => Number(f.quantidade_disponivel) > 0));
         setColaboradores(cRes.data || []);
-      } catch (error) {
-        setErro(error?.response?.data?.erro || 'Erro ao carregar dados para retirada.');
+      } catch (err) {
+        error(err?.response?.data?.erro || 'Erro ao carregar dados para retirada.', 7000);
       }
     };
 
@@ -64,9 +64,6 @@ function AlmoxRetirada() {
 
   const salvar = async (e) => {
     e.preventDefault();
-    setErro('');
-    setSucesso('');
-
     try {
       let colaboradorSelecionado = form.colaborador_id
         ? colaboradores.find((item) => String(item.id) === String(form.colaborador_id))
@@ -88,19 +85,16 @@ function AlmoxRetirada() {
         ferramenta_id: Number(form.ferramenta_id),
         quantidade: Number(form.quantidade)
       });
-      setSucesso('Retirada registrada com sucesso.');
+      success('Retirada registrada com sucesso.', 5000);
       setForm({ colaborador_id: '', colaborador_nome: '', ferramenta_id: '', quantidade: 1, previsao_devolucao: '', observacao: '' });
       setBuscaColaborador('');
-    } catch (error) {
-      setErro(error?.response?.data?.erro || 'Erro ao registrar retirada.');
+    } catch (err) {
+      error(err?.response?.data?.erro || 'Erro ao registrar retirada.', 7000);
     }
   };
 
   return (
     <AlmoxarifadoLayout title="Retirada">
-        {erro && <div className="alert alert-error">{erro}</div>}
-        {sucesso && <div className="alert alert-success">{sucesso}</div>}
-
         <div className="card">
           <h2 className="card-header">Nova retirada</h2>
           <form onSubmit={salvar} className="grid grid-2" style={{ gap: 12 }}>
