@@ -132,12 +132,32 @@ jobs:
             set -e
 
             APP_DIR="/home/ubuntu/app/gestao-obras-vetor"
+            DATA_DIR="/home/ubuntu/app_data/gestao-obras-vetor"
+            LEGACY_DIR_1="/home/ubuntu/app/gestao-obras-vetor/backend"
+            LEGACY_DIR_2="/home/ubuntu/app/gestao-obras-vetor/gestao-obras-vetor/backend"
 
             sudo mkdir -p "$APP_DIR"
+            sudo mkdir -p "$DATA_DIR/database" "$DATA_DIR/uploads"
             sudo chown -R ubuntu:ubuntu /home/ubuntu/app
+            sudo chown -R ubuntu:ubuntu /home/ubuntu/app_data
             cd "$APP_DIR"
 
             echo '${{ secrets.BACKEND_ENV }}' > backend/.env
+            printf 'APP_DATA_DIR=%s\n' "$DATA_DIR" > .env
+
+            if [ ! -f "$DATA_DIR/database/gestao_obras.db" ]; then
+              if [ -f "$LEGACY_DIR_1/database/gestao_obras.db" ]; then
+                cp -R "$LEGACY_DIR_1/database/." "$DATA_DIR/database/"
+              elif [ -f "$LEGACY_DIR_2/database/gestao_obras.db" ]; then
+                cp -R "$LEGACY_DIR_2/database/." "$DATA_DIR/database/"
+              fi
+            fi
+
+            if [ -d "$LEGACY_DIR_1/uploads" ] && [ -z "$(ls -A "$DATA_DIR/uploads" 2>/dev/null)" ]; then
+              cp -R "$LEGACY_DIR_1/uploads/." "$DATA_DIR/uploads/" || true
+            elif [ -d "$LEGACY_DIR_2/uploads" ] && [ -z "$(ls -A "$DATA_DIR/uploads" 2>/dev/null)" ]; then
+              cp -R "$LEGACY_DIR_2/uploads/." "$DATA_DIR/uploads/" || true
+            fi
 
             sudo docker compose up -d --build
 

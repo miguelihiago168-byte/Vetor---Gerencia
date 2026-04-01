@@ -8,8 +8,8 @@ services:
     env_file:
       - backend/.env
     volumes:
-      - ./backend/uploads:/app/uploads
-      - ./backend/database:/app/database
+      - ${APP_DATA_DIR:-/home/ubuntu/app_data/gestao-obras-vetor}/uploads:/app/uploads
+      - ${APP_DATA_DIR:-/home/ubuntu/app_data/gestao-obras-vetor}/database:/app/database
     expose:
       - "3001"
     restart: unless-stopped
