@@ -48,21 +48,60 @@ jobs:
           chmod 600 ~/.ssh/id_ec2
           ssh-keyscan -T 10 -H '${{ secrets.EC2_HOST }}' >> ~/.ssh/known_hosts 2>/dev/null || true
 
+      - name: Testar conectividade SSH com EC2
+        run: |
+          set -e
+          SSH_OPTS="-i ~/.ssh/id_ec2 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20"
+
+          ok=0
+          for i in 1 2 3 4 5; do
+            echo "Tentativa de SSH $i/5..."
+            if ssh $SSH_OPTS ubuntu@${{ secrets.EC2_HOST }} "echo conectado" >/dev/null 2>&1; then
+              ok=1
+              break
+            fi
+            sleep 8
+          done
+
+          if [ "$ok" -ne 1 ]; then
+            echo "Falha de conectividade SSH: porta 22 inacessivel a partir do runner do GitHub."
+            echo "Verifique Security Group, NACL, IP publico da EC2 e se o sshd esta ativo."
+            exit 1
+          fi
+
       - name: Sincronizar arquivos para EC2 (rápido)
         run: |
           set -e
           APP_DIR="/home/ubuntu/app/gestao-obras-vetor"
           SSH_OPTS="-i ~/.ssh/id_ec2 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15"
 
-          ssh $SSH_OPTS ubuntu@${{ secrets.EC2_HOST }} "mkdir -p '$APP_DIR/backend' '$APP_DIR/frontend' '$APP_DIR/nginx'"
+          retry() {
+            local n=1
+            local max=5
+            local delay=8
+            while true; do
+              "$@" && break || {
+                if [ $n -lt $max ]; then
+                  n=$((n+1))
+                  echo "Falhou. Nova tentativa em ${delay}s (${n}/${max})..."
+                  sleep $delay
+                else
+                  echo "Comando falhou apos ${max} tentativas: $*"
+                  return 1
+                fi
+              }
+            done
+          }
 
-          rsync -az -e "ssh $SSH_OPTS" "$BASE_DIR/docker-compose.yml" ubuntu@${{ secrets.EC2_HOST }}:"$APP_DIR/"
+          retry ssh $SSH_OPTS ubuntu@${{ secrets.EC2_HOST }} "mkdir -p '$APP_DIR/backend' '$APP_DIR/frontend' '$APP_DIR/nginx'"
+
+          retry rsync -az -e "ssh $SSH_OPTS" "$BASE_DIR/docker-compose.yml" ubuntu@${{ secrets.EC2_HOST }}:"$APP_DIR/"
 
           if [ -f "$BASE_DIR/.dockerignore" ]; then
-            rsync -az -e "ssh $SSH_OPTS" "$BASE_DIR/.dockerignore" ubuntu@${{ secrets.EC2_HOST }}:"$APP_DIR/"
+            retry rsync -az -e "ssh $SSH_OPTS" "$BASE_DIR/.dockerignore" ubuntu@${{ secrets.EC2_HOST }}:"$APP_DIR/"
           fi
 
-          rsync -az -e "ssh $SSH_OPTS" \
+          retry rsync -az -e "ssh $SSH_OPTS" \
             --exclude node_modules \
             --exclude database \
             --exclude uploads \
@@ -71,14 +110,14 @@ jobs:
             --exclude .env \
             "$BASE_DIR/backend/" ubuntu@${{ secrets.EC2_HOST }}:"$APP_DIR/backend/"
 
-          rsync -az -e "ssh $SSH_OPTS" \
+          retry rsync -az -e "ssh $SSH_OPTS" \
             --exclude node_modules \
             --exclude dist \
             --exclude build \
             --exclude .vite \
             "$BASE_DIR/frontend/" ubuntu@${{ secrets.EC2_HOST }}:"$APP_DIR/frontend/"
 
-          rsync -az -e "ssh $SSH_OPTS" "$BASE_DIR/nginx/" ubuntu@${{ secrets.EC2_HOST }}:"$APP_DIR/nginx/"
+          retry rsync -az -e "ssh $SSH_OPTS" "$BASE_DIR/nginx/" ubuntu@${{ secrets.EC2_HOST }}:"$APP_DIR/nginx/"
 
       - name: Conectar ao servidor e fazer deploy
         uses: appleboy/ssh-action@v1.0.3
