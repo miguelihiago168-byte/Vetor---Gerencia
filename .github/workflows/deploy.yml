@@ -16,6 +16,27 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      - name: Baixar código do repositório
+        uses: actions/checkout@v4
+
+      - name: Copiar somente arquivos necessários para EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          port: 22
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: |
+            gestao-obras-vetor/docker-compose.yml
+            gestao-obras-vetor/.dockerignore
+            gestao-obras-vetor/backend/**
+            gestao-obras-vetor/frontend/**
+            gestao-obras-vetor/nginx/**
+          target: /home/ubuntu/app/gestao-obras-vetor
+          strip_components: 1
+          overwrite: true
+          rm: false
+
       - name: Conectar ao servidor e fazer deploy
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -32,15 +53,7 @@ jobs:
 
             sudo mkdir -p "$APP_DIR"
             sudo chown -R ubuntu:ubuntu /home/ubuntu/app
-
-            if [ ! -d "$APP_DIR/.git" ]; then
-              echo "Repositório não encontrado em $APP_DIR"
-              exit 1
-            fi
-
             cd "$APP_DIR"
-            git fetch origin principal
-            git reset --hard origin/principal
 
             echo '${{ secrets.BACKEND_ENV }}' > backend/.env
 
