@@ -46,13 +46,13 @@ jobs:
           mkdir -p ~/.ssh
           printf '%s\n' '${{ secrets.EC2_SSH_KEY }}' > ~/.ssh/id_ec2
           chmod 600 ~/.ssh/id_ec2
-          ssh-keyscan -H '${{ secrets.EC2_HOST }}' >> ~/.ssh/known_hosts
+          ssh-keyscan -T 10 -H '${{ secrets.EC2_HOST }}' >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Sincronizar arquivos para EC2 (rápido)
         run: |
           set -e
           APP_DIR="/home/ubuntu/app/gestao-obras-vetor"
-          SSH_OPTS="-i ~/.ssh/id_ec2 -o StrictHostKeyChecking=yes"
+          SSH_OPTS="-i ~/.ssh/id_ec2 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15"
 
           ssh $SSH_OPTS ubuntu@${{ secrets.EC2_HOST }} "mkdir -p '$APP_DIR/backend' '$APP_DIR/frontend' '$APP_DIR/nginx'"
 
