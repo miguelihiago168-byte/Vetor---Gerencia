@@ -9,6 +9,7 @@ const { getQuery, allQuery, runQuery } = require('../config/database');
 const { inferirPerfil } = require('../constants/access');
 const { ensureAccessSchema } = require('../middleware/rbac');
 const { auth, isAdm } = require('../middleware/auth');
+const { hasForbiddenPasswordSequence } = require('../services/passwordPolicy');
 
 const router = express.Router();
 const GLOBAL_SIGNUP_CODE = process.env.GLOBAL_SIGNUP_CODE || '052298';
@@ -319,6 +320,12 @@ router.post('/register', [
 
     const { nome, empresa, email, usuario, senha, codigo_acesso } = req.body;
 
+    if (hasForbiddenPasswordSequence(senha)) {
+      return res.status(400).json({
+        erro: 'Senha não pode conter sequência crescente ou decrescente de letras/números (ex: abcd, 1234, 9876).'
+      });
+    }
+
     if (String(codigo_acesso).trim() !== GLOBAL_SIGNUP_CODE) {
       return res.status(403).json({ erro: 'Código global inválido para criação de conta.' });
     }
@@ -488,6 +495,12 @@ router.post('/register/:token', [
     if (!senhaValida) {
       return res.status(400).json({
         erro: 'A senha deve ter exatamente 6 caracteres com pelo menos 4 números, 1 letra e 1 caractere especial.'
+      });
+    }
+
+    if (hasForbiddenPasswordSequence(senha)) {
+      return res.status(400).json({
+        erro: 'Senha não pode conter sequência crescente ou decrescente de letras/números (ex: abcd, 1234, 9876).'
       });
     }
 

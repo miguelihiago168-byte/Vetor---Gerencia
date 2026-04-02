@@ -4,7 +4,7 @@ import Navbar from '../components/Navbar';
 import { getRDO, updateRDO, getAtividadesEAP, addRdoMaoObra, listRdoMaoObra, addRdoComentario, addRdoMaterial, addRdoOcorrencia, uploadRdoFoto, getAnexos, updateStatusRDO, getRdoFerramentasDisponiveis, getRdoFerramentas, addRdoFerramenta, getRdoPDF } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
-import { FileText, Download, ArrowLeft, MapPin, Building2, User, Calendar } from 'lucide-react';
+import { FileText, Download, ArrowLeft, MapPin, Building2, User, Calendar, Save } from 'lucide-react';
 import { KPICards } from '../components/RDOTimeline';
 
 function RDODetalhes() {
@@ -85,13 +85,9 @@ function RDODetalhes() {
       const resp = await getRdoPDF(rdoId);
       const blob = new Blob([resp.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `RDO-${String(rdoId).padStart(3, '0')}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      const newTab = window.open(url, '_blank');
+      if (!newTab) window.location.href = url;
+      setTimeout(() => window.URL.revokeObjectURL(url), 60000);
     } catch (error) {
       await alert({ title: 'Erro', message: 'Falha ao gerar PDF: ' + (error.response?.data?.erro || error.message) });
     }
@@ -110,7 +106,7 @@ function RDODetalhes() {
 
   const statusLabel = (s) => {
     if (s === 'Em análise') return 'Em aprovação';
-    if (s === 'Em preenchimento') return 'Aguardando aprovação';
+    if (s === 'Em preenchimento') return 'Em preenchimento';
     return s || 'N/A';
   };
 
@@ -231,7 +227,7 @@ function RDODetalhes() {
                 Reprovar
               </button>
             )}
-            {isGestor && rdo.status !== 'Em preenchimento' && (
+            {isGestor && rdo.status === 'Aprovado' && (
               <button className="btn btn-warning" onClick={async () => {
                 try {
                   await updateStatusRDO(rdoId, 'Em preenchimento');
@@ -246,42 +242,11 @@ function RDODetalhes() {
           </div>
         </div>
 
-        {/* Row 1: 2 colunas — Informações Gerais | Informações do Projeto */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-          {/* Informações Gerais */}
-          <div className="card" style={{ padding: '0', overflow: 'hidden' }}>
-            <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Informações Gerais</span>
-            </div>
-            {[
-              { label: 'Data', value: formatLocalDate(rdo.data_relatorio) },
-              { label: 'Dia da Semana', value: rdo.dia_semana || 'N/A' },
-              { label: 'Status', value: statusLabel(rdo.status) },
-              { label: 'Responsável', value: rdo.criado_por_nome || 'N/A' },
-            ].map((row, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
-                <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#9CA3AF', fontWeight: 600 }}>{row.label}</span>
-                <span style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{row.value}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Informações do Projeto */}
-          <div className="card" style={{ padding: '0', overflow: 'hidden' }}>
-            <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Informações do Projeto</span>
-            </div>
-            {[
-              { label: 'Projeto', value: rdo.projeto_nome || 'N/A', icon: <Building2 size={11} /> },
-              { label: 'Empresa Executante', value: rdo.empresa_executante || 'N/A', icon: <Building2 size={11} /> },
-              { label: 'Cidade', value: rdo.cidade || 'N/A', icon: <MapPin size={11} /> },
-            ].map((row, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#9CA3AF', fontWeight: 600 }}>{row.icon}{row.label}</span>
-                <span style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{row.value}</span>
-              </div>
-            ))}
-          </div>
+        <div className="card" style={{ marginBottom: '16px', padding: '10px 16px', display: 'flex', gap: '18px', flexWrap: 'wrap', color: '#64748b', fontSize: '13px' }}>
+          <span><Calendar size={14} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} />{formatLocalDate(rdo.data_relatorio)}</span>
+          <span><User size={14} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} />{rdo.criado_por_nome || 'N/A'}</span>
+          <span><Building2 size={14} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} />{rdo.projeto_nome || 'N/A'}</span>
+          <span><MapPin size={14} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} />{rdo.cidade || 'N/A'}</span>
         </div>
 
         {erro && <div className="alert alert-error" style={{ marginBottom: '16px' }}>{erro}</div>}
@@ -420,23 +385,41 @@ function RDODetalhes() {
         {(rdo.fotos || []).length > 0 && (
           <div className="card" style={{ padding: '0', marginBottom: '16px', overflow: 'hidden' }}>
             <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Registros Fotográficos</span>
+              <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>
+                Registros Fotográficos ({(rdo.fotos || []).length})
+              </span>
             </div>
-            {(rdo.fotos || []).map((foto) => (
-              <div key={foto.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
-                <div>
-                  <div style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{foto.descricao || 'Foto'}</div>
-                  {(foto.atividade_descricao || foto.atividade_avulsa_descricao) && (
-                    <div style={{ fontSize: '12px', color: '#9CA3AF' }}>
-                      Atividade: {foto.atividade_descricao
-                        ? `${foto.atividade_codigo ? `${foto.atividade_codigo} — ` : ''}${foto.atividade_descricao}`
-                        : `Avulsa — ${foto.atividade_avulsa_descricao}`}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '12px', padding: '16px' }}>
+              {(rdo.fotos || []).map((foto) => (
+                <a
+                  key={foto.id}
+                  href={`/uploads/${foto.caminho_arquivo}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ display: 'block', textDecoration: 'none', borderRadius: '8px', overflow: 'hidden', border: '1px solid #E5E7EB', background: '#fff' }}
+                >
+                  <div style={{ position: 'relative', width: '100%', paddingTop: '75%', background: '#F3F4F6', overflow: 'hidden' }}>
+                    <img
+                      src={`/uploads/${foto.caminho_arquivo}`}
+                      alt={foto.descricao || 'Foto'}
+                      style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  </div>
+                  <div style={{ padding: '8px 10px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 600, color: '#374151', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {foto.descricao || 'Foto'}
                     </div>
-                  )}
-                </div>
-                <span style={{ fontSize: '12px', color: '#9CA3AF' }}>{new Date(foto.criado_em).toLocaleString('pt-BR')}</span>
-              </div>
-            ))}
+                    {(foto.atividade_descricao || foto.atividade_avulsa_descricao) && (
+                      <div style={{ fontSize: '11px', color: '#9CA3AF', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {foto.atividade_descricao
+                          ? `${foto.atividade_codigo ? `${foto.atividade_codigo} — ` : ''}${foto.atividade_descricao}`
+                          : `Avulsa — ${foto.atividade_avulsa_descricao}`}
+                      </div>
+                    )}
+                  </div>
+                </a>
+              ))}
+            </div>
           </div>
         )}
 
@@ -447,16 +430,17 @@ function RDODetalhes() {
           </div>
           {materiais.length > 0 ? (
             <div>
-              <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr 1fr', padding: '6px 16px', background: '#F9FAFB', borderBottom: '1px solid #F3F4F6' }}>
-                {['Material', 'Quantidade', 'Unidade'].map(h => (
+              <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr 1fr 2fr', padding: '6px 16px', background: '#F9FAFB', borderBottom: '1px solid #F3F4F6' }}>
+                {['Material', 'Quantidade', 'Unidade', 'Nº NF'].map(h => (
                   <span key={h} style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#9CA3AF' }}>{h}</span>
                 ))}
               </div>
               {materiais.map((item, index) => (
-                <div key={index} style={{ display: 'grid', gridTemplateColumns: '3fr 1fr 1fr', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
+                <div key={index} style={{ display: 'grid', gridTemplateColumns: '3fr 1fr 1fr 2fr', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
                   <span style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{item.nome_material || item.nome}</span>
                   <span style={{ fontSize: '14px', color: '#374151' }}>{item.quantidade}</span>
                   <span style={{ fontSize: '14px', color: '#374151' }}>{item.unidade}</span>
+                  <span style={{ fontSize: '14px', color: '#374151' }}>{item.numero_nf || '—'}</span>
                 </div>
               ))}
             </div>
@@ -508,24 +492,43 @@ function RDODetalhes() {
           </div>
         )}
 
-        {/* Anexos */}
-        <div className="card" style={{ padding: '0', marginBottom: '16px', overflow: 'hidden' }}>
-          <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
-            <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Anexos</span>
-          </div>
-          {anexos.length > 0 ? (
-            <div>
-              {anexos.map((anexo) => (
-                <div key={anexo.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
-                  <FileText size={14} style={{ color: '#9CA3AF', flexShrink: 0 }} />
-                  <span style={{ fontSize: '14px', color: '#111827' }}>{anexo.nome_original}</span>
-                </div>
-              ))}
+        {/* Anexos — somente PDFs */}
+        {anexos.filter(a => (a.tipo || '').includes('pdf') || (a.nome_arquivo || a.nome_original || '').toLowerCase().endsWith('.pdf')).length > 0 && (
+          <div className="card" style={{ padding: '0', marginBottom: '16px', overflow: 'hidden' }}>
+            <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
+              <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>
+                Anexos ({anexos.filter(a => (a.tipo || '').includes('pdf') || (a.nome_arquivo || a.nome_original || '').toLowerCase().endsWith('.pdf')).length})
+              </span>
             </div>
-          ) : (
-            <div style={{ padding: '16px', color: '#9CA3AF', fontSize: '14px' }}>Nenhum anexo.</div>
-          )}
-        </div>
+            <div style={{ padding: '8px 0' }}>
+              {anexos
+                .filter(a => (a.tipo || '').includes('pdf') || (a.nome_arquivo || a.nome_original || '').toLowerCase().endsWith('.pdf'))
+                .map((anexo) => {
+                  const nome = anexo.nome_arquivo || anexo.nome_original || 'Anexo.pdf';
+                  const caminho = anexo.caminho_arquivo || '';
+                  return (
+                    <a
+                      key={anexo.id}
+                      href={`/uploads/${caminho}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 16px', borderBottom: '1px solid #F3F4F6', textDecoration: 'none', color: 'inherit' }}
+                    >
+                      <FileText size={20} style={{ color: '#ef4444', flexShrink: 0 }} />
+                      <div>
+                        <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>{nome}</div>
+                        {anexo.tamanho ? (
+                          <div style={{ fontSize: '11px', color: '#9CA3AF' }}>{(anexo.tamanho / 1024).toFixed(0)} KB · Clique para abrir</div>
+                        ) : (
+                          <div style={{ fontSize: '11px', color: '#9CA3AF' }}>Clique para abrir</div>
+                        )}
+                      </div>
+                    </a>
+                  );
+                })}
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

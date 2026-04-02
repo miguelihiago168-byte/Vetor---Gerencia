@@ -16,6 +16,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
 import { useNotification } from '../context/NotificationContext';
+import { hasForbiddenPasswordSequence } from '../utils/passwordPolicy';
 import { Shield, UserPlus, Trash2, RotateCcw, Search, X, Users, UserCheck, Eye, EyeOff } from 'lucide-react';
 
 const PERFIS = ['ADM', 'Gestor Geral', 'Gestor Local', 'Gestor de Qualidade', 'Almoxarife', 'Fiscal'];
@@ -207,6 +208,9 @@ function Usuarios() {
     }
 
     if (!editingUserId && formData.senha.length > 72) return 'A senha deve ter no máximo 72 caracteres.';
+    if (formData.senha && hasForbiddenPasswordSequence(formData.senha)) {
+      return 'A senha não pode conter sequência crescente/decrescente de letras ou números (ex: abcd, 1234, 9876).';
+    }
     if (!FUNCOES.includes(formData.funcao)) return 'Função inválida.';
     if (!PERFIS.includes(formData.perfil)) return 'Perfil inválido.';
     if (!SETORES.includes(formData.setor)) return 'Setor inválido.';

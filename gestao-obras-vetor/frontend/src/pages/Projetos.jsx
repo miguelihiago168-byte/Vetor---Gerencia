@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getProjetos, createProjeto, updateProjeto, deleteProjeto, getUsuarios, arquivarProjeto, desarquivarProjeto, getDashboardAvanco, copiarEapProjeto } from '../services/api';
+import { getProjetos, createProjeto, updateProjeto, getUsuarios, arquivarProjeto, desarquivarProjeto, getDashboardAvanco, copiarEapProjeto } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
 import { useNotification } from '../context/NotificationContext';
-import { Plus, Edit, Trash2, Users, Calendar, Building, Archive, RotateCcw, Eye, EyeOff } from 'lucide-react';
+import { Plus, Edit, Users, Calendar, Building, Archive, RotateCcw, Eye, EyeOff } from 'lucide-react';
 
 function Projetos() {
   const { confirm } = useDialog();
@@ -154,27 +154,6 @@ function Projetos() {
     setEditando(null);
     setErro('');
     setCopiarEapDe('');
-  };
-
-  const handleDelete = async (id) => {
-    const ok = await confirm({
-      title: 'Desativar projeto',
-      message: 'Deseja realmente desativar este projeto?',
-      confirmText: 'Desativar',
-      cancelText: 'Cancelar'
-    });
-    if (!ok) return;
-
-    try {
-      await deleteProjeto(id);
-      setSucesso('Projeto desativado com sucesso!');
-      notifySuccess('Projeto desativado com sucesso!', 4000);
-      await carregarDados();
-      setTimeout(() => setSucesso(''), 3000);
-    } catch (error) {
-      setErro('Erro ao desativar projeto.');
-      notifyError('Erro ao desativar projeto.', 6000);
-    }
   };
 
   const handleArquivar = async (id) => {
@@ -381,14 +360,6 @@ function Projetos() {
                       style={{ padding: '5px 8px' }}
                     >
                       {showArquivados ? <RotateCcw size={14} /> : <Archive size={14} />}
-                    </button>
-                    <button
-                      onClick={() => handleDelete(projeto.id)}
-                      className="btn btn-icon btn-danger"
-                      title="Excluir"
-                      style={{ padding: '5px 8px' }}
-                    >
-                      <Trash2 size={14} />
                     </button>
                   </div>
                 )}

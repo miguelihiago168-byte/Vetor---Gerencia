@@ -24,7 +24,7 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({
+const uploadGeral = multer({
   storage: storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
   fileFilter: (req, file, cb) => {
@@ -40,8 +40,19 @@ const upload = multer({
   }
 });
 
+const uploadPdfRdo = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = String(path.extname(file.originalname || '')).toLowerCase();
+    const mime = String(file.mimetype || '').toLowerCase();
+    if (ext === '.pdf' || mime.includes('pdf')) return cb(null, true);
+    return cb(new Error('Anexos do RDO aceitam somente arquivos PDF.'));
+  }
+});
+
 // Upload de arquivo
-router.post('/upload/:rdoId', auth, upload.single('arquivo'), async (req, res) => {
+router.post('/upload/:rdoId', auth, uploadPdfRdo.single('arquivo'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ erro: 'Nenhum arquivo enviado.' });
@@ -71,7 +82,7 @@ router.post('/upload/:rdoId', auth, upload.single('arquivo'), async (req, res) =
 });
 
 // Upload de arquivo para RNC
-router.post('/upload-rnc/:rncId', auth, upload.single('arquivo'), async (req, res) => {
+router.post('/upload-rnc/:rncId', auth, uploadGeral.single('arquivo'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ erro: 'Nenhum arquivo enviado.' });
@@ -117,7 +128,14 @@ router.get('/rdo/:rdoId', auth, async (req, res) => {
     const { rdoId } = req.params;
 
     const anexos = await allQuery(
-      'SELECT * FROM anexos WHERE rdo_id = ? ORDER BY criado_em DESC',
+      `SELECT *
+       FROM anexos
+       WHERE rdo_id = ?
+         AND (
+           LOWER(COALESCE(tipo, '')) LIKE '%pdf%'
+           OR LOWER(COALESCE(nome_arquivo, '')) LIKE '%.pdf'
+         )
+       ORDER BY criado_em DESC`,
       [rdoId]
     );
 
@@ -177,7 +195,7 @@ router.delete('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const anexo = await runQuery(
+    const anexo = await getQuery(
       'SELECT * FROM anexos WHERE id = ?',
       [id]
     );

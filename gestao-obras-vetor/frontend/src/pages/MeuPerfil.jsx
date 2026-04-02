@@ -4,6 +4,7 @@ import { useDialog } from '../context/DialogContext';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { ArrowLeft, KeyRound, ShieldCheck, User } from 'lucide-react';
 import Navbar from '../components/Navbar';
+import { hasForbiddenPasswordSequence } from '../utils/passwordPolicy';
 import './MeuPerfil.css';
 
 function MeuPerfil() {
@@ -22,6 +23,10 @@ function MeuPerfil() {
     e.preventDefault();
     if (novaSenha.length !== 6 || !/^\d{6}$/.test(novaSenha)) {
       await alert({ title: 'Erro', message: 'A nova senha deve ter 6 dígitos numéricos.' });
+      return;
+    }
+    if (hasForbiddenPasswordSequence(novaSenha)) {
+      await alert({ title: 'Erro', message: 'A nova senha não pode conter sequência crescente/decrescente (ex: 123456 ou 987654).' });
       return;
     }
     if (novaSenha !== confirmarSenha) {

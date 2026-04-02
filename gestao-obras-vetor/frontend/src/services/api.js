@@ -63,7 +63,6 @@ export const getProjetos = () => api.get('/projetos');
 export const getProjeto = (id) => api.get(`/projetos/${id}`);
 export const createProjeto = (data) => api.post('/projetos', data);
 export const updateProjeto = (id, data) => api.put(`/projetos/${id}`, data);
-export const deleteProjeto = (id) => api.delete(`/projetos/${id}`);
 export const arquivarProjeto = (id) => api.patch(`/projetos/${id}/arquivar`);
 export const desarquivarProjeto = (id) => api.patch(`/projetos/${id}/desarquivar`);
 export const copiarEapProjeto = (destinoId, origemProjetoId) => api.post(`/projetos/${destinoId}/copiar-eap`, { origem_projeto_id: origemProjetoId });
@@ -102,6 +101,8 @@ export const addRdoOcorrencia = (rdoId, data) => api.post(`/rdo/${rdoId}/ocorren
 export const addRdoAssinatura = (rdoId, data) => api.post(`/rdo/${rdoId}/assinatura`, data);
 // Backend espera o campo 'arquivo' no upload
 export const uploadRdoFoto = (rdoId, formData) => api.post(`/rdo/${rdoId}/foto`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+export const updateRdoFoto = (rdoId, fotoId, data) => api.patch(`/rdo/${rdoId}/foto/${fotoId}`, data);
+export const reorderRdoFotos = (rdoId, fotoIds) => api.patch(`/rdo/${rdoId}/fotos/ordem`, { foto_ids: fotoIds });
 // Equipamentos
 export const getRdoEquipamentos = (rdoId) => api.get(`/rdo/${rdoId}/equipamentos`);
 export const addRdoEquipamento = (rdoId, data) => api.post(`/rdo/${rdoId}/equipamentos`, data);
@@ -127,6 +128,7 @@ export const getAnexosRNC = (rncId) => api.get(`/anexos/rnc/${rncId}`);
 // Dashboard
 export const getDashboardAvanco = (projetoId) => api.get(`/dashboard/projeto/${projetoId}/avanco`);
 export const getRDOStats = (projetoId) => api.get(`/dashboard/projeto/${projetoId}/rdos-stats`);
+export const getDashboardGaleriaRdos = (projetoId) => api.get(`/dashboard/projeto/${projetoId}/galeria-rdos`);
 export const getCurvaS = (projetoId) => api.get(`/dashboard/projeto/${projetoId}/curva-s`);
 
 // RNC

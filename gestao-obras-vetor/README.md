@@ -235,7 +235,8 @@ gestao-obras-vetor/
 - `GET /api/projetos/:id` - Detalhes
 - `POST /api/projetos` - Criar
 - `PUT /api/projetos/:id` - Atualizar
-- `DELETE /api/projetos/:id` - Desativar
+- `PATCH /api/projetos/:id/arquivar` - Arquivar
+- `PATCH /api/projetos/:id/desarquivar` - Desarquivar
 
 ### EAP
 - `GET /api/eap/projeto/:projetoId` - Listar atividades
@@ -262,6 +263,7 @@ gestao-obras-vetor/
 ### Dashboard
 - `GET /api/dashboard/projeto/:projetoId/avanco` - Avanço físico
 - `GET /api/dashboard/projeto/:projetoId/rdos-stats` - Estatísticas
+- `GET /api/dashboard/projeto/:projetoId/galeria-rdos` - Galeria de fotos agrupada por RDO
 
 ## 🎯 Próximos Passos
 
@@ -292,6 +294,8 @@ Para expandir o sistema, você pode:
 - Para produção, migre para PostgreSQL ou MySQL
 - Os arquivos de upload ficam em `backend/uploads/`
 - Logs são exibidos no console do backend
+- PDF de RDO inclui links clicáveis para anexos e fotos embutidas
+- PDF de RNC inclui fotos anexadas e links para abertura dos anexos
 
 ## 🐛 Troubleshooting
 

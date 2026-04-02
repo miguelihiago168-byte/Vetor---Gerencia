@@ -1,6 +1,10 @@
+[migrate_add_requisicoes] Iniciando migração...
+[migrate_add_cotacao_fields] Iniciando...
 
 Servidor inicializado na porta 3001
 Acesse http://localhost:3001/api/health
 Credenciais padrão: Login: 000001 Senha: 123456
-Conectado ao banco de dados SQLite
+Conectado ao banco de dados SQLite (principal)
+[migrate_add_cotacao_fields] Schema já compatível.
+[migrate_add_requisicoes] Migração concluída com sucesso.
 EAP recalculada com sucesso.

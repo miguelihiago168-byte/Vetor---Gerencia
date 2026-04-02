@@ -56,7 +56,7 @@ function RDOs() {
 
   const statusLabel = (s) => {
     if (s === 'Em análise') return 'Em aprovação';
-    if (s === 'Em preenchimento') return 'Aguardando aprovação';
+    if (s === 'Em preenchimento') return 'Em preenchimento';
     return s || 'N/A';
   };
 

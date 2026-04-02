@@ -1,0 +1,4 @@
+Erro ao validar acesso de leitura no almoxarifado: [Error: SQLITE_BUSY: database is locked] {
+  errno: 5,
+  code: 'SQLITE_BUSY'
+}

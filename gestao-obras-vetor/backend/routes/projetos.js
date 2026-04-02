@@ -316,28 +316,17 @@ router.put('/:id', [auth, isGestor], async (req, res) => {
   }
 });
 
-// Desativar projeto
+// Exclusão de projeto desabilitada: use arquivamento
 router.delete('/:id', [auth, isGestor], async (req, res) => {
   try {
-    const { id } = req.params;
-    const tenantId = req.tenantId;
-    if (!tenantId) return res.status(400).json({ erro: 'Tenant não definido.' });
-
-    const projetoAnterior = await getQuery('SELECT * FROM projetos WHERE id = ? AND tenant_id = ?', [id, tenantId]);
-    if (!projetoAnterior) return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
-
-    await runQuery(
-      'UPDATE projetos SET ativo = 0, atualizado_em = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?',
-      [id, tenantId]
-    );
-
-    await registrarAuditoria('projetos', id, 'DELETE', projetoAnterior, { ativo: 0 }, req.usuario.id);
-
-    res.json({ mensagem: 'Projeto desativado com sucesso.' });
+    return res.status(405).json({
+      erro: 'Exclusão de projeto não é permitida. Use o arquivamento.',
+      endpoint_recomendado: `PATCH /api/projetos/${req.params.id}/arquivar`
+    });
 
   } catch (error) {
-    console.error('Erro ao desativar projeto:', error);
-    res.status(500).json({ erro: 'Erro ao desativar projeto.' });
+    console.error('Erro ao bloquear exclusão de projeto:', error);
+    res.status(500).json({ erro: 'Erro ao processar solicitação de exclusão.' });
   }
 });
 

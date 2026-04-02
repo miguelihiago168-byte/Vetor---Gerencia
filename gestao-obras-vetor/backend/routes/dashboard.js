@@ -134,6 +134,71 @@ router.get('/projeto/:projetoId/rdos-stats', auth, async (req, res) => {
   }
 });
 
+// Galeria de fotos agrupada por RDO
+router.get('/projeto/:projetoId/galeria-rdos', auth, async (req, res) => {
+  try {
+    const { projetoId } = req.params;
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(400).json({ erro: 'Tenant não definido.' });
+
+    const projeto = await getQuery('SELECT id FROM projetos WHERE id = ? AND tenant_id = ?', [projetoId, tenantId]);
+    if (!projeto) {
+      return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
+    }
+
+    const rdos = await allQuery(`
+      SELECT id, numero_rdo, data_relatorio, status
+      FROM rdos
+      WHERE projeto_id = ?
+      ORDER BY data_relatorio DESC, id DESC
+      LIMIT 120
+    `, [projetoId]);
+
+    const grupos = [];
+    let totalFotos = 0;
+
+    for (const rdo of rdos) {
+      const fotos = await allQuery(`
+        SELECT rf.id,
+               rf.rdo_id,
+               rf.nome_arquivo,
+               rf.caminho_arquivo,
+               rf.descricao,
+               rf.criado_em,
+               ae.codigo_eap AS atividade_codigo,
+               COALESCE(ae.nome, ae.descricao) AS atividade_descricao,
+               rf.atividade_avulsa_descricao
+        FROM rdo_fotos rf
+        LEFT JOIN rdo_atividades ra ON rf.rdo_atividade_id = ra.id
+        LEFT JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
+        WHERE rf.rdo_id = ?
+        ORDER BY COALESCE(rf.ordem, 0) ASC, rf.criado_em ASC
+      `, [rdo.id]);
+
+      if (!fotos.length) continue;
+
+      totalFotos += fotos.length;
+      grupos.push({
+        rdo_id: rdo.id,
+        numero_rdo: rdo.numero_rdo || `RDO-${String(rdo.id).padStart(3, '0')}`,
+        data_relatorio: rdo.data_relatorio,
+        status: rdo.status,
+        total_fotos: fotos.length,
+        fotos
+      });
+    }
+
+    res.json({
+      total_rdos_com_foto: grupos.length,
+      total_fotos: totalFotos,
+      rdos: grupos
+    });
+  } catch (error) {
+    console.error('Erro ao obter galeria agrupada de fotos:', error);
+    res.status(500).json({ erro: 'Erro ao obter galeria de fotos.' });
+  }
+});
+
 router.get('/projeto/:projetoId/curva-s', auth, async (req, res) => {
   try {
     const { projetoId } = req.params;

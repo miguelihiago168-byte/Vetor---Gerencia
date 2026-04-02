@@ -6,6 +6,7 @@ const { auth } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
 const { PERMISSIONS, requirePermission, ensureAccessSchema } = require('../middleware/rbac');
 const { PERFIS, PERFIS_LISTA, SETORES, SETORES_LISTA, normalizarPerfil, mapPerfilParaLegado } = require('../constants/access');
+const { hasForbiddenPasswordSequence } = require('../services/passwordPolicy');
 
 const router = express.Router();
 
@@ -538,6 +539,12 @@ router.post('/', [
     const erroSetor = validarSetor(setor, setorOutro);
     if (erroSetor) return res.status(400).json({ erro: erroSetor });
 
+    if (hasForbiddenPasswordSequence(senha)) {
+      return res.status(400).json({
+        erro: 'Senha não pode conter sequência crescente ou decrescente de letras/números (ex: abcd, 1234, 9876).'
+      });
+    }
+
     const projetoIds = perfil === PERFIS.GESTOR_GERAL ? await listarTodosProjetosIds() : projetoIdsEntrada;
     const erroPerfil = validarPerfilEObras(perfil, projetoIds);
     if (erroPerfil) return res.status(400).json({ erro: erroPerfil });
@@ -673,6 +680,11 @@ router.put('/:id', [
     if (req.body.senha !== undefined && req.body.senha !== '') {
       if (String(req.body.senha).length > 72) {
         return res.status(400).json({ erro: 'Senha deve ter no maximo 72 caracteres.' });
+      }
+      if (hasForbiddenPasswordSequence(req.body.senha)) {
+        return res.status(400).json({
+          erro: 'Senha não pode conter sequência crescente ou decrescente de letras/números (ex: abcd, 1234, 9876).'
+        });
       }
       const senhaHash = await bcrypt.hash(req.body.senha, 10);
       updates.push('senha = ?');
@@ -823,6 +835,12 @@ router.patch('/:id/senha', [auth], async (req, res) => {
 
     if (String(novaSenha).length > 72) {
       return res.status(400).json({ erro: 'Nova senha deve ter no maximo 72 caracteres.' });
+    }
+
+    if (hasForbiddenPasswordSequence(novaSenha)) {
+      return res.status(400).json({
+        erro: 'Nova senha não pode conter sequência crescente ou decrescente de letras/números (ex: abcd, 1234, 9876).'
+      });
     }
 
     // Verificar senha atual

@@ -23,6 +23,7 @@ function RNCDetalhes() {
   const [acaoCorretiva, setAcaoCorretiva] = useState('');
   const [enviando, setEnviando] = useState(false);
   const { success, error } = useNotification();
+  const isImage = (anexo) => String(anexo?.tipo || '').startsWith('image/');
 
   useEffect(() => {
     carregarRNC();
@@ -228,12 +229,45 @@ function RNCDetalhes() {
           <div className="rnc-det-section">
             <h3>Anexos (Fotos)</h3>
             <div className="rnc-det-attachments">
-              {anexos.map((anexo) => (
-                <div key={anexo.id} className="rnc-det-attach-item">
-                  <AlertTriangle size={16} />
-                  <div className="attach-name">{anexo.nome_arquivo}</div>
-                </div>
-              ))}
+              {anexos.map((anexo) => {
+                const href = `/uploads/${anexo.caminho_arquivo}`;
+                if (isImage(anexo)) {
+                  return (
+                    <a
+                      key={anexo.id}
+                      href={href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rnc-det-attach-item"
+                      style={{ textDecoration: 'none', color: 'inherit', alignItems: 'flex-start' }}
+                    >
+                      <img
+                        src={href}
+                        alt={anexo.nome_arquivo}
+                        style={{ width: '72px', height: '72px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                      />
+                      <div>
+                        <div className="attach-name">{anexo.nome_arquivo}</div>
+                        <div className="muted" style={{ fontSize: '11px' }}>Abrir imagem</div>
+                      </div>
+                    </a>
+                  );
+                }
+
+                return (
+                  <a
+                    key={anexo.id}
+                    href={href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rnc-det-attach-item"
+                    style={{ textDecoration: 'none', color: 'inherit' }}
+                  >
+                    <AlertTriangle size={16} />
+                    <div className="attach-name">{anexo.nome_arquivo}</div>
+                  </a>
+                );
+              })}
               {anexos.length === 0 && (
                 <div className="muted">Nenhum anexo.</div>
               )}

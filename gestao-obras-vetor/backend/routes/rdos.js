@@ -7,10 +7,36 @@ const { PERFIS, inferirPerfil } = require('../constants/access');
 
 const router = express.Router();
 
+const getPublicBaseUrl = (req) => {
+  const envBase = process.env.PUBLIC_FILE_BASE_URL || process.env.APP_BASE_URL;
+  if (envBase) return String(envBase).replace(/\/$/, '');
+  return `${req.protocol}://${req.get('host')}`;
+};
+
 // Auto-migration: adicionar coluna atividades_avulsas se não existir
 runQuery("ALTER TABLE rdos ADD COLUMN atividades_avulsas TEXT").catch(e => {
   if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] atividades_avulsas:', e.message);
 });
+runQuery('ALTER TABLE rdo_fotos ADD COLUMN ordem INTEGER DEFAULT 0').catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_fotos.ordem:', e.message);
+});
+runQuery('ALTER TABLE rdo_materiais ADD COLUMN numero_nf TEXT').catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_materiais.numero_nf:', e.message);
+});
+
+const ensureRdoOptionalColumns = async () => {
+  try { await runQuery('ALTER TABLE rdo_fotos ADD COLUMN ordem INTEGER DEFAULT 0'); } catch (_) {}
+  try { await runQuery('ALTER TABLE rdo_materiais ADD COLUMN numero_nf TEXT'); } catch (_) {}
+};
+
+const getRdoFotosOrderBy = async () => {
+  try {
+    const cols = await allQuery('PRAGMA table_info(rdo_fotos)');
+    const hasOrdem = Array.isArray(cols) && cols.some((c) => String(c?.name) === 'ordem');
+    if (hasOrdem) return 'COALESCE(rf.ordem, 0) ASC, rf.criado_em ASC';
+  } catch (_) {}
+  return 'rf.criado_em ASC';
+};
 
 // Gerar número sequencial e único no formato RDO-XXX por tenant/projeto
 const gerarNumeroRDO = async (tenantId, projetoId) => {
@@ -195,6 +221,7 @@ router.get('/projeto/:projetoId', auth, async (req, res) => {
 // Obter detalhes de um RDO
 router.get('/:id', auth, async (req, res) => {
   try {
+    await ensureRdoOptionalColumns();
     const { id } = req.params;
 
     const rdo = await getQuery(`
@@ -221,7 +248,14 @@ router.get('/:id', auth, async (req, res) => {
 
     // Buscar anexos
     const anexos = await allQuery(`
-      SELECT * FROM anexos WHERE rdo_id = ?
+      SELECT *
+      FROM anexos
+      WHERE rdo_id = ?
+        AND (
+          LOWER(COALESCE(tipo, '')) LIKE '%pdf%'
+          OR LOWER(COALESCE(nome_arquivo, '')) LIKE '%.pdf'
+        )
+      ORDER BY criado_em DESC
     `, [id]);
 
     // Buscar mão de obra vinculada ao RDO
@@ -234,13 +268,17 @@ router.get('/:id', auth, async (req, res) => {
     `, [id]);
 
     // Buscar fotos vinculadas às atividades do RDO
+    const fotosOrderBy = await getRdoFotosOrderBy();
     const fotos = await allQuery(`
-      SELECT rf.*, ae.codigo_eap AS atividade_codigo, COALESCE(ae.nome, ae.descricao) AS atividade_descricao, rf.atividade_avulsa_descricao
+      SELECT rf.*, ra.atividade_eap_id AS atividade_eap_id,
+             ae.codigo_eap AS atividade_codigo,
+             COALESCE(ae.nome, ae.descricao) AS atividade_descricao,
+             rf.atividade_avulsa_descricao
       FROM rdo_fotos rf
       LEFT JOIN rdo_atividades ra ON rf.rdo_atividade_id = ra.id
       LEFT JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
       WHERE rf.rdo_id = ?
-      ORDER BY rf.criado_em DESC
+      ORDER BY ${fotosOrderBy}
     `, [id]);
 
     // Buscar comentários
@@ -1058,6 +1096,7 @@ router.get('/:id/pdf', auth, async (req, res) => {
 
   let browser;
   try {
+    await ensureRdoOptionalColumns();
     const { id } = req.params;
 
     // ── Buscar dados do RDO ──────────────────────────────────────────────
@@ -1136,12 +1175,16 @@ router.get('/:id/pdf', auth, async (req, res) => {
       saida_final: m.horario_saida_final || '—'
     }));
 
+    const fotosOrderBy = await getRdoFotosOrderBy();
     const fotos = await allQuery(`
-      SELECT rf.*, ae.codigo_eap AS atividade_codigo, COALESCE(ae.nome, ae.descricao) AS atividade_descricao, rf.atividade_avulsa_descricao
+      SELECT rf.*, ra.atividade_eap_id AS atividade_eap_id,
+             ae.codigo_eap AS atividade_codigo,
+             COALESCE(ae.nome, ae.descricao) AS atividade_descricao,
+             rf.atividade_avulsa_descricao
       FROM rdo_fotos rf
       LEFT JOIN rdo_atividades ra ON rf.rdo_atividade_id = ra.id
       LEFT JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
-      WHERE rf.rdo_id = ? ORDER BY rf.criado_em ASC
+      WHERE rf.rdo_id = ? ORDER BY ${fotosOrderBy}
     `, [id]);
 
     const ocorrencias = await allQuery(
@@ -1165,6 +1208,7 @@ router.get('/:id/pdf', auth, async (req, res) => {
        AND tipo NOT LIKE 'image%'
        ORDER BY criado_em ASC`, [id]
     );
+    const publicBaseUrl = getPublicBaseUrl(req);
 
     let equipamentosLista = [];
     try {
@@ -1220,16 +1264,9 @@ router.get('/:id/pdf', auth, async (req, res) => {
       return (Math.round((tot / 60) * 100) / 100) + ' h';
     };
 
-    // Fotos como base64 para inline no PDF
-    const fotoBase64 = (filename) => {
-      try {
-        const fp = path.join(uploadsDir, filename);
-        if (!fs.existsSync(fp)) return null;
-        const ext = path.extname(filename).toLowerCase().replace('.', '');
-        const mime = ext === 'jpg' ? 'jpeg' : ext;
-        return `data:image/${mime};base64,${fs.readFileSync(fp).toString('base64')}`;
-      } catch { return null; }
-    };
+    // URL pública das fotos (Puppeteer acessa o próprio servidor)
+    const fotoUrl = (filename) =>
+      `http://127.0.0.1:${process.env.PORT || 3001}/uploads/${encodeURIComponent(filename)}`;
 
     // ── HTML template ─────────────────────────────────────────────────────
     const rows = (items, fn) => items.map(fn).join('');
@@ -1346,14 +1383,13 @@ router.get('/:id/pdf', auth, async (req, res) => {
 
     const fotosSection = fotos.length > 0 ? `
       <section>
-        <h2>Fotos do RDO</h2>
+        <h2>Fotos do RDO (${fotos.length})</h2>
         <div class="foto-grid">
           ${rows(fotos, f => {
-            const b64 = fotoBase64(f.caminho_arquivo);
-            if (!b64) return '';
+            const src = fotoUrl(f.caminho_arquivo);
             return `<div class="foto-item">
-              <img src="${b64}" alt="${f.nome_arquivo}" />
-              <p class="foto-desc">${f.atividade_descricao ? `<strong>${f.atividade_codigo ? f.atividade_codigo + ' — ' : ''}${f.atividade_descricao}</strong><br>` : (f.atividade_avulsa_descricao ? `<strong>Avulsa — ${f.atividade_avulsa_descricao}</strong><br>` : '')}${f.descricao || f.nome_arquivo}</p>
+              <img src="${src}" alt="${f.nome_arquivo || 'foto'}" />
+              <p class="foto-desc">${f.atividade_descricao ? `<strong>${f.atividade_codigo ? f.atividade_codigo + ' — ' : ''}${f.atividade_descricao}</strong><br>` : (f.atividade_avulsa_descricao ? `<strong>Avulsa — ${f.atividade_avulsa_descricao}</strong><br>` : '')}${f.descricao || f.nome_arquivo || ''}</p>
             </div>`;
           })}
         </div>
@@ -1363,11 +1399,12 @@ router.get('/:id/pdf', auth, async (req, res) => {
       <section>
         <h2>Materiais Recebidos</h2>
         <table>
-          <thead><tr><th>Material</th><th>Quantidade</th><th>Unidade</th></tr></thead>
+          <thead><tr><th>Material</th><th>Quantidade</th><th>Unidade</th><th>Nº NF</th></tr></thead>
           <tbody>${rows(materiais, m => `<tr>
             <td>${m.nome_material || '—'}</td>
             <td style="text-align:right">${m.quantidade ?? '—'}</td>
             <td>${m.unidade || '—'}</td>
+            <td>${m.numero_nf || '—'}</td>
           </tr>`)}</tbody>
         </table>
       </section>` : '';
@@ -1409,7 +1446,10 @@ router.get('/:id/pdf', auth, async (req, res) => {
       <section>
         <h2>Anexos</h2>
         <ol class="anexo-list">
-          ${rows(anexos, (a, i) => `<li><strong>${a.nome_arquivo}</strong> — ${a.tipo || '—'}${a.tamanho ? ` (${Math.round(a.tamanho / 1024)} KB)` : ''}</li>`)}
+          ${rows(anexos, (a) => {
+            const href = `${publicBaseUrl}/uploads/${encodeURIComponent(a.caminho_arquivo || '')}`;
+            return `<li><a href="${href}" target="_blank" rel="noopener noreferrer"><strong>${a.nome_arquivo}</strong></a> — ${a.tipo || '—'}${a.tamanho ? ` (${Math.round(a.tamanho / 1024)} KB)` : ''}</li>`;
+          })}
         </ol>
       </section>` : '';
 
@@ -1422,34 +1462,34 @@ router.get('/:id/pdf', auth, async (req, res) => {
   body { font-family: 'Segoe UI', sans-serif; font-size: 11px; color: #1e293b; background: #fff; }
 
   /* CAPA */
-  .capa { page-break-after: always; padding: 48px 40px; }
-  .capa-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #0ea5e9; padding-bottom: 20px; margin-bottom: 32px; }
+  .capa { page-break-after: always; padding: 38px 32px; }
+  .capa-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #0ea5e9; padding-bottom: 14px; margin-bottom: 18px; }
   .capa-title { font-size: 28px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
   .capa-subtitle { font-size: 14px; color: #64748b; }
-  .capa-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }
+  .capa-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
   .info-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; }
   .info-card h3 { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; margin-bottom: 12px; }
   .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 11px; }
   .info-row .label { color: #64748b; }
   .info-row .value { font-weight: 600; color: #0f172a; text-align: right; max-width: 60%; }
-  .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 32px; }
-  .kpi { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; text-align: center; }
-  .kpi .kpi-val { font-size: 22px; font-weight: 700; color: #0f172a; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+  .kpi { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; text-align: center; }
+  .kpi .kpi-val { font-size: 20px; font-weight: 700; color: #0f172a; }
   .kpi .kpi-label { font-size: 10px; color: #64748b; margin-top: 4px; }
   .status-pill { display: inline-block; padding: 4px 12px; border-radius: 20px; color: #fff; font-size: 11px; font-weight: 600; }
   .resumo-row { display: flex; gap: 12px; flex-wrap: wrap; }
   .resumo-chip { background: #e0f2fe; color: #0369a1; padding: 6px 12px; border-radius: 20px; font-size: 11px; font-weight: 500; }
 
   /* SEÇÕES */
-  section { padding: 20px 40px; page-break-inside: avoid; }
+  section { padding: 14px 32px; page-break-inside: auto; }
   section + section { border-top: 1px solid #f1f5f9; }
-  h2 { font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.06em; padding-bottom: 6px; border-bottom: 2px solid #0ea5e9; }
+  h2 { font-size: 12px; font-weight: 700; color: #0f172a; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.06em; padding-bottom: 4px; border-bottom: 2px solid #0ea5e9; }
 
   /* TABELAS */
-  table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 9.5px; margin-bottom: 2px; }
   thead tr { background: #f1f5f9; }
-  th { padding: 7px 10px; text-align: left; font-weight: 600; color: #475569; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 2px solid #e2e8f0; }
-  td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; color: #334155; }
+  th { padding: 5px 8px; text-align: left; font-weight: 600; color: #475569; font-size: 8.8px; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 2px solid #e2e8f0; }
+  td { padding: 5px 8px; border-bottom: 1px solid #f1f5f9; color: #334155; }
   tr:nth-child(even) td { background: #fafafa; }
   code { font-family: monospace; background: #f1f5f9; padding: 1px 4px; border-radius: 3px; font-size: 9px; }
 
@@ -1457,10 +1497,24 @@ router.get('/:id/pdf', auth, async (req, res) => {
   .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; color: #fff; font-size: 9px; font-weight: 600; }
 
   /* FOTOS */
-  .foto-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-  .foto-item { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
-  .foto-item img { width: 100%; max-height: 220px; object-fit: cover; display: block; }
-  .foto-desc { padding: 8px 10px; font-size: 10px; color: #475569; background: #f8fafc; }
+  .foto-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .foto-item {
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .foto-item img {
+    width: 100%;
+    height: auto;
+    max-height: 240px;
+    object-fit: contain;
+    object-position: center;
+    display: block;
+    background: #f8fafc;
+  }
+  .foto-desc { padding: 6px 8px; font-size: 9px; color: #475569; background: #f8fafc; }
 
   /* OCORRÊNCIAS */
   .ocorrencia { background: #fafafa; border: 1px solid #f1f5f9; border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; }
@@ -1545,7 +1599,7 @@ ${anexosSection}
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     });
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'load' });
+    await page.setContent(html, { waitUntil: 'networkidle0' });
 
     const safeNomeProjeto = String(rdo.projeto_nome || 'Projeto').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const pdfBuffer = await page.pdf({
@@ -1554,7 +1608,7 @@ ${anexosSection}
       displayHeaderFooter: true,
       headerTemplate: '<span></span>',
       footerTemplate: `<div style="font-size:8px;color:#94a3b8;padding:0 40px;width:100%;box-sizing:border-box;display:flex;justify-content:space-between;font-family:'Segoe UI',sans-serif;align-items:center"><span>${safeNomeProjeto} &nbsp;&middot;&nbsp; ${displayId}</span><span>Pág. <span class="pageNumber"></span>&nbsp;/&nbsp;<span class="totalPages"></span> &nbsp;&mdash;&nbsp; Gerado em ${new Date().toLocaleString('pt-BR')}</span></div>`,
-      margin: { top: '10mm', bottom: '14mm', left: '0', right: '0' }
+      margin: { top: '8mm', bottom: '10mm', left: '0', right: '0' }
     });
 
     await browser.close();

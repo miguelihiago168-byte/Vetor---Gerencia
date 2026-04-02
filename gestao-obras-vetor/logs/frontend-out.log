@@ -3,22 +3,8 @@
 > vite --port 3000
 
 
-  [32m[1mVITE[22m v5.0.8[39m  [2mready in [0m[1m823[22m[2m[0m ms[22m
+  [32m[1mVITE[22m v5.0.8[39m  [2mready in [0m[1m829[22m[2m[0m ms[22m
 
   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m3000[22m/[39m
 [2m  [32m➜[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
 [2m[32m  ➜[39m[22m[2m  press [22m[1mh + enter[22m[2m to show help[22m
-[2m00:53:45[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/main.jsx[22m
-[2m00:53:59[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/main.jsx[22m
-[2m01:15:59[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/AlmoxRelatorios.jsx, /src/pages/RNC.jsx, /src/pages/Fornecedores.jsx, /src/pages/AlmoxDevolucao.jsx, /src/pages/AlmoxRetirada.jsx, /src/pages/RDODetalhes.jsx, /src/pages/AlmoxFerramentas.jsx, /src/pages/ComprasStatusList.jsx, /src/pages/RNCForm.jsx, /src/pages/AlmoxPerdas.jsx, /src/pages/AlmoxManutencao.jsx, /src/pages/Requisicoes.jsx, /src/pages/Usuarios.jsx, /src/pages/Dashboard.jsx, /src/pages/RNCDetalhes.jsx, /src/pages/Login.jsx, /src/pages/EAPForm.jsx, /src/pages/ProjetoSelector.jsx, /src/pages/RequisicaoKanban.jsx, /src/pages/CriarConta.jsx, /src/pages/EAP.jsx, /src/pages/CurvaS.jsx, /src/pages/ComprasGlobal.jsx, /src/pages/AlmoxarifadoDashboard.jsx, /src/pages/RDOs.jsx, /src/pages/RequisicaoDetalhe.jsx, /src/pages/CotacoesFinalizadas.jsx, /src/pages/CotacoesNegadas.jsx, /src/pages/PedidosCompra.jsx, /src/pages/ProjetoDetalhes.jsx, /src/pages/Projetos.jsx, /src/pages/RDOForm2.jsx, /src/components/Navbar.jsx, /src/components/ComprasLayout.jsx[22m
-[2m01:16:15[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/CriarConta.jsx[22m
-[2m01:16:22[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/main.jsx[22m
-[2m01:16:28[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/PrivateRoute.jsx[22m
-[2m01:16:33[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/context/AuthContext.jsx[22m
-[2m01:17:13[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Login.jsx[22m
-[2m01:22:18[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/main.jsx[22m
-[2m01:22:18[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/CriarConta.jsx[22m
-[2m01:22:18[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/AlmoxRelatorios.jsx, /src/pages/RNC.jsx, /src/pages/Fornecedores.jsx, /src/pages/AlmoxDevolucao.jsx, /src/pages/AlmoxRetirada.jsx, /src/pages/RDODetalhes.jsx, /src/pages/AlmoxFerramentas.jsx, /src/pages/ComprasStatusList.jsx, /src/pages/RNCForm.jsx, /src/pages/AlmoxPerdas.jsx, /src/pages/AlmoxManutencao.jsx, /src/pages/Requisicoes.jsx, /src/pages/Usuarios.jsx, /src/pages/Dashboard.jsx, /src/pages/RNCDetalhes.jsx, /src/pages/Login.jsx, /src/pages/EAPForm.jsx, /src/pages/ProjetoSelector.jsx, /src/pages/RequisicaoKanban.jsx, /src/pages/CriarConta.jsx, /src/pages/EAP.jsx, /src/pages/CurvaS.jsx, /src/pages/ComprasGlobal.jsx, /src/pages/AlmoxarifadoDashboard.jsx, /src/pages/RDOs.jsx, /src/pages/RequisicaoDetalhe.jsx, /src/pages/CotacoesFinalizadas.jsx, /src/pages/CotacoesNegadas.jsx, /src/pages/PedidosCompra.jsx, /src/pages/ProjetoDetalhes.jsx, /src/pages/Projetos.jsx, /src/pages/RDOForm2.jsx, /src/components/Navbar.jsx, /src/components/ComprasLayout.jsx[22m
-[2m01:22:18[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/PrivateRoute.jsx[22m
-[2m01:22:18[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/context/AuthContext.jsx[22m
-[2m01:22:18[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Login.jsx[22m

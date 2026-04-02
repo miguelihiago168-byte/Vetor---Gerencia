@@ -9,7 +9,7 @@ import {
   getProjeto,
   getAtividadesEAP, getRDO, createRDO, updateRDO,
   addRdoClima, addRdoComentario, addRdoOcorrencia, addRdoMaterial,
-  uploadRdoFoto, updateStatusRDO, getExecucaoAcumulada,
+  uploadRdoFoto, updateRdoFoto, reorderRdoFotos, updateStatusRDO, getExecucaoAcumulada,
   getRdoColaboradores, createRdoColaborador,
   getRdoEquipamentos, addRdoEquipamento, deleteRdoEquipamento,
   getAnexos, uploadAnexo, deleteAnexo
@@ -34,6 +34,13 @@ const weekdayFromLocalDateInput = (val) => {
   }
   const d = new Date(val);
   return isNaN(d.getTime()) ? '' : dias[d.getDay()];
+};
+
+const parseTS = (s) => {
+  if (!s) return null;
+  const str = String(s);
+  if (str.includes('Z') || str.includes('+')) return new Date(str);
+  return new Date(str.replace(' ', 'T') + 'Z');
 };
 
 const Section = ({ id, num, title, badge, children, isOpen, onToggle }) => (
@@ -79,6 +86,10 @@ function RDOForm2() {
   const [fotoPendente, setFotoPendente] = useState({ file: null, atividadeId: '', descricao: '' });
   const [fotosQueue, setFotosQueue] = useState([]);
   const [isUploadingFoto, setIsUploadingFoto] = useState(false);
+  const [dragFotoIndex, setDragFotoIndex] = useState(null);
+  const [editingFotoId, setEditingFotoId] = useState(null);
+  const [editingFotoDescricao, setEditingFotoDescricao] = useState('');
+  const [isSavingFotoDescricao, setIsSavingFotoDescricao] = useState(false);
   const [anexos, setAnexos] = useState([]);
   const [anexosQueue, setAnexosQueue] = useState([]);
   const [isUploadingAnexo, setIsUploadingAnexo] = useState(false);
@@ -268,8 +279,8 @@ function RDOForm2() {
           }
           if (!rdo) return;
 
-          if (rdo.status !== 'Em preenchimento') {
-            notifyInfo('Este RDO está em modo de visualização. Para editar, use "Voltar para edição".', 5000);
+          if (rdo.status === 'Aprovado') {
+            notifyInfo('Este RDO está aprovado e não pode ser editado.', 5000);
             navigate(`/projeto/${projetoId}/rdos/${rdoId}`);
             return;
           }
@@ -319,7 +330,8 @@ function RDOForm2() {
               id: m.id,
               nome: m.nome_material || '',
               quantidade: Number(m.quantidade || 0),
-              unidade: m.unidade || null
+              unidade: m.unidade || null,
+              numero_nf: m.numero_nf || ''
             }))
           });
 
@@ -327,7 +339,12 @@ function RDOForm2() {
           setEquipamentosLista(rdo.equipamentos_lista || []);
 
           // Fotos
-          setRdoFotos(rdo.fotos || []);
+          setRdoFotos([...(rdo.fotos || [])].sort((a, b) => {
+            const oa = Number(a?.ordem || 0);
+            const ob = Number(b?.ordem || 0);
+            if (oa !== ob) return oa - ob;
+            return new Date(a?.criado_em || 0).getTime() - new Date(b?.criado_em || 0).getTime();
+          }));
 
           // Comentários existentes
           setComentariosExistentes((rdo.comentarios || []).map(c => ({
@@ -341,7 +358,7 @@ function RDOForm2() {
           } catch {}
 
         } else {
-          // Novo RDO: copiar mão de obra e equipamentos do último RDO
+          // Novo RDO: copiar mão de obra, equipamentos e atividades não concluídas do último RDO
           const copyLast = location.state?.copyLast;
           if (copyLast) {
             try {
@@ -352,7 +369,7 @@ function RDOForm2() {
                 const baseLista = listaAprovados.length > 0 ? listaAprovados : lista;
                 const ultimo = baseLista.reduce((acc, cur) => {
                   const toDate = (s) => {
-                    const m = String(s).match(/^(d{4})-(\d{2})-(\d{2})$/);
+                    const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})$/);
                     return m ? new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10)) : new Date(s);
                   };
                   const dAcc = acc ? toDate(acc.data_relatorio) : null;
@@ -360,73 +377,52 @@ function RDOForm2() {
                   return (!acc || dCur.getTime() > dAcc.getTime()) ? cur : acc;
                 }, null);
                 if (ultimo) {
-                  // Copiar dados do último RDO
-                  setFormData({
-                    data_relatorio: ultimo.data_relatorio,
-                    dia_semana: ultimo.dia_semana,
+                  // Copia apenas o que deve ser reaproveitado. Data e dia permanecem vazios no novo RDO.
+                  const naoConcluidasIds = new Set(
+                    (eapRes.data || [])
+                      .filter(eap => Number(eap.percentual_executado || 0) < 100)
+                      .map(eap => String(eap.id))
+                  );
+
+                  setFormData(prev => ({
+                    ...prev,
                     entrada_saida_inicio: ultimo.entrada_saida_inicio || '07:00',
                     entrada_saida_fim: ultimo.entrada_saida_fim || '17:00',
                     intervalo_almoco_inicio: ultimo.intervalo_almoco_inicio || '12:00',
                     intervalo_almoco_fim: ultimo.intervalo_almoco_fim || '13:00',
-                    atividades: (ultimo.atividades || []).map(a => ({
-                      rdo_atividade_id: a.id,
-                      atividade_eap_id: a.atividade_eap_id,
-                      percentual_executado: a.percentual_executado,
-                      quantidade_executada: a.quantidade_executada || '',
-                      unidade_medida: (() => {
-                        const sel = eapRes.data?.find(x => String(x.id) === String(a.atividade_eap_id));
-                        return sel ? (sel.unidade_medida || '') : '';
-                      })(),
-                      observacao: a.observacao || ''
-                    })),
-                    climaRegistros: (ultimo.clima || []).map(c => ({
-                      periodo: c.periodo,
-                      condicao_tempo: c.condicao_tempo || 'Claro',
-                      condicao_trabalho: c.condicao_trabalho || 'Praticável',
-                      pluviometria_mm: c.pluviometria_mm || 0
-                    })),
+                    atividades: (ultimo.atividades || [])
+                      .filter(a => naoConcluidasIds.has(String(a.atividade_eap_id)))
+                      .map(a => ({
+                        rdo_atividade_id: null,
+                        atividade_eap_id: a.atividade_eap_id,
+                        percentual_executado: 0,
+                        quantidade_executada: '',
+                        unidade_medida: (() => {
+                          const sel = eapRes.data?.find(x => String(x.id) === String(a.atividade_eap_id));
+                          return sel ? (sel.unidade_medida || '') : '';
+                        })(),
+                        observacao: ''
+                      })),
                     atividades_avulsas: Array.isArray(ultimo.atividades_avulsas)
-                      ? ultimo.atividades_avulsas.map(a => ({
-                        avulsa: true,
-                        descricao: a?.descricao || '',
-                        quantidade_prevista: (a?.quantidade_prevista ?? ''),
-                        quantidade_executada: (a?.quantidade_executada ?? ''),
-                        observacao: a?.observacao || ''
-                      }))
+                      ? ultimo.atividades_avulsas
+                          .filter(a => {
+                            const previsto = Number(a?.quantidade_prevista || 0);
+                            const executado = Number(a?.quantidade_executada || 0);
+                            return previsto <= 0 || executado < previsto;
+                          })
+                          .map(a => ({
+                            avulsa: true,
+                            descricao: a?.descricao || '',
+                            quantidade_prevista: a?.quantidade_prevista ?? '',
+                            quantidade_executada: '',
+                            observacao: a?.observacao || ''
+                          }))
                       : [],
-                    mao_obra_detalhada: Array.isArray(ultimo.mao_obra_detalhada) ? ultimo.mao_obra_detalhada : [],
-                    ocorrencias_lista: (ultimo.ocorrencias || []).map(o => ({
-                      id: o.id,
-                      titulo: o.titulo || '',
-                      descricao: o.descricao || '',
-                      gravidade: o.gravidade || 'Baixa'
-                    })),
-                    comentarios_lista: [],
-                    materiais_lista: (ultimo.materiais || []).map(m => ({
-                      id: m.id,
-                      nome: m.nome_material || '',
-                      quantidade: Number(m.quantidade || 0),
-                      unidade: m.unidade || null
-                    }))
-                  });
+                    mao_obra_detalhada: Array.isArray(ultimo.mao_obra_detalhada) ? ultimo.mao_obra_detalhada : []
+                  }));
 
                   // Equipamentos vêm da nova tabela
                   setEquipamentosLista(ultimo.equipamentos_lista || []);
-
-                  // Fotos
-                  setRdoFotos(ultimo.fotos || []);
-
-                  // Comentários existentes
-                  setComentariosExistentes((ultimo.comentarios || []).map(c => ({
-                    id: c.id, comentario: c.comentario, autor_nome: c.autor_nome, criado_em: c.criado_em
-                  })));
-
-                  // Anexos
-                  try {
-                    const anx = await getAnexos(ultimo.id);
-                    setAnexos(anx.data || []);
-                  } catch {}
-
                 }
               }
             } catch {}
@@ -837,12 +833,12 @@ function RDOForm2() {
   };
 
   /* ── Materiais ──────────────────────────────────── */
-  const [draftMaterial, setDraftMaterial] = useState({ nome: '', quantidade: '', unidade: '' });
+  const [draftMaterial, setDraftMaterial] = useState({ nome: '', quantidade: '', unidade: '', numero_nf: '' });
 
   const addMaterial = () => {
     if (!draftMaterial.nome) return;
     setFormData({ ...formData, materiais_lista: [...formData.materiais_lista, { ...draftMaterial }] });
-    setDraftMaterial({ nome: '', quantidade: '', unidade: '' });
+    setDraftMaterial({ nome: '', quantidade: '', unidade: '', numero_nf: '' });
     setDirty(true);
   };
 
@@ -905,9 +901,11 @@ function RDOForm2() {
         setRdoFotos(prev => [...prev, {
           id: resp.data?.id,
           nome_arquivo: resp.data?.arquivo?.nome_arquivo || file.name,
+          caminho_arquivo: resp.data?.arquivo?.caminho_arquivo,
           descricao: descricao || file.name,
           atividade_eap_id: atividadeSelecionada?.tipo === 'eap' ? atividadeSelecionada.atividade_eap_id : null,
           atividade_avulsa_descricao: atividadeSelecionada?.tipo === 'avulsa' ? atividadeSelecionada.atividade_avulsa_descricao : null,
+          ordem: resp.data?.ordem,
           criado_em: new Date().toISOString()
         }]);
       } catch (e) {
@@ -930,9 +928,67 @@ function RDOForm2() {
     if (fotoInputRef.current) fotoInputRef.current.value = '';
   };
 
+  const startEditarFotoDescricao = (foto) => {
+    setEditingFotoId(foto.id);
+    setEditingFotoDescricao(foto.descricao || '');
+  };
+
+  const cancelarEditarFotoDescricao = () => {
+    setEditingFotoId(null);
+    setEditingFotoDescricao('');
+  };
+
+  const salvarFotoDescricao = async (fotoId) => {
+    if (!rdoId || !fotoId) return;
+    try {
+      setIsSavingFotoDescricao(true);
+      await updateRdoFoto(rdoId, fotoId, { descricao: editingFotoDescricao });
+      setRdoFotos((prev) => prev.map((f) => (
+        f.id === fotoId ? { ...f, descricao: editingFotoDescricao } : f
+      )));
+      cancelarEditarFotoDescricao();
+    } catch (e) {
+      setErro('Erro ao atualizar descrição da foto: ' + (e?.response?.data?.erro || e.message));
+    } finally {
+      setIsSavingFotoDescricao(false);
+    }
+  };
+
+  const persistirOrdemFotos = async (listaFotos) => {
+    if (!rdoId) return;
+    const ids = listaFotos.map((f) => Number(f.id)).filter(Boolean);
+    if (!ids.length) return;
+    try {
+      await reorderRdoFotos(rdoId, ids);
+    } catch (e) {
+      setErro('Erro ao salvar nova ordem das fotos: ' + (e?.response?.data?.erro || e.message));
+    }
+  };
+
+  const onDragFotoStart = (idx) => setDragFotoIndex(idx);
+
+  const onDropFoto = async (dropIndex) => {
+    if (dragFotoIndex == null || dropIndex === dragFotoIndex) {
+      setDragFotoIndex(null);
+      return;
+    }
+    const nova = [...rdoFotos];
+    const [movida] = nova.splice(dragFotoIndex, 1);
+    nova.splice(dropIndex, 0, movida);
+    setRdoFotos(nova);
+    setDragFotoIndex(null);
+    await persistirOrdemFotos(nova);
+  };
+
   /* ── Anexos ─────────────────────────────────────── */
   const handleAnexoUpload = async (file) => {
     if (!file) return;
+    const nome = String(file.name || '').toLowerCase();
+    const tipo = String(file.type || '').toLowerCase();
+    if (!nome.endsWith('.pdf') && !tipo.includes('pdf')) {
+      setErro('Anexos do RDO aceitam somente arquivos PDF.');
+      return;
+    }
     if (!rdoId) {
       setAnexosQueue(prev => [...prev, file]);
       if (anexoInputRef.current) anexoInputRef.current.value = '';
@@ -964,7 +1020,7 @@ function RDOForm2() {
   };
 
   /* ── Salvar ─────────────────────────────────────── */
-  const salvar = async () => {
+  const salvar = async (targetStatus = 'analise') => {
     try {
       setErro('');
       setSucesso('');
@@ -1050,12 +1106,20 @@ function RDOForm2() {
           await addRdoOcorrencia(rdoId, { titulo: o.titulo || null, descricao: o.descricao, gravidade: o.gravidade || null });
         }
         for (const m of (formData.materiais_lista || []).filter(item => !item.id)) {
-          await addRdoMaterial(rdoId, { nome_material: m.nome, quantidade: Number(m.quantidade || 0), unidade: m.unidade || null });
+          await addRdoMaterial(rdoId, {
+            nome_material: m.nome,
+            quantidade: Number(m.quantidade || 0),
+            unidade: m.unidade || null,
+            numero_nf: m.numero_nf || null
+          });
         }
-        try { await updateStatusRDO(rdoId, 'Em análise'); } catch {}
+        if (targetStatus === 'analise') {
+          try { await updateStatusRDO(rdoId, 'Em análise'); } catch {}
+        }
         await carregarLogsRdo(rdoId);
-        setSucesso('RDO atualizado e enviado para análise.');
-        notifySuccess('RDO atualizado e enviado para análise.', 4500);
+        const msgRdo = targetStatus === 'analise' ? 'RDO enviado para aprovação.' : 'RDO salvo com sucesso.';
+        setSucesso(msgRdo);
+        notifySuccess(msgRdo, 4500);
       } else {
         const res = await createRDO(body);
         finalId = res.data?.rdo?.id;
@@ -1069,7 +1133,12 @@ function RDOForm2() {
           await addRdoComentario(finalId, { comentario: c });
         }
         for (const m of (formData.materiais_lista || [])) {
-          await addRdoMaterial(finalId, { nome_material: m.nome, quantidade: Number(m.quantidade || 0), unidade: m.unidade || null });
+          await addRdoMaterial(finalId, {
+            nome_material: m.nome,
+            quantidade: Number(m.quantidade || 0),
+            unidade: m.unidade || null,
+            numero_nf: m.numero_nf || null
+          });
         }
         // Sincronizar equipamentos na nova tabela
         for (const eq of equipamentosLista) {
@@ -1115,9 +1184,12 @@ function RDOForm2() {
         if (finalId) {
           try { const lista = await getAnexos(finalId); setAnexos(lista.data || []); } catch {}
         }
-        try { if (finalId) await updateStatusRDO(finalId, 'Em análise'); } catch {}
-        setSucesso('RDO criado e enviado para análise.');
-        notifySuccess('RDO criado e enviado para análise.', 4500);
+        if (targetStatus === 'analise') {
+          try { if (finalId) await updateStatusRDO(finalId, 'Em análise'); } catch {}
+        }
+        const msgNovo = targetStatus === 'analise' ? 'RDO enviado para aprovação.' : 'RDO salvo com sucesso.';
+        setSucesso(msgNovo);
+        notifySuccess(msgNovo, 4500);
       }
 
       try { setDirty(false); } catch {}
@@ -1139,6 +1211,12 @@ function RDOForm2() {
     if (s === 'média' || s === 'media') return 'media';
     return 'baixa';
   };
+
+  const anexosPdf = (anexos || []).filter((a) => {
+    const tipo = String(a?.tipo || '').toLowerCase();
+    const nome = String(a?.nome_arquivo || a?.nome_original || '').toLowerCase();
+    return tipo.includes('pdf') || nome.endsWith('.pdf');
+  });
 
   /* ══════════════════════════════════════════════════
      RENDER
@@ -1310,7 +1388,9 @@ function RDOForm2() {
                   <tr key={c.periodo}>
                     <td><strong>{c.periodo}</strong></td>
                     <td>{c.condicao_tempo}</td>
-                    <td>{c.condicao_trabalho}</td>
+                    <td style={{ color: c.condicao_trabalho === 'Impraticável' ? '#dc2626' : undefined, fontWeight: c.condicao_trabalho === 'Impraticável' ? 700 : undefined }}>
+                      {c.condicao_trabalho}
+                    </td>
                     <td>{Number(c.pluviometria_mm || 0)} mm</td>
                     <td className="td-actions">
                       <button className="btn btn-danger" style={{ padding: '4px 8px' }} onClick={() => removeClimaRegistro(c.periodo)}>
@@ -1717,32 +1797,88 @@ function RDOForm2() {
           {rdoFotos.length === 0 && fotosQueue.length === 0 ? (
             <div className="rdo-empty">Nenhuma foto adicionada.</div>
           ) : (
-            <table className="rdo-table" style={{ marginTop: '8px' }}>
-              <thead><tr><th>Arquivo</th><th>Descrição</th><th>Atividade</th><th>Data</th></tr></thead>
-              <tbody>
-                {rdoFotos.map(f => (
-                  <tr key={f.id}>
-                    <td><FileText size={14} style={{ marginRight: '6px', color: '#94a3b8' }} />{f.nome_arquivo}</td>
-                    <td>{f.descricao || '—'}</td>
-                    <td style={{ color: '#64748b', fontSize: '12px' }}>{(() => {
-                      const a = atividadesEap.find(x => String(x.id) === String(f.atividade_eap_id));
-                      if (a) return `${a.codigo_eap} — ${a.nome || a.descricao || ''}`;
-                      if (f.atividade_avulsa_descricao) return `Avulsa — ${f.atividade_avulsa_descricao}`;
-                      return (f.atividade_descricao || '—');
-                    })()}</td>
-                    <td style={{ color: '#94a3b8', fontSize: '12px' }}>{f.criado_em ? new Date(f.criado_em).toLocaleString('pt-BR') : '—'}</td>
-                  </tr>
-                ))}
-                {fotosQueue.map((f, i) => (
-                  <tr key={`q-${i}`} style={{ background: '#fefce8' }}>
-                    <td><FileText size={14} style={{ marginRight: '6px', color: '#94a3b8' }} />{f.file.name}</td>
-                    <td>{f.descricao || '—'}</td>
-                    <td style={{ color: '#64748b', fontSize: '12px' }}>{f.atividade_label || '—'}</td>
-                    <td style={{ color: '#94a3b8', fontSize: '12px' }}>—</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <>
+              {rdoFotos.length > 0 && (
+                <div style={{ marginTop: '10px' }}>
+                  <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '8px' }}>
+                    Arraste e solte para reorganizar a ordem das fotos.
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: '12px' }}>
+                    {rdoFotos.map((f, idx) => (
+                      <div
+                        key={f.id}
+                        draggable
+                        onDragStart={() => onDragFotoStart(idx)}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={() => onDropFoto(idx)}
+                        style={{ border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden', background: '#fff', cursor: 'move' }}
+                      >
+                        <a href={`/uploads/${f.caminho_arquivo}`} target="_blank" rel="noreferrer" style={{ display: 'block', textDecoration: 'none' }}>
+                          <div style={{ position: 'relative', width: '100%', paddingTop: '70%', background: '#f8fafc' }}>
+                            <img
+                              src={`/uploads/${f.caminho_arquivo}`}
+                              alt={f.nome_arquivo || 'foto'}
+                              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                            />
+                          </div>
+                        </a>
+                        <div style={{ padding: '8px 10px' }}>
+                          <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>{f.nome_arquivo}</div>
+                          {editingFotoId === f.id ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                              <input
+                                className="form-input"
+                                type="text"
+                                value={editingFotoDescricao}
+                                onChange={(e) => setEditingFotoDescricao(e.target.value)}
+                                placeholder="Descrição da foto"
+                              />
+                              <div style={{ display: 'flex', gap: '6px' }}>
+                                <button className="btn btn-primary" style={{ padding: '4px 8px' }} disabled={isSavingFotoDescricao} onClick={() => salvarFotoDescricao(f.id)}>
+                                  {isSavingFotoDescricao ? 'Salvando...' : 'Salvar'}
+                                </button>
+                                <button className="btn btn-secondary" style={{ padding: '4px 8px' }} onClick={cancelarEditarFotoDescricao}>Cancelar</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => startEditarFotoDescricao(f)}
+                              style={{ border: 0, background: 'transparent', padding: 0, textAlign: 'left', cursor: 'pointer', width: '100%' }}
+                              title="Clique para editar descrição"
+                            >
+                              <div style={{ fontSize: '12px', fontWeight: 600, color: '#1f2937' }}>{f.descricao || 'Clique para adicionar descrição'}</div>
+                            </button>
+                          )}
+                          <div style={{ marginTop: '4px', fontSize: '11px', color: '#64748b' }}>{(() => {
+                            const a = atividadesEap.find(x => String(x.id) === String(f.atividade_eap_id));
+                            if (a) return `${a.codigo_eap} — ${a.nome || a.descricao || ''}`;
+                            if (f.atividade_avulsa_descricao) return `Avulsa — ${f.atividade_avulsa_descricao}`;
+                            return (f.atividade_descricao || '—');
+                          })()}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {fotosQueue.length > 0 && (
+                <table className="rdo-table" style={{ marginTop: '10px' }}>
+                  <thead><tr><th>Arquivo</th><th>Descrição</th><th>Atividade</th><th>Status</th></tr></thead>
+                  <tbody>
+                    {fotosQueue.map((f, i) => (
+                      <tr key={`q-${i}`} style={{ background: '#fefce8' }}>
+                        <td><FileText size={14} style={{ marginRight: '6px', color: '#94a3b8' }} />{f.file.name}</td>
+                        <td>{f.descricao || '—'}</td>
+                        <td style={{ color: '#64748b', fontSize: '12px' }}>{f.atividade_label || '—'}</td>
+                        <td style={{ color: '#94a3b8', fontSize: '12px' }}>Pendente</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </>
           )}
         </Section>
 
@@ -1764,6 +1900,11 @@ function RDOForm2() {
               <input className="form-input" type="text" placeholder="m, kg, un" value={draftMaterial.unidade}
                 onChange={(e) => setDraftMaterial({ ...draftMaterial, unidade: e.target.value })} />
             </div>
+            <div className="form-group" style={{ flex: '1.6', minWidth: '140px' }}>
+              <label className="form-label">Número da NF</label>
+              <input className="form-input" type="text" placeholder="Ex.: 123456" value={draftMaterial.numero_nf}
+                onChange={(e) => setDraftMaterial({ ...draftMaterial, numero_nf: e.target.value })} />
+            </div>
             <div style={{ display: 'flex', alignItems: 'flex-end' }}>
               <button className="btn btn-primary" onClick={addMaterial}><Plus size={15} /> Adicionar</button>
             </div>
@@ -1772,13 +1913,14 @@ function RDOForm2() {
             <div className="rdo-empty">Nenhum material registrado.</div>
           ) : (
             <table className="rdo-table">
-              <thead><tr><th>Material</th><th>Quantidade</th><th>Unidade</th><th className="td-actions"></th></tr></thead>
+              <thead><tr><th>Material</th><th>Quantidade</th><th>Unidade</th><th>Nº NF</th><th className="td-actions"></th></tr></thead>
               <tbody>
                 {formData.materiais_lista.map((m, idx) => (
                   <tr key={idx}>
                     <td><strong>{m.nome}</strong></td>
                     <td>{m.quantidade}</td>
                     <td>{m.unidade || '—'}</td>
+                    <td>{m.numero_nf || '—'}</td>
                     <td className="td-actions">
                       <button className="btn btn-danger" style={{ padding: '4px 8px' }} onClick={() => removeMaterial(idx)}>
                         <Trash2 size={14} />
@@ -1880,19 +2022,19 @@ function RDOForm2() {
         </Section>
 
         {/* ══ SEÇÃO 10 — Anexos ═════════════════════════ */}
-        <Section id="anexos" num="10" title="Anexos do RDO" badge={(anexos.length + anexosQueue.length) || null} isOpen={openSections.anexos} onToggle={toggleSection}>
+        <Section id="anexos" num="10" title="Anexos do RDO" badge={(anexosPdf.length + anexosQueue.length) || null} isOpen={openSections.anexos} onToggle={toggleSection}>
           {!rdoId && anexosQueue.length > 0 && (
             <div className="alert alert-info" style={{ marginBottom: '8px', fontSize: '12px' }}>
               {anexosQueue.length} arquivo(s) na fila — serão enviados ao salvar o RDO.
             </div>
           )}
           <label className="rdo-upload-zone">
-            <input ref={anexoInputRef} type="file" multiple
+            <input ref={anexoInputRef} type="file" multiple accept="application/pdf,.pdf"
               onChange={(e) => { Array.from(e.target.files || []).forEach(f => handleAnexoUpload(f)); }}
               disabled={isUploadingAnexo} />
             <Upload size={24} style={{ marginBottom: '6px', color: '#94a3b8' }} />
-            <div>{isUploadingAnexo ? 'Enviando...' : 'Clique ou arraste arquivos aqui'}</div>
-            <div style={{ fontSize: '11px', marginTop: '4px' }}>PDF, DOC, XLS, imagens — máx. 10 MB cada</div>
+            <div>{isUploadingAnexo ? 'Enviando...' : 'Clique ou arraste arquivos PDF aqui'}</div>
+            <div style={{ fontSize: '11px', marginTop: '4px' }}>Somente PDF — máx. 10 MB cada</div>
           </label>
           {!rdoId && anexosQueue.length > 0 && (
             <div style={{ marginTop: '10px' }}>
@@ -1911,9 +2053,9 @@ function RDOForm2() {
               ))}
             </div>
           )}
-          {anexos.length > 0 && (
+          {anexosPdf.length > 0 && (
             <div style={{ marginTop: '10px' }}>
-              {anexos.map(a => (
+              {anexosPdf.map(a => (
                 <div key={a.id} className="rdo-anexo-item">
                   <span className="anexo-icon"><FileText size={18} color="#64748b" /></span>
                   <div className="anexo-info">
@@ -1930,7 +2072,7 @@ function RDOForm2() {
               ))}
             </div>
           )}
-          {anexos.length === 0 && anexosQueue.length === 0 && <div className="rdo-empty" style={{ marginTop: '10px' }}>Nenhum anexo adicionado.</div>}
+          {anexosPdf.length === 0 && anexosQueue.length === 0 && <div className="rdo-empty" style={{ marginTop: '10px' }}>Nenhum anexo adicionado.</div>}
         </Section>
 
         {/* ── Barra de ações ───────────────────────────── */}
@@ -1946,7 +2088,7 @@ function RDOForm2() {
               <>
                 {ultimaAlteracao && (
                   <div style={{ fontSize: 12, color: '#64748b', textAlign: 'right' }}>
-                    Última alteração: {ultimaAlteracao.usuario_nome || 'Usuário removido'} em {new Date(ultimaAlteracao.criado_em).toLocaleString('pt-BR')}
+                    Última alteração: {ultimaAlteracao.usuario_nome || 'Usuário removido'} em {parseTS(ultimaAlteracao.criado_em)?.toLocaleString('pt-BR') ?? '—'}
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: '16px', marginBottom: 4 }}>
@@ -1963,9 +2105,13 @@ function RDOForm2() {
               <button className="btn btn-secondary" onClick={() => navigate(`/projeto/${projetoId}/rdos`)}>
                 Voltar
               </button>
-              <button className="btn btn-success" onClick={salvar}
+              <button className="btn btn-secondary" onClick={() => salvar('rascunho')}
                 disabled={isSaving || !formData.data_relatorio}>
-                {isSaving ? 'Salvando...' : rdoId ? 'Salvar alterações' : 'Salvar RDO'}
+                {isSaving ? 'Salvando...' : 'Salvar rascunho'}
+              </button>
+              <button className="btn btn-success" onClick={() => salvar('analise')}
+                disabled={isSaving || !formData.data_relatorio}>
+                {isSaving ? 'Enviando...' : 'Enviar para aprovação'}
               </button>
             </div>
           </div>
@@ -1991,7 +2137,7 @@ function RDOForm2() {
                       <tr key={log.id || idx}>
                         <td>{log.usuario_nome || '—'}</td>
                           <td>{log.acao === 'UPDATE' ? 'Edição' : 'Visualização'}</td>
-                        <td>{new Date(log.criado_em).toLocaleString('pt-BR')}</td>
+                        <td>{parseTS(log.criado_em)?.toLocaleString('pt-BR') ?? '—'}</td>
                       </tr>
                     ))
                   )}

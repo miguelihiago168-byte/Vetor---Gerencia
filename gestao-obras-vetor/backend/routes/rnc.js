@@ -1,4 +1,6 @@
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 const { body, validationResult } = require('express-validator');
 const { allQuery, getQuery, runQuery } = require('../config/database');
 const { auth, isGestor } = require('../middleware/auth');
@@ -22,9 +24,17 @@ router.get('/:id/pdf', auth, async (req, res) => {
       WHERE r.id = ? AND p.tenant_id = ?
     `, [id, tenantId]);
     if (!rnc) return res.status(404).json({ erro: 'RNC não encontrada ou não pertence ao seu tenant.' });
-    // ...existing code PDF...
     const PDFDocument = require('pdfkit');
     const doc = new PDFDocument({ size: 'A4', layout: 'portrait', margin: 40 });
+    const uploadsDir = path.join(__dirname, '..', 'uploads');
+    const publicBaseUrl = (process.env.PUBLIC_FILE_BASE_URL || process.env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+    const anexos = await allQuery(
+      'SELECT * FROM anexos WHERE rnc_id = ? ORDER BY criado_em ASC',
+      [id]
+    );
+    const fotos = anexos.filter((a) => String(a.tipo || '').startsWith('image/'));
+    const outrosAnexos = anexos.filter((a) => !String(a.tipo || '').startsWith('image/'));
+
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="RNC-${id}.pdf"`);
     doc.pipe(res);
@@ -63,6 +73,50 @@ router.get('/:id/pdf', auth, async (req, res) => {
       doc.text(rnc.registros_fotograficos);
       doc.moveDown();
     }
+
+    if (fotos.length > 0) {
+      doc.text('Fotos anexadas:', { underline: true });
+      doc.moveDown(0.5);
+
+      for (const foto of fotos) {
+        const imgPath = path.join(uploadsDir, foto.caminho_arquivo || '');
+        if (fs.existsSync(imgPath)) {
+          try {
+            const maxWidth = 500;
+            const maxHeight = 260;
+            doc.image(imgPath, {
+              fit: [maxWidth, maxHeight],
+              align: 'left',
+              valign: 'top'
+            });
+            doc.moveDown(0.3);
+          } catch (_) {
+            doc.fontSize(10).fillColor('#b91c1c').text(`Falha ao renderizar imagem: ${foto.nome_arquivo || 'arquivo'}`);
+          }
+        } else {
+          doc.fontSize(10).fillColor('#b91c1c').text(`Arquivo de imagem não encontrado: ${foto.nome_arquivo || 'arquivo'}`);
+        }
+
+        const fotoUrl = `${publicBaseUrl}/uploads/${encodeURIComponent(foto.caminho_arquivo || '')}`;
+        doc.fontSize(10).fillColor('black').text(`Arquivo: ${foto.nome_arquivo || '—'}`);
+        doc.fillColor('#0b5fff').text('Abrir arquivo original', { link: fotoUrl, underline: true });
+        doc.fillColor('black').moveDown();
+      }
+    }
+
+    if (outrosAnexos.length > 0) {
+      doc.moveDown();
+      doc.text('Outros anexos:', { underline: true });
+      doc.moveDown(0.4);
+      for (const anexo of outrosAnexos) {
+        const fileUrl = `${publicBaseUrl}/uploads/${encodeURIComponent(anexo.caminho_arquivo || '')}`;
+        const tamanhoKb = anexo.tamanho ? `${Math.round(Number(anexo.tamanho) / 1024)} KB` : '—';
+        doc.fillColor('black').fontSize(10).text(`${anexo.nome_arquivo || 'anexo'} (${anexo.tipo || 'tipo desconhecido'}, ${tamanhoKb})`);
+        doc.fillColor('#0b5fff').text('Abrir anexo', { link: fileUrl, underline: true });
+        doc.fillColor('black').moveDown(0.4);
+      }
+    }
+
     doc.fontSize(10).text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, { align: 'center' });
     doc.end();
   } catch (error) {

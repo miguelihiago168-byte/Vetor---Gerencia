@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { registerWithInviteToken, validateInviteToken } from '../services/api';
 import { ArrowRight, ArrowLeft, Copy, Check, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { hasForbiddenPasswordSequence } from '../utils/passwordPolicy';
 import './Login.css';
 
 // Senha: exatamente 6 chars, >= 4 dígitos, >= 1 letra, >= 1 especial
@@ -59,6 +60,9 @@ function CriarConta() {
     if (form.senha.length !== 6) return 'A senha deve ter exatamente 6 caracteres.';
     if (!SENHA_REGEX.test(form.senha)) {
       return 'A senha deve conter pelo menos 4 números, 1 letra e 1 caractere especial (ex: 1234a!).';
+    }
+    if (hasForbiddenPasswordSequence(form.senha)) {
+      return 'A senha não pode conter sequência crescente/decrescente de letras ou números (ex: abcd, 1234, 9876).';
     }
     if (form.senha !== form.confirmar) return 'As senhas não conferem.';
     return null;

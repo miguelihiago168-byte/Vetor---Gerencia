@@ -116,7 +116,7 @@
 .rdo-badge-aprovado  { background: #dcfce7; color: #15803d; }
 .rdo-badge-reprovado { background: #fee2e2; color: #b91c1c; }
 .rdo-badge-analise   { background: #fef9c3; color: #92400e; }
-.rdo-badge-pendente  { background: #f1f5f9; color: #475569; }
+.rdo-badge-pendente  { background: #fef3c7; color: #92400e; }
 
 /* ── Actions ── */
 .rdo-actions {
