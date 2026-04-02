@@ -4,6 +4,7 @@ const { allQuery, runQuery, getQuery } = require('../config/database');
 const { auth, isGestor } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
 const { PERFIS, inferirPerfil } = require('../constants/access');
+const backendPackage = require('../package.json');
 
 const router = express.Router();
 
@@ -11,6 +12,12 @@ const getPublicBaseUrl = (req) => {
   const envBase = process.env.PUBLIC_FILE_BASE_URL || process.env.APP_BASE_URL;
   if (envBase) return String(envBase).replace(/\/$/, '');
   return `${req.protocol}://${req.get('host')}`;
+};
+
+const getPdfVersionLabel = () => {
+  const appVersion = process.env.APP_VERSION || process.env.RELEASE_VERSION || backendPackage.version || 'desconhecida';
+  const appEnv = process.env.APP_ENV || process.env.NODE_ENV || 'local';
+  return `Versão ${appVersion} (${appEnv})`;
 };
 
 // Auto-migration: adicionar coluna atividades_avulsas se não existir
@@ -1799,12 +1806,13 @@ ${anexosSection}
     await page.setContent(html, { waitUntil: 'networkidle0' });
 
     const safeNomeProjeto = String(rdo.projeto_nome || 'Projeto').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const pdfVersionLabel = getPdfVersionLabel().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
       displayHeaderFooter: true,
       headerTemplate: '<span></span>',
-      footerTemplate: `<div style="font-size:8px;color:#94a3b8;padding:0 40px;width:100%;box-sizing:border-box;display:flex;justify-content:space-between;font-family:'Segoe UI',sans-serif;align-items:center"><span>${safeNomeProjeto} &nbsp;&middot;&nbsp; ${displayId}</span><span>Pág. <span class="pageNumber"></span>&nbsp;/&nbsp;<span class="totalPages"></span> &nbsp;&mdash;&nbsp; Gerado em ${new Date().toLocaleString('pt-BR')}</span></div>`,
+      footerTemplate: `<div style="font-size:8px;color:#94a3b8;padding:0 40px;width:100%;box-sizing:border-box;display:flex;justify-content:space-between;font-family:'Segoe UI',sans-serif;align-items:center"><span>${safeNomeProjeto} &nbsp;&middot;&nbsp; ${displayId}</span><span>${pdfVersionLabel} &nbsp;&middot;&nbsp; Pág. <span class="pageNumber"></span>&nbsp;/&nbsp;<span class="totalPages"></span> &nbsp;&mdash;&nbsp; Gerado em ${new Date().toLocaleString('pt-BR')}</span></div>`,
       margin: { top: '8mm', bottom: '10mm', left: '0', right: '0' }
     });
 
@@ -1859,6 +1867,7 @@ ${anexosSection}
         return Number.isNaN(dt.getTime()) ? String(d) : dt.toLocaleDateString('pt-BR');
       };
       const fmtNum = (v) => Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+      const pdfVersionLabel = getPdfVersionLabel();
       const drawDivider = () => {
         const y = doc.y;
         doc.save().moveTo(36, y).lineTo(559, y).lineWidth(0.5).strokeColor('#D1D5DB').stroke().restore();
@@ -1917,6 +1926,11 @@ ${anexosSection}
           }
         }
       }
+
+      const footerY = 800;
+      doc.font('Helvetica').fontSize(8).fillColor('#94A3B8');
+      doc.text(pdfVersionLabel, 36, footerY, { width: 250, align: 'left' });
+      doc.text(`Gerado em ${new Date().toLocaleString('pt-BR')}`, 286, footerY, { width: 273, align: 'right' });
 
       doc.end();
     } catch (fallbackError) {
