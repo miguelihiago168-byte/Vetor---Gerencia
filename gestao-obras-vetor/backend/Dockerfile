@@ -1,14 +1,16 @@
-FROM node:18-bookworm-slim
+FROM node:18-alpine
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apk add --no-cache \
 	chromium \
+	nss \
+	freetype \
+	harfbuzz \
 	ca-certificates \
-	fonts-liberation \
-	&& rm -rf /var/lib/apt/lists/*
+	ttf-freefont
 
 ENV PUPPETEER_SKIP_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 COPY backend/package*.json ./
 RUN npm install --production --silent

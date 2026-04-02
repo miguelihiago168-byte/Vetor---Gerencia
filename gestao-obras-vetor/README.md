@@ -71,7 +71,7 @@ restart-deploy.bat
 Para que o PDF gerado na web fique igual ao PDF do localhost, o deploy do backend precisa incluir um navegador headless.
 
 - Em Docker: o `backend/Dockerfile` já instala `chromium` e define `PUPPETEER_EXECUTABLE_PATH`.
-- Em PM2/Linux direto: use o `backend/ecosystem.config.js`, que já define `PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium`.
+- Em PM2/Linux direto: use o `backend/ecosystem.config.js`, que já define `PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser`.
 
 Após atualizar essas dependências no servidor, faça rebuild/restart do backend:
 
