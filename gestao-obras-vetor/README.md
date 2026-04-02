@@ -52,6 +52,20 @@ npm ci
 
 ## ▶️ Executar o Sistema
 
+### Reinício rápido após deploy
+
+Na raiz do projeto, execute:
+
+```powershell
+.\scripts\restart_after_deploy.ps1
+```
+
+Ou, via atalho `.bat`:
+
+```bat
+restart-deploy.bat
+```
+
 ### Opção 1: Executar manualmente (2 terminais)
 
 **Terminal 1 - Backend:**
