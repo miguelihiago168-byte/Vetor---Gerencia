@@ -20,8 +20,8 @@ sudo apt-get update -y
 sudo apt-get upgrade -y
 
 echo ""
-echo ">>> [2/6] Instalando dependências do Docker..."
-sudo apt-get install -y ca-certificates curl gnupg git
+echo ">>> [2/6] Instalando dependências base do servidor..."
+sudo apt-get install -y ca-certificates curl gnupg git chromium-browser
 
 sudo install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
@@ -82,6 +82,7 @@ echo "Versões instaladas:"
 docker --version
 docker compose version
 git --version
+chromium-browser --version || true
 echo ""
 echo "--------------------------------------"
 echo " PRÓXIMOS PASSOS:"
@@ -107,6 +108,7 @@ echo ""
 echo " 5. Verifique se tudo subiu:"
 echo "    docker compose ps"
 echo "    curl http://localhost/api/health"
+echo "    docker exec gestao-backend printenv PUPPETEER_EXECUTABLE_PATH"
 echo ""
 echo " 6. Acesse no browser: http://SEU_IP"
 echo "    Login: 000001  |  Senha: 123456"
