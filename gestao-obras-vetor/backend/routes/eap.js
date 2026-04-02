@@ -129,9 +129,9 @@ router.post('/copiar', [auth, isGestor], async (req, res) => {
 
     for (const a of atividades) {
       const result = await runQuery(`
-        INSERT INTO atividades_eap (projeto_id, codigo_eap, descricao, percentual_previsto, pai_id, ordem, unidade_medida, quantidade_total, criado_por)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [targetProjetoId, a.codigo_eap, a.descricao + ` (copiado de projeto ${sourceProjetoId})`, a.percentual_previsto, null, a.ordem, a.unidade_medida, a.quantidade_total, req.usuario.id]);
+        INSERT INTO atividades_eap (tenant_id, projeto_id, codigo_eap, descricao, percentual_previsto, pai_id, ordem, unidade_medida, quantidade_total, criado_por)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [tenantId, targetProjetoId, a.codigo_eap, a.descricao + ` (copiado de projeto ${sourceProjetoId})`, a.percentual_previsto, null, a.ordem, a.unidade_medida, a.quantidade_total, req.usuario.id]);
       mapOldToNew[a.id] = result.lastID;
     }
 
@@ -240,9 +240,10 @@ router.post('/', auth, [
 
     const result = await runQuery(`
       INSERT INTO atividades_eap 
-      (projeto_id, codigo_eap, descricao, percentual_previsto, pai_id, ordem, unidade_medida, quantidade_total, criado_por, id_atividade, nome, data_inicio_planejada, data_fim_planejada, peso_percentual_projeto)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (tenant_id, projeto_id, codigo_eap, descricao, percentual_previsto, pai_id, ordem, unidade_medida, quantidade_total, criado_por, id_atividade, nome, data_inicio_planejada, data_fim_planejada, peso_percentual_projeto)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
+      tenantId,
       projeto_id,
       codigo_eap,
       descricaoNormalizada,

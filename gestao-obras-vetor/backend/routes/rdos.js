@@ -443,6 +443,12 @@ router.post('/', auth, [
       return res.status(403).json({ erro: 'Projeto fora do tenant ativo.' });
     }
 
+    // Normaliza dados legados: EAPs antigas podem estar sem tenant_id preenchido.
+    await runQuery(
+      'UPDATE atividades_eap SET tenant_id = ? WHERE projeto_id = ? AND (tenant_id IS NULL OR tenant_id = 0)',
+      [req.tenantId, projeto_id]
+    );
+
     // Integridade: projeto precisa ter EAP e criação deve trazer ao menos uma atividade
     const eapCountRow = await getQuery('SELECT COUNT(*) AS c FROM atividades_eap WHERE projeto_id = ? AND tenant_id = ?', [projeto_id, req.tenantId]);
     if (!eapCountRow || eapCountRow.c === 0) {

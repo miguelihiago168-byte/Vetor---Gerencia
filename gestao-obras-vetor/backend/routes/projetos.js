@@ -423,10 +423,11 @@ router.post('/:destinoId/copiar-eap', [auth, isGestor], async (req, res) => {
       const novoPaiId = at.pai_id ? (mapaIds[at.pai_id] ?? null) : null;
       const result = await runQuery(`
         INSERT INTO atividades_eap
-          (projeto_id, id_atividade, codigo_eap, nome, descricao, percentual_previsto, peso_percentual_projeto,
+          (tenant_id, projeto_id, id_atividade, codigo_eap, nome, descricao, percentual_previsto, peso_percentual_projeto,
            data_inicio_planejada, data_fim_planejada, status, pai_id, ordem, unidade_medida, quantidade_total, criado_por)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Não iniciada', ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Não iniciada', ?, ?, ?, ?, ?)
       `, [
+        tenantId,
         destinoId,
         at.id_atividade,
         at.codigo_eap,
