@@ -313,99 +313,186 @@ router.get('/:id', auth, async (req, res) => {
     await ensureRdoOptionalColumns();
     const { id } = req.params;
 
-    const rdo = await getQuery(`
-      SELECT r.*, u.nome as criado_por_nome, g.nome as aprovado_por_nome,
-             p.nome as projeto_nome, p.empresa_responsavel, p.empresa_executante, p.cidade
-      FROM rdos r
-      LEFT JOIN usuarios u ON r.criado_por = u.id
-      LEFT JOIN usuarios g ON r.aprovado_por = g.id
-      LEFT JOIN projetos p ON r.projeto_id = p.id
-      WHERE r.id = ?
-    `, [id]);
+    let rdo;
+    try {
+      rdo = await getQuery(`
+        SELECT r.*, u.nome as criado_por_nome, g.nome as aprovado_por_nome,
+               p.nome as projeto_nome, p.empresa_responsavel, p.empresa_executante, p.cidade
+        FROM rdos r
+        LEFT JOIN usuarios u ON r.criado_por = u.id
+        LEFT JOIN usuarios g ON r.aprovado_por = g.id
+        LEFT JOIN projetos p ON r.projeto_id = p.id
+        WHERE r.id = ?
+      `, [id]);
+    } catch (_) {
+      // Fallback para schema legado de projetos (colunas opcionais podem não existir)
+      rdo = await getQuery(`
+        SELECT r.*, u.nome as criado_por_nome, g.nome as aprovado_por_nome,
+               p.nome as projeto_nome
+        FROM rdos r
+        LEFT JOIN usuarios u ON r.criado_por = u.id
+        LEFT JOIN usuarios g ON r.aprovado_por = g.id
+        LEFT JOIN projetos p ON r.projeto_id = p.id
+        WHERE r.id = ?
+      `, [id]);
+      if (rdo) {
+        rdo.empresa_responsavel = rdo.empresa_responsavel || null;
+        rdo.empresa_executante = rdo.empresa_executante || null;
+        rdo.cidade = rdo.cidade || null;
+      }
+    }
 
     if (!rdo) {
       return res.status(404).json({ erro: 'RDO não encontrado.' });
     }
 
     // Buscar atividades executadas
-    const atividades = await allQuery(`
-      SELECT ra.*, ae.codigo_eap, COALESCE(ae.nome, ae.descricao) AS descricao
-      FROM rdo_atividades ra
-      INNER JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
-      WHERE ra.rdo_id = ?
-    `, [id]);
+    let atividades = [];
+    try {
+      atividades = await allQuery(`
+        SELECT ra.*, ae.codigo_eap, COALESCE(ae.nome, ae.descricao) AS descricao
+        FROM rdo_atividades ra
+        INNER JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
+        WHERE ra.rdo_id = ?
+      `, [id]);
+    } catch (_) {
+      try {
+        atividades = await allQuery(`
+          SELECT ra.*, ae.codigo_eap, ae.descricao AS descricao
+          FROM rdo_atividades ra
+          LEFT JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
+          WHERE ra.rdo_id = ?
+        `, [id]);
+      } catch (_) {
+        atividades = [];
+      }
+    }
 
     // Buscar anexos
-    const anexos = await allQuery(`
-      SELECT *
-      FROM anexos
-      WHERE rdo_id = ?
-        AND (
-          LOWER(COALESCE(tipo, '')) LIKE '%pdf%'
-          OR LOWER(COALESCE(nome_arquivo, '')) LIKE '%.pdf'
-        )
-      ORDER BY criado_em DESC
-    `, [id]);
+    let anexos = [];
+    try {
+      anexos = await allQuery(`
+        SELECT *
+        FROM anexos
+        WHERE rdo_id = ?
+          AND (
+            LOWER(COALESCE(tipo, '')) LIKE '%pdf%'
+            OR LOWER(COALESCE(nome_arquivo, '')) LIKE '%.pdf'
+          )
+        ORDER BY criado_em DESC
+      `, [id]);
+    } catch (_) {
+      anexos = [];
+    }
 
     // Buscar mão de obra vinculada ao RDO
-    const maoObra = await allQuery(`
-      SELECT rmo.*, mo.nome as nome_colaborador, mo.funcao as funcao_colaborador
-      FROM rdo_mao_obra rmo
-      LEFT JOIN mao_obra mo ON rmo.mao_obra_id = mo.id
-      WHERE rmo.rdo_id = ?
-      ORDER BY rmo.id
-    `, [id]);
+    let maoObra = [];
+    try {
+      maoObra = await allQuery(`
+        SELECT rmo.*, mo.nome as nome_colaborador, mo.funcao as funcao_colaborador
+        FROM rdo_mao_obra rmo
+        LEFT JOIN mao_obra mo ON rmo.mao_obra_id = mo.id
+        WHERE rmo.rdo_id = ?
+        ORDER BY rmo.id
+      `, [id]);
+    } catch (_) {
+      maoObra = [];
+    }
 
     // Buscar fotos vinculadas às atividades do RDO
     const fotosOrderBy = await getRdoFotosOrderBy();
-    const fotos = await allQuery(`
-      SELECT rf.*, ra.atividade_eap_id AS atividade_eap_id,
-             ae.codigo_eap AS atividade_codigo,
-             COALESCE(ae.nome, ae.descricao) AS atividade_descricao,
-             rf.atividade_avulsa_descricao
-      FROM rdo_fotos rf
-      LEFT JOIN rdo_atividades ra ON rf.rdo_atividade_id = ra.id
-      LEFT JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
-      WHERE rf.rdo_id = ?
-      ORDER BY ${fotosOrderBy}
-    `, [id]);
+    let fotos = [];
+    try {
+      fotos = await allQuery(`
+        SELECT rf.*, ra.atividade_eap_id AS atividade_eap_id,
+               ae.codigo_eap AS atividade_codigo,
+               COALESCE(ae.nome, ae.descricao) AS atividade_descricao,
+               rf.atividade_avulsa_descricao
+        FROM rdo_fotos rf
+        LEFT JOIN rdo_atividades ra ON rf.rdo_atividade_id = ra.id
+        LEFT JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
+        WHERE rf.rdo_id = ?
+        ORDER BY ${fotosOrderBy}
+      `, [id]);
+    } catch (_) {
+      try {
+        fotos = await allQuery(`
+          SELECT rf.*, ra.atividade_eap_id AS atividade_eap_id,
+                 ae.codigo_eap AS atividade_codigo,
+                 ae.descricao AS atividade_descricao,
+                 NULL AS atividade_avulsa_descricao
+          FROM rdo_fotos rf
+          LEFT JOIN rdo_atividades ra ON rf.rdo_atividade_id = ra.id
+          LEFT JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
+          WHERE rf.rdo_id = ?
+          ORDER BY ${fotosOrderBy}
+        `, [id]);
+      } catch (_) {
+        fotos = [];
+      }
+    }
 
     // Buscar comentários
-    const comentarios = await allQuery(`
-      SELECT rc.*, u.nome as autor_nome
-      FROM rdo_comentarios rc
-      LEFT JOIN usuarios u ON rc.usuario_id = u.id
-      WHERE rc.rdo_id = ?
-      ORDER BY rc.criado_em ASC
-    `, [id]);
+    let comentarios = [];
+    try {
+      comentarios = await allQuery(`
+        SELECT rc.*, u.nome as autor_nome
+        FROM rdo_comentarios rc
+        LEFT JOIN usuarios u ON rc.usuario_id = u.id
+        WHERE rc.rdo_id = ?
+        ORDER BY rc.criado_em ASC
+      `, [id]);
+    } catch (_) {
+      comentarios = [];
+    }
 
     // Materiais recebidos
-    const materiais = await allQuery(`
-      SELECT * FROM rdo_materiais WHERE rdo_id = ? ORDER BY criado_em DESC
-    `, [id]);
+    let materiais = [];
+    try {
+      materiais = await allQuery(`
+        SELECT * FROM rdo_materiais WHERE rdo_id = ? ORDER BY criado_em DESC
+      `, [id]);
+    } catch (_) {
+      materiais = [];
+    }
 
     // Ocorrências
-    const ocorrencias = await allQuery(`
-      SELECT ro.*, u.nome as autor_nome
-      FROM rdo_ocorrencias ro
-      LEFT JOIN usuarios u ON ro.criado_por = u.id
-      WHERE ro.rdo_id = ?
-      ORDER BY ro.criado_em DESC
-    `, [id]);
+    let ocorrencias = [];
+    try {
+      ocorrencias = await allQuery(`
+        SELECT ro.*, u.nome as autor_nome
+        FROM rdo_ocorrencias ro
+        LEFT JOIN usuarios u ON ro.criado_por = u.id
+        WHERE ro.rdo_id = ?
+        ORDER BY ro.criado_em DESC
+      `, [id]);
+    } catch (_) {
+      ocorrencias = [];
+    }
 
     // Assinaturas
-    const assinaturas = await allQuery(`
-      SELECT ra.*, u.nome as usuario_nome
-      FROM rdo_assinaturas ra
-      LEFT JOIN usuarios u ON ra.usuario_id = u.id
-      WHERE ra.rdo_id = ?
-      ORDER BY ra.assinado_em ASC
-    `, [id]);
+    let assinaturas = [];
+    try {
+      assinaturas = await allQuery(`
+        SELECT ra.*, u.nome as usuario_nome
+        FROM rdo_assinaturas ra
+        LEFT JOIN usuarios u ON ra.usuario_id = u.id
+        WHERE ra.rdo_id = ?
+        ORDER BY ra.assinado_em ASC
+      `, [id]);
+    } catch (_) {
+      assinaturas = [];
+    }
 
     // Clima por periodo
-    const clima = await allQuery(`
-      SELECT * FROM rdo_clima WHERE rdo_id = ? ORDER BY id
-    `, [id]);
+    let clima = [];
+    try {
+      clima = await allQuery(`
+        SELECT * FROM rdo_clima WHERE rdo_id = ? ORDER BY id
+      `, [id]);
+    } catch (_) {
+      clima = [];
+    }
 
     rdo.atividades = atividades;
     rdo.anexos = anexos;
