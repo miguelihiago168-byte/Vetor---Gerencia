@@ -1688,11 +1688,24 @@ ${anexosSection}
 </body>
 </html>`;
 
-    // ── Lançar puppeteer com Edge do sistema ─────────────────────────────
-    const edgePath = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
+    // ── Lançar puppeteer com navegador disponível no ambiente ─────────────
+    const browserCandidates = [
+      process.env.PUPPETEER_EXECUTABLE_PATH,
+      process.env.CHROME_PATH,
+      process.env.BROWSER_EXECUTABLE_PATH,
+      'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      '/usr/bin/google-chrome',
+      '/usr/bin/chromium-browser',
+      '/usr/bin/chromium'
+    ].filter(Boolean);
+    const executablePath = browserCandidates.find((p) => {
+      try { return fs.existsSync(p); } catch (_) { return false; }
+    });
+
     browser = await puppeteer.launch({
       headless: true,
-      executablePath: fs.existsSync(edgePath) ? edgePath : undefined,
+      executablePath: executablePath || undefined,
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     });
     const page = await browser.newPage();
@@ -1750,27 +1763,72 @@ ${anexosSection}
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="${safeId}.pdf"`);
 
-      const doc = new PDFDocument({ size: 'A4', margin: 40 });
+      const doc = new PDFDocument({ size: 'A4', margin: 36 });
       doc.pipe(res);
-      doc.fontSize(18).text('Relatório Diário de Obra', { align: 'left' });
-      doc.moveDown(0.5);
-      doc.fontSize(11).text(`RDO: ${safeId}`);
-      doc.text(`Projeto: ${rdoFallback.projeto_nome || '—'}`);
-      doc.text(`Data: ${rdoFallback.data_relatorio || '—'}`);
-      doc.text(`Status: ${rdoFallback.status || '—'}`);
-      doc.text(`Criado por: ${rdoFallback.criado_por_nome || '—'}`);
-      doc.moveDown();
-      doc.fontSize(13).text('Atividades');
-      doc.moveDown(0.4);
 
+      const fmtDate = (d) => {
+        if (!d) return '—';
+        const dt = new Date(String(d).includes('T') ? d : `${d}T00:00:00`);
+        return Number.isNaN(dt.getTime()) ? String(d) : dt.toLocaleDateString('pt-BR');
+      };
+      const fmtNum = (v) => Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+      const drawDivider = () => {
+        const y = doc.y;
+        doc.save().moveTo(36, y).lineTo(559, y).lineWidth(0.5).strokeColor('#D1D5DB').stroke().restore();
+        doc.moveDown(0.4);
+      };
+
+      doc.font('Helvetica-Bold').fontSize(17).fillColor('#0F172A').text('Relatório Diário de Obra');
+      doc.moveDown(0.2);
+      doc.font('Helvetica').fontSize(10).fillColor('#475569').text(`Documento gerado em ${new Date().toLocaleString('pt-BR')}`);
+      doc.moveDown(0.5);
+      drawDivider();
+
+      doc.font('Helvetica-Bold').fontSize(11).fillColor('#111827').text('Resumo');
+      doc.moveDown(0.3);
+      doc.font('Helvetica').fontSize(10).fillColor('#1F2937');
+      doc.text(`RDO: ${safeId}`);
+      doc.text(`Projeto: ${rdoFallback.projeto_nome || '—'}`);
+      doc.text(`Data do relatório: ${fmtDate(rdoFallback.data_relatorio)}`);
+      doc.text(`Status: ${rdoFallback.status || '—'}`);
+      doc.text(`Responsável: ${rdoFallback.criado_por_nome || '—'}`);
+      drawDivider();
+
+      doc.font('Helvetica-Bold').fontSize(11).fillColor('#111827').text(`Atividades (${atividadesFallback.length})`);
+      doc.moveDown(0.3);
+
+      const col = { codigo: 36, desc: 105, qtd: 410, perc: 490 };
+      doc.font('Helvetica-Bold').fontSize(9).fillColor('#334155');
+      doc.text('Código', col.codigo, doc.y, { width: 60 });
+      doc.text('Descrição', col.desc, doc.y, { width: 290 });
+      doc.text('Qtde', col.qtd, doc.y, { width: 70, align: 'right' });
+      doc.text('%', col.perc, doc.y, { width: 60, align: 'right' });
+      doc.moveDown(0.2);
+      drawDivider();
+
+      doc.font('Helvetica').fontSize(9).fillColor('#1F2937');
       if (atividadesFallback.length === 0) {
-        doc.fontSize(10).text('Sem atividades registradas.');
+        doc.text('Sem atividades registradas para este RDO.');
       } else {
-        atividadesFallback.forEach((a, idx) => {
-          doc.fontSize(10).text(
-            `${idx + 1}. ${a.codigo_eap} - ${a.descricao} | Qtde: ${Number(a.quantidade_executada || 0).toLocaleString('pt-BR')} | %: ${Number(a.percentual_executado || 0).toLocaleString('pt-BR')}%`
-          );
-        });
+        for (const a of atividadesFallback) {
+          const yStart = doc.y;
+          const codigo = String(a.codigo_eap || 'AVULSA');
+          const desc = String(a.descricao || 'Atividade');
+          const qtd = fmtNum(a.quantidade_executada || 0);
+          const perc = `${fmtNum(a.percentual_executado || 0)}%`;
+
+          doc.text(codigo, col.codigo, yStart, { width: 60 });
+          doc.text(desc, col.desc, yStart, { width: 290 });
+          doc.text(qtd, col.qtd, yStart, { width: 70, align: 'right' });
+          doc.text(perc, col.perc, yStart, { width: 60, align: 'right' });
+
+          const nextY = Math.max(doc.y, yStart + 14);
+          doc.y = nextY;
+
+          if (doc.y > 770) {
+            doc.addPage();
+          }
+        }
       }
 
       doc.end();

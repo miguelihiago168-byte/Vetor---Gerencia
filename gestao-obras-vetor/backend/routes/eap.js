@@ -22,6 +22,30 @@ const ensureFaixaPercentual = (valor) => {
   return Math.round(parsed * 100) / 100;
 };
 
+const ensureEapOptionalColumns = async () => {
+  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN tenant_id INTEGER'); } catch (_) {}
+  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN unidade_medida TEXT'); } catch (_) {}
+  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN quantidade_total REAL DEFAULT 0'); } catch (_) {}
+  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN id_atividade TEXT'); } catch (_) {}
+  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN nome TEXT'); } catch (_) {}
+  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN data_inicio_planejada DATE'); } catch (_) {}
+  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN data_fim_planejada DATE'); } catch (_) {}
+  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN peso_percentual_projeto REAL DEFAULT 0'); } catch (_) {}
+  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN data_conclusao_real DATE'); } catch (_) {}
+  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN status TEXT'); } catch (_) {}
+
+  // Backfill de tenant para registros legados
+  try {
+    await runQuery(`
+      UPDATE atividades_eap
+      SET tenant_id = (
+        SELECT p.tenant_id FROM projetos p WHERE p.id = atividades_eap.projeto_id
+      )
+      WHERE tenant_id IS NULL OR tenant_id = 0
+    `);
+  } catch (_) {}
+};
+
 const getSomaPesosFolhas = async (projetoId) => {
   const row = await getQuery(`
     SELECT COALESCE(SUM(COALESCE(a.peso_percentual_projeto, a.percentual_previsto, 0)), 0) AS total
@@ -48,6 +72,7 @@ const getSomaPesosIrmaos = async (projetoId, paiId, excluirId = null) => {
 // Listar atividades EAP de um projeto (tenant-aware)
 router.get('/projeto/:projetoId', auth, async (req, res) => {
   try {
+    await ensureEapOptionalColumns();
     const { projetoId } = req.params;
     const tenantId = req.tenantId;
     if (!tenantId) {
@@ -113,6 +138,7 @@ router.get('/projeto/:projetoId', auth, async (req, res) => {
 // Copiar EAP de um projeto para outro (tenant-aware)
 router.post('/copiar', [auth, isGestor], async (req, res) => {
   try {
+    await ensureEapOptionalColumns();
     const { sourceProjetoId, targetProjetoId } = req.body;
     const tenantId = req.tenantId;
     if (!sourceProjetoId || !targetProjetoId) return res.status(400).json({ erro: 'É necessário sourceProjetoId e targetProjetoId.' });
@@ -159,6 +185,7 @@ router.post('/', auth, [
   body('percentual_previsto').optional().isFloat({ min: 0, max: 100 })
 ], async (req, res) => {
   try {
+    await ensureEapOptionalColumns();
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ erro: 'Dados inválidos.', detalhes: errors.array() });
@@ -276,6 +303,7 @@ router.post('/', auth, [
 // Atualizar atividade EAP
 router.put('/:id', auth, async (req, res) => {
   try {
+    await ensureEapOptionalColumns();
     const { id } = req.params;
     const { codigo_eap, descricao, percentual_previsto, ordem, unidade_medida, quantidade_total, pai_id, id_atividade, nome, data_inicio_planejada, data_fim_planejada, peso_percentual_projeto, percentual_executado } = req.body;
 
