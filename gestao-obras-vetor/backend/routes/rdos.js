@@ -20,13 +20,102 @@ runQuery("ALTER TABLE rdos ADD COLUMN atividades_avulsas TEXT").catch(e => {
 runQuery('ALTER TABLE rdo_fotos ADD COLUMN ordem INTEGER DEFAULT 0').catch(e => {
   if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_fotos.ordem:', e.message);
 });
+runQuery('ALTER TABLE rdo_fotos ADD COLUMN atividade_avulsa_descricao TEXT').catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_fotos.atividade_avulsa_descricao:', e.message);
+});
 runQuery('ALTER TABLE rdo_materiais ADD COLUMN numero_nf TEXT').catch(e => {
   if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_materiais.numero_nf:', e.message);
 });
 
 const ensureRdoOptionalColumns = async () => {
   try { await runQuery('ALTER TABLE rdo_fotos ADD COLUMN ordem INTEGER DEFAULT 0'); } catch (_) {}
+  try { await runQuery('ALTER TABLE rdo_fotos ADD COLUMN atividade_avulsa_descricao TEXT'); } catch (_) {}
   try { await runQuery('ALTER TABLE rdo_materiais ADD COLUMN numero_nf TEXT'); } catch (_) {}
+  try {
+    await runQuery(`
+      CREATE TABLE IF NOT EXISTS rdo_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rdo_id INTEGER NOT NULL,
+        usuario_id INTEGER,
+        acao TEXT NOT NULL CHECK (acao IN ('VIEW', 'UPDATE')),
+        criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE,
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL
+      )
+    `);
+  } catch (_) {}
+  try {
+    await runQuery(`
+      CREATE TABLE IF NOT EXISTS rdo_comentarios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rdo_id INTEGER NOT NULL,
+        usuario_id INTEGER NOT NULL,
+        comentario TEXT NOT NULL,
+        criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE,
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+      )
+    `);
+  } catch (_) {}
+  try {
+    await runQuery(`
+      CREATE TABLE IF NOT EXISTS rdo_materiais (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rdo_id INTEGER NOT NULL,
+        nome_material TEXT NOT NULL,
+        quantidade REAL,
+        unidade TEXT,
+        criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE
+      )
+    `);
+  } catch (_) {}
+  try {
+    await runQuery(`
+      CREATE TABLE IF NOT EXISTS rdo_ocorrencias (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rdo_id INTEGER NOT NULL,
+        titulo TEXT,
+        descricao TEXT NOT NULL,
+        gravidade TEXT,
+        criado_por INTEGER,
+        criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE,
+        FOREIGN KEY (criado_por) REFERENCES usuarios(id)
+      )
+    `);
+  } catch (_) {}
+  try {
+    await runQuery(`
+      CREATE TABLE IF NOT EXISTS rdo_assinaturas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rdo_id INTEGER NOT NULL,
+        usuario_id INTEGER NOT NULL,
+        tipo TEXT NOT NULL,
+        arquivo_assinatura TEXT,
+        assinado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE,
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+      )
+    `);
+  } catch (_) {}
+  try {
+    await runQuery(`
+      CREATE TABLE IF NOT EXISTS rdo_clima (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rdo_id INTEGER NOT NULL,
+        periodo TEXT NOT NULL,
+        condicao_tempo TEXT,
+        condicao_trabalho TEXT,
+        pluviometria_mm REAL DEFAULT 0,
+        criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE
+      )
+    `);
+  } catch (_) {}
+  try { await runQuery('CREATE INDEX IF NOT EXISTS idx_rdo_logs_rdo_id ON rdo_logs(rdo_id)'); } catch (_) {}
+  try { await runQuery('CREATE INDEX IF NOT EXISTS idx_rdo_logs_usuario_id ON rdo_logs(usuario_id)'); } catch (_) {}
+  try { await runQuery('CREATE INDEX IF NOT EXISTS idx_rdo_logs_acao ON rdo_logs(acao)'); } catch (_) {}
 };
 
 const getRdoFotosOrderBy = async () => {
@@ -406,6 +495,7 @@ router.post('/', auth, [
   body('dia_semana').optional().isString()
 ], async (req, res) => {
   try {
+    await ensureRdoOptionalColumns();
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ erro: 'Dados inválidos.', detalhes: errors.array() });
@@ -708,6 +798,7 @@ router.post('/', auth, [
 // Atualizar RDO
 router.put('/:id', auth, async (req, res) => {
   try {
+    await ensureRdoOptionalColumns();
     const { id } = req.params;
 
     const rdoAtual = await getQuery('SELECT * FROM rdos WHERE id = ?', [id]);
@@ -1627,7 +1718,66 @@ ${anexosSection}
   } catch (error) {
     if (browser) { try { await browser.close(); } catch {} }
     console.error('Erro ao gerar PDF (puppeteer):', error);
-    res.status(500).json({ erro: 'Erro ao gerar PDF: ' + (error.message || 'erro desconhecido') });
+
+    // Fallback para ambientes sem browser headless disponível.
+    try {
+      const PDFDocument = require('pdfkit');
+      const { id } = req.params;
+      const rdoFallback = await getQuery(`
+        SELECT r.*, p.nome AS projeto_nome, u.nome AS criado_por_nome
+        FROM rdos r
+        LEFT JOIN projetos p ON r.projeto_id = p.id
+        LEFT JOIN usuarios u ON r.criado_por = u.id
+        WHERE r.id = ?
+      `, [id]);
+
+      if (!rdoFallback) {
+        return res.status(404).json({ erro: 'RDO não encontrado.' });
+      }
+
+      const atividadesFallback = await allQuery(`
+        SELECT COALESCE(ae.codigo_eap, 'AVULSA') AS codigo_eap,
+               COALESCE(ae.nome, ae.descricao, ra.observacao, 'Atividade') AS descricao,
+               COALESCE(ra.quantidade_executada, 0) AS quantidade_executada,
+               COALESCE(ra.percentual_executado, 0) AS percentual_executado
+        FROM rdo_atividades ra
+        LEFT JOIN atividades_eap ae ON ae.id = ra.atividade_eap_id
+        WHERE ra.rdo_id = ?
+        ORDER BY ae.codigo_eap
+      `, [id]);
+
+      const safeId = String(rdoFallback.numero_rdo || `RDO-${rdoFallback.id}`);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${safeId}.pdf"`);
+
+      const doc = new PDFDocument({ size: 'A4', margin: 40 });
+      doc.pipe(res);
+      doc.fontSize(18).text('Relatório Diário de Obra', { align: 'left' });
+      doc.moveDown(0.5);
+      doc.fontSize(11).text(`RDO: ${safeId}`);
+      doc.text(`Projeto: ${rdoFallback.projeto_nome || '—'}`);
+      doc.text(`Data: ${rdoFallback.data_relatorio || '—'}`);
+      doc.text(`Status: ${rdoFallback.status || '—'}`);
+      doc.text(`Criado por: ${rdoFallback.criado_por_nome || '—'}`);
+      doc.moveDown();
+      doc.fontSize(13).text('Atividades');
+      doc.moveDown(0.4);
+
+      if (atividadesFallback.length === 0) {
+        doc.fontSize(10).text('Sem atividades registradas.');
+      } else {
+        atividadesFallback.forEach((a, idx) => {
+          doc.fontSize(10).text(
+            `${idx + 1}. ${a.codigo_eap} - ${a.descricao} | Qtde: ${Number(a.quantidade_executada || 0).toLocaleString('pt-BR')} | %: ${Number(a.percentual_executado || 0).toLocaleString('pt-BR')}%`
+          );
+        });
+      }
+
+      doc.end();
+    } catch (fallbackError) {
+      console.error('Erro no fallback de PDF (pdfkit):', fallbackError);
+      res.status(500).json({ erro: 'Erro ao gerar PDF: ' + (error.message || 'erro desconhecido') });
+    }
   }
 });
 
@@ -1774,6 +1924,7 @@ router.delete('/projeto/:projetoId/todos', [auth, isGestor], async (req, res) =>
 // Endpoint para consultar logs de visualização e edição de um RDO
 router.get('/:id/logs', auth, async (req, res) => {
   try {
+    await ensureRdoOptionalColumns();
     const { id } = req.params;
     const logs = await allQuery(`
       SELECT rl.*, u.nome as usuario_nome
@@ -1784,6 +1935,10 @@ router.get('/:id/logs', auth, async (req, res) => {
     `, [id]);
     res.json({ logs });
   } catch (error) {
+    // Em bases legadas, não bloquear o formulário por falha de logs.
+    if (String(error?.message || '').toLowerCase().includes('no such table')) {
+      return res.json({ logs: [] });
+    }
     console.error('Erro ao buscar logs do RDO:', error);
     res.status(500).json({ erro: 'Erro ao buscar logs do RDO.' });
   }
