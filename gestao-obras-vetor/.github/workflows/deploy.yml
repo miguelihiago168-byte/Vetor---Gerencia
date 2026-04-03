@@ -67,17 +67,37 @@ jobs:
 
             echo ">>> Atualizando código..."
             cd "$APP_DIR"
+            PREV_COMMIT="$(git rev-parse HEAD || true)"
             git fetch origin principal
+            NEW_COMMIT="$(git rev-parse origin/principal)"
+            CHANGED_FILES="$(git diff --name-only "$PREV_COMMIT" "$NEW_COMMIT" || true)"
             git reset --hard origin/principal
 
             echo '${{ secrets.BACKEND_ENV }}' > backend/.env
 
-            echo ">>> Subindo containers..."
-            sudo docker compose down --remove-orphans || true
-            sudo docker compose up -d --build
+            NEED_BACKEND=0
+            NEED_FRONTEND=0
+
+            if echo "$CHANGED_FILES" | grep -Eq '^(backend/|docker-compose.yml)'; then NEED_BACKEND=1; fi
+            if echo "$CHANGED_FILES" | grep -Eq '^(frontend/|nginx/|docker-compose.yml)'; then NEED_FRONTEND=1; fi
+
+            echo ">>> Arquivos alterados:"
+            echo "$CHANGED_FILES"
+
+            echo ">>> Subindo containers (build seletivo)..."
+            if [ "$NEED_BACKEND" -eq 1 ] && [ "$NEED_FRONTEND" -eq 1 ]; then
+              sudo docker compose up -d --build backend frontend
+            elif [ "$NEED_BACKEND" -eq 1 ]; then
+              sudo docker compose up -d --build backend
+            elif [ "$NEED_FRONTEND" -eq 1 ]; then
+              sudo docker compose up -d --build frontend
+            else
+              echo ">>> Sem mudanças em backend/frontend. Garantindo serviços ativos sem rebuild."
+              sudo docker compose up -d backend frontend
+            fi
 
             echo ">>> Status dos containers:"
-            docker compose ps
+            sudo docker compose ps
 
             echo ">>> Verificando health check..."
             sleep 5

@@ -3,6 +3,10 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+  build: {
+    // Evita a etapa "computing gzip size" para acelerar build em servidor menor.
+    reportCompressedSize: false
+  },
   server: {
     port: 3000,
     proxy: {
