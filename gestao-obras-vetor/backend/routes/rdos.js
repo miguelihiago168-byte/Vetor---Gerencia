@@ -1845,6 +1845,7 @@ ${anexosSection}
   } catch (error) {
     if (browser) { try { await browser.close(); } catch {} }
     console.error('Erro ao gerar PDF (puppeteer):', error);
+    const puppeteerErrorMessage = String(error?.message || 'erro_desconhecido').slice(0, 240);
 
     // Fallback para ambientes sem browser headless disponível.
     try {
@@ -1877,6 +1878,7 @@ ${anexosSection}
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="${safeId}.pdf"`);
       res.setHeader('X-PDF-Engine', 'pdfkit-fallback');
+      res.setHeader('X-PDF-Fallback-Reason', puppeteerErrorMessage.replace(/[\r\n]+/g, ' '));
 
       const doc = new PDFDocument({ size: 'A4', margin: 36 });
       doc.pipe(res);
@@ -1895,6 +1897,8 @@ ${anexosSection}
       };
 
       doc.font('Helvetica-Bold').fontSize(17).fillColor('#0F172A').text('Relatório Diário de Obra');
+      doc.moveDown(0.2);
+      doc.font('Helvetica-Bold').fontSize(9).fillColor('#B91C1C').text('MODO COMPATIBILIDADE: fallback ativo (layout reduzido)');
       doc.moveDown(0.2);
       doc.font('Helvetica').fontSize(10).fillColor('#475569').text(`Documento gerado em ${new Date().toLocaleString('pt-BR')}`);
       doc.moveDown(0.5);
