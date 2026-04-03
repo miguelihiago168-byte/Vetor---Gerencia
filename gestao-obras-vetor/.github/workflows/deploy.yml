@@ -15,6 +15,40 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Preflight de conectividade SSH
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          HOST="${{ secrets.EC2_HOST }}"
+          PORT="22"
+
+          if [ -z "$HOST" ]; then
+            echo "Secret EC2_HOST vazio ou não definido."
+            exit 1
+          fi
+
+          echo ">>> Verificando resolução DNS/IP de $HOST"
+          getent hosts "$HOST" || true
+
+          echo ">>> Testando porta $PORT com tentativas"
+          ok=0
+          for i in 1 2 3 4 5; do
+            echo "Tentativa de SSH $i/5..."
+            if timeout 8 bash -c "</dev/tcp/$HOST/$PORT" 2>/dev/null; then
+              echo "Conectividade TCP na porta $PORT OK."
+              ok=1
+              break
+            fi
+            sleep 3
+          done
+
+          if [ "$ok" -ne 1 ]; then
+            echo "Falha de conectividade SSH: porta $PORT inacessivel a partir do runner do GitHub."
+            echo "Verifique Security Group, NACL, IP publico da EC2 e se o sshd esta ativo."
+            exit 1
+          fi
+
       - name: Conectar ao servidor e fazer deploy
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -24,6 +58,8 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           timeout: 60s
           command_timeout: 30m
+          debug: true
+          script_stop: true
           script: |
             set -e
 
