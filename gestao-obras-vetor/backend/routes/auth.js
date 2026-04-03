@@ -13,6 +13,7 @@ const { hasForbiddenPasswordSequence } = require('../services/passwordPolicy');
 
 const router = express.Router();
 const GLOBAL_SIGNUP_CODE = process.env.GLOBAL_SIGNUP_CODE || '052298';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '30d';
 
 const normalizeLogin = (value) => String(value || '')
   .trim()
@@ -271,7 +272,7 @@ router.post('/login', [
         verificado: !!tenantIdAtivo
       },
       process.env.JWT_SECRET,
-      { expiresIn: '8h' }
+      { expiresIn: JWT_EXPIRES_IN }
     );
 
     res.json({
@@ -561,7 +562,7 @@ router.post('/register/:token', [
         verificado: true
       },
       process.env.JWT_SECRET,
-      { expiresIn: '8h' }
+      { expiresIn: JWT_EXPIRES_IN }
     );
 
     res.status(201).json({

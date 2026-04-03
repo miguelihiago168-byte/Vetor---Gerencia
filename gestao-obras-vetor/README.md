@@ -160,7 +160,7 @@ pm2 status
 ```
 
 - **Boas práticas**:
-   - Use variáveis de ambiente (`.env`) para `JWT_SECRET`, `DATABASE_URL`, `PORT`.
+   - Use variáveis de ambiente (`.env`) para `JWT_SECRET`, `JWT_EXPIRES_IN`, `DATABASE_URL`, `PORT`.
    - Sempre verifique `GET /api/health` antes de iniciar o frontend.
    - Se o backend falhar ao iniciar, cheque o log (`server.log` ou `pm2 logs`) e libere a porta como acima.
 
