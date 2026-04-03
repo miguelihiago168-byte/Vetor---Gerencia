@@ -1648,9 +1648,12 @@ router.get('/:id/pdf', auth, async (req, res) => {
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', sans-serif; font-size: 11px; color: #1e293b; background: #fff; }
+  body { font-family: 'Inter', 'Segoe UI', 'Noto Sans', sans-serif; font-size: 11px; color: #1e293b; background: #fff; }
 
   /* CAPA */
   .capa { page-break-after: always; padding: 38px 32px; }
@@ -1812,7 +1815,7 @@ ${anexosSection}
       printBackground: true,
       displayHeaderFooter: true,
       headerTemplate: '<span></span>',
-      footerTemplate: `<div style="font-size:8px;color:#94a3b8;padding:0 40px;width:100%;box-sizing:border-box;display:flex;justify-content:space-between;font-family:'Segoe UI',sans-serif;align-items:center"><span>${safeNomeProjeto} &nbsp;&middot;&nbsp; ${displayId}</span><span>${pdfVersionLabel} &nbsp;&middot;&nbsp; Pág. <span class="pageNumber"></span>&nbsp;/&nbsp;<span class="totalPages"></span> &nbsp;&mdash;&nbsp; Gerado em ${new Date().toLocaleString('pt-BR')}</span></div>`,
+      footerTemplate: `<div style="font-size:8px;color:#94a3b8;padding:0 40px;width:100%;box-sizing:border-box;display:flex;justify-content:space-between;font-family:'Inter','Segoe UI','Noto Sans',sans-serif;align-items:center"><span>${safeNomeProjeto} &nbsp;&middot;&nbsp; ${displayId}</span><span>${pdfVersionLabel} &nbsp;&middot;&nbsp; Pág. <span class="pageNumber"></span>&nbsp;/&nbsp;<span class="totalPages"></span> &nbsp;&mdash;&nbsp; Gerado em ${new Date().toLocaleString('pt-BR')}</span></div>`,
       margin: { top: '8mm', bottom: '10mm', left: '0', right: '0' }
     });
 
