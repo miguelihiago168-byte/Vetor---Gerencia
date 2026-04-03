@@ -7,6 +7,8 @@ services:
     container_name: gestao-backend
     env_file:
       - backend/.env
+    environment:
+      - TZ=America/Sao_Paulo
     volumes:
       - ${APP_DATA_DIR:-/home/ubuntu/app_data/gestao-obras-vetor}/uploads:/app/uploads
       - ${APP_DATA_DIR:-/home/ubuntu/app_data/gestao-obras-vetor}/database:/app/database
