@@ -1378,7 +1378,7 @@ router.get('/:id/pdf', auth, async (req, res) => {
     }));
 
     const fotosOrderBy = await getRdoFotosOrderBy();
-    const fotos = await allQuery(`
+    const fotos = await safeAllIfTableMissing(`
       SELECT rf.*, ra.atividade_eap_id AS atividade_eap_id,
              ae.codigo_eap AS atividade_codigo,
              COALESCE(ae.nome, ae.descricao) AS atividade_descricao,
@@ -1387,7 +1387,7 @@ router.get('/:id/pdf', auth, async (req, res) => {
       LEFT JOIN rdo_atividades ra ON rf.rdo_atividade_id = ra.id
       LEFT JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
       WHERE rf.rdo_id = ? ORDER BY ${fotosOrderBy}
-    `, [id]);
+    `, [id], []);
 
     const ocorrencias = await safeAllIfTableMissing(
       'SELECT * FROM rdo_ocorrencias WHERE rdo_id = ? ORDER BY criado_em ASC', [id], []
