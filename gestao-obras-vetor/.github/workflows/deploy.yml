@@ -64,6 +64,25 @@ jobs:
 
           if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" = "None" ]; then
             echo "Nenhuma instancia running encontrada para o host informado."
+            INSTANCE_ID=""
+          fi
+
+          if [ -z "$INSTANCE_ID" ]; then
+            echo ">>> Tentando fallback por SSM (instancia managed online unica)..."
+            SSM_IDS="$(aws ssm describe-instance-information \
+              --query 'InstanceInformationList[?PingStatus==`Online`].InstanceId' \
+              --output text || true)"
+
+            SSM_COUNT="$(printf '%s\n' "$SSM_IDS" | awk 'NF{c+=NF} END{print c+0}')"
+            if [ "$SSM_COUNT" -eq 1 ]; then
+              INSTANCE_ID="$(printf '%s\n' "$SSM_IDS" | awk '{print $1}')"
+              echo ">>> Instance ID resolvido via SSM: $INSTANCE_ID"
+            else
+              echo ">>> Nao foi possivel resolver instance id via SSM (quantidade online: $SSM_COUNT)."
+            fi
+          fi
+
+          if [ -z "$INSTANCE_ID" ]; then
             echo "instance_id=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -145,7 +164,7 @@ jobs:
           exit 1
 
       - name: Liberar SSH temporario no Security Group
-        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_REGION != '' && secrets.EC2_SECURITY_GROUP_ID != '' }}
+        if: ${{ secrets.ENABLE_SSH_FALLBACK == 'true' && secrets.EC2_INSTANCE_ID == '' && steps.resolve_instance.outputs.instance_id == '' && secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_REGION != '' && secrets.EC2_SECURITY_GROUP_ID != '' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -157,8 +176,20 @@ jobs:
             --ip-permissions "[{\"IpProtocol\":\"tcp\",\"FromPort\":22,\"ToPort\":22,\"IpRanges\":[{\"CidrIp\":\"$CIDR\",\"Description\":\"github-actions-temporary-ssh\"}]}]" \
             || true
 
+      - name: Sem SSM resolvido e fallback SSH desabilitado
+        if: ${{ secrets.EC2_INSTANCE_ID == '' && steps.resolve_instance.outputs.instance_id == '' && secrets.ENABLE_SSH_FALLBACK != 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Nao foi possivel executar deploy via SSM (EC2_INSTANCE_ID ausente e resolucao automatica falhou)."
+          echo "Fallback SSH esta desabilitado por padrao para evitar tentativas na porta 22."
+          echo "Opcoes:"
+          echo "1) Definir secret EC2_INSTANCE_ID (recomendado)."
+          echo "2) Definir secret ENABLE_SSH_FALLBACK=true para permitir fallback SSH."
+          exit 1
+
       - name: Preflight de conectividade SSH
-        if: ${{ secrets.EC2_INSTANCE_ID == '' && steps.resolve_instance.outputs.instance_id == '' }}
+        if: ${{ secrets.ENABLE_SSH_FALLBACK == 'true' && secrets.EC2_INSTANCE_ID == '' && steps.resolve_instance.outputs.instance_id == '' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -194,7 +225,7 @@ jobs:
           fi
 
       - name: Conectar ao servidor e fazer deploy
-        if: ${{ secrets.EC2_INSTANCE_ID == '' && steps.resolve_instance.outputs.instance_id == '' }}
+        if: ${{ secrets.ENABLE_SSH_FALLBACK == 'true' && secrets.EC2_INSTANCE_ID == '' && steps.resolve_instance.outputs.instance_id == '' }}
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -251,7 +282,7 @@ jobs:
             echo ">>> Deploy concluído!"
 
       - name: Revogar SSH temporario do Security Group
-        if: ${{ always() && secrets.EC2_INSTANCE_ID == '' && steps.resolve_instance.outputs.instance_id == '' && secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_REGION != '' && secrets.EC2_SECURITY_GROUP_ID != '' }}
+        if: ${{ always() && secrets.ENABLE_SSH_FALLBACK == 'true' && secrets.EC2_INSTANCE_ID == '' && steps.resolve_instance.outputs.instance_id == '' && secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_REGION != '' && secrets.EC2_SECURITY_GROUP_ID != '' }}
         shell: bash
         run: |
           set -euo pipefail
