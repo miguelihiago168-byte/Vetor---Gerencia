@@ -164,7 +164,7 @@ jobs:
           exit 1
 
       - name: Liberar SSH temporario no Security Group
-        if: ${{ secrets.ENABLE_SSH_FALLBACK == 'true' && secrets.EC2_INSTANCE_ID == '' && steps.resolve_instance.outputs.instance_id == '' && secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_REGION != '' && secrets.EC2_SECURITY_GROUP_ID != '' }}
+        if: ${{ false }}
         shell: bash
         run: |
           set -euo pipefail
@@ -177,19 +177,18 @@ jobs:
             || true
 
       - name: Sem SSM resolvido e fallback SSH desabilitado
-        if: ${{ secrets.EC2_INSTANCE_ID == '' && steps.resolve_instance.outputs.instance_id == '' && secrets.ENABLE_SSH_FALLBACK != 'true' }}
+        if: ${{ secrets.EC2_INSTANCE_ID == '' && steps.resolve_instance.outputs.instance_id == '' }}
         shell: bash
         run: |
           set -euo pipefail
           echo "Nao foi possivel executar deploy via SSM (EC2_INSTANCE_ID ausente e resolucao automatica falhou)."
-          echo "Fallback SSH esta desabilitado por padrao para evitar tentativas na porta 22."
+          echo "Fallback SSH esta desabilitado para evitar tentativas na porta 22."
           echo "Opcoes:"
           echo "1) Definir secret EC2_INSTANCE_ID (recomendado)."
-          echo "2) Definir secret ENABLE_SSH_FALLBACK=true para permitir fallback SSH."
           exit 1
 
       - name: Preflight de conectividade SSH
-        if: ${{ secrets.ENABLE_SSH_FALLBACK == 'true' && secrets.EC2_INSTANCE_ID == '' && steps.resolve_instance.outputs.instance_id == '' }}
+        if: ${{ false }}
         shell: bash
         run: |
           set -euo pipefail
@@ -225,7 +224,7 @@ jobs:
           fi
 
       - name: Conectar ao servidor e fazer deploy
-        if: ${{ secrets.ENABLE_SSH_FALLBACK == 'true' && secrets.EC2_INSTANCE_ID == '' && steps.resolve_instance.outputs.instance_id == '' }}
+        if: ${{ false }}
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -282,7 +281,7 @@ jobs:
             echo ">>> Deploy concluído!"
 
       - name: Revogar SSH temporario do Security Group
-        if: ${{ always() && secrets.ENABLE_SSH_FALLBACK == 'true' && secrets.EC2_INSTANCE_ID == '' && steps.resolve_instance.outputs.instance_id == '' && secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_REGION != '' && secrets.EC2_SECURITY_GROUP_ID != '' }}
+        if: ${{ false }}
         shell: bash
         run: |
           set -euo pipefail
