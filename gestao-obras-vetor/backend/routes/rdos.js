@@ -1809,10 +1809,11 @@ ${anexosSection}
     });
 
     browser = await puppeteer.launch({
-      headless: true,
+      headless: 'new',
       executablePath: executablePath || undefined,
       timeout: 60000,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--no-zygote', '--single-process', '--disable-gpu']
+      protocolTimeout: 120000,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
     });
     const page = await browser.newPage();
     page.setDefaultNavigationTimeout(60000);
