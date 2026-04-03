@@ -40,78 +40,7 @@ jobs:
           test -d "$BASE_DIR/nginx"
           echo "BASE_DIR=$BASE_DIR" >> "$GITHUB_ENV"
 
-      - name: Configurar credenciais AWS (modo SSM)
-        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_REGION != '' && secrets.EC2_INSTANCE_ID != '' }}
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Deploy via SSM (sem SSH)
-        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_REGION != '' && secrets.EC2_INSTANCE_ID != '' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          INSTANCE_ID="${{ secrets.EC2_INSTANCE_ID }}"
-          BACKEND_ENV_B64="$(printf '%s' "${{ secrets.BACKEND_ENV }}" | base64 | tr -d '\n' | tr -d '\r')"
-
-          cat > /tmp/ssm-params.json <<JSON
-          {
-            "commands": [
-              "set -e",
-              "APP_DIR=/home/ubuntu/app/gestao-obras-vetor",
-              "DATA_DIR=/home/ubuntu/app_data/gestao-obras-vetor",
-              "sudo mkdir -p $APP_DIR",
-              "sudo mkdir -p $DATA_DIR/database $DATA_DIR/uploads",
-              "sudo chown -R ubuntu:ubuntu /home/ubuntu/app /home/ubuntu/app_data",
-              "cd $APP_DIR",
-              "if [ ! -d .git ]; then git clone -b principal https://github.com/${{ github.repository }}.git .; fi",
-              "git fetch origin principal",
-              "git reset --hard origin/principal",
-              "echo '$BACKEND_ENV_B64' | base64 -d > backend/.env",
-              "printf 'APP_DATA_DIR=%s\\n' '$DATA_DIR' > .env",
-              "sudo docker compose up -d --build",
-              "sleep 5",
-              "curl -sf http://localhost/api/health && echo OK || (echo FALHOU; exit 1)"
-            ]
-          }
-          JSON
-
-          COMMAND_ID="$(aws ssm send-command \
-            --instance-ids "$INSTANCE_ID" \
-            --document-name AWS-RunShellScript \
-            --comment "Deploy gestao-obras-vetor via GitHub Actions" \
-            --parameters file:///tmp/ssm-params.json \
-            --query 'Command.CommandId' \
-            --output text)"
-
-          echo ">>> SSM CommandId: $COMMAND_ID"
-
-          for i in $(seq 1 120); do
-            STATUS="$(aws ssm list-command-invocations \
-              --command-id "$COMMAND_ID" \
-              --details \
-              --query 'CommandInvocations[0].Status' \
-              --output text)"
-            echo ">>> Status SSM: $STATUS"
-            if [ "$STATUS" = "Success" ]; then
-              aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --query 'StandardOutputContent' --output text || true
-              exit 0
-            fi
-            if [ "$STATUS" = "Cancelled" ] || [ "$STATUS" = "TimedOut" ] || [ "$STATUS" = "Failed" ] || [ "$STATUS" = "Cancelling" ]; then
-              aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --query 'StandardErrorContent' --output text || true
-              exit 1
-            fi
-            sleep 5
-          done
-
-          echo "Timeout aguardando comando SSM concluir."
-          exit 1
-
       - name: Configurar SSH para rsync
-        if: ${{ secrets.EC2_INSTANCE_ID == '' }}
         run: |
           set -e
           mkdir -p ~/.ssh
@@ -120,7 +49,6 @@ jobs:
           ssh-keyscan -T 10 -H '${{ secrets.EC2_HOST }}' >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Testar conectividade SSH com EC2
-        if: ${{ secrets.EC2_INSTANCE_ID == '' }}
         run: |
           set -e
           SSH_OPTS="-i ~/.ssh/id_ec2 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=20"
@@ -142,7 +70,6 @@ jobs:
           fi
 
       - name: Sincronizar arquivos para EC2 (rápido)
-        if: ${{ secrets.EC2_INSTANCE_ID == '' }}
         run: |
           set -e
           APP_DIR="/home/ubuntu/app/gestao-obras-vetor"
@@ -193,7 +120,6 @@ jobs:
           retry rsync -az -e "ssh $SSH_OPTS" "$BASE_DIR/nginx/" ubuntu@${{ secrets.EC2_HOST }}:"$APP_DIR/nginx/"
 
       - name: Conectar ao servidor e fazer deploy
-        if: ${{ secrets.EC2_INSTANCE_ID == '' }}
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
