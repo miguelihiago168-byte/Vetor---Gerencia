@@ -189,8 +189,8 @@ function RDOs() {
 
   const grupos = Object.entries(
     rdos.reduce((acc, r) => {
-      const dt = r.criado_em ? new Date(r.criado_em) : null;
-      const key = dt && !isNaN(dt.getTime()) ? dt.toISOString().slice(0, 10) : 'sem-data';
+      const m = r.data_relatorio ? String(r.data_relatorio).match(/^(\d{4}-\d{2}-\d{2})/) : null;
+      const key = m ? m[1] : 'sem-data';
       if (!acc[key]) acc[key] = [];
       acc[key].push(r);
       return acc;
