@@ -15,6 +15,40 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Descobrir IP publico do runner
+        id: runner_ip
+        shell: bash
+        run: |
+          set -euo pipefail
+          ip="$(curl -fsSL https://checkip.amazonaws.com | tr -d '\n' | tr -d '\r')"
+          if [ -z "$ip" ]; then
+            echo "Nao foi possivel descobrir o IP publico do runner."
+            exit 1
+          fi
+          echo "ip=$ip" >> "$GITHUB_OUTPUT"
+          echo ">>> Runner IP: $ip"
+
+      - name: Configurar credenciais AWS
+        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_REGION != '' && secrets.EC2_SECURITY_GROUP_ID != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Liberar SSH temporario no Security Group
+        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_REGION != '' && secrets.EC2_SECURITY_GROUP_ID != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CIDR="${{ steps.runner_ip.outputs.ip }}/32"
+          SG_ID="${{ secrets.EC2_SECURITY_GROUP_ID }}"
+          echo ">>> Liberando TCP/22 para $CIDR no SG $SG_ID"
+          aws ec2 authorize-security-group-ingress \
+            --group-id "$SG_ID" \
+            --ip-permissions "[{\"IpProtocol\":\"tcp\",\"FromPort\":22,\"ToPort\":22,\"IpRanges\":[{\"CidrIp\":\"$CIDR\",\"Description\":\"github-actions-temporary-ssh\"}]}]" \
+            || true
+
       - name: Preflight de conectividade SSH
         shell: bash
         run: |
@@ -45,6 +79,7 @@ jobs:
 
           if [ "$ok" -ne 1 ]; then
             echo "Falha de conectividade SSH: porta $PORT inacessivel a partir do runner do GitHub."
+            echo "Se os secrets AWS_* e EC2_SECURITY_GROUP_ID nao estiverem configurados, a liberacao automatica do SG nao ocorre."
             echo "Verifique Security Group, NACL, IP publico da EC2 e se o sshd esta ativo."
             exit 1
           fi
@@ -104,3 +139,16 @@ jobs:
             curl -sf http://localhost/api/health && echo " OK" || echo " FALHOU"
 
             echo ">>> Deploy concluído!"
+
+      - name: Revogar SSH temporario do Security Group
+        if: ${{ always() && secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_REGION != '' && secrets.EC2_SECURITY_GROUP_ID != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CIDR="${{ steps.runner_ip.outputs.ip }}/32"
+          SG_ID="${{ secrets.EC2_SECURITY_GROUP_ID }}"
+          echo ">>> Revogando TCP/22 para $CIDR no SG $SG_ID"
+          aws ec2 revoke-security-group-ingress \
+            --group-id "$SG_ID" \
+            --ip-permissions "[{\"IpProtocol\":\"tcp\",\"FromPort\":22,\"ToPort\":22,\"IpRanges\":[{\"CidrIp\":\"$CIDR\"}]}]" \
+            || true
