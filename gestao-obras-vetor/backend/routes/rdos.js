@@ -1345,12 +1345,23 @@ router.get('/:id/pdf', auth, async (req, res) => {
       atividadesAvulsas = [];
     }
 
-    const maoObraLista = await allQuery(`
+    // Bases legadas podem não ter todas as tabelas auxiliares do RDO.
+    const safeAllIfTableMissing = async (sql, params = [], fallback = []) => {
+      try {
+        return await allQuery(sql, params);
+      } catch (e) {
+        const msg = String(e?.message || e || '');
+        if (/no such table/i.test(msg)) return fallback;
+        throw e;
+      }
+    };
+
+    const maoObraLista = await safeAllIfTableMissing(`
       SELECT rmo.*, mo.nome AS nome_colaborador, mo.funcao AS funcao_colaborador
       FROM rdo_mao_obra rmo
       LEFT JOIN mao_obra mo ON rmo.mao_obra_id = mo.id
       WHERE rmo.rdo_id = ? ORDER BY rmo.id
-    `, [id]);
+    `, [id], []);
 
     // mao_obra_detalhada JSON
     let maoObraDetalhada = [];
@@ -1378,26 +1389,26 @@ router.get('/:id/pdf', auth, async (req, res) => {
       WHERE rf.rdo_id = ? ORDER BY ${fotosOrderBy}
     `, [id]);
 
-    const ocorrencias = await allQuery(
-      'SELECT * FROM rdo_ocorrencias WHERE rdo_id = ? ORDER BY criado_em ASC', [id]
+    const ocorrencias = await safeAllIfTableMissing(
+      'SELECT * FROM rdo_ocorrencias WHERE rdo_id = ? ORDER BY criado_em ASC', [id], []
     );
-    const comentarios = await allQuery(`
+    const comentarios = await safeAllIfTableMissing(`
       SELECT rc.*, u.nome as autor_nome
       FROM rdo_comentarios rc
       LEFT JOIN usuarios u ON rc.usuario_id = u.id
       WHERE rc.rdo_id = ?
       ORDER BY rc.criado_em ASC
-    `, [id]);
-    const materiais = await allQuery(
-      'SELECT * FROM rdo_materiais WHERE rdo_id = ? ORDER BY criado_em ASC', [id]
+    `, [id], []);
+    const materiais = await safeAllIfTableMissing(
+      'SELECT * FROM rdo_materiais WHERE rdo_id = ? ORDER BY criado_em ASC', [id], []
     );
-    const clima = await allQuery(
-      'SELECT * FROM rdo_clima WHERE rdo_id = ? ORDER BY id', [id]
+    const clima = await safeAllIfTableMissing(
+      'SELECT * FROM rdo_clima WHERE rdo_id = ? ORDER BY id', [id], []
     );
-    const anexos = await allQuery(
+    const anexos = await safeAllIfTableMissing(
       `SELECT * FROM anexos WHERE rdo_id = ?
        AND tipo NOT LIKE 'image%'
-       ORDER BY criado_em ASC`, [id]
+       ORDER BY criado_em ASC`, [id], []
     );
     const publicBaseUrl = getPublicBaseUrl(req);
 
