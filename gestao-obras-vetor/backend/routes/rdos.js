@@ -1648,12 +1648,9 @@ router.get('/:id/pdf', auth, async (req, res) => {
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Inter', 'Segoe UI', 'Noto Sans', sans-serif; font-size: 11px; color: #1e293b; background: #fff; }
+  body { font-family: 'Segoe UI', 'Noto Sans', Arial, sans-serif; font-size: 11px; color: #1e293b; background: #fff; }
 
   /* CAPA */
   .capa { page-break-after: always; padding: 38px 32px; }
@@ -1803,10 +1800,28 @@ ${anexosSection}
     browser = await puppeteer.launch({
       headless: true,
       executablePath: executablePath || undefined,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+      timeout: 60000,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--no-zygote', '--single-process', '--disable-gpu']
     });
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+    page.setDefaultNavigationTimeout(60000);
+    page.setDefaultTimeout(60000);
+    await page.setContent(html, { waitUntil: 'domcontentloaded' });
+    await page.evaluate(async () => {
+      if (document.fonts && document.fonts.ready) {
+        try { await document.fonts.ready; } catch (_) {}
+      }
+      const imgs = Array.from(document.images || []);
+      await Promise.all(imgs.map((img) => {
+        if (img.complete) return Promise.resolve();
+        return new Promise((resolve) => {
+          const done = () => resolve();
+          img.addEventListener('load', done, { once: true });
+          img.addEventListener('error', done, { once: true });
+          setTimeout(done, 5000);
+        });
+      }));
+    });
 
     const safeNomeProjeto = String(rdo.projeto_nome || 'Projeto').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const pdfVersionLabel = getPdfVersionLabel().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -1824,6 +1839,7 @@ ${anexosSection}
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${displayId}.pdf"`);
+    res.setHeader('X-PDF-Engine', 'puppeteer');
     res.send(Buffer.from(pdfBuffer));
 
   } catch (error) {
@@ -1860,6 +1876,7 @@ ${anexosSection}
       const safeId = String(rdoFallback.numero_rdo || `RDO-${rdoFallback.id}`);
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="${safeId}.pdf"`);
+      res.setHeader('X-PDF-Engine', 'pdfkit-fallback');
 
       const doc = new PDFDocument({ size: 'A4', margin: 36 });
       doc.pipe(res);
