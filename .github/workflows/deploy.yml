@@ -3,10 +3,10 @@ name: Deploy para AWS EC2
 on:
   push:
     branches:
-      - principal
+      - main
 
 concurrency:
-  group: deploy-ec2-principal
+  group: deploy-ec2-main
   cancel-in-progress: true
 
 jobs:
