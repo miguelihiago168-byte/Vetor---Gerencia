@@ -1,7 +1,7 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 
 const AuthContext = createContext(null);
-const APP_VERSION = '2';
+const APP_VERSION = '3';
 
 export const AuthProvider = ({ children }) => {
   const [usuario, setUsuario] = useState(null);
@@ -49,12 +49,14 @@ export const AuthProvider = ({ children }) => {
     localStorage.setItem('usuario', JSON.stringify(novosDados));
     setUsuario(novosDados);
   };
+
+  const primeiroAcessoPendente = usuario?.primeiro_acesso_pendente === true;
   const perfil = usuario?.perfil || null;
   const isGestor = perfil === 'Gestor Geral' || perfil === 'Gestor da Obra' || perfil === 'Gestor Local';
   const isAdm = perfil === 'ADM' || usuario?.is_adm === 1;
 
   return (
-    <AuthContext.Provider value={{ usuario, loading, loginAuth, logout, atualizarUsuarioLogado, isGestor, isAdm, perfil }}>
+    <AuthContext.Provider value={{ usuario, loading, loginAuth, logout, atualizarUsuarioLogado, isGestor, isAdm, perfil, primeiroAcessoPendente }}>
       {children}
     </AuthContext.Provider>
   );

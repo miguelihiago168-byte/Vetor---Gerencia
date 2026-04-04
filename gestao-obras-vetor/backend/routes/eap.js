@@ -22,6 +22,30 @@ const ensureFaixaPercentual = (valor) => {
   return Math.round(parsed * 100) / 100;
 };
 
+const ensureEapOptionalColumns = async () => {
+  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN tenant_id INTEGER'); } catch (_) {}
+  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN unidade_medida TEXT'); } catch (_) {}
+  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN quantidade_total REAL DEFAULT 0'); } catch (_) {}
+  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN id_atividade TEXT'); } catch (_) {}
+  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN nome TEXT'); } catch (_) {}
+  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN data_inicio_planejada DATE'); } catch (_) {}
+  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN data_fim_planejada DATE'); } catch (_) {}
+  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN peso_percentual_projeto REAL DEFAULT 0'); } catch (_) {}
+  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN data_conclusao_real DATE'); } catch (_) {}
+  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN status TEXT'); } catch (_) {}
+
+  // Backfill de tenant para registros legados
+  try {
+    await runQuery(`
+      UPDATE atividades_eap
+      SET tenant_id = (
+        SELECT p.tenant_id FROM projetos p WHERE p.id = atividades_eap.projeto_id
+      )
+      WHERE tenant_id IS NULL OR tenant_id = 0
+    `);
+  } catch (_) {}
+};
+
 const getSomaPesosFolhas = async (projetoId) => {
   const row = await getQuery(`
     SELECT COALESCE(SUM(COALESCE(a.peso_percentual_projeto, a.percentual_previsto, 0)), 0) AS total
@@ -45,10 +69,20 @@ const getSomaPesosIrmaos = async (projetoId, paiId, excluirId = null) => {
   return Number(row?.total || 0);
 };
 
-// Listar atividades EAP de um projeto
+// Listar atividades EAP de um projeto (tenant-aware)
 router.get('/projeto/:projetoId', auth, async (req, res) => {
   try {
+    await ensureEapOptionalColumns();
     const { projetoId } = req.params;
+    const tenantId = req.tenantId;
+    if (!tenantId) {
+      return res.status(400).json({ erro: 'Tenant não definido.' });
+    }
+    // Verifica se o projeto pertence ao tenant
+    const projeto = await getQuery('SELECT id FROM projetos WHERE id = ? AND tenant_id = ?', [projetoId, tenantId]);
+    if (!projeto) {
+      return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
+    }
 
     const atividades = await allQuery(`
       SELECT *,
@@ -60,11 +94,10 @@ router.get('/projeto/:projetoId', auth, async (req, res) => {
       ORDER BY ordem, codigo_eap
     `, [projetoId]);
 
-    // Agregar métricas para atividades-mãe
+    // ...existing code...
     const byId = {};
     atividades.forEach(a => { byId[a.id] = { ...a, previsto_agregado: a.quantidade_total || 0, executado_agregado: (a.percentual_executado || 0) * ((a.quantidade_total||0)/100) } });
 
-    // calcular a partir das filhas
     atividades.forEach(a => {
       if (a.pai_id) {
         const pai = byId[a.pai_id];
@@ -76,7 +109,6 @@ router.get('/projeto/:projetoId', auth, async (req, res) => {
       }
     });
 
-    // construir lista com campos agregados para pais
     const atividadesOut = atividades.map(a => {
       const copy = { ...a };
       if (!a.pai_id) {
@@ -90,7 +122,7 @@ router.get('/projeto/:projetoId', auth, async (req, res) => {
           percentual_agregado = a.percentual_executado || 0;
         }
         copy.previsto_agregado = previsto;
-        copy.executado_agregado = Math.round((executado + 0.000001) * 100) / 100; // duas casas
+        copy.executado_agregado = Math.round((executado + 0.000001) * 100) / 100;
         copy.percentual_agregado = percentual_agregado;
       }
       return copy;
@@ -103,25 +135,32 @@ router.get('/projeto/:projetoId', auth, async (req, res) => {
   }
 });
 
-// Copiar EAP de um projeto para outro
+// Copiar EAP de um projeto para outro (tenant-aware)
 router.post('/copiar', [auth, isGestor], async (req, res) => {
   try {
+    await ensureEapOptionalColumns();
     const { sourceProjetoId, targetProjetoId } = req.body;
+    const tenantId = req.tenantId;
     if (!sourceProjetoId || !targetProjetoId) return res.status(400).json({ erro: 'É necessário sourceProjetoId e targetProjetoId.' });
+    if (!tenantId) return res.status(400).json({ erro: 'Tenant não definido.' });
+    // Verifica se ambos os projetos pertencem ao tenant
+    const sourceProjeto = await getQuery('SELECT id FROM projetos WHERE id = ? AND tenant_id = ?', [sourceProjetoId, tenantId]);
+    const targetProjeto = await getQuery('SELECT id FROM projetos WHERE id = ? AND tenant_id = ?', [targetProjetoId, tenantId]);
+    if (!sourceProjeto || !targetProjeto) {
+      return res.status(404).json({ erro: 'Projetos de origem ou destino não pertencem ao seu tenant.' });
+    }
 
     const atividades = await allQuery('SELECT * FROM atividades_eap WHERE projeto_id = ? ORDER BY id', [sourceProjetoId]);
     const mapOldToNew = {};
 
-    // Inserir atividades na mesma ordem, mantendo pai mapping
     for (const a of atividades) {
       const result = await runQuery(`
-        INSERT INTO atividades_eap (projeto_id, codigo_eap, descricao, percentual_previsto, pai_id, ordem, unidade_medida, quantidade_total, criado_por)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [targetProjetoId, a.codigo_eap, a.descricao + ` (copiado de projeto ${sourceProjetoId})`, a.percentual_previsto, null, a.ordem, a.unidade_medida, a.quantidade_total, req.usuario.id]);
+        INSERT INTO atividades_eap (tenant_id, projeto_id, codigo_eap, descricao, percentual_previsto, pai_id, ordem, unidade_medida, quantidade_total, criado_por)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [tenantId, targetProjetoId, a.codigo_eap, a.descricao + ` (copiado de projeto ${sourceProjetoId})`, a.percentual_previsto, null, a.ordem, a.unidade_medida, a.quantidade_total, req.usuario.id]);
       mapOldToNew[a.id] = result.lastID;
     }
 
-    // atualizar pai_id das atividades copiadas
     for (const a of atividades) {
       if (a.pai_id) {
         const newId = mapOldToNew[a.id];
@@ -139,13 +178,14 @@ router.post('/copiar', [auth, isGestor], async (req, res) => {
   }
 });
 
-// Criar atividade EAP
+// Criar atividade EAP (tenant-aware)
 router.post('/', auth, [
   body('projeto_id').isInt(),
   body('codigo_eap').trim().notEmpty(),
   body('percentual_previsto').optional().isFloat({ min: 0, max: 100 })
 ], async (req, res) => {
   try {
+    await ensureEapOptionalColumns();
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ erro: 'Dados inválidos.', detalhes: errors.array() });
@@ -166,9 +206,17 @@ router.post('/', auth, [
       data_fim_planejada,
       peso_percentual_projeto
     } = req.body;
+    const tenantId = req.tenantId;
+    if (!tenantId) {
+      return res.status(400).json({ erro: 'Tenant não definido.' });
+    }
+    // Verifica se o projeto pertence ao tenant
+    const projeto = await getQuery('SELECT id FROM projetos WHERE id = ? AND tenant_id = ?', [projeto_id, tenantId]);
+    if (!projeto) {
+      return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
+    }
 
     const ehFilha = !!pai_id;
-
     const descricaoNormalizada = (typeof descricao === 'string')
       ? descricao.trim()
       : '';
@@ -201,13 +249,16 @@ router.post('/', auth, [
       }
 
       const paiRow = await getQuery(`
-        SELECT id, COALESCE(peso_percentual_projeto, percentual_previsto, 0) AS peso,
+        SELECT id, pai_id, COALESCE(peso_percentual_projeto, percentual_previsto, 0) AS peso,
                EXISTS(SELECT 1 FROM atividades_eap c WHERE c.pai_id = atividades_eap.id) AS tem_filhos
         FROM atividades_eap
         WHERE id = ? AND projeto_id = ?
       `, [pai_id, projeto_id]);
       if (!paiRow) {
         return res.status(400).json({ erro: 'Atividade pai inválida para este projeto.' });
+      }
+      if (paiRow.pai_id) {
+        return res.status(400).json({ erro: 'Somente atividades pai (raiz) podem receber atividades filhas.' });
       }
     }
 
@@ -216,9 +267,10 @@ router.post('/', auth, [
 
     const result = await runQuery(`
       INSERT INTO atividades_eap 
-      (projeto_id, codigo_eap, descricao, percentual_previsto, pai_id, ordem, unidade_medida, quantidade_total, criado_por, id_atividade, nome, data_inicio_planejada, data_fim_planejada, peso_percentual_projeto)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (tenant_id, projeto_id, codigo_eap, descricao, percentual_previsto, pai_id, ordem, unidade_medida, quantidade_total, criado_por, id_atividade, nome, data_inicio_planejada, data_fim_planejada, peso_percentual_projeto)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
+      tenantId,
       projeto_id,
       codigo_eap,
       descricaoNormalizada,
@@ -251,6 +303,7 @@ router.post('/', auth, [
 // Atualizar atividade EAP
 router.put('/:id', auth, async (req, res) => {
   try {
+    await ensureEapOptionalColumns();
     const { id } = req.params;
     const { codigo_eap, descricao, percentual_previsto, ordem, unidade_medida, quantidade_total, pai_id, id_atividade, nome, data_inicio_planejada, data_fim_planejada, peso_percentual_projeto, percentual_executado } = req.body;
 
@@ -265,6 +318,23 @@ router.put('/:id', auth, async (req, res) => {
 
     const novoPaiId = (typeof pai_id !== 'undefined') ? (pai_id || null) : atividadeAnterior.pai_id;
     const ehFilha = !!novoPaiId;
+
+    if (ehFilha) {
+      if (Number(novoPaiId) === Number(id)) {
+        return res.status(400).json({ erro: 'Uma atividade não pode ser pai dela mesma.' });
+      }
+
+      const novoPai = await getQuery(
+        'SELECT id, pai_id FROM atividades_eap WHERE id = ? AND projeto_id = ?',
+        [novoPaiId, atividadeAnterior.projeto_id]
+      );
+      if (!novoPai) {
+        return res.status(400).json({ erro: 'Atividade pai inválida para este projeto.' });
+      }
+      if (novoPai.pai_id) {
+        return res.status(400).json({ erro: 'Somente atividades pai (raiz) podem receber atividades filhas.' });
+      }
+    }
 
     const dataInicioRaw = (typeof data_inicio_planejada !== 'undefined') ? data_inicio_planejada : atividadeAnterior.data_inicio_planejada;
     const dataFimRaw = (typeof data_fim_planejada !== 'undefined') ? data_fim_planejada : atividadeAnterior.data_fim_planejada;

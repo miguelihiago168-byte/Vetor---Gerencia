@@ -5,18 +5,236 @@ on:
     branches:
       - principal
 
+concurrency:
+  group: deploy-ec2-principal
+  cancel-in-progress: true
+
 jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
 
     steps:
+      - name: Descobrir IP publico do runner
+        id: runner_ip
+        shell: bash
+        run: |
+          set -euo pipefail
+          ip="$(curl -fsSL https://checkip.amazonaws.com | tr -d '\n' | tr -d '\r')"
+          if [ -z "$ip" ]; then
+            echo "Nao foi possivel descobrir o IP publico do runner."
+            exit 1
+          fi
+          echo "ip=$ip" >> "$GITHUB_OUTPUT"
+          echo ">>> Runner IP: $ip"
+
+      - name: Configurar credenciais AWS
+        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_REGION != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Resolver EC2 Instance ID pelo host (fallback para SSM)
+        id: resolve_instance
+        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_REGION != '' && secrets.EC2_INSTANCE_ID == '' && secrets.EC2_HOST != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          HOST_RAW="${{ secrets.EC2_HOST }}"
+          HOST="$HOST_RAW"
+
+          if ! [[ "$HOST" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            HOST="$(getent ahostsv4 "$HOST_RAW" | awk 'NR==1 {print $1}')"
+          fi
+
+          if [ -z "$HOST" ]; then
+            echo "Nao foi possivel resolver EC2_HOST para IPv4."
+            echo "instance_id=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo ">>> Tentando descobrir instance id pelo IP publico: $HOST"
+          INSTANCE_ID="$(aws ec2 describe-instances \
+            --filters "Name=instance-state-name,Values=running" "Name=ip-address,Values=$HOST" \
+            --query 'Reservations[].Instances[].InstanceId' \
+            --output text | awk 'NR==1{print $1}')"
+
+          if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" = "None" ]; then
+            echo "Nenhuma instancia running encontrada para o host informado."
+            INSTANCE_ID=""
+          fi
+
+          if [ -z "$INSTANCE_ID" ]; then
+            echo ">>> Tentando fallback por SSM (instancia managed online unica)..."
+            SSM_IDS="$(aws ssm describe-instance-information \
+              --query 'InstanceInformationList[?PingStatus==`Online`].InstanceId' \
+              --output text || true)"
+
+            SSM_COUNT="$(printf '%s\n' "$SSM_IDS" | awk 'NF{c+=NF} END{print c+0}')"
+            if [ "$SSM_COUNT" -eq 1 ]; then
+              INSTANCE_ID="$(printf '%s\n' "$SSM_IDS" | awk '{print $1}')"
+              echo ">>> Instance ID resolvido via SSM: $INSTANCE_ID"
+            else
+              echo ">>> Nao foi possivel resolver instance id via SSM (quantidade online: $SSM_COUNT)."
+            fi
+          fi
+
+          if [ -z "$INSTANCE_ID" ]; then
+            echo "instance_id=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo ">>> Instance ID resolvido: $INSTANCE_ID"
+          echo "instance_id=$INSTANCE_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy via SSM (sem SSH)
+        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_REGION != '' && (secrets.EC2_INSTANCE_ID != '' || steps.resolve_instance.outputs.instance_id != '') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          INSTANCE_ID="${{ secrets.EC2_INSTANCE_ID }}"
+          if [ -z "$INSTANCE_ID" ]; then
+            INSTANCE_ID="${{ steps.resolve_instance.outputs.instance_id }}"
+          fi
+
+          if [ -z "$INSTANCE_ID" ]; then
+            echo "EC2_INSTANCE_ID nao definido e nao foi possivel resolver automaticamente."
+            exit 1
+          fi
+
+          BACKEND_ENV_B64="$(printf '%s' "${{ secrets.BACKEND_ENV }}" | base64 | tr -d '\n' | tr -d '\r')"
+
+          cat > /tmp/ssm-params.json <<JSON
+          {
+            "commands": [
+              "set -e",
+              "APP_DIR=/home/ubuntu/app/gestao-obras-vetor",
+              "cd $APP_DIR",
+              "PREV_COMMIT=$(git rev-parse HEAD || true)",
+              "git fetch origin principal",
+              "NEW_COMMIT=$(git rev-parse origin/principal)",
+              "CHANGED_FILES=$(git diff --name-only $PREV_COMMIT $NEW_COMMIT || true)",
+              "git reset --hard origin/principal",
+              "echo '$BACKEND_ENV_B64' | base64 -d > backend/.env",
+              "NEED_BACKEND=0",
+              "NEED_FRONTEND=0",
+              "echo \"$CHANGED_FILES\" | grep -Eq '^(backend/|docker-compose.yml)' && NEED_BACKEND=1 || true",
+              "echo \"$CHANGED_FILES\" | grep -Eq '^(frontend/|nginx/|docker-compose.yml)' && NEED_FRONTEND=1 || true",
+              "if [ $NEED_BACKEND -eq 1 ] && [ $NEED_FRONTEND -eq 1 ]; then sudo docker compose up -d --build backend frontend; elif [ $NEED_BACKEND -eq 1 ]; then sudo docker compose up -d --build backend; elif [ $NEED_FRONTEND -eq 1 ]; then sudo docker compose up -d --build frontend; else sudo docker compose up -d backend frontend; fi",
+              "sudo docker compose ps",
+              "sleep 5",
+              "curl -sf http://localhost/api/health && echo OK || (echo FALHOU; exit 1)"
+            ]
+          }
+          JSON
+
+          COMMAND_ID="$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "Deploy gestao-obras-vetor via GitHub Actions" \
+            --parameters file:///tmp/ssm-params.json \
+            --query 'Command.CommandId' \
+            --output text)"
+
+          echo ">>> SSM CommandId: $COMMAND_ID"
+
+          for i in $(seq 1 90); do
+            STATUS="$(aws ssm list-command-invocations \
+              --command-id "$COMMAND_ID" \
+              --details \
+              --query 'CommandInvocations[0].Status' \
+              --output text)"
+            echo ">>> Status SSM: $STATUS"
+            if [ "$STATUS" = "Success" ]; then
+              aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --query 'StandardOutputContent' --output text || true
+              exit 0
+            fi
+            if [ "$STATUS" = "Cancelled" ] || [ "$STATUS" = "TimedOut" ] || [ "$STATUS" = "Failed" ] || [ "$STATUS" = "Cancelling" ]; then
+              aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --query 'StandardErrorContent' --output text || true
+              exit 1
+            fi
+            sleep 5
+          done
+
+          echo "Timeout aguardando comando SSM concluir."
+          exit 1
+
+      - name: Liberar SSH temporario no Security Group
+        if: ${{ false }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CIDR="${{ steps.runner_ip.outputs.ip }}/32"
+          SG_ID="${{ secrets.EC2_SECURITY_GROUP_ID }}"
+          echo ">>> Liberando TCP/22 para $CIDR no SG $SG_ID"
+          aws ec2 authorize-security-group-ingress \
+            --group-id "$SG_ID" \
+            --ip-permissions "[{\"IpProtocol\":\"tcp\",\"FromPort\":22,\"ToPort\":22,\"IpRanges\":[{\"CidrIp\":\"$CIDR\",\"Description\":\"github-actions-temporary-ssh\"}]}]" \
+            || true
+
+      - name: Sem SSM resolvido e fallback SSH desabilitado
+        if: ${{ secrets.EC2_INSTANCE_ID == '' && steps.resolve_instance.outputs.instance_id == '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Nao foi possivel executar deploy via SSM (EC2_INSTANCE_ID ausente e resolucao automatica falhou)."
+          echo "Fallback SSH esta desabilitado para evitar tentativas na porta 22."
+          echo "Opcoes:"
+          echo "1) Definir secret EC2_INSTANCE_ID (recomendado)."
+          exit 1
+
+      - name: Preflight de conectividade SSH
+        if: ${{ false }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          HOST="${{ secrets.EC2_HOST }}"
+          PORT="22"
+
+          if [ -z "$HOST" ]; then
+            echo "Secret EC2_HOST vazio ou não definido."
+            exit 1
+          fi
+
+          echo ">>> Verificando resolução DNS/IP de $HOST"
+          getent hosts "$HOST" || true
+
+          echo ">>> Testando porta $PORT com tentativas"
+          ok=0
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            echo "Tentativa de SSH $i/10..."
+            if timeout 8 bash -c "</dev/tcp/$HOST/$PORT" 2>/dev/null; then
+              echo "Conectividade TCP na porta $PORT OK."
+              ok=1
+              break
+            fi
+            sleep 4
+          done
+
+          if [ "$ok" -ne 1 ]; then
+            echo "Falha de conectividade SSH: porta $PORT inacessivel a partir do runner do GitHub."
+            echo "Se os secrets AWS_* e EC2_SECURITY_GROUP_ID nao estiverem configurados, a liberacao automatica do SG nao ocorre."
+            echo "Verifique Security Group, NACL, IP publico da EC2 e se o sshd esta ativo."
+            exit 1
+          fi
+
       - name: Conectar ao servidor e fazer deploy
+        if: ${{ false }}
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
+          port: 22
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
+          timeout: 60s
+          command_timeout: 30m
+          debug: true
+          script_stop: true
           script: |
             set -e
 
@@ -24,16 +242,53 @@ jobs:
 
             echo ">>> Atualizando código..."
             cd "$APP_DIR"
-            git pull origin principal
+            PREV_COMMIT="$(git rev-parse HEAD || true)"
+            git fetch origin principal
+            NEW_COMMIT="$(git rev-parse origin/principal)"
+            CHANGED_FILES="$(git diff --name-only "$PREV_COMMIT" "$NEW_COMMIT" || true)"
+            git reset --hard origin/principal
 
-            echo ">>> Subindo containers..."
-            docker-compose up --build
+            echo '${{ secrets.BACKEND_ENV }}' > backend/.env
+
+            NEED_BACKEND=0
+            NEED_FRONTEND=0
+
+            if echo "$CHANGED_FILES" | grep -Eq '^(backend/|docker-compose.yml)'; then NEED_BACKEND=1; fi
+            if echo "$CHANGED_FILES" | grep -Eq '^(frontend/|nginx/|docker-compose.yml)'; then NEED_FRONTEND=1; fi
+
+            echo ">>> Arquivos alterados:"
+            echo "$CHANGED_FILES"
+
+            echo ">>> Subindo containers (build seletivo)..."
+            if [ "$NEED_BACKEND" -eq 1 ] && [ "$NEED_FRONTEND" -eq 1 ]; then
+              sudo docker compose up -d --build backend frontend
+            elif [ "$NEED_BACKEND" -eq 1 ]; then
+              sudo docker compose up -d --build backend
+            elif [ "$NEED_FRONTEND" -eq 1 ]; then
+              sudo docker compose up -d --build frontend
+            else
+              echo ">>> Sem mudanças em backend/frontend. Garantindo serviços ativos sem rebuild."
+              sudo docker compose up -d backend frontend
+            fi
 
             echo ">>> Status dos containers:"
-            docker compose ps
+            sudo docker compose ps
 
             echo ">>> Verificando health check..."
             sleep 5
             curl -sf http://localhost/api/health && echo " OK" || echo " FALHOU"
 
             echo ">>> Deploy concluído!"
+
+      - name: Revogar SSH temporario do Security Group
+        if: ${{ false }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CIDR="${{ steps.runner_ip.outputs.ip }}/32"
+          SG_ID="${{ secrets.EC2_SECURITY_GROUP_ID }}"
+          echo ">>> Revogando TCP/22 para $CIDR no SG $SG_ID"
+          aws ec2 revoke-security-group-ingress \
+            --group-id "$SG_ID" \
+            --ip-permissions "[{\"IpProtocol\":\"tcp\",\"FromPort\":22,\"ToPort\":22,\"IpRanges\":[{\"CidrIp\":\"$CIDR\"}]}]" \
+            || true

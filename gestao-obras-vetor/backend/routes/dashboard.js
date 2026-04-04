@@ -30,29 +30,31 @@ const diffDays = (fromDateOnly, toDateOnlyValue) => {
 router.get('/projeto/:projetoId/avanco', auth, async (req, res) => {
   try {
     const { projetoId } = req.params;
-
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(400).json({ erro: 'Tenant não definido.' });
+    // Verifica se o projeto pertence ao tenant
+    const projeto = await getQuery('SELECT id FROM projetos WHERE id = ? AND tenant_id = ?', [projetoId, tenantId]);
+    if (!projeto) {
+      return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
+    }
     // Calcular avanço físico geral
     const resultado = await getQuery(`
       SELECT 
         AVG(percentual_executado) as avanco_medio,
         SUM(CASE WHEN status = 'Concluída' THEN 1 ELSE 0 END) as concluidas,
         SUM(CASE WHEN status = 'Em andamento' THEN 1 ELSE 0 END) as em_andamento,
-        -- Não contabilizar atividades 'mãe' como "não iniciadas"
         SUM(CASE WHEN status = 'Não iniciada' AND pai_id IS NOT NULL THEN 1 ELSE 0 END) as nao_iniciadas,
         COUNT(*) as total_atividades
       FROM atividades_eap
       WHERE projeto_id = ?
     `, [projetoId]);
-
     // Avanço por atividade principal (pai_id IS NULL) - agregar a partir das filhas quando aplicável
     const atividadesRaw = await allQuery(`
       SELECT * FROM atividades_eap WHERE projeto_id = ? ORDER BY ordem, codigo_eap
     `, [projetoId]);
-
     // montar map por id
     const byId = {};
     atividadesRaw.forEach(a => { byId[a.id] = { ...a, previsto_agregado: a.quantidade_total || 0, executado_agregado: (a.percentual_executado || 0) * ((a.quantidade_total||0)/100) }; });
-
     // agregar das filhas para os pais
     atividadesRaw.forEach(a => {
       if (a.pai_id) {
@@ -64,7 +66,6 @@ router.get('/projeto/:projetoId/avanco', auth, async (req, res) => {
         }
       }
     });
-
     const atividadesPrincipais = atividadesRaw.filter(a => !a.pai_id).map(a => {
       const copy = { ...a };
       const agg = byId[a.id] || {};
@@ -76,12 +77,10 @@ router.get('/projeto/:projetoId/avanco', auth, async (req, res) => {
       } else {
         percentual_agregado = a.percentual_executado || 0;
       }
-      // expor como percentual_executado para compatibilidade com frontend
       copy.percentual_executado = percentual_agregado;
       copy.percentual_previsto = a.percentual_previsto || 0;
       return copy;
     });
-
     // Evolução diária
     const evolucaoDiaria = await allQuery(`
       SELECT 
@@ -95,13 +94,11 @@ router.get('/projeto/:projetoId/avanco', auth, async (req, res) => {
       ORDER BY r.data_relatorio DESC
       LIMIT 30
     `, [projetoId]);
-
     res.json({
       avanco_geral: resultado,
       atividades_principais: atividadesPrincipais,
       evolucao_diaria: evolucaoDiaria
     });
-
   } catch (error) {
     console.error('Erro ao obter dashboard:', error);
     res.status(500).json({ erro: 'Erro ao obter dados do dashboard.' });
@@ -112,7 +109,13 @@ router.get('/projeto/:projetoId/avanco', auth, async (req, res) => {
 router.get('/projeto/:projetoId/rdos-stats', auth, async (req, res) => {
   try {
     const { projetoId } = req.params;
-
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(400).json({ erro: 'Tenant não definido.' });
+    // Verifica se o projeto pertence ao tenant
+    const projeto = await getQuery('SELECT id FROM projetos WHERE id = ? AND tenant_id = ?', [projetoId, tenantId]);
+    if (!projeto) {
+      return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
+    }
     const stats = await getQuery(`
       SELECT 
         COUNT(*) as total_rdos,
@@ -124,30 +127,93 @@ router.get('/projeto/:projetoId/rdos-stats', auth, async (req, res) => {
       FROM rdos
       WHERE projeto_id = ?
     `, [projetoId]);
-
     res.json(stats);
-
   } catch (error) {
     console.error('Erro ao obter estatísticas:', error);
     res.status(500).json({ erro: 'Erro ao obter estatísticas.' });
   }
 });
 
+// Galeria de fotos agrupada por RDO
+router.get('/projeto/:projetoId/galeria-rdos', auth, async (req, res) => {
+  try {
+    const { projetoId } = req.params;
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(400).json({ erro: 'Tenant não definido.' });
+
+    const projeto = await getQuery('SELECT id FROM projetos WHERE id = ? AND tenant_id = ?', [projetoId, tenantId]);
+    if (!projeto) {
+      return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
+    }
+
+    const rdos = await allQuery(`
+      SELECT id, numero_rdo, data_relatorio, status
+      FROM rdos
+      WHERE projeto_id = ?
+      ORDER BY data_relatorio DESC, id DESC
+      LIMIT 120
+    `, [projetoId]);
+
+    const grupos = [];
+    let totalFotos = 0;
+
+    for (const rdo of rdos) {
+      const fotos = await allQuery(`
+        SELECT rf.id,
+               rf.rdo_id,
+               rf.nome_arquivo,
+               rf.caminho_arquivo,
+               rf.descricao,
+               rf.criado_em,
+               ae.codigo_eap AS atividade_codigo,
+               COALESCE(ae.nome, ae.descricao) AS atividade_descricao,
+               rf.atividade_avulsa_descricao
+        FROM rdo_fotos rf
+        LEFT JOIN rdo_atividades ra ON rf.rdo_atividade_id = ra.id
+        LEFT JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
+        WHERE rf.rdo_id = ?
+        ORDER BY COALESCE(rf.ordem, 0) ASC, rf.criado_em ASC
+      `, [rdo.id]);
+
+      if (!fotos.length) continue;
+
+      totalFotos += fotos.length;
+      grupos.push({
+        rdo_id: rdo.id,
+        numero_rdo: rdo.numero_rdo || `RDO-${String(rdo.id).padStart(3, '0')}`,
+        data_relatorio: rdo.data_relatorio,
+        status: rdo.status,
+        total_fotos: fotos.length,
+        fotos
+      });
+    }
+
+    res.json({
+      total_rdos_com_foto: grupos.length,
+      total_fotos: totalFotos,
+      rdos: grupos
+    });
+  } catch (error) {
+    console.error('Erro ao obter galeria agrupada de fotos:', error);
+    res.status(500).json({ erro: 'Erro ao obter galeria de fotos.' });
+  }
+});
+
 router.get('/projeto/:projetoId/curva-s', auth, async (req, res) => {
   try {
     const { projetoId } = req.params;
-
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(400).json({ erro: 'Tenant não definido.' });
+    // Verifica se o projeto pertence ao tenant
     const projeto = await getQuery(`
       SELECT p.id, p.nome, COALESCE(u.nome, 'Sem responsável') AS responsavel
       FROM projetos p
       LEFT JOIN usuarios u ON p.criado_por = u.id
-      WHERE p.id = ?
-    `, [projetoId]);
-
+      WHERE p.id = ? AND p.tenant_id = ?
+    `, [projetoId, tenantId]);
     if (!projeto) {
-      return res.status(404).json({ erro: 'Projeto não encontrado.' });
+      return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
     }
-
     const atividades = await allQuery(`
       SELECT a.id,
              COALESCE(a.id_atividade, ('ATV-' || a.id)) AS id_atividade,
@@ -162,7 +228,6 @@ router.get('/projeto/:projetoId/curva-s', auth, async (req, res) => {
         AND NOT EXISTS (SELECT 1 FROM atividades_eap c WHERE c.pai_id = a.id)
       ORDER BY a.ordem, a.codigo_eap
     `, [projetoId]);
-
     if (!atividades.length) {
       return res.json({
         projeto,
@@ -222,12 +287,21 @@ router.get('/projeto/:projetoId/curva-s', auth, async (req, res) => {
     }
 
     const realRaw = await allQuery(`
-      SELECT r.data_relatorio, ra.atividade_eap_id, COALESCE(SUM(ra.percentual_executado), 0) AS percentual_dia
+      SELECT
+        r.data_relatorio,
+        ra.atividade_eap_id,
+        CASE
+          WHEN COALESCE(a.quantidade_total, 0) > 0 THEN
+            (COALESCE(SUM(COALESCE(ra.quantidade_executada, 0)), 0) / a.quantidade_total) * 100
+          ELSE
+            COALESCE(SUM(ra.percentual_executado), 0)
+        END AS percentual_dia
       FROM rdo_atividades ra
       INNER JOIN rdos r ON r.id = ra.rdo_id
+      INNER JOIN atividades_eap a ON a.id = ra.atividade_eap_id
       WHERE r.projeto_id = ?
         AND r.status = 'Aprovado'
-      GROUP BY r.data_relatorio, ra.atividade_eap_id
+      GROUP BY r.data_relatorio, ra.atividade_eap_id, a.quantidade_total
       ORDER BY r.data_relatorio ASC
     `, [projetoId]);
 
@@ -242,6 +316,16 @@ router.get('/projeto/:projetoId/curva-s', auth, async (req, res) => {
       });
     });
 
+    // Se houver execução real antes do início planejado, iniciar a série nessa data
+    // para refletir avanço adiantado na Curva S.
+    const primeiraDataReal = realRaw
+      .map(row => toDateOnly(row.data_relatorio))
+      .filter(Boolean)
+      .sort()[0] || null;
+    const inicioSerie = (primeiraDataReal && primeiraDataReal < inicioProjeto)
+      ? primeiraDataReal
+      : inicioProjeto;
+
     const acumuladoRealAtividade = {};
     atividades.forEach(a => {
       acumuladoRealAtividade[a.id] = 0;
@@ -251,9 +335,9 @@ router.get('/projeto/:projetoId/curva-s', auth, async (req, res) => {
     let acumuladoPlanejado = 0;
     let acumuladoReal = 0;
 
-    const totalDias = Math.max(0, diffDays(inicioProjeto, dataFimSerie));
+    const totalDias = Math.max(0, diffDays(inicioSerie, dataFimSerie));
     for (let i = 0; i <= totalDias; i += 1) {
-      const data = addDays(inicioProjeto, i);
+      const data = addDays(inicioSerie, i);
 
       acumuladoPlanejado = Math.min(100, acumuladoPlanejado + Number(planejadoPorDia[data] || 0));
 

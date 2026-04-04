@@ -1,18 +1,53 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { register } from '../services/api';
-import { ArrowRight, ArrowLeft, Copy, Check } from 'lucide-react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { registerWithInviteToken, validateInviteToken } from '../services/api';
+import { ArrowRight, ArrowLeft, Copy, Check, AlertCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { hasForbiddenPasswordSequence } from '../utils/passwordPolicy';
 import './Login.css';
 
 // Senha: exatamente 6 chars, >= 4 dígitos, >= 1 letra, >= 1 especial
 const SENHA_REGEX = /^(?=(.*\d){4,})(?=.*[a-zA-Z])(?=.*[^a-zA-Z0-9]).{6}$/;
 
 function CriarConta() {
+  const { token } = useParams();
+  const navigate = useNavigate();
+  const { loginAuth } = useAuth();
+
   const [form, setForm] = useState({ nome: '', email: '', senha: '', confirmar: '' });
   const [erro, setErro] = useState('');
+  const [erroToken, setErroToken] = useState('');
+  const [tokenValido, setTokenValido] = useState(false);
+  const [validandoToken, setValidandoToken] = useState(true);
   const [loading, setLoading] = useState(false);
   const [loginGerado, setLoginGerado] = useState(null);
   const [copiado, setCopiado] = useState(false);
+
+  React.useEffect(() => {
+    const validarToken = async () => {
+      if (!token) {
+        setErroToken('Convite inválido. Solicite um novo link ao administrador.');
+        setValidandoToken(false);
+        return;
+      }
+      try {
+        const response = await validateInviteToken(token);
+        setTokenValido(true);
+        setForm((prev) => ({
+          ...prev,
+          email: response.data?.email || '',
+          nome: response.data?.nome || prev.nome
+        }));
+      } catch (e) {
+        setTokenValido(false);
+        setErroToken(e.response?.data?.erro || 'Convite inválido, expirado ou já utilizado.');
+      } finally {
+        setValidandoToken(false);
+      }
+    };
+
+    validarToken();
+  }, [token]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -21,11 +56,13 @@ function CriarConta() {
 
   const validar = () => {
     if (!form.nome.trim()) return 'Informe seu nome completo.';
-    if (!form.email.trim()) return 'Informe seu e-mail.';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return 'E-mail inválido.';
+    if (!form.email.trim()) return 'E-mail do convite não encontrado.';
     if (form.senha.length !== 6) return 'A senha deve ter exatamente 6 caracteres.';
     if (!SENHA_REGEX.test(form.senha)) {
       return 'A senha deve conter pelo menos 4 números, 1 letra e 1 caractere especial (ex: 1234a!).';
+    }
+    if (hasForbiddenPasswordSequence(form.senha)) {
+      return 'A senha não pode conter sequência crescente/decrescente de letras ou números (ex: abcd, 1234, 9876).';
     }
     if (form.senha !== form.confirmar) return 'As senhas não conferem.';
     return null;
@@ -43,12 +80,16 @@ function CriarConta() {
 
     setLoading(true);
     try {
-      const response = await register({
+      const response = await registerWithInviteToken(token, {
         nome: form.nome.trim(),
         email: form.email.trim().toLowerCase(),
         senha: form.senha
       });
-      setLoginGerado(response.data.login);
+      if (response?.data?.token && response?.data?.usuario) {
+        loginAuth(response.data.token, response.data.usuario);
+      }
+      setLoginGerado(response.data?.usuario?.login || response.data?.login || '');
+      setTimeout(() => navigate('/projetos'), 700);
     } catch (error) {
       setErro(error.response?.data?.erro || 'Erro ao criar conta. Tente novamente.');
     } finally {
@@ -62,16 +103,44 @@ function CriarConta() {
     setTimeout(() => setCopiado(false), 2000);
   };
 
+  if (validandoToken) {
+    return (
+      <div className="login-page">
+        <div className="login-card">
+          <p className="criar-conta-heading">Validando convite...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!tokenValido) {
+    return (
+      <div className="login-page">
+        <div className="login-card">
+          <div className="login-error" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AlertCircle size={16} />
+            {erroToken || 'Convite inválido.'}
+          </div>
+          <div className="login-register-link">
+            <Link to="/login" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <ArrowLeft size={14} />
+              Voltar ao login
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (loginGerado) {
     return (
       <div className="login-page">
         <div className="login-card">
           <div className="login-brand">
             <div className="login-logo-wrap">
-              <img src="/logo.svg" alt="Vetor" className="login-logo-img" />
+              <img src="/logo_vetor.png" alt="Vetor" className="login-logo-img" />
             </div>
             <div>
-              <p className="login-brand-name">Vetor</p>
               <p className="login-brand-sub">Gestão de Obras</p>
             </div>
           </div>
@@ -113,10 +182,9 @@ function CriarConta() {
       <div className="login-card">
         <div className="login-brand">
           <div className="login-logo-wrap">
-            <img src="/logo.svg" alt="Vetor" className="login-logo-img" />
+            <img src="/logo_vetor.png" alt="Vetor" className="login-logo-img" />
           </div>
           <div>
-            <p className="login-brand-name">Vetor</p>
             <p className="login-brand-sub">Gestão de Obras</p>
           </div>
         </div>
@@ -150,6 +218,7 @@ function CriarConta() {
               onChange={handleChange}
               placeholder="seu@email.com"
               autoComplete="email"
+              disabled
               required
             />
           </div>

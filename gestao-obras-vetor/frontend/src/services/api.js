@@ -36,7 +36,9 @@ api.interceptors.response.use(
 
 // Auth
 export const login = (credentials) => api.post('/auth/login', credentials);
-export const register = (data) => api.post('/auth/register', data);
+export const registerTrialAccount = (data) => api.post('/auth/register', data);
+export const validateInviteToken = (token) => api.get(`/auth/register/${token}`);
+export const registerWithInviteToken = (token, data) => api.post(`/auth/register/${token}`, data);
 
 // Usuários
 export const getUsuarios = (params) => api.get('/usuarios', { params });
@@ -45,6 +47,7 @@ export const getNovoLogin = () => api.get('/usuarios/novo-login');
 export const getUsuariosDeletados = () => api.get('/usuarios/deletados/lista');
 export const createUsuario = (data) => api.post('/usuarios', data);
 export const updateUsuario = (id, data) => api.put(`/usuarios/${id}`, data);
+export const concluirPrimeiroAcesso = (data) => api.patch('/usuarios/me/primeiro-acesso', data);
 export const updateUsuarioGestor = (id, isGestor) => api.patch(`/usuarios/${id}/gestor`, { is_gestor: isGestor });
 export const updateUsuarioAdm = (id, isAdm) => api.patch(`/usuarios/${id}/adm`, { is_adm: isAdm });
 export const deleteUsuario = (id) => api.delete(`/usuarios/${id}`);
@@ -60,7 +63,6 @@ export const getProjetos = () => api.get('/projetos');
 export const getProjeto = (id) => api.get(`/projetos/${id}`);
 export const createProjeto = (data) => api.post('/projetos', data);
 export const updateProjeto = (id, data) => api.put(`/projetos/${id}`, data);
-export const deleteProjeto = (id) => api.delete(`/projetos/${id}`);
 export const arquivarProjeto = (id) => api.patch(`/projetos/${id}/arquivar`);
 export const desarquivarProjeto = (id) => api.patch(`/projetos/${id}/desarquivar`);
 export const copiarEapProjeto = (destinoId, origemProjetoId) => api.post(`/projetos/${destinoId}/copiar-eap`, { origem_projeto_id: origemProjetoId });
@@ -99,6 +101,8 @@ export const addRdoOcorrencia = (rdoId, data) => api.post(`/rdo/${rdoId}/ocorren
 export const addRdoAssinatura = (rdoId, data) => api.post(`/rdo/${rdoId}/assinatura`, data);
 // Backend espera o campo 'arquivo' no upload
 export const uploadRdoFoto = (rdoId, formData) => api.post(`/rdo/${rdoId}/foto`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+export const updateRdoFoto = (rdoId, fotoId, data) => api.patch(`/rdo/${rdoId}/foto/${fotoId}`, data);
+export const reorderRdoFotos = (rdoId, fotoIds) => api.patch(`/rdo/${rdoId}/fotos/ordem`, { foto_ids: fotoIds });
 // Equipamentos
 export const getRdoEquipamentos = (rdoId) => api.get(`/rdo/${rdoId}/equipamentos`);
 export const addRdoEquipamento = (rdoId, data) => api.post(`/rdo/${rdoId}/equipamentos`, data);
@@ -124,6 +128,7 @@ export const getAnexosRNC = (rncId) => api.get(`/anexos/rnc/${rncId}`);
 // Dashboard
 export const getDashboardAvanco = (projetoId) => api.get(`/dashboard/projeto/${projetoId}/avanco`);
 export const getRDOStats = (projetoId) => api.get(`/dashboard/projeto/${projetoId}/rdos-stats`);
+export const getDashboardGaleriaRdos = (projetoId) => api.get(`/dashboard/projeto/${projetoId}/galeria-rdos`);
 export const getCurvaS = (projetoId) => api.get(`/dashboard/projeto/${projetoId}/curva-s`);
 
 // RNC
@@ -162,6 +167,8 @@ export const selecionarCotacaoItem = (reqId, itemId, cotacaoId) =>
   api.patch(`/requisicoes/${reqId}/itens/${itemId}/cotacoes/${cotacaoId}/selecionar`);
 export const marcarItemComprado = (reqId, itemId) =>
   api.patch(`/requisicoes/${reqId}/itens/${itemId}/comprado`);
+export const concluirRequisicao = (reqId) =>
+  api.patch(`/requisicoes/${reqId}/concluir`);
 export const cancelarItemRequisicao = (reqId, itemId, data) =>
   api.patch(`/requisicoes/${reqId}/itens/${itemId}/cancelar`, data);
 export const devolverCotacaoItem = (reqId, itemId, data) =>
@@ -242,5 +249,27 @@ export const getRelatorioPerdasAlmox = (projetoId) => api.get('/almoxarifado/rel
 export const getRdoFerramentasDisponiveis = (rdoId) => api.get(`/almoxarifado/rdo/${rdoId}/ferramentas-disponiveis`);
 export const getRdoFerramentas = (rdoId) => api.get(`/almoxarifado/rdo/${rdoId}/ferramentas`);
 export const addRdoFerramenta = (rdoId, data) => api.post(`/almoxarifado/rdo/${rdoId}/ferramentas`, data);
+
+export const getRdoLogs = (rdoId) => api.get(`/rdos/${rdoId}/logs`);
+
+// Email
+export const getEmailConfig = () => api.get('/email/config');
+export const saveEmailConfig = (data) => api.post('/email/config', data);
+export const testEmailConfig = (data) => api.post('/email/config/test', data);
+export const sendEmail = (data) => api.post('/email/send', data);
+export const sendEmailFormData = (formData) => api.post('/email/send', formData, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+});
+export const uploadEmailInlineImage = (formData) => api.post('/email/upload-image', formData, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+});
+export const getEmailHistory = (params) => api.get('/email/history', { params });
+export const getEmailHistoryDetail = (id) => api.get(`/email/history/${id}`);
+export const getEmailTemplates = () => api.get('/email/templates');
+export const getEmailTemplate = (id) => api.get(`/email/templates/${id}`);
+export const saveEmailTemplate = (data) => api.post('/email/templates', data);
+export const deleteEmailTemplate = (id) => api.delete(`/email/templates/${id}`);
+export const getEmailSignature = () => api.get('/email/signature');
+export const updateEmailSignature = (data) => api.put('/email/signature', data);
 
 export default api;

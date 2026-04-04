@@ -1,18 +1,45 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { body, validationResult } = require('express-validator');
-const { allQuery, runQuery, getQuery } = require('../config/database');
+const { allQuery, runQuery, getQuery, runQueryMain, getQueryMain } = require('../config/database');
 const { auth } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
 const { PERMISSIONS, requirePermission, ensureAccessSchema } = require('../middleware/rbac');
 const { PERFIS, PERFIS_LISTA, SETORES, SETORES_LISTA, normalizarPerfil, mapPerfilParaLegado } = require('../constants/access');
+const { hasForbiddenPasswordSequence } = require('../services/passwordPolicy');
 
 const router = express.Router();
 
+const normalizeLogin = (value) => String(value || '').trim().replace(/\s+/g, '').toLowerCase();
+const normalizeName = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .replace(/\s+/g, '')
+  .replace(/[^a-z0-9]/g, '');
+
+const generateUniqueLoginFromName = async (name) => {
+  const base = normalizeName(name).slice(0, 14) || 'usuario';
+  for (let i = 0; i < 50; i += 1) {
+    const suffix = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+    const candidate = `${base}${suffix}`;
+    const exists = await getQuery('SELECT id FROM usuarios WHERE login = ?', [candidate]);
+    if (!exists) return candidate;
+  }
+  throw new Error('Nao foi possivel gerar login unico.');
+};
+
 const gerarLogin = async (preferencia) => {
   if (preferencia) {
-    const existente = await getQuery('SELECT id FROM usuarios WHERE login = ?', [preferencia]);
-    if (!existente) return preferencia;
+    const loginNormalizado = normalizeLogin(preferencia);
+    if (!loginNormalizado) {
+      throw new Error('Login invalido.');
+    }
+
+    const existente = await getQuery('SELECT id FROM usuarios WHERE login = ?', [loginNormalizado]);
+    if (!existente) return loginNormalizado;
+
+    throw new Error('Login ja esta em uso.');
   }
 
   const ultimoUsuario = await getQuery(
@@ -79,6 +106,17 @@ const validarPerfilEObras = (perfil, projetosIds) => {
   }
 
   return null;
+};
+
+const resolverPerfil = (perfilInformado, funcaoInformada, perfilAtual) => {
+  if (perfilInformado !== undefined) {
+    return normalizarPerfil(perfilInformado);
+  }
+
+  const perfilPorFuncao = normalizarPerfil(funcaoInformada);
+  if (perfilPorFuncao) return perfilPorFuncao;
+
+  return normalizarPerfil(perfilAtual);
 };
 
 const sincronizarVinculosProjeto = async (usuarioId, projetoIds) => {
@@ -412,8 +450,30 @@ router.patch('/bulk-update', [auth, requirePermission(PERMISSIONS.USERS_MANAGE)]
         `UPDATE usuarios SET ativo = 1, deletado_em = NULL, deletado_por = NULL, atualizado_em = CURRENT_TIMESTAMP WHERE id IN (${placeholders})`,
         [...idsValidos]
       );
+      await runQueryMain(
+        `UPDATE usuarios SET ativo = 1, deletado_em = NULL, deletado_por = NULL, atualizado_em = CURRENT_TIMESTAMP WHERE id IN (${placeholders})`,
+        [...idsValidos]
+      );
+    } else if (campo === 'perfil') {
+      const legado = mapPerfilParaLegado(valorFinal);
+      await runQuery(
+        `UPDATE usuarios
+         SET perfil = ?, funcao = ?, is_gestor = ?, is_adm = ?, perfil_almoxarifado = ?, atualizado_em = CURRENT_TIMESTAMP
+         WHERE id IN (${placeholders})`,
+        [valorFinal, valorFinal, legado.is_gestor, legado.is_adm, legado.perfil_almoxarifado, ...idsValidos]
+      );
+      await runQueryMain(
+        `UPDATE usuarios
+         SET perfil = ?, funcao = ?, is_gestor = ?, is_adm = ?, perfil_almoxarifado = ?, atualizado_em = CURRENT_TIMESTAMP
+         WHERE id IN (${placeholders})`,
+        [valorFinal, valorFinal, legado.is_gestor, legado.is_adm, legado.perfil_almoxarifado, ...idsValidos]
+      );
     } else {
       await runQuery(
+        `UPDATE usuarios SET ${campo} = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id IN (${placeholders})`,
+        [valorFinal, ...idsValidos]
+      );
+      await runQueryMain(
         `UPDATE usuarios SET ${campo} = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id IN (${placeholders})`,
         [valorFinal, ...idsValidos]
       );
@@ -452,9 +512,10 @@ router.post('/', [
   auth,
   requirePermission(PERMISSIONS.USERS_MANAGE),
   body('nome').trim().notEmpty(),
+  body('login').optional({ checkFalsy: true, nullable: true }).isString().isLength({ min: 3, max: 40 }),
   body('email').optional({ checkFalsy: true, nullable: true }).trim().isEmail(),
-  body('senha').isLength({ min: 6, max: 6 }).isNumeric(),
-  body('pin').optional().isLength({ min: 6, max: 6 }).isNumeric(),
+  body('senha').isString().isLength({ min: 1, max: 72 }),
+  body('pin').optional({ checkFalsy: true, nullable: true }).isLength({ min: 6, max: 6 }).isNumeric(),
   body('perfil').isString(),
   body('funcao').optional({ nullable: true }).isString(),
   body('setor').isString(),
@@ -478,19 +539,27 @@ router.post('/', [
     const erroSetor = validarSetor(setor, setorOutro);
     if (erroSetor) return res.status(400).json({ erro: erroSetor });
 
+    if (hasForbiddenPasswordSequence(senha)) {
+      return res.status(400).json({
+        erro: 'Senha não pode conter sequência crescente ou decrescente de letras/números (ex: abcd, 1234, 9876).'
+      });
+    }
+
     const projetoIds = perfil === PERFIS.GESTOR_GERAL ? await listarTodosProjetosIds() : projetoIdsEntrada;
     const erroPerfil = validarPerfilEObras(perfil, projetoIds);
     if (erroPerfil) return res.status(400).json({ erro: erroPerfil });
 
-    const login = await gerarLogin(req.body.login);
+    const login = req.body.login
+      ? await gerarLogin(req.body.login)
+      : await generateUniqueLoginFromName(nome);
     const senhaHash = await bcrypt.hash(senha, 10);
-    const pinFinal = pin || Math.floor(Math.random() * 900000 + 100000).toString();
+    const pinFinal = pin ? String(pin).trim() : null;
 
     const legado = mapPerfilParaLegado(perfil);
 
     const result = await runQuery(`
-      INSERT INTO usuarios (login, senha, pin, nome, email, perfil, funcao, setor, setor_outro, is_gestor, is_adm, perfil_almoxarifado, criado_por)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO usuarios (login, senha, pin, nome, email, perfil, funcao, setor, setor_outro, is_gestor, is_adm, perfil_almoxarifado, tenant_id, criado_por, primeiro_acesso_pendente)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
     `, [
       login,
       senhaHash,
@@ -504,8 +573,35 @@ router.post('/', [
       legado.is_gestor,
       legado.is_adm,
       legado.perfil_almoxarifado,
+      req.usuario.tenant_id,
       req.usuario.id
     ]);
+
+    // Gravar no banco principal para que o usuário consiga fazer login
+    await runQueryMain(`
+      INSERT OR IGNORE INTO usuarios (id, login, senha, pin, nome, email, perfil, funcao, setor, setor_outro, is_gestor, is_adm, perfil_almoxarifado, tenant_id, ativo, criado_por, primeiro_acesso_pendente)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 0)
+    `, [
+      result.lastID,
+      login,
+      senhaHash,
+      pinFinal,
+      nome,
+      email,
+      perfil,
+      funcao || perfil,
+      setor,
+      setor === SETORES.OUTRO ? setorOutro : null,
+      legado.is_gestor,
+      legado.is_adm,
+      legado.perfil_almoxarifado,
+      req.usuario.tenant_id,
+      req.usuario.id
+    ]);
+    await runQueryMain(
+      'INSERT OR IGNORE INTO usuario_tenants (usuario_id, tenant_id, ativo) VALUES (?, ?, 1)',
+      [result.lastID, req.usuario.tenant_id]
+    );
 
     await sincronizarVinculosProjeto(result.lastID, projetoIds);
 
@@ -518,6 +614,12 @@ router.post('/', [
     });
   } catch (error) {
     console.error('Erro ao criar usuário:', error);
+    if (error?.message === 'Login ja esta em uso.') {
+      return res.status(409).json({ erro: 'Usuário já existe. Escolha outro login.' });
+    }
+    if (error?.message === 'Login invalido.') {
+      return res.status(400).json({ erro: 'Usuário inválido.' });
+    }
     res.status(500).json({ erro: 'Erro ao criar usuário.' });
   }
 });
@@ -576,18 +678,28 @@ router.put('/:id', [
     }
 
     if (req.body.senha !== undefined && req.body.senha !== '') {
-      if (!/^\d{6}$/.test(String(req.body.senha))) {
-        return res.status(400).json({ erro: 'Senha deve conter 6 dígitos numéricos.' });
+      if (String(req.body.senha).length > 72) {
+        return res.status(400).json({ erro: 'Senha deve ter no maximo 72 caracteres.' });
+      }
+      if (hasForbiddenPasswordSequence(req.body.senha)) {
+        return res.status(400).json({
+          erro: 'Senha não pode conter sequência crescente ou decrescente de letras/números (ex: abcd, 1234, 9876).'
+        });
       }
       const senhaHash = await bcrypt.hash(req.body.senha, 10);
       updates.push('senha = ?');
       params.push(senhaHash);
     }
 
-    const perfilEntrada = req.body.perfil !== undefined ? req.body.perfil : usuarioAnterior.perfil;
-    const perfil = normalizarPerfil(perfilEntrada);
-    const funcao = req.body.funcao !== undefined
+    const funcaoInformada = req.body.funcao !== undefined
       ? String(req.body.funcao || '').trim()
+      : undefined;
+    const perfil = resolverPerfil(req.body.perfil, funcaoInformada, usuarioAnterior.perfil);
+    if (!perfil || !PERFIS_LISTA.includes(perfil)) {
+      return res.status(400).json({ erro: 'Perfil de acesso inválido.' });
+    }
+    const funcao = req.body.funcao !== undefined
+      ? funcaoInformada
       : (usuarioAnterior.funcao || perfil);
     const setor = req.body.setor !== undefined ? req.body.setor : usuarioAnterior.setor;
     const setorOutro = req.body.setor_outro !== undefined ? String(req.body.setor_outro || '').trim() : (usuarioAnterior.setor_outro || '');
@@ -622,6 +734,7 @@ router.put('/:id', [
     if (updates.length > 0) {
       params.push(id);
       await runQuery(`UPDATE usuarios SET ${updates.join(', ')}, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?`, params);
+      await runQueryMain(`UPDATE usuarios SET ${updates.join(', ')}, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?`, params);
     }
 
     if (req.body.projeto_ids !== undefined || req.body.projeto_id !== undefined || perfil === PERFIS.GESTOR_OBRA || perfil === PERFIS.GESTOR_GERAL) {
@@ -649,6 +762,10 @@ router.patch('/:id/gestor', [auth, requirePermission(PERMISSIONS.USERS_MANAGE)],
       'UPDATE usuarios SET perfil = ?, is_gestor = ?, is_adm = ?, perfil_almoxarifado = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
       [perfil, legado.is_gestor, legado.is_adm, legado.perfil_almoxarifado, id]
     );
+    await runQueryMain(
+      'UPDATE usuarios SET perfil = ?, is_gestor = ?, is_adm = ?, perfil_almoxarifado = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+      [perfil, legado.is_gestor, legado.is_adm, legado.perfil_almoxarifado, id]
+    );
 
     res.json({ mensagem: 'Permissões atualizadas com sucesso.' });
   } catch (error) {
@@ -668,6 +785,10 @@ router.patch('/:id/adm', [auth, requirePermission(PERMISSIONS.USERS_MANAGE)], as
       'UPDATE usuarios SET perfil = ?, is_gestor = ?, is_adm = ?, perfil_almoxarifado = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
       [perfil, legado.is_gestor, legado.is_adm, legado.perfil_almoxarifado, id]
     );
+    await runQueryMain(
+      'UPDATE usuarios SET perfil = ?, is_gestor = ?, is_adm = ?, perfil_almoxarifado = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+      [perfil, legado.is_gestor, legado.is_adm, legado.perfil_almoxarifado, id]
+    );
 
     res.json({ mensagem: 'Permissões ADM atualizadas com sucesso.' });
   } catch (error) {
@@ -684,6 +805,10 @@ router.delete('/:id', [auth, requirePermission(PERMISSIONS.USERS_MANAGE)], async
       'UPDATE usuarios SET ativo = 0, deletado_em = CURRENT_TIMESTAMP, deletado_por = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
       [req.usuario.id, id]
     );
+    await runQueryMain(
+      'UPDATE usuarios SET ativo = 0, deletado_em = CURRENT_TIMESTAMP, deletado_por = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+      [req.usuario.id, id]
+    );
 
     await registrarAuditoria('usuarios', id, 'DELETE', null, { deletado_por: req.usuario.id }, req.usuario.id);
 
@@ -691,6 +816,156 @@ router.delete('/:id', [auth, requirePermission(PERMISSIONS.USERS_MANAGE)], async
   } catch (error) {
     console.error('Erro ao excluir usuário:', error);
     res.status(500).json({ erro: 'Erro ao excluir usuário.' });
+  }
+});
+
+router.patch('/:id/senha', [auth], async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { senhaAtual, novaSenha } = req.body;
+
+    // Usuário só pode alterar sua própria senha
+    if (Number(id) !== Number(req.usuario.id)) {
+      return res.status(403).json({ erro: 'Você só pode alterar sua própria senha.' });
+    }
+
+    if (!senhaAtual || !novaSenha) {
+      return res.status(400).json({ erro: 'Senha atual e nova senha são obrigatórias.' });
+    }
+
+    if (String(novaSenha).length > 72) {
+      return res.status(400).json({ erro: 'Nova senha deve ter no maximo 72 caracteres.' });
+    }
+
+    if (hasForbiddenPasswordSequence(novaSenha)) {
+      return res.status(400).json({
+        erro: 'Nova senha não pode conter sequência crescente ou decrescente de letras/números (ex: abcd, 1234, 9876).'
+      });
+    }
+
+    // Verificar senha atual
+    const usuario = await getQuery('SELECT senha FROM usuarios WHERE id = ? AND ativo = 1', [id]);
+    if (!usuario) {
+      return res.status(404).json({ erro: 'Usuário não encontrado.' });
+    }
+
+    const senhaCorreta = await bcrypt.compare(senhaAtual, usuario.senha);
+    if (!senhaCorreta) {
+      return res.status(400).json({ erro: 'Senha atual incorreta.' });
+    }
+
+    // Hash da nova senha
+    const novaSenhaHash = await bcrypt.hash(novaSenha, 10);
+
+    await runQuery(
+      'UPDATE usuarios SET senha = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+      [novaSenhaHash, id]
+    );
+    await runQueryMain(
+      'UPDATE usuarios SET senha = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+      [novaSenhaHash, id]
+    );
+
+    await registrarAuditoria('usuarios', id, 'UPDATE', { senha: '[REDACTED]' }, { senha: '[ALTERADA]' }, req.usuario.id);
+
+    res.json({ mensagem: 'Senha alterada com sucesso.' });
+  } catch (error) {
+    console.error('Erro ao alterar senha:', error);
+    res.status(500).json({ erro: 'Erro ao alterar senha.' });
+  }
+});
+
+router.patch('/me/primeiro-acesso', [
+  auth,
+  body('funcao').trim().notEmpty(),
+  body('setor').isString(),
+  body('setor_outro').optional({ nullable: true }).isString()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ erro: 'Dados inválidos para concluir o primeiro acesso.' });
+    }
+
+    const usuarioAnterior = await carregarUsuarioComProjetos(req.usuario.id);
+    if (!usuarioAnterior) {
+      return res.status(404).json({ erro: 'Usuário não encontrado.' });
+    }
+
+    const funcao = String(req.body.funcao || '').trim();
+    const setor = String(req.body.setor || '').trim();
+    const setorOutro = String(req.body.setor_outro || '').trim();
+    const perfilPorFuncao = normalizarPerfil(funcao);
+
+    const erroSetor = validarSetor(setor, setorOutro);
+    if (erroSetor) return res.status(400).json({ erro: erroSetor });
+
+    if (perfilPorFuncao) {
+      const legado = mapPerfilParaLegado(perfilPorFuncao);
+      const paramsUpdate = [
+        funcao,
+        perfilPorFuncao,
+        setor,
+        setor === SETORES.OUTRO ? setorOutro : null,
+        legado.is_gestor,
+        legado.is_adm,
+        legado.perfil_almoxarifado,
+        req.usuario.id
+      ];
+
+      await runQuery(
+        `UPDATE usuarios
+         SET funcao = ?, perfil = ?, setor = ?, setor_outro = ?, is_gestor = ?, is_adm = ?, perfil_almoxarifado = ?, primeiro_acesso_pendente = 0, atualizado_em = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        paramsUpdate
+      );
+      await runQueryMain(
+        `UPDATE usuarios
+         SET funcao = ?, perfil = ?, setor = ?, setor_outro = ?, is_gestor = ?, is_adm = ?, perfil_almoxarifado = ?, primeiro_acesso_pendente = 0, atualizado_em = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        paramsUpdate
+      );
+    } else {
+      await runQuery(
+        `UPDATE usuarios
+         SET funcao = ?, setor = ?, setor_outro = ?, primeiro_acesso_pendente = 0, atualizado_em = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [funcao, setor, setor === SETORES.OUTRO ? setorOutro : null, req.usuario.id]
+      );
+      await runQueryMain(
+        `UPDATE usuarios
+         SET funcao = ?, setor = ?, setor_outro = ?, primeiro_acesso_pendente = 0, atualizado_em = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [funcao, setor, setor === SETORES.OUTRO ? setorOutro : null, req.usuario.id]
+      );
+    }
+
+    const usuarioNovo = await carregarUsuarioComProjetos(req.usuario.id);
+    await registrarAuditoria('usuarios', req.usuario.id, 'UPDATE', usuarioAnterior, usuarioNovo, req.usuario.id);
+
+    res.json({
+      mensagem: 'Primeiro acesso concluído com sucesso.',
+      usuario: {
+        id: usuarioNovo.id,
+        login: usuarioNovo.login,
+        nome: usuarioNovo.nome,
+        email: usuarioNovo.email,
+        perfil: usuarioNovo.perfil,
+        funcao: usuarioNovo.funcao,
+        setor: usuarioNovo.setor,
+        setor_outro: usuarioNovo.setor_outro,
+        primeiro_acesso_pendente: false,
+        is_gestor: usuarioNovo.is_gestor,
+        is_adm: usuarioNovo.is_adm || 0,
+        perfil_almoxarifado: usuarioNovo.perfil_almoxarifado || null,
+        tenant_id: req.usuario.tenant_id,
+        tenant_ids: Array.isArray(req.usuario.tenant_ids) ? req.usuario.tenant_ids : [req.usuario.tenant_id].filter(Boolean),
+        verificado: true
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao concluir primeiro acesso:', error);
+    res.status(500).json({ erro: 'Erro ao concluir primeiro acesso.' });
   }
 });
 

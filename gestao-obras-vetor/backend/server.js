@@ -33,9 +33,97 @@ const fornecedoresRoutes = require('./routes/fornecedores');
 // const financeiroRoutes = require('./routes/financeiro');
 const notificacoesRoutes = require('./routes/notificacoes');
 const almoxarifadoRoutes = require('./routes/almoxarifado');
+const emailRoutes = require('./routes/email');
 // Garantir esquema de notificações e índice único para evitar duplicidades
 try {
   const { db } = require('./config/database');
+  const { ensureMultitenancySchema } = require('./scripts/migrate_multitenancy');
+  const { ensureRdoLogsSchema } = require('./scripts/migrate_add_rdo_logs');
+  const migrateAddRequisicoes = require('./scripts/migrate_add_requisicoes');
+  const { migrateAddCotacaoFields } = require('./scripts/migrate_add_cotacao_fields');
+
+  const runDb = (sql) => new Promise((resolve, reject) => {
+    db.run(sql, (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
+
+  const ensureColumn = async (table, columnName, columnSql) => {
+    try {
+      await runDb(`ALTER TABLE ${table} ADD COLUMN ${columnSql}`);
+    } catch (err) {
+      const msg = String(err?.message || '').toLowerCase();
+      if (!msg.includes('duplicate column')) throw err;
+    }
+  };
+
+  ensureMultitenancySchema().catch((e) => {
+    console.warn('Aviso: não foi possível aplicar schema de multitenancy:', e?.message || e);
+  });
+
+  ensureRdoLogsSchema().catch((e) => {
+    console.warn('Aviso: não foi possível aplicar schema de rdo_logs:', e?.message || e);
+  });
+
+  // Garantir colunas de RDO esperadas pelas rotas atuais
+  ensureColumn('rdos', 'mao_obra_detalhada', 'mao_obra_detalhada TEXT').catch((e) => {
+    console.warn('Aviso: não foi possível garantir coluna rdos.mao_obra_detalhada:', e?.message || e);
+  });
+  ensureColumn('rdos', 'atividades_avulsas', 'atividades_avulsas TEXT').catch((e) => {
+    console.warn('Aviso: não foi possível garantir coluna rdos.atividades_avulsas:', e?.message || e);
+  });
+
+  // Garantir colunas extras de RNC usadas pela API
+  ensureColumn('rnc', 'descricao_correcao', 'descricao_correcao TEXT').catch((e) => {
+    console.warn('Aviso: não foi possível garantir coluna rnc.descricao_correcao:', e?.message || e);
+  });
+  ensureColumn('rnc', 'descricao_correcao_em', 'descricao_correcao_em DATETIME').catch((e) => {
+    console.warn('Aviso: não foi possível garantir coluna rnc.descricao_correcao_em:', e?.message || e);
+  });
+  ensureColumn('rnc', 'data_prevista_encerramento', 'data_prevista_encerramento DATE').catch((e) => {
+    console.warn('Aviso: não foi possível garantir coluna rnc.data_prevista_encerramento:', e?.message || e);
+  });
+  ensureColumn('rnc', 'origem', 'origem TEXT').catch((e) => {
+    console.warn('Aviso: não foi possível garantir coluna rnc.origem:', e?.message || e);
+  });
+  ensureColumn('rnc', 'area_afetada', 'area_afetada TEXT').catch((e) => {
+    console.warn('Aviso: não foi possível garantir coluna rnc.area_afetada:', e?.message || e);
+  });
+  ensureColumn('rnc', 'norma_referencia', 'norma_referencia TEXT').catch((e) => {
+    console.warn('Aviso: não foi possível garantir coluna rnc.norma_referencia:', e?.message || e);
+  });
+  ensureColumn('rnc', 'registros_fotograficos', 'registros_fotograficos TEXT').catch((e) => {
+    console.warn('Aviso: não foi possível garantir coluna rnc.registros_fotograficos:', e?.message || e);
+  });
+
+  // Garantir tabelas do módulo de requisições/compras multi-itens
+  migrateAddRequisicoes().catch((e) => {
+    console.warn('Aviso: não foi possível aplicar schema de requisições:', e?.message || e);
+  });
+
+  // Garantir schema de cotações com fornecedor_id nullable (nome livre)
+  migrateAddCotacaoFields().catch((e) => {
+    console.warn('Aviso: não foi possível aplicar schema de cotações:', e?.message || e);
+  });
+
+  // Garantir colunas novas em requisicao_cotacoes para compatibilidade das consultas
+  ensureColumn('requisicao_cotacoes', 'fornecedor_nome', 'fornecedor_nome TEXT').catch((e) => {
+    console.warn('Aviso: não foi possível garantir coluna requisicao_cotacoes.fornecedor_nome:', e?.message || e);
+  });
+  ensureColumn('requisicao_cotacoes', 'cnpj', 'cnpj TEXT').catch((e) => {
+    console.warn('Aviso: não foi possível garantir coluna requisicao_cotacoes.cnpj:', e?.message || e);
+  });
+  ensureColumn('requisicao_cotacoes', 'telefone', 'telefone TEXT').catch((e) => {
+    console.warn('Aviso: não foi possível garantir coluna requisicao_cotacoes.telefone:', e?.message || e);
+  });
+  ensureColumn('requisicao_cotacoes', 'email', 'email TEXT').catch((e) => {
+    console.warn('Aviso: não foi possível garantir coluna requisicao_cotacoes.email:', e?.message || e);
+  });
+  ensureColumn('requisicao_cotacoes', 'frete', 'frete REAL DEFAULT 0').catch((e) => {
+    console.warn('Aviso: não foi possível garantir coluna requisicao_cotacoes.frete:', e?.message || e);
+  });
+
   db.run(`
     CREATE TABLE IF NOT EXISTS notificacoes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -77,6 +165,7 @@ app.use('/api/fornecedores', fornecedoresRoutes);
 // app.use('/api/financeiro', financeiroRoutes);
 app.use('/api/notificacoes', notificacoesRoutes);
 app.use('/api/almoxarifado', almoxarifadoRoutes);
+app.use('/api/email', emailRoutes);
 
 // Rota de teste
 app.get('/api/health', (req, res) => {

@@ -1,9 +1,10 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-function PrivateRoute({ children, allowedPerfis }) {
-  const { usuario, loading } = useAuth();
+function PrivateRoute({ children, allowedPerfis, allowPendingFirstAccess = false }) {
+  const { usuario, loading, primeiroAcessoPendente } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -14,6 +15,20 @@ function PrivateRoute({ children, allowedPerfis }) {
   }
 
   if (!usuario) return <Navigate to="/login" />;
+
+  const tenantValido = !!usuario?.tenant_id || (Array.isArray(usuario?.tenant_ids) && usuario.tenant_ids.length > 0);
+  const usuarioVerificado = usuario?.verificado !== false;
+  if (!tenantValido || !usuarioVerificado) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (primeiroAcessoPendente && !allowPendingFirstAccess && location.pathname !== '/primeiro-acesso') {
+    return <Navigate to="/primeiro-acesso" replace />;
+  }
+
+  if (!primeiroAcessoPendente && location.pathname === '/primeiro-acesso') {
+    return <Navigate to="/projetos" replace />;
+  }
 
   if (Array.isArray(allowedPerfis) && allowedPerfis.length > 0) {
     const perfilUsuario = usuario?.perfil;

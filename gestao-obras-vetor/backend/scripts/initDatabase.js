@@ -274,6 +274,42 @@ const initDatabase = async () => {
     });
     console.log('✓ Tabela auditoria criada');
 
+    await new Promise((resolve, reject) => {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS rdo_logs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          rdo_id INTEGER NOT NULL,
+          usuario_id INTEGER,
+          acao TEXT NOT NULL CHECK (acao IN ('VIEW', 'UPDATE')),
+          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE,
+          FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL
+        )
+      `, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+    await new Promise((resolve, reject) => {
+      db.run('CREATE INDEX IF NOT EXISTS idx_rdo_logs_rdo_id ON rdo_logs(rdo_id)', (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+    await new Promise((resolve, reject) => {
+      db.run('CREATE INDEX IF NOT EXISTS idx_rdo_logs_usuario_id ON rdo_logs(usuario_id)', (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+    await new Promise((resolve, reject) => {
+      db.run('CREATE INDEX IF NOT EXISTS idx_rdo_logs_acao ON rdo_logs(acao)', (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+    console.log('✓ Tabela rdo_logs criada');
+
     // Tabela de Pedidos de Compra
     await new Promise((resolve, reject) => {
       db.run(`

@@ -16,10 +16,27 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
 });
 
-const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
+const uploadFoto = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowedExt = /\.(jpe?g|png|webp|gif)$/i;
+    const allowedMime = /^image\//i;
+    const extOk = allowedExt.test(String(file.originalname || '').toLowerCase());
+    const mimeOk = allowedMime.test(String(file.mimetype || '').toLowerCase());
+    if (extOk && mimeOk) return cb(null, true);
+    return cb(new Error('Apenas imagens são permitidas na galeria de fotos do RDO.'));
+  }
+});
 
 runQuery("ALTER TABLE rdo_fotos ADD COLUMN atividade_avulsa_descricao TEXT").catch(e => {
   if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] atividade_avulsa_descricao:', e.message);
+});
+runQuery('ALTER TABLE rdo_fotos ADD COLUMN ordem INTEGER DEFAULT 0').catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_fotos.ordem:', e.message);
+});
+runQuery('ALTER TABLE rdo_materiais ADD COLUMN numero_nf TEXT').catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_materiais.numero_nf:', e.message);
 });
 
 const garantirTabelaMaoObraDireta = async () => {
@@ -279,9 +296,13 @@ router.post('/:rdoId/comentario', auth, async (req, res) => {
 router.post('/:rdoId/material', auth, async (req, res) => {
   try {
     const { rdoId } = req.params;
-    const { nome_material, quantidade, unidade } = req.body;
+    const { nome_material, quantidade, unidade, numero_nf } = req.body;
     if (!nome_material) return res.status(400).json({ erro: 'Nome do material requerido.' });
-    const result = await runQuery('INSERT INTO rdo_materiais (rdo_id, nome_material, quantidade, unidade) VALUES (?, ?, ?, ?)', [rdoId, nome_material, quantidade || 0, unidade || null]);
+    const nf = String(numero_nf || '').trim();
+    const result = await runQuery(
+      'INSERT INTO rdo_materiais (rdo_id, nome_material, quantidade, unidade, numero_nf) VALUES (?, ?, ?, ?, ?)',
+      [rdoId, nome_material, quantidade || 0, unidade || null, nf || null]
+    );
     res.status(201).json({ mensagem: 'Material registrado.', id: result.lastID });
   } catch (err) {
     console.error('Erro ao registrar material', err);
@@ -386,27 +407,77 @@ router.delete('/:rdoId/equipamentos/:equipId', auth, async (req, res) => {
 });
 
 // Upload de fotos vinculadas a atividade do RDO
-router.post('/:rdoId/foto', auth, upload.single('arquivo'), async (req, res) => {
+router.post('/:rdoId/foto', auth, uploadFoto.single('arquivo'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ erro: 'Nenhum arquivo enviado.' });
     const { rdoId } = req.params;
     const { rdo_atividade_id, descricao, atividade_avulsa_descricao } = req.body;
-    const { originalname, filename, mimetype, size } = req.file;
+    const { originalname, filename } = req.file;
+
+    const ordemRow = await getQuery('SELECT COALESCE(MAX(ordem), 0) AS max_ordem FROM rdo_fotos WHERE rdo_id = ?', [rdoId]);
+    const ordem = Number(ordemRow?.max_ordem || 0) + 1;
 
     // Salvar no table rdo_fotos
     const result = await runQuery(
-      'INSERT INTO rdo_fotos (rdo_id, rdo_atividade_id, nome_arquivo, caminho_arquivo, descricao, atividade_avulsa_descricao, criado_por) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [rdoId, rdo_atividade_id || null, originalname, filename, descricao || null, atividade_avulsa_descricao || null, req.usuario.id]
+      'INSERT INTO rdo_fotos (rdo_id, rdo_atividade_id, nome_arquivo, caminho_arquivo, descricao, atividade_avulsa_descricao, ordem, criado_por) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [rdoId, rdo_atividade_id || null, originalname, filename, descricao || null, atividade_avulsa_descricao || null, ordem, req.usuario.id]
     );
 
-    // Também manter em anexos para download se necessário
-    await runQuery('INSERT INTO anexos (rdo_id, tipo, nome_arquivo, caminho_arquivo, tamanho) VALUES (?, ?, ?, ?, ?)', [rdoId, mimetype, originalname, filename, size]);
-
     // Retornar informação do arquivo para o frontend
-    res.status(201).json({ mensagem: 'Foto enviada.', id: result.lastID, arquivo: { nome_arquivo: originalname, caminho_arquivo: filename } });
+    res.status(201).json({ mensagem: 'Foto enviada.', id: result.lastID, arquivo: { nome_arquivo: originalname, caminho_arquivo: filename }, ordem });
   } catch (err) {
     console.error('Erro ao enviar foto', err);
     res.status(500).json({ erro: 'Erro ao enviar foto.' });
+  }
+});
+
+// Atualizar descrição da foto
+router.patch('/:rdoId/foto/:fotoId', auth, async (req, res) => {
+  try {
+    const { rdoId, fotoId } = req.params;
+    const descricao = String(req.body?.descricao || '').trim() || null;
+
+    const foto = await getQuery('SELECT id FROM rdo_fotos WHERE id = ? AND rdo_id = ?', [fotoId, rdoId]);
+    if (!foto) return res.status(404).json({ erro: 'Foto não encontrada.' });
+
+    await runQuery('UPDATE rdo_fotos SET descricao = ? WHERE id = ? AND rdo_id = ?', [descricao, fotoId, rdoId]);
+    res.json({ mensagem: 'Descrição da foto atualizada.' });
+  } catch (err) {
+    console.error('Erro ao atualizar descrição da foto', err);
+    res.status(500).json({ erro: 'Erro ao atualizar descrição da foto.' });
+  }
+});
+
+// Reordenar fotos do RDO (ordem persistida)
+router.patch('/:rdoId/fotos/ordem', auth, async (req, res) => {
+  try {
+    const { rdoId } = req.params;
+    const fotoIds = Array.isArray(req.body?.foto_ids) ? req.body.foto_ids.map(Number).filter(Boolean) : [];
+    if (!fotoIds.length) return res.status(400).json({ erro: 'Lista de fotos inválida.' });
+
+    const existentes = await allQuery('SELECT id FROM rdo_fotos WHERE rdo_id = ?', [rdoId]);
+    const idsExistentes = new Set((existentes || []).map((f) => Number(f.id)));
+    for (const id of fotoIds) {
+      if (!idsExistentes.has(id)) {
+        return res.status(400).json({ erro: 'Lista contém foto inválida para este RDO.' });
+      }
+    }
+
+    await runQuery('BEGIN TRANSACTION');
+    try {
+      for (let i = 0; i < fotoIds.length; i += 1) {
+        await runQuery('UPDATE rdo_fotos SET ordem = ? WHERE id = ? AND rdo_id = ?', [i + 1, fotoIds[i], rdoId]);
+      }
+      await runQuery('COMMIT');
+    } catch (txErr) {
+      await runQuery('ROLLBACK');
+      throw txErr;
+    }
+
+    res.json({ mensagem: 'Ordem das fotos atualizada.' });
+  } catch (err) {
+    console.error('Erro ao reordenar fotos do RDO', err);
+    res.status(500).json({ erro: 'Erro ao reordenar fotos.' });
   }
 });
 

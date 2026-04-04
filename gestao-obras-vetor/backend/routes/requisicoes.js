@@ -126,10 +126,10 @@ const atualizarStatusRequisicao = async (requisicaoId, usuarioId) => {
     novoStatus = STATUS_REQ.ENCERRADA_SEM_COMPRA;
   } else if (todosEmTerminal() && algum(STATUS_ITEM.COMPRADO)) {
     novoStatus = STATUS_REQ.FINALIZADA;
-  } else if (algum(STATUS_ITEM.COMPRADO)) {
+  } else if (algum(STATUS_ITEM.APROVADO) || algum(STATUS_ITEM.COMPRADO)) {
+    // Após seleção do fornecedor, o item fica "Aprovado para compra" e
+    // a requisição deve avançar para a etapa de fechamento (ADM).
     novoStatus = STATUS_REQ.AUTORIZADA;
-  } else if (algum(STATUS_ITEM.APROVADO)) {
-    novoStatus = STATUS_REQ.AG_DECISAO;
   } else if (algum(STATUS_ITEM.COT_FINALIZADA)) {
     novoStatus = STATUS_REQ.COT_RECEBIDAS;
   } else if (algum(STATUS_ITEM.EM_COTACAO)) {
@@ -410,7 +410,7 @@ router.get('/encerradas', async (req, res) => {
       FROM requisicoes r
       LEFT JOIN usuarios u ON u.id = r.solicitante_id
       LEFT JOIN projetos p ON p.id = r.projeto_id
-      WHERE r.status_requisicao IN ('Finalizada', 'Encerrada sem compra')
+      WHERE r.status_requisicao IN ('Finalizada', 'Encerrada sem compra', 'Entregue')
     `;
     const params = [];
 
@@ -842,6 +842,61 @@ router.get('/projeto/:projetoId', async (req, res) => {
   } catch (err) {
     console.error('[requisicoes] Erro ao listar por projeto:', err);
     res.status(500).json({ erro: 'Erro ao listar requisições.' });
+  }
+});
+
+// ─── PATCH /api/requisicoes/:id/concluir ─────────────────────────────────
+router.patch('/:id/concluir', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const usuario = await carregarPerfilUsuario(req.usuario.id);
+    const perfil = inferirPerfil(usuario);
+
+    if (!['ADM', 'Gestor Geral'].includes(perfil)) {
+      return res.status(403).json({ erro: 'Apenas ADM ou Gestor Geral pode concluir uma requisição.' });
+    }
+
+    const requisicao = await getQuery('SELECT * FROM requisicoes WHERE id = ?', [Number(id)]);
+    if (!requisicao) return res.status(404).json({ erro: 'Requisição não encontrada.' });
+
+    if (requisicao.status_requisicao !== STATUS_REQ.FINALIZADA) {
+      return res.status(400).json({ erro: 'Somente requisições com status "Finalizada" podem ser concluídas.' });
+    }
+
+    await runQuery(
+      `UPDATE requisicoes SET status_requisicao = 'Entregue', atualizado_em = CURRENT_TIMESTAMP WHERE id = ?`,
+      [Number(id)]
+    );
+
+    await registrarHistorico(
+      Number(id), null, req.usuario.id,
+      'REQUISICAO_ENTREGUE', STATUS_REQ.FINALIZADA, 'Entregue', null
+    );
+
+    // Notificar solicitante
+    try {
+      if (requisicao.solicitante_id && requisicao.solicitante_id !== req.usuario.id) {
+        await runQuery(
+          `INSERT OR IGNORE INTO notificacoes (usuario_id, tipo, mensagem, referencia_tipo, referencia_id)
+           VALUES (?, ?, ?, ?, ?)`,
+          [
+            requisicao.solicitante_id,
+            'requisicao_entregue',
+            `Pedido ${requisicao.numero_requisicao || '#' + id} foi entregue e concluído.`,
+            'requisicao',
+            Number(id)
+          ]
+        );
+      }
+    } catch (e) {
+      console.warn('Falha ao notificar solicitante sobre entrega:', e?.message || e);
+    }
+
+    const atualizada = await getQuery('SELECT * FROM requisicoes WHERE id = ?', [Number(id)]);
+    res.json({ requisicao: atualizada });
+  } catch (err) {
+    console.error('[requisicoes] Erro ao concluir requisição:', err);
+    res.status(500).json({ erro: 'Erro ao concluir requisição.' });
   }
 });
 

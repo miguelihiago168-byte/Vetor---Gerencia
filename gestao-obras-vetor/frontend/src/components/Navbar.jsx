@@ -143,6 +143,7 @@ function Navbar() {
   const rotaEap = projetoId ? `/projeto/${projetoId}/eap` : '/eap';
   const rotaCurvaS = projetoId ? `/projeto/${projetoId}/curva-s` : '/curva-s';
   const rotaUsuarios = projetoId ? `/projeto/${projetoId}/usuarios` : '/usuarios';
+  const rotaEmail = projetoId ? `/projeto/${projetoId}/email-dashboard` : '/email-dashboard';
   const identificacaoTopo = usuario?.funcao || perfil || '';
 
   const isGestorGeral = perfil === 'Gestor Geral';
@@ -166,7 +167,11 @@ function Navbar() {
       <div className="navbar-container">
         <div className="navbar-content">
           <NavLink to="/projetos" className="navbar-brand">
-            <span>Vetor</span> Gestão de Obras
+            <div className="navbar-brand-left">
+              <img src="/logo_vetor.png" alt="Vetor" className="navbar-logo-img" />
+              <span className="navbar-brand-name">Vetor</span>
+            </div>
+            <span className="navbar-brand-subtitle">Gestão de Obras</span>
           </NavLink>
 
           <div className="navbar-main">
@@ -207,6 +212,9 @@ function Navbar() {
                   Curva S
                 </NavLink>
                 )}
+                <NavLink to={rotaEmail} onClick={(e) => confirmNav(e, rotaEmail)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+                  Email
+                </NavLink>
                 {canViewCompras && (
                 <NavLink to={rotaCompras} onClick={(e) => confirmNav(e, rotaCompras)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
                   Compras
@@ -247,19 +255,23 @@ function Navbar() {
               )}
             </NavLink>
             )}
+            {!temProjetoSelecionado && (
+              <NavLink to={rotaEmail} onClick={(e) => confirmNav(e, rotaEmail)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+                Email
+              </NavLink>
+            )}
             {canViewUsuarios && (
               <NavLink to={rotaUsuarios} onClick={(e) => confirmNav(e, rotaUsuarios)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
                 Usuários
               </NavLink>
             )}
-            </div>
           </div>
-
+          </div>
           <div className="navbar-account">
-            <span className="navbar-user">
+            <NavLink to="/perfil" className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`} style={{ marginRight: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
               <User size={16} />
-              {usuario?.nome}
-            </span>
+              Perfil
+            </NavLink>
             <button onClick={handleLogout} className="btn btn-danger" style={{ padding: '10px 14px' }}>
               <LogOut size={16} />
               Sair

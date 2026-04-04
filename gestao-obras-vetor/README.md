@@ -2,6 +2,8 @@
 
 Sistema completo de gestão de obras com controle de EAP e RDO.
 
+Última atualização de documentação: 01/04/2026.
+
 ## 🚀 Tecnologias
 
 ### Backend
@@ -50,6 +52,33 @@ npm ci
 
 ## ▶️ Executar o Sistema
 
+### Reinício rápido após deploy
+
+Na raiz do projeto, execute:
+
+```powershell
+.\scripts\restart_after_deploy.ps1
+```
+
+Ou, via atalho `.bat`:
+
+```bat
+restart-deploy.bat
+```
+
+### PDF rico em produção (Linux/Ubuntu)
+
+Para que o PDF gerado na web fique igual ao PDF do localhost, o deploy do backend precisa incluir um navegador headless.
+
+- Em Docker: o `backend/Dockerfile` já instala `chromium` e define `PUPPETEER_EXECUTABLE_PATH`.
+- Em PM2/Linux direto: use o `backend/ecosystem.config.js`, que já define `PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser`.
+
+Após atualizar essas dependências no servidor, faça rebuild/restart do backend:
+
+```bash
+docker compose up -d --build backend
+```
+
 ### Opção 1: Executar manualmente (2 terminais)
 
 **Terminal 1 - Backend:**
@@ -89,7 +118,11 @@ cd 'c:\Apps\Vetor - Gerencia\gestao-obras-vetor\backend'
 
 
 # ou em produção/simulação com node direto:
+
 node server.js
+
+# (ou, se já estiver no diretório backend, apenas)
+# node server.js
 ```
 
 - **Passo 2 — Frontend:** depois que o backend estiver com `/api/health` retornando OK, inicie o Vite.
@@ -127,7 +160,7 @@ pm2 status
 ```
 
 - **Boas práticas**:
-   - Use variáveis de ambiente (`.env`) para `JWT_SECRET`, `DATABASE_URL`, `PORT`.
+   - Use variáveis de ambiente (`.env`) para `JWT_SECRET`, `JWT_EXPIRES_IN`, `DATABASE_URL`, `PORT`.
    - Sempre verifique `GET /api/health` antes de iniciar o frontend.
    - Se o backend falhar ao iniciar, cheque o log (`server.log` ou `pm2 logs`) e libere a porta como acima.
 
@@ -229,7 +262,8 @@ gestao-obras-vetor/
 - `GET /api/projetos/:id` - Detalhes
 - `POST /api/projetos` - Criar
 - `PUT /api/projetos/:id` - Atualizar
-- `DELETE /api/projetos/:id` - Desativar
+- `PATCH /api/projetos/:id/arquivar` - Arquivar
+- `PATCH /api/projetos/:id/desarquivar` - Desarquivar
 
 ### EAP
 - `GET /api/eap/projeto/:projetoId` - Listar atividades
@@ -256,6 +290,7 @@ gestao-obras-vetor/
 ### Dashboard
 - `GET /api/dashboard/projeto/:projetoId/avanco` - Avanço físico
 - `GET /api/dashboard/projeto/:projetoId/rdos-stats` - Estatísticas
+- `GET /api/dashboard/projeto/:projetoId/galeria-rdos` - Galeria de fotos agrupada por RDO
 
 ## 🎯 Próximos Passos
 
@@ -286,6 +321,8 @@ Para expandir o sistema, você pode:
 - Para produção, migre para PostgreSQL ou MySQL
 - Os arquivos de upload ficam em `backend/uploads/`
 - Logs são exibidos no console do backend
+- PDF de RDO inclui links clicáveis para anexos e fotos embutidas
+- PDF de RNC inclui fotos anexadas e links para abertura dos anexos
 
 ## 🐛 Troubleshooting
 
@@ -325,3 +362,6 @@ ISC - Uso interno da Vetor
 ---
 
 **Desenvolvido para Vetor - Sistema de Gestão de Obras**
+
+# Teste de Deploy Final
+

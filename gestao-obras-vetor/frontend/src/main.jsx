@@ -1,3 +1,8 @@
+          <Route path="/perfil" element={
+            <PrivateRoute>
+              <MeuPerfil />
+            </PrivateRoute>
+          } />
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
@@ -5,6 +10,7 @@ import { AuthProvider } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { LeaveGuardProvider } from './context/LeaveGuardContext';
 import { DialogProvider } from './context/DialogContext';
+import { UserPreferencesProvider } from './context/UserPreferencesContext';
 import PrivateRoute from './components/PrivateRoute';
 import NotificationContainer from './components/NotificationContainer';
 import Login from './pages/Login';
@@ -42,64 +48,16 @@ import AlmoxDevolucao from './pages/AlmoxDevolucao';
 import AlmoxManutencao from './pages/AlmoxManutencao';
 import AlmoxPerdas from './pages/AlmoxPerdas';
 import AlmoxRelatorios from './pages/AlmoxRelatorios';
+import MeuPerfil from './pages/MeuPerfil';
+import PrimeiroAcesso from './pages/PrimeiroAcesso';
+import EmailDashboard from './pages/EmailDashboard';
 import './index.css';
 import './dark-mode.css';
-
-<<<<<<< HEAD
-const MOBILE_BREAKPOINT = 900;
-
-function MobileDisabledGate({ children }) {
-  const [isMobileViewport, setIsMobileViewport] = React.useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.innerWidth <= MOBILE_BREAKPOINT;
-  });
-
-  React.useEffect(() => {
-    const onResize = () => {
-      setIsMobileViewport(window.innerWidth <= MOBILE_BREAKPOINT);
-    };
-
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
-
-  if (isMobileViewport) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px',
-        textAlign: 'center',
-        background: '#f5f7fa',
-        color: '#1f2937',
-        fontFamily: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif'
-      }}>
-        <div style={{ maxWidth: '480px' }}>
-          <h1 style={{ marginBottom: '12px', fontSize: '1.5rem' }}>Versão mobile desativada</h1>
-          <p style={{ margin: 0, lineHeight: 1.5 }}>
-            Este sistema está temporariamente disponível apenas para telas maiores.
-            Acesse por um computador ou aumente a largura da janela.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  return children;
-}
 
 const PERFIS_RDO = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade', 'Fiscal'];
 const PERFIS_RNC = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade', 'Fiscal'];
 const PERFIS_CURVA_S = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade', 'Fiscal'];
 const PERFIS_EAP = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade'];
-=======
-const PERFIS_RDO = ['Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade', 'Fiscal'];
-const PERFIS_RNC = ['Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade', 'Fiscal'];
-const PERFIS_CURVA_S = ['Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade', 'Fiscal'];
-const PERFIS_EAP = ['Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade'];
->>>>>>> Melhorias-fluxo-de-compras
 const PERFIS_COMPRAS = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'ADM', 'Almoxarife'];
 const PERFIS_GESTORES_ADM = ['Gestor Geral', 'ADM'];
 const PERFIS_ATIVOS = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'ADM', 'Almoxarife'];
@@ -107,15 +65,18 @@ const PERFIS_USUARIOS = ['Gestor Geral', 'ADM'];
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <MobileDisabledGate>
-      <NotificationProvider>
-        <AuthProvider>
+    <NotificationProvider>
+      <AuthProvider>
+        <UserPreferencesProvider>
           <LeaveGuardProvider>
-          <DialogProvider>
-          <BrowserRouter>
-          <Routes>
+            <DialogProvider>
+              <BrowserRouter>
+                <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/criar-conta" element={<CriarConta />} />
+          <Route path="/register/:token" element={<CriarConta />} />
+          <Route path="/criar-conta" element={<Navigate to="/login" replace />} />
+          <Route path="/primeiro-acesso" element={<PrivateRoute allowPendingFirstAccess><PrimeiroAcesso /></PrivateRoute>} />
+          <Route path="/perfil" element={<PrivateRoute><MeuPerfil /></PrivateRoute>} />
           {/* Redirecionar Dashboard para Projetos */}
           <Route path="/dashboard" element={<Navigate to="/projetos" replace />} />
           <Route path="/projetos" element={
@@ -233,6 +194,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
               <Usuarios />
             </PrivateRoute>
           } />
+          <Route path="/projeto/:projetoId/email-dashboard" element={
+            <PrivateRoute>
+              <EmailDashboard />
+            </PrivateRoute>
+          } />
           <Route path="/projeto/:projetoId/rnc" element={
             <PrivateRoute allowedPerfis={PERFIS_RNC}>
               <RNC />
@@ -285,7 +251,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             </PrivateRoute>
           } />
 
-          {/* Rotas globais de compras */}
+
+
           <Route path="/compras/kanban" element={
             <PrivateRoute allowedPerfis={PERFIS_COMPRAS}>
               <RequisicaoKanban />
@@ -316,32 +283,20 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/eap" element={<ProjetoSelector destino="eap" />} />
           <Route path="/curva-s" element={<ProjetoSelector destino="curva-s" />} />
           <Route path="/rnc" element={<ProjetoSelector destino="rnc" />} />
-<<<<<<< HEAD
-           <Route path="/compras" element={<ProjetoSelector destino="pedidos" />} />
-           <Route path="/financeiro" element={<ProjetoSelector destino="financeiro" />} />
-           <Route path="/ativos" element={<ProjetoSelector destino="almoxarifado" />} />
-           <Route path="/" element={<Navigate to="/projetos" replace />} />
-          </Routes>
-          <NotificationContainer />
-        </BrowserRouter>
-        </DialogProvider>
-      </LeaveGuardProvider>
-      </AuthProvider>
-    </NotificationProvider>
-    </MobileDisabledGate>
-=======
           <Route path="/compras" element={<PrivateRoute allowedPerfis={PERFIS_COMPRAS}><ComprasGlobal /></PrivateRoute>} />
           <Route path="/compras/status/:statusSlug" element={<PrivateRoute allowedPerfis={PERFIS_COMPRAS}><ComprasStatusList /></PrivateRoute>} />
           {/* FINANCEIRO DESATIVADO: <Route path="/financeiro" element={<ProjetoSelector destino="financeiro" />} /> */}
           <Route path="/ativos" element={<ProjetoSelector destino="almoxarifado" />} />
+          {/* Email Dashboard */}
+          <Route path="/email-dashboard" element={<PrivateRoute><EmailDashboard /></PrivateRoute>} />
           <Route path="/" element={<Navigate to="/projetos" replace />} />
-        </Routes>
-        <NotificationContainer />
-      </BrowserRouter>
-      </DialogProvider>
-    </LeaveGuardProvider>
-    </AuthProvider>
-  </NotificationProvider>
->>>>>>> Melhorias-fluxo-de-compras
+                </Routes>
+                <NotificationContainer />
+              </BrowserRouter>
+            </DialogProvider>
+          </LeaveGuardProvider>
+        </UserPreferencesProvider>
+      </AuthProvider>
+    </NotificationProvider>
   </React.StrictMode>
 );

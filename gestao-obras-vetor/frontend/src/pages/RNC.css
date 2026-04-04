@@ -99,6 +99,33 @@
   border-color: #cbd5e1;
 }
 
+.rnc-card-aberta {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border-color: #93c5fd;
+  box-shadow: 0 8px 20px rgba(14, 165, 233, 0.10) !important;
+}
+
+.rnc-card-aberta:hover {
+  border-color: #60a5fa;
+  box-shadow: 0 10px 24px rgba(14, 165, 233, 0.18) !important;
+}
+
+.rnc-card-analise {
+  border-left: 3px solid #f59e0b;
+}
+
+.rnc-card-encerrada {
+  border-left: 3px solid #22c55e;
+}
+
+.rnc-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
 /* ── Badge de status ── */
 .rnc-badge {
   display: inline-flex;
@@ -110,23 +137,26 @@
   letter-spacing: 0.01em;
   white-space: nowrap;
   align-self: flex-start;
-  margin-bottom: 10px;
+  margin: 0;
+  flex-shrink: 0;
 }
 
 .rnc-badge-encerrada { background: #dcfce7; color: #15803d; }
 .rnc-badge-analise   { background: #fef9c3; color: #92400e; }
-.rnc-badge-aberta    { background: #f1f5f9; color: #475569; }
+.rnc-badge-aberta    { background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
 
 /* ── Conteúdo do card ── */
 .rnc-title {
   font-size: 14px;
   font-weight: 700;
   color: #0f172a;
-  margin: 0 0 8px;
+  margin: 0;
   letter-spacing: -0.01em;
   overflow-wrap: anywhere;
   word-break: break-word;
   line-height: 1.45;
+  flex: 1;
+  min-width: 0;
 }
 
 .rnc-dates {

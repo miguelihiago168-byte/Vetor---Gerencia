@@ -6,8 +6,6 @@ const { PERFIS, inferirPerfil } = require('../constants/access');
 
 const router = express.Router();
 
-let schemaReadyPromise = null;
-
 const PERFIL_ALMOX = {
   ADMIN: 'ADMINISTRADOR',
   GESTOR: 'GESTOR_OBRA',
@@ -51,22 +49,34 @@ const getPerfilAlmox = (usuario) => {
 const canWrite = (perfil) => [PERFIL_ALMOX.ADMIN, PERFIL_ALMOX.GESTOR, PERFIL_ALMOX.ALMOXARIFE].includes(perfil);
 const canRead = (perfil) => [PERFIL_ALMOX.ADMIN, PERFIL_ALMOX.GESTOR, PERFIL_ALMOX.ALMOXARIFE, PERFIL_ALMOX.VISUALIZADOR].includes(perfil);
 
-const requireReadPermission = (req, res, next) => {
-  const perfil = getPerfilAlmox(req.usuario);
-  if (!canRead(perfil)) {
-    return res.status(403).json({ erro: 'Sem permissão para visualizar dados do almoxarifado.' });
+const requireReadPermission = async (req, res, next) => {
+  try {
+    await ensureSchema();
+    const perfil = getPerfilAlmox(req.usuario);
+    if (!canRead(perfil)) {
+      return res.status(403).json({ erro: 'Sem permissão para visualizar dados do almoxarifado.' });
+    }
+    req.perfilAlmox = perfil;
+    next();
+  } catch (error) {
+    console.error('Erro ao validar acesso de leitura no almoxarifado:', error);
+    res.status(500).json({ erro: 'Falha ao inicializar módulo de almoxarifado.' });
   }
-  req.perfilAlmox = perfil;
-  next();
 };
 
-const requireWritePermission = (req, res, next) => {
-  const perfil = getPerfilAlmox(req.usuario);
-  if (!canWrite(perfil)) {
-    return res.status(403).json({ erro: 'Sem permissão para registrar movimentações no almoxarifado.' });
+const requireWritePermission = async (req, res, next) => {
+  try {
+    await ensureSchema();
+    const perfil = getPerfilAlmox(req.usuario);
+    if (!canWrite(perfil)) {
+      return res.status(403).json({ erro: 'Sem permissão para registrar movimentações no almoxarifado.' });
+    }
+    req.perfilAlmox = perfil;
+    next();
+  } catch (error) {
+    console.error('Erro ao validar acesso de escrita no almoxarifado:', error);
+    res.status(500).json({ erro: 'Falha ao inicializar módulo de almoxarifado.' });
   }
-  req.perfilAlmox = perfil;
-  next();
 };
 
 const ensureProjectAccess = async (usuario, perfil, projetoId) => {
@@ -129,12 +139,10 @@ const registrarMovimentacao = async ({
 };
 
 const ensureSchema = async () => {
-  if (!schemaReadyPromise) {
-    schemaReadyPromise = (async () => {
-      await runQuery('BEGIN TRANSACTION');
-      try {
-        await runQuery(`ALTER TABLE usuarios ADD COLUMN perfil_almoxarifado TEXT`);
-      } catch (_) {}
+  try {
+    try {
+      await runQuery(`ALTER TABLE usuarios ADD COLUMN perfil_almoxarifado TEXT`);
+    } catch (_) {}
 
       await runQuery(`
         CREATE TABLE IF NOT EXISTS almox_ferramentas (
@@ -247,6 +255,22 @@ const ensureSchema = async () => {
         )
       `);
 
+      try {
+        await runQuery(`ALTER TABLE almox_alocacoes ADD COLUMN colaborador_nome TEXT`);
+      } catch (_) {}
+
+      try {
+        await runQuery(`ALTER TABLE almox_alocacoes ADD COLUMN quantidade_devolvida INTEGER NOT NULL DEFAULT 0`);
+      } catch (_) {}
+
+      try {
+        await runQuery(`ALTER TABLE almox_alocacoes ADD COLUMN status TEXT NOT NULL DEFAULT 'ALOCADA'`);
+      } catch (_) {}
+
+      try {
+        await runQuery(`ALTER TABLE almox_alocacoes ADD COLUMN atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP`);
+      } catch (_) {}
+
       await runQuery(`
         CREATE TABLE IF NOT EXISTS almox_manutencoes (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -256,6 +280,11 @@ const ensureSchema = async () => {
           quantidade INTEGER NOT NULL DEFAULT 1,
           status TEXT NOT NULL DEFAULT 'EM_MANUTENCAO',
           justificativa TEXT,
+          local_manutencao TEXT,
+          prazo_estimado_dias INTEGER,
+          endereco_manutencao TEXT,
+          responsavel_retirada TEXT,
+          retirada_necessaria INTEGER NOT NULL DEFAULT 0,
           retorna_estoque INTEGER NOT NULL DEFAULT 1,
           custo REAL,
           data_envio DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -271,6 +300,78 @@ const ensureSchema = async () => {
           FOREIGN KEY (finalizado_por) REFERENCES usuarios(id)
         )
       `);
+
+      try {
+        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN local_manutencao TEXT`);
+      } catch (_) {}
+
+      try {
+        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN prazo_estimado_dias INTEGER`);
+      } catch (_) {}
+
+      try {
+        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN endereco_manutencao TEXT`);
+      } catch (_) {}
+
+      try {
+        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN responsavel_retirada TEXT`);
+      } catch (_) {}
+
+      try {
+        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN retirada_necessaria INTEGER NOT NULL DEFAULT 0`);
+      } catch (_) {}
+
+      try {
+        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN custo REAL`);
+      } catch (_) {}
+
+      try {
+        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN alocacao_id INTEGER`);
+      } catch (_) {}
+
+      try {
+        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN projeto_id INTEGER`);
+      } catch (_) {}
+
+      try {
+        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN quantidade INTEGER NOT NULL DEFAULT 1`);
+      } catch (_) {}
+
+      try {
+        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN status TEXT NOT NULL DEFAULT 'EM_MANUTENCAO'`);
+      } catch (_) {}
+
+      try {
+        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN justificativa TEXT`);
+      } catch (_) {}
+
+      try {
+        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN retorna_estoque INTEGER NOT NULL DEFAULT 1`);
+      } catch (_) {}
+
+      try {
+        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN data_envio DATETIME DEFAULT CURRENT_TIMESTAMP`);
+      } catch (_) {}
+
+      try {
+        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN data_retorno DATETIME`);
+      } catch (_) {}
+
+      try {
+        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN criado_por INTEGER`);
+      } catch (_) {}
+
+      try {
+        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN finalizado_por INTEGER`);
+      } catch (_) {}
+
+      try {
+        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN criado_em DATETIME DEFAULT CURRENT_TIMESTAMP`);
+      } catch (_) {}
+
+      try {
+        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP`);
+      } catch (_) {}
 
       await runQuery(`
         CREATE TABLE IF NOT EXISTS almox_perdas (
@@ -365,24 +466,10 @@ const ensureSchema = async () => {
       await runQuery('CREATE INDEX IF NOT EXISTS idx_almox_perdas_projeto_data ON almox_perdas(projeto_id, criado_em)');
       await runQuery('CREATE INDEX IF NOT EXISTS idx_rdo_ferramentas_rdo ON rdo_ferramentas(rdo_id)');
 
-      await runQuery('COMMIT');
-    })().catch(async (error) => {
-      try { await runQuery('ROLLBACK'); } catch (_) {}
-      throw error;
-    });
-  }
-  return schemaReadyPromise;
-};
-
-router.use(async (req, res, next) => {
-  try {
-    await ensureSchema();
-    next();
   } catch (error) {
-    console.error('Erro ao inicializar schema do almoxarifado:', error);
-    res.status(500).json({ erro: 'Falha ao inicializar módulo de almoxarifado.' });
+    throw error;
   }
-});
+};
 
 router.get('/perfil', [auth, requireReadPermission], async (req, res) => {
   res.json({ perfil: req.perfilAlmox });
@@ -652,31 +739,65 @@ router.get('/alocacoes-abertas', [auth, requireReadPermission], async (req, res)
     const ok = await ensureProjectAccess(req.usuario, req.perfilAlmox, Number(projetoId));
     if (!ok) return res.status(403).json({ erro: 'Sem acesso a esta obra.' });
 
-    const alocacoes = await allQuery(`
-      SELECT
-        a.*,
-        m.id AS manutencao_id,
-        f.nome AS ferramenta_nome,
-        f.codigo AS ferramenta_codigo,
-        f.valor_reposicao,
-        u.nome AS colaborador_usuario_nome,
-        CASE WHEN date(a.previsao_devolucao) < date('now') AND a.status = 'ALOCADA' THEN 1 ELSE 0 END AS atrasada
-      FROM almox_alocacoes a
-      LEFT JOIN almox_manutencoes m
-        ON m.id = (
-          SELECT mm.id
-          FROM almox_manutencoes mm
-          WHERE mm.alocacao_id = a.id
-            AND mm.status = 'EM_MANUTENCAO'
-          ORDER BY mm.id DESC
-          LIMIT 1
-        )
-      INNER JOIN almox_ferramentas f ON f.id = a.ferramenta_id
-      LEFT JOIN usuarios u ON u.id = a.colaborador_id
-      WHERE a.projeto_id = ?
-        AND a.status IN ('ALOCADA', 'EM_MANUTENCAO')
-      ORDER BY a.previsao_devolucao ASC
-    `, [Number(projetoId)]);
+    let alocacoes = [];
+    try {
+      alocacoes = await allQuery(`
+        SELECT
+          a.*,
+          m.id AS manutencao_id,
+          m.local_manutencao,
+          m.prazo_estimado_dias,
+          m.endereco_manutencao,
+          m.responsavel_retirada,
+          m.retirada_necessaria,
+          m.custo AS custo_manutencao,
+          m.justificativa AS manutencao_justificativa,
+          f.nome AS ferramenta_nome,
+          f.codigo AS ferramenta_codigo,
+          f.valor_reposicao,
+          u.nome AS colaborador_usuario_nome,
+          CASE WHEN date(a.previsao_devolucao) < date('now') AND a.status = 'ALOCADA' THEN 1 ELSE 0 END AS atrasada
+        FROM almox_alocacoes a
+        LEFT JOIN almox_manutencoes m
+          ON m.id = (
+            SELECT mm.id
+            FROM almox_manutencoes mm
+            WHERE mm.alocacao_id = a.id
+              AND mm.status = 'EM_MANUTENCAO'
+            ORDER BY mm.id DESC
+            LIMIT 1
+          )
+        INNER JOIN almox_ferramentas f ON f.id = a.ferramenta_id
+        LEFT JOIN usuarios u ON u.id = a.colaborador_id
+        WHERE a.projeto_id = ?
+          AND a.status IN ('ALOCADA', 'EM_MANUTENCAO')
+        ORDER BY a.previsao_devolucao ASC
+      `, [Number(projetoId)]);
+    } catch (queryError) {
+      console.warn('Fallback da listagem de alocações abertas (schema legado):', queryError?.message || queryError);
+      alocacoes = await allQuery(`
+        SELECT
+          a.*,
+          NULL AS manutencao_id,
+          NULL AS local_manutencao,
+          NULL AS prazo_estimado_dias,
+          NULL AS endereco_manutencao,
+          NULL AS responsavel_retirada,
+          0 AS retirada_necessaria,
+          NULL AS custo_manutencao,
+          NULL AS manutencao_justificativa,
+          f.nome AS ferramenta_nome,
+          f.codigo AS ferramenta_codigo,
+          f.valor_reposicao,
+          NULL AS colaborador_usuario_nome,
+          CASE WHEN date(a.previsao_devolucao) < date('now') AND a.status = 'ALOCADA' THEN 1 ELSE 0 END AS atrasada
+        FROM almox_alocacoes a
+        INNER JOIN almox_ferramentas f ON f.id = a.ferramenta_id
+        WHERE a.projeto_id = ?
+          AND a.status IN ('ALOCADA', 'EM_MANUTENCAO')
+        ORDER BY a.previsao_devolucao ASC
+      `, [Number(projetoId)]);
+    }
 
     res.json(alocacoes);
   } catch (error) {
@@ -857,7 +978,12 @@ router.post('/manutencao/enviar', [auth, requireWritePermission], async (req, re
       quantidade,
       justificativa,
       enviar_para_manutencao: enviarParaManutencao,
-      custo
+      custo,
+      local_manutencao: localManutencao,
+      prazo_estimado_dias: prazoEstimadoDias,
+      endereco_manutencao: enderecoManutencao,
+      responsavel_retirada: responsavelRetirada,
+      retirada_necessaria: retiradaNecessaria
     } = req.body;
 
     if (!alocacaoId || !Number.isInteger(Number(quantidade || 1))) {
@@ -876,8 +1002,40 @@ router.post('/manutencao/enviar', [auth, requireWritePermission], async (req, re
       return res.status(400).json({ erro: 'Quantidade inválida para manutenção/baixa.' });
     }
 
+    const prazoManutencaoInt = prazoEstimadoDias != null && String(prazoEstimadoDias).trim() !== ''
+      ? Number(prazoEstimadoDias)
+      : null;
+    if (prazoManutencaoInt != null && (!Number.isInteger(prazoManutencaoInt) || prazoManutencaoInt < 0)) {
+      return res.status(400).json({ erro: 'Prazo estimado deve ser um número inteiro maior ou igual a zero.' });
+    }
+
     const ferramenta = await getQuery('SELECT * FROM almox_ferramentas WHERE id = ?', [Number(alocacao.ferramenta_id)]);
     if (!ferramenta) return res.status(404).json({ erro: 'Ativo não encontrado.' });
+
+    // Em cenários multi-tenant legados, o usuário autenticado pode não existir no DB do tenant.
+    // Para não quebrar por FK (criado_por/usuario_id), usamos um operador válido disponível.
+    const usuarioOperador = await getQuery('SELECT id FROM usuarios WHERE id = ? LIMIT 1', [Number(req.usuario.id)]);
+    const operadorId = usuarioOperador?.id
+      ? Number(req.usuario.id)
+      : Number(alocacao.criado_por || 0);
+    if (!operadorId) {
+      return res.status(400).json({ erro: 'Não foi possível identificar um usuário operador válido para registrar a manutenção.' });
+    }
+
+    if (enviarParaManutencao !== false) {
+      if (!localManutencao || !String(localManutencao).trim()) {
+        return res.status(400).json({ erro: 'Informe onde será feita a manutenção.' });
+      }
+      if (!enderecoManutencao || !String(enderecoManutencao).trim()) {
+        return res.status(400).json({ erro: 'Informe o endereço da manutenção.' });
+      }
+      if (prazoManutencaoInt == null) {
+        return res.status(400).json({ erro: 'Informe o prazo estimado em dias.' });
+      }
+      if (retiradaNecessaria && (!responsavelRetirada || !String(responsavelRetirada).trim())) {
+        return res.status(400).json({ erro: 'Informe quem vai retirar o ativo para manutenção.' });
+      }
+    }
 
     await runQuery('BEGIN TRANSACTION');
     try {
@@ -894,7 +1052,7 @@ router.post('/manutencao/enviar', [auth, requireWritePermission], async (req, re
           SET status = 'BAIXA_DEFINITIVA', data_devolucao = CURRENT_TIMESTAMP,
               atualizado_em = CURRENT_TIMESTAMP, encerrado_por = ?
           WHERE id = ?
-        `, [req.usuario.id, Number(alocacaoId)]);
+        `, [operadorId, Number(alocacaoId)]);
 
         await runQuery(`
           UPDATE almox_ferramentas
@@ -913,7 +1071,7 @@ router.post('/manutencao/enviar', [auth, requireWritePermission], async (req, re
           normalizarValorMonetario(ferramenta.valor_reposicao || 0),
           custoTotal,
           justificativa,
-          req.usuario.id
+          operadorId
         ]);
 
         await registrarMovimentacao({
@@ -926,21 +1084,40 @@ router.post('/manutencao/enviar', [auth, requireWritePermission], async (req, re
           alocacaoId: Number(alocacaoId),
           justificativa,
           custo: custoTotal,
-          usuarioId: req.usuario.id
+          usuarioId: operadorId
         });
       } else {
         const manutResult = await runQuery(`
           INSERT INTO almox_manutencoes
-          (ferramenta_id, alocacao_id, projeto_id, quantidade, justificativa, retorna_estoque, custo, criado_por)
-          VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+          (
+            ferramenta_id,
+            alocacao_id,
+            projeto_id,
+            quantidade,
+            justificativa,
+            local_manutencao,
+            prazo_estimado_dias,
+            endereco_manutencao,
+            responsavel_retirada,
+            retirada_necessaria,
+            retorna_estoque,
+            custo,
+            criado_por
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
         `, [
           Number(alocacao.ferramenta_id),
           Number(alocacaoId),
           Number(alocacao.projeto_id),
           qtd,
           justificativa || null,
+          localManutencao ? String(localManutencao).trim() : null,
+          prazoManutencaoInt,
+          enderecoManutencao ? String(enderecoManutencao).trim() : null,
+          responsavelRetirada ? String(responsavelRetirada).trim() : null,
+          retiradaNecessaria ? 1 : 0,
           custo != null ? normalizarValorMonetario(custo) : null,
-          req.usuario.id
+          operadorId
         ]);
 
         await runQuery(`
@@ -958,7 +1135,7 @@ router.post('/manutencao/enviar', [auth, requireWritePermission], async (req, re
           colaboradorNome: alocacao.colaborador_nome,
           alocacaoId: Number(alocacaoId),
           justificativa,
-          usuarioId: req.usuario.id
+          usuarioId: operadorId
         });
 
         const manutencao = await getQuery('SELECT * FROM almox_manutencoes WHERE id = ?', [manutResult.lastID]);
@@ -1234,7 +1411,7 @@ router.get('/dashboard/projeto/:projetoId', [auth, requireReadPermission], async
     const ok = await ensureProjectAccess(req.usuario, req.perfilAlmox, Number(projetoId));
     if (!ok) return res.status(403).json({ erro: 'Sem acesso a esta obra.' });
 
-    const [ferramentasAlocadas, ferramentasAtrasadas, ferramentasManutencao, perdasResumo, listaAtivos, totalFerramentas] = await Promise.all([
+    const [ferramentasAlocadas, ferramentasAtrasadas, ferramentasManutencao, perdasResumo, manutencaoResumo, listaAtivos, totalFerramentas] = await Promise.all([
       getQuery(`
         SELECT COALESCE(SUM(quantidade - quantidade_devolvida), 0) AS total
         FROM almox_alocacoes
@@ -1254,6 +1431,11 @@ router.get('/dashboard/projeto/:projetoId', [auth, requireReadPermission], async
         SELECT COALESCE(SUM(quantidade), 0) AS total_perdas,
                COALESCE(SUM(custo_total), 0) AS custo_perdas
         FROM almox_perdas
+        WHERE projeto_id = ?
+      `, [Number(projetoId)]),
+      getQuery(`
+        SELECT COALESCE(SUM(custo), 0) AS custo_manutencao
+        FROM almox_manutencoes
         WHERE projeto_id = ?
       `, [Number(projetoId)]),
       allQuery(`
@@ -1292,6 +1474,7 @@ router.get('/dashboard/projeto/:projetoId', [auth, requireReadPermission], async
       ferramentas_manutencao: Number(ferramentasManutencao?.total || 0),
       total_perdas: Number(perdasResumo?.total_perdas || 0),
       custo_perdas: Number(perdasResumo?.custo_perdas || 0),
+      custo_manutencao: Number(manutencaoResumo?.custo_manutencao || 0),
       ativos: listaAtivos
     });
   } catch (error) {

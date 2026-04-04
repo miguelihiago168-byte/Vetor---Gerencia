@@ -13,3 +13,5 @@ ios/
 
 *.log
 .env
+keys/
+

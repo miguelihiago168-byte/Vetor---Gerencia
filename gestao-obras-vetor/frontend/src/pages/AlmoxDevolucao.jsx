@@ -1,15 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import AlmoxarifadoLayout from '../components/AlmoxarifadoLayout';
 import { enviarFerramentaManutencao, getAlocacoesAbertas, registrarDevolucaoFerramenta, registrarPerdaFerramenta } from '../services/api';
+import { useNotification } from '../context/NotificationContext';
 
 function AlmoxDevolucao() {
   const { projetoId } = useParams();
+  const { success, error } = useNotification();
   const [alocacoes, setAlocacoes] = useState([]);
-  const [erro, setErro] = useState('');
-  const [sucesso, setSucesso] = useState('');
   const [showBaixaModal, setShowBaixaModal] = useState(false);
   const [alocacaoSelecionada, setAlocacaoSelecionada] = useState(null);
+  const carregandoRef = useRef(false);
+  const ultimoErroRef = useRef({ msg: '', at: 0 });
   const [baixaForm, setBaixaForm] = useState({
     acao: 'DEVOLVIDA',
     destinoDanificada: 'MANUTENCAO',
@@ -18,11 +20,22 @@ function AlmoxDevolucao() {
   });
 
   const carregar = async () => {
+    if (!projetoId || carregandoRef.current) return;
+    carregandoRef.current = true;
     try {
       const res = await getAlocacoesAbertas(projetoId);
       setAlocacoes(res.data || []);
-    } catch (error) {
-      setErro(error?.response?.data?.erro || 'Erro ao carregar alocações.');
+    } catch (err) {
+      setAlocacoes([]);
+      const mensagem = err?.response?.data?.erro || 'Erro ao carregar alocações.';
+      const now = Date.now();
+      const repetido = ultimoErroRef.current.msg === mensagem && (now - ultimoErroRef.current.at) < 2500;
+      if (!repetido) {
+        error(mensagem, 7000);
+        ultimoErroRef.current = { msg: mensagem, at: now };
+      }
+    } finally {
+      carregandoRef.current = false;
     }
   };
 
@@ -55,12 +68,12 @@ function AlmoxDevolucao() {
     const quantidadeInt = Number(baixaForm.quantidade);
 
     if (!Number.isInteger(quantidadeInt) || quantidadeInt <= 0 || quantidadeInt > pendente) {
-      setErro(`Quantidade inválida. Informe um valor entre 1 e ${pendente}.`);
+      error(`Quantidade inválida. Informe um valor entre 1 e ${pendente}.`, 6000);
       return;
     }
 
     if (baixaForm.acao === 'DANIFICADA' && baixaForm.destinoDanificada === 'BAIXA_DEFINITIVA' && !String(baixaForm.justificativa || '').trim()) {
-      setErro('Justificativa obrigatória para baixa definitiva de ativo danificado.');
+      error('Justificativa obrigatória para baixa definitiva de ativo danificado.', 6000);
       return;
     }
 
@@ -70,14 +83,14 @@ function AlmoxDevolucao() {
           quantidade: quantidadeInt,
           observacao: baixaForm.justificativa || null
         });
-        setSucesso('Baixa registrada como devolvida com sucesso.');
+        success('Baixa registrada como devolvida com sucesso.', 5000);
       } else if (baixaForm.acao === 'PERDIDA') {
         await registrarPerdaFerramenta({
           alocacao_id: alocacaoSelecionada.id,
           quantidade: quantidadeInt,
           justificativa: baixaForm.justificativa || null
         });
-        setSucesso('Baixa registrada como perdida com sucesso.');
+        success('Baixa registrada como perdida com sucesso.', 5000);
       } else {
         await enviarFerramentaManutencao({
           alocacao_id: alocacaoSelecionada.id,
@@ -85,25 +98,23 @@ function AlmoxDevolucao() {
           enviar_para_manutencao: baixaForm.destinoDanificada === 'MANUTENCAO',
           justificativa: baixaForm.justificativa || null
         });
-        setSucesso(
+        success(
           baixaForm.destinoDanificada === 'MANUTENCAO'
             ? 'Ativo danificado enviado para manutenção.'
-            : 'Ativo danificado baixado definitivamente.'
+            : 'Ativo danificado baixado definitivamente.',
+          5000
         );
       }
 
       fecharModalBaixa();
       carregar();
-    } catch (error) {
-      setErro(error?.response?.data?.erro || 'Erro ao registrar baixa do ativo.');
+    } catch (err) {
+      error(err?.response?.data?.erro || 'Erro ao registrar baixa do ativo.', 7000);
     }
   };
 
   return (
     <AlmoxarifadoLayout title="Devolução">
-        {erro && <div className="alert alert-error">{erro}</div>}
-        {sucesso && <div className="alert alert-success">{sucesso}</div>}
-
         <div className="card">
           <h2 className="card-header">Alocações abertas</h2>
           <div style={{ overflowX: 'auto' }}>

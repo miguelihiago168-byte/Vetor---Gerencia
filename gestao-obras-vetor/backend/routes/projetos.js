@@ -12,13 +12,16 @@ const usuarioPodeVerTodosProjetos = (usuario) => {
   return perfil === PERFIS.ADM || perfil === PERFIS.GESTOR_GERAL;
 };
 
-// Listar projetos do usuário
+// Listar projetos do usuário (tenant-aware)
 router.get('/', auth, async (req, res) => {
   try {
     let projetos;
-    
+    const tenantId = req.tenantId;
+    if (!tenantId) {
+      return res.status(400).json({ erro: 'Tenant não definido.' });
+    }
     if (usuarioPodeVerTodosProjetos(req.usuario)) {
-      // ADM e Gestor Geral veem todos os projetos
+      // ADM e Gestor Geral veem todos os projetos do tenant
       projetos = await allQuery(`
         SELECT p.*, u.nome as criador,
           (
@@ -31,11 +34,11 @@ router.get('/', auth, async (req, res) => {
           ) AS total_usuarios
         FROM projetos p
         LEFT JOIN usuarios u ON p.criado_por = u.id
-        WHERE p.ativo = 1
+        WHERE p.ativo = 1 AND p.tenant_id = ?
         ORDER BY p.criado_em DESC
-      `);
+      `, [tenantId]);
     } else {
-      // Demais perfis veem apenas projetos vinculados
+      // Demais perfis veem apenas projetos vinculados ao tenant
       projetos = await allQuery(`
         SELECT p.*, u.nome as criador,
           (
@@ -49,9 +52,9 @@ router.get('/', auth, async (req, res) => {
         FROM projetos p
         INNER JOIN projeto_usuarios pu ON p.id = pu.projeto_id
         LEFT JOIN usuarios u ON p.criado_por = u.id
-        WHERE pu.usuario_id = ? AND p.ativo = 1
+        WHERE pu.usuario_id = ? AND p.ativo = 1 AND p.tenant_id = ?
         ORDER BY p.criado_em DESC
-      `, [req.usuario.id]);
+      `, [req.usuario.id, tenantId]);
     }
     // Para cada projeto, agregar métricas da EAP (previsto/executado/percentual)
     for (const projeto of projetos) {
@@ -103,20 +106,24 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-// Obter detalhes de um projeto
+// Obter detalhes de um projeto (tenant-aware)
 router.get('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
-    
+    const tenantId = req.tenantId;
+    if (!tenantId) {
+      return res.status(400).json({ erro: 'Tenant não definido.' });
+    }
+    // Busca projeto apenas se pertencer ao tenant
     const projeto = await getQuery(`
       SELECT p.*, u.nome as criador
       FROM projetos p
       LEFT JOIN usuarios u ON p.criado_por = u.id
-      WHERE p.id = ? AND p.ativo = 1
-    `, [id]);
+      WHERE p.id = ? AND p.ativo = 1 AND p.tenant_id = ?
+    `, [id, tenantId]);
 
     if (!projeto) {
-      return res.status(404).json({ erro: 'Projeto não encontrado.' });
+      return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
     }
 
     // Verificar se usuário tem acesso
@@ -125,7 +132,6 @@ router.get('/:id', auth, async (req, res) => {
         'SELECT * FROM projeto_usuarios WHERE projeto_id = ? AND usuario_id = ?',
         [id, req.usuario.id]
       );
-      
       if (!acesso) {
         return res.status(403).json({ erro: 'Acesso negado a este projeto.' });
       }
@@ -220,7 +226,7 @@ router.get('/:id', auth, async (req, res) => {
   }
 });
 
-// Criar projeto
+// Criar projeto (tenant-aware)
 router.post('/', [auth, isGestor], [
   body('nome').trim().notEmpty(),
   body('empresa_responsavel').trim().notEmpty(),
@@ -236,11 +242,15 @@ router.post('/', [auth, isGestor], [
     }
 
     const { nome, empresa_responsavel, empresa_executante, prazo_termino, cidade, usuarios } = req.body;
+    const tenantId = req.tenantId;
+    if (!tenantId) {
+      return res.status(400).json({ erro: 'Tenant não definido.' });
+    }
 
     const result = await runQuery(`
-      INSERT INTO projetos (nome, empresa_responsavel, empresa_executante, prazo_termino, cidade, criado_por)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `, [nome, empresa_responsavel, empresa_executante, prazo_termino, cidade, req.usuario.id]);
+      INSERT INTO projetos (nome, empresa_responsavel, empresa_executante, prazo_termino, cidade, criado_por, tenant_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, [nome, empresa_responsavel, empresa_executante, prazo_termino, cidade, req.usuario.id, tenantId]);
 
     const projetoId = result.lastID;
 
@@ -272,14 +282,17 @@ router.put('/:id', [auth, isGestor], async (req, res) => {
   try {
     const { id } = req.params;
     const { nome, empresa_responsavel, empresa_executante, prazo_termino, cidade, usuarios } = req.body;
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(400).json({ erro: 'Tenant não definido.' });
 
-    const projetoAnterior = await getQuery('SELECT * FROM projetos WHERE id = ?', [id]);
+    const projetoAnterior = await getQuery('SELECT * FROM projetos WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    if (!projetoAnterior) return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
 
     await runQuery(`
       UPDATE projetos 
       SET nome = ?, empresa_responsavel = ?, empresa_executante = ?, prazo_termino = ?, cidade = ?, atualizado_em = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `, [nome, empresa_responsavel, empresa_executante, prazo_termino, cidade, id]);
+      WHERE id = ? AND tenant_id = ?
+    `, [nome, empresa_responsavel, empresa_executante, prazo_termino, cidade, id, tenantId]);
 
     // Atualizar usuários do projeto
     if (usuarios) {
@@ -303,23 +316,17 @@ router.put('/:id', [auth, isGestor], async (req, res) => {
   }
 });
 
-// Desativar projeto
+// Exclusão de projeto desabilitada: use arquivamento
 router.delete('/:id', [auth, isGestor], async (req, res) => {
   try {
-    const { id } = req.params;
-
-    await runQuery(
-      'UPDATE projetos SET ativo = 0, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
-      [id]
-    );
-
-    await registrarAuditoria('projetos', id, 'DELETE', null, { ativo: 0 }, req.usuario.id);
-
-    res.json({ mensagem: 'Projeto desativado com sucesso.' });
+    return res.status(405).json({
+      erro: 'Exclusão de projeto não é permitida. Use o arquivamento.',
+      endpoint_recomendado: `PATCH /api/projetos/${req.params.id}/arquivar`
+    });
 
   } catch (error) {
-    console.error('Erro ao desativar projeto:', error);
-    res.status(500).json({ erro: 'Erro ao desativar projeto.' });
+    console.error('Erro ao bloquear exclusão de projeto:', error);
+    res.status(500).json({ erro: 'Erro ao processar solicitação de exclusão.' });
   }
 });
 
@@ -327,16 +334,18 @@ router.delete('/:id', [auth, isGestor], async (req, res) => {
 router.patch('/:id/arquivar', [auth, isGestor], async (req, res) => {
   try {
     const { id } = req.params;
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(400).json({ erro: 'Tenant não definido.' });
 
-    const projetoAnterior = await getQuery('SELECT * FROM projetos WHERE id = ?', [id]);
-    if (!projetoAnterior) return res.status(404).json({ erro: 'Projeto não encontrado.' });
+    const projetoAnterior = await getQuery('SELECT * FROM projetos WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    if (!projetoAnterior) return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
 
     await runQuery(
-      'UPDATE projetos SET arquivado = 1, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
-      [id]
+      'UPDATE projetos SET arquivado = 1, atualizado_em = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?',
+      [id, tenantId]
     );
 
-    const projetoNovo = await getQuery('SELECT * FROM projetos WHERE id = ?', [id]);
+    const projetoNovo = await getQuery('SELECT * FROM projetos WHERE id = ? AND tenant_id = ?', [id, tenantId]);
     await registrarAuditoria('projetos', id, 'ARCHIVE', projetoAnterior, projetoNovo, req.usuario.id);
 
     res.json({ mensagem: 'Projeto arquivado com sucesso.', projeto: projetoNovo });
@@ -351,16 +360,18 @@ router.patch('/:id/arquivar', [auth, isGestor], async (req, res) => {
 router.patch('/:id/desarquivar', [auth, isGestor], async (req, res) => {
   try {
     const { id } = req.params;
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(400).json({ erro: 'Tenant não definido.' });
 
-    const projetoAnterior = await getQuery('SELECT * FROM projetos WHERE id = ?', [id]);
-    if (!projetoAnterior) return res.status(404).json({ erro: 'Projeto não encontrado.' });
+    const projetoAnterior = await getQuery('SELECT * FROM projetos WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    if (!projetoAnterior) return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
 
     await runQuery(
-      'UPDATE projetos SET arquivado = 0, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
-      [id]
+      'UPDATE projetos SET arquivado = 0, atualizado_em = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?',
+      [id, tenantId]
     );
 
-    const projetoNovo = await getQuery('SELECT * FROM projetos WHERE id = ?', [id]);
+    const projetoNovo = await getQuery('SELECT * FROM projetos WHERE id = ? AND tenant_id = ?', [id, tenantId]);
     await registrarAuditoria('projetos', id, 'UNARCHIVE', projetoAnterior, projetoNovo, req.usuario.id);
 
     res.json({ mensagem: 'Projeto desarchivado com sucesso.', projeto: projetoNovo });
@@ -376,27 +387,29 @@ router.post('/:destinoId/copiar-eap', [auth, isGestor], async (req, res) => {
   try {
     const destinoId = Number(req.params.destinoId);
     const origemId = Number(req.body.origem_projeto_id);
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(400).json({ erro: 'Tenant não definido.' });
 
     if (!origemId || !destinoId || origemId === destinoId) {
       return res.status(400).json({ erro: 'IDs de origem e destino inválidos.' });
     }
 
-    const destino = await getQuery('SELECT id FROM projetos WHERE id = ? AND ativo = 1', [destinoId]);
-    if (!destino) return res.status(404).json({ erro: 'Projeto destino não encontrado.' });
+    const destino = await getQuery('SELECT id FROM projetos WHERE id = ? AND ativo = 1 AND tenant_id = ?', [destinoId, tenantId]);
+    if (!destino) return res.status(404).json({ erro: 'Projeto destino não encontrado ou não pertence ao seu tenant.' });
 
-    const origem = await getQuery('SELECT id FROM projetos WHERE id = ? AND ativo = 1', [origemId]);
-    if (!origem) return res.status(404).json({ erro: 'Projeto origem não encontrado.' });
+    const origem = await getQuery('SELECT id FROM projetos WHERE id = ? AND ativo = 1 AND tenant_id = ?', [origemId, tenantId]);
+    if (!origem) return res.status(404).json({ erro: 'Projeto origem não encontrado ou não pertence ao seu tenant.' });
 
     // Verificar se destino já tem atividades
-    const existentes = await getQuery('SELECT COUNT(*) as total FROM atividades_eap WHERE projeto_id = ?', [destinoId]);
+    const existentes = await getQuery('SELECT COUNT(*) as total FROM atividades_eap WHERE projeto_id = ? AND tenant_id = ?', [destinoId, tenantId]);
     if (existentes.total > 0) {
       return res.status(409).json({ erro: 'O projeto destino já possui EAP configurada.' });
     }
 
     // Buscar todas as atividades da origem ordenadas por hierarquia (pai antes de filho)
     const atividades = await allQuery(
-      'SELECT * FROM atividades_eap WHERE projeto_id = ? ORDER BY CASE WHEN pai_id IS NULL THEN 0 ELSE 1 END ASC, ordem ASC, id ASC',
-      [origemId]
+      'SELECT * FROM atividades_eap WHERE projeto_id = ? AND tenant_id = ? ORDER BY CASE WHEN pai_id IS NULL THEN 0 ELSE 1 END ASC, ordem ASC, id ASC',
+      [origemId, tenantId]
     );
 
     if (atividades.length === 0) {
@@ -410,10 +423,11 @@ router.post('/:destinoId/copiar-eap', [auth, isGestor], async (req, res) => {
       const novoPaiId = at.pai_id ? (mapaIds[at.pai_id] ?? null) : null;
       const result = await runQuery(`
         INSERT INTO atividades_eap
-          (projeto_id, id_atividade, codigo_eap, nome, descricao, percentual_previsto, peso_percentual_projeto,
+          (tenant_id, projeto_id, id_atividade, codigo_eap, nome, descricao, percentual_previsto, peso_percentual_projeto,
            data_inicio_planejada, data_fim_planejada, status, pai_id, ordem, unidade_medida, quantidade_total, criado_por)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Não iniciada', ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Não iniciada', ?, ?, ?, ?, ?)
       `, [
+        tenantId,
         destinoId,
         at.id_atividade,
         at.codigo_eap,

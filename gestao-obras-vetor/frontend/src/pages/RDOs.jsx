@@ -6,7 +6,9 @@ import { useAuth } from '../context/AuthContext';
 import { FileText, Plus, Eye, MoreHorizontal, CheckCircle, XCircle, RotateCcw } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import { useDialog } from '../context/DialogContext';
+import { useUserPreferences } from '../context/UserPreferencesContext';
 import './RDOs.css';
+import Modal from '../components/Modal';
 
 function RDOs() {
   const { projetoId } = useParams();
@@ -16,13 +18,15 @@ function RDOs() {
   // Controle de permissões para ações nos RDOs
   const canAprovarRdo = perfil === 'Gestor Geral' || perfil === 'Gestor da Obra' || perfil === 'Gestor Local';
   const canReprovarRdo = canAprovarRdo || perfil === 'Fiscal';
-  const { info, actionNotify } = useNotification();
+  const { info, success, error: notifyError } = useNotification();
   const { alert } = useDialog();
   const [sucesso, setSucesso] = useState('');
   const [rdos, setRdos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState('');
   const [openDropdown, setOpenDropdown] = useState(null);
+  const [showCopyModal, setShowCopyModal] = useState(false);
+  const [copyChecked, setCopyChecked] = useState(false);
 
   // Fecha dropdown ao clicar fora
   useEffect(() => {
@@ -52,7 +56,7 @@ function RDOs() {
 
   const statusLabel = (s) => {
     if (s === 'Em análise') return 'Em aprovação';
-    if (s === 'Em preenchimento') return 'Aguardando aprovação';
+    if (s === 'Em preenchimento') return 'Em preenchimento';
     return s || 'N/A';
   };
 
@@ -90,8 +94,11 @@ function RDOs() {
       await updateStatusRDO(rdoId, 'Aprovado');
       setRdos(prev => prev.map(r => r.id === rdoId ? { ...r, status: 'Aprovado' } : r));
       setSucesso('RDO aprovado com sucesso.');
-    } catch (error) {
-      await alert({ title: 'Erro', message: 'Falha ao aprovar RDO: ' + (error.response?.data?.erro || error.message) });
+      success('RDO aprovado com sucesso.', 4000);
+    } catch (err) {
+      const msg = 'Falha ao aprovar RDO: ' + (err.response?.data?.erro || err.message);
+      notifyError(msg, 6000);
+      await alert({ title: 'Erro', message: msg });
     }
   };
 
@@ -104,8 +111,11 @@ function RDOs() {
       await updateStatusRDO(rdoId, 'Reprovado');
       setRdos(prev => prev.map(r => r.id === rdoId ? { ...r, status: 'Reprovado' } : r));
       setSucesso('RDO reprovado.');
-    } catch (error) {
-      await alert({ title: 'Erro', message: 'Falha ao reprovar RDO: ' + (error.response?.data?.erro || error.message) });
+      success('RDO reprovado.', 4000);
+    } catch (err) {
+      const msg = 'Falha ao reprovar RDO: ' + (err.response?.data?.erro || err.message);
+      notifyError(msg, 6000);
+      await alert({ title: 'Erro', message: msg });
     }
   };
 
@@ -121,9 +131,12 @@ function RDOs() {
       await updateStatusRDO(rdoId, 'Em preenchimento');
       setRdos(prev => prev.map(r => r.id === rdoId ? { ...r, status: 'Em preenchimento' } : r));
       setSucesso('RDO revertido para edição.');
+      success('RDO revertido para edição.', 4500);
       navigate(`/projeto/${projetoId}/rdos/${rdoId}/editar`);
-    } catch (error) {
-      await alert({ title: 'Erro', message: 'Falha ao voltar para edição: ' + (error.response?.data?.erro || error.message) });
+    } catch (err) {
+      const msg = 'Falha ao voltar para edição: ' + (err.response?.data?.erro || err.message);
+      notifyError(msg, 6000);
+      await alert({ title: 'Erro', message: msg });
     }
   };
 
@@ -145,6 +158,24 @@ function RDOs() {
     }
   };
 
+  const { prefs, setPreference } = useUserPreferences();
+
+  // Handler para botão Novo RDO
+  const handleNovoRDO = () => {
+    if (prefs?.alwaysCopyRDO) {
+      navigate(`/projeto/${projetoId}/rdos/novo`, { state: { copyLast: true } });
+    } else {
+      setCopyChecked(Boolean(prefs?.alwaysCopyRDO));
+      setShowCopyModal(true);
+    }
+  };
+
+  const handleCopyModalConfirm = (copy) => {
+    setShowCopyModal(false);
+    setPreference('alwaysCopyRDO', Boolean(copy && copyChecked));
+    navigate(`/projeto/${projetoId}/rdos/novo`, { state: { copyLast: copy } });
+  };
+
   if (loading) {
     return (
       <>
@@ -158,8 +189,8 @@ function RDOs() {
 
   const grupos = Object.entries(
     rdos.reduce((acc, r) => {
-      const dt = r.criado_em ? new Date(r.criado_em) : null;
-      const key = dt && !isNaN(dt.getTime()) ? dt.toISOString().slice(0, 10) : 'sem-data';
+      const m = r.data_relatorio ? String(r.data_relatorio).match(/^(\d{4}-\d{2}-\d{2})/) : null;
+      const key = m ? m[1] : 'sem-data';
       if (!acc[key]) acc[key] = [];
       acc[key].push(r);
       return acc;
@@ -181,10 +212,38 @@ function RDOs() {
               {rdos.length} {rdos.length === 1 ? 'relatório' : 'relatórios'} neste projeto
             </p>
           </div>
-          <button className="btn btn-primary" onClick={() => navigate(`/projeto/${projetoId}/rdos/novo`)}>
-            <Plus size={15} />
-            Novo RDO
-          </button>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+            <button className="btn btn-primary" onClick={handleNovoRDO}>
+              <Plus size={15} />
+              Novo RDO
+            </button>
+            {prefs?.alwaysCopyRDO && (
+              <button
+                className="btn btn-secondary"
+                style={{ padding: '8px 12px', fontSize: 12 }}
+                onClick={() => setPreference('alwaysCopyRDO', false)}
+              >
+                Desativar cópia automática
+              </button>
+            )}
+          </div>
+
+          <Modal open={showCopyModal} title="Novo RDO" onClose={() => {
+            setShowCopyModal(false);
+            setCopyChecked(Boolean(prefs?.alwaysCopyRDO));
+          }}>
+            <div style={{ marginBottom: 18 }}>
+              Deseja copiar as informações do último relatório?
+            </div>
+            <div style={{ display: 'flex', gap: 12, marginBottom: 18 }}>
+              <button className="btn btn-primary" onClick={() => handleCopyModalConfirm(true)}>Sim</button>
+              <button className="btn btn-secondary" onClick={() => handleCopyModalConfirm(false)}>Não</button>
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+              <input type="checkbox" checked={copyChecked} onChange={e => setCopyChecked(e.target.checked)} />
+              Sempre copiar automaticamente
+            </label>
+          </Modal>
         </div>
 
         {sucesso && <div className="alert alert-success" style={{ marginBottom: '20px' }}>{sucesso}</div>}
@@ -219,16 +278,13 @@ function RDOs() {
                         className="rdo-card"
                         onClick={() => {
                           if (isAprovado) {
-                            if (isGestor) {
-                              actionNotify('RDO aprovado. Deseja voltar para edição?', 'Voltar para edição', () => handleVoltarEdicao(rdo.id), 'warning', 7000);
-                            } else {
-                              info('RDO aprovado. Solicite ao gestor para voltar à edição.', 6000);
-                            }
+                            if (!isGestor) info('RDO aprovado. Somente visualização disponível.', 4500);
+                            navigate(`/projeto/${projetoId}/rdos/${rdo.id}`);
                             return;
                           }
                           navigate(`/projeto/${projetoId}/rdos/${rdo.id}/editar`);
                         }}
-                        title={isAprovado ? 'RDO aprovado' : 'Editar RDO'}
+                        title={isAprovado ? 'Ver detalhes do RDO' : 'Editar RDO'}
                       >
                         {/* Informações */}
                         <div className="rdo-card-body">

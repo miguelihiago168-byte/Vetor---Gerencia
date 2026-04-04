@@ -5,7 +5,6 @@ import { getRNCs, updateStatusRNC, getAnexosRNC, uploadAnexoRNC, submitCorrecaoR
 import { useAuth } from '../context/AuthContext';
 import { AlertTriangle, ArrowLeft } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
-import { useDialog } from '../context/DialogContext';
 import RNCTimeline from '../components/RNCTimeline';
 import './RNCDetalhes.css';
 
@@ -23,8 +22,8 @@ function RNCDetalhes() {
   const [mostrarResposta, setMostrarResposta] = useState(false);
   const [acaoCorretiva, setAcaoCorretiva] = useState('');
   const [enviando, setEnviando] = useState(false);
-  const { alert } = useDialog();
   const { success, error } = useNotification();
+  const isImage = (anexo) => String(anexo?.tipo || '').startsWith('image/');
 
   useEffect(() => {
     carregarRNC();
@@ -88,8 +87,8 @@ function RNCDetalhes() {
     try {
       await updateStatusRNC(rncId, 'Encerrada');
       setRnc(prev => ({ ...prev, status: 'Encerrada' }));
-    } catch (error) {
-      await alert({ title: 'Erro', message: 'Falha ao aprovar RNC: ' + (error.response?.data?.erro || error.message) });
+    } catch (err) {
+      error('Falha ao aprovar RNC: ' + (err.response?.data?.erro || err.message), 7000);
     }
   };
 
@@ -97,8 +96,8 @@ function RNCDetalhes() {
     try {
       await updateStatusRNC(rncId, 'Reprovada');
       setRnc(prev => ({ ...prev, status: 'Reprovada' }));
-    } catch (error) {
-      await alert({ title: 'Erro', message: 'Falha ao reprovar RNC: ' + (error.response?.data?.erro || error.message) });
+    } catch (err) {
+      error('Falha ao reprovar RNC: ' + (err.response?.data?.erro || err.message), 7000);
     }
   };
 
@@ -116,8 +115,8 @@ function RNCDetalhes() {
       setRnc(prev => ({ ...prev, status: 'Em análise' }));
       setMostrarResposta(false);
       success('Resposta enviada para aprovação.', 5000);
-    } catch (error) {
-      error('Falha ao enviar resposta: ' + (error.response?.data?.erro || error.message), 7000);
+    } catch (err) {
+      error('Falha ao enviar resposta: ' + (err.response?.data?.erro || err.message), 7000);
     } finally {
       setEnviando(false);
     }
@@ -139,7 +138,7 @@ function RNCDetalhes() {
       <>
         <Navbar />
         <div className="container rnc-det-container">
-          <div className="alert alert-error">{erro || 'RNC não encontrada'}</div>
+          <div className="card" style={{ marginBottom: 12, color: 'var(--text-secondary)' }}>{erro || 'RNC não encontrada'}</div>
           <button className="btn btn-secondary" onClick={() => navigate(`/projeto/${projetoId}/rnc`)}>
             <ArrowLeft size={16} /> Voltar
           </button>
@@ -230,12 +229,45 @@ function RNCDetalhes() {
           <div className="rnc-det-section">
             <h3>Anexos (Fotos)</h3>
             <div className="rnc-det-attachments">
-              {anexos.map((anexo) => (
-                <div key={anexo.id} className="rnc-det-attach-item">
-                  <AlertTriangle size={16} />
-                  <div className="attach-name">{anexo.nome_arquivo}</div>
-                </div>
-              ))}
+              {anexos.map((anexo) => {
+                const href = `/uploads/${anexo.caminho_arquivo}`;
+                if (isImage(anexo)) {
+                  return (
+                    <a
+                      key={anexo.id}
+                      href={href}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rnc-det-attach-item"
+                      style={{ textDecoration: 'none', color: 'inherit', alignItems: 'flex-start' }}
+                    >
+                      <img
+                        src={href}
+                        alt={anexo.nome_arquivo}
+                        style={{ width: '72px', height: '72px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                      />
+                      <div>
+                        <div className="attach-name">{anexo.nome_arquivo}</div>
+                        <div className="muted" style={{ fontSize: '11px' }}>Abrir imagem</div>
+                      </div>
+                    </a>
+                  );
+                }
+
+                return (
+                  <a
+                    key={anexo.id}
+                    href={href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rnc-det-attach-item"
+                    style={{ textDecoration: 'none', color: 'inherit' }}
+                  >
+                    <AlertTriangle size={16} />
+                    <div className="attach-name">{anexo.nome_arquivo}</div>
+                  </a>
+                );
+              })}
               {anexos.length === 0 && (
                 <div className="muted">Nenhum anexo.</div>
               )}
@@ -262,7 +294,7 @@ function RNCDetalhes() {
                       setFotoFile(null);
                       setFotoDesc('');
                     } catch (err) {
-                      await alert({ title: 'Erro', message: 'Falha ao enviar foto: ' + (err.response?.data?.erro || err.message) });
+                      error('Falha ao enviar foto: ' + (err.response?.data?.erro || err.message), 7000);
                     }
                   }}>Enviar foto</button>
                 </div>

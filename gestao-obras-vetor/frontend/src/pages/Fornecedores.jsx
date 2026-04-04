@@ -1,12 +1,16 @@
 ﻿import React, { useEffect, useState, useCallback } from 'react';
 import ComprasLayout from '../components/ComprasLayout';
 import { useAuth } from '../context/AuthContext';
+import { useDialog } from '../context/DialogContext';
 import { listarFornecedores, criarFornecedor, editarFornecedor, toggleFornecedor } from '../services/api';
+import { useNotification } from '../context/NotificationContext';
 
 const VAZIO = { razao_social: '', nome_fantasia: '', cnpj: '', telefone: '', email: '', observacao: '' };
 
 export default function Fornecedores() {
   const { usuario } = useAuth();
+  const { confirm } = useDialog();
+  const { success, error } = useNotification();
   const podeGerenciar = ['ADM', 'Gestor Geral'].includes(usuario?.perfil || '');
 
   const [fornecedores, setFornecedores] = useState([]);
@@ -17,7 +21,6 @@ export default function Fornecedores() {
   const [form, setForm] = useState(VAZIO);
   const [editandoId, setEditandoId] = useState(null);
   const [salvando, setSalvando] = useState(false);
-  const [erro, setErro] = useState('');
 
   const carregar = useCallback(async () => {
     setLoading(true);
@@ -25,15 +28,15 @@ export default function Fornecedores() {
       const res = await listarFornecedores({ ativo: mostrarInativos ? 'todos' : '1', q: busca || undefined });
       setFornecedores(res.data);
     } catch {
-      setErro('Erro ao carregar fornecedores.');
+      error('Erro ao carregar fornecedores.', 7000);
     } finally {
       setLoading(false);
     }
-  }, [busca, mostrarInativos]);
+  }, [busca, mostrarInativos, error]);
 
   useEffect(() => { carregar(); }, [carregar]);
 
-  const abrirCriar = () => { setForm(VAZIO); setEditandoId(null); setModal('criar'); setErro(''); };
+  const abrirCriar = () => { setForm(VAZIO); setEditandoId(null); setModal('criar'); };
   const abrirEditar = (f) => {
     setForm({
       razao_social: f.razao_social || '',
@@ -45,15 +48,13 @@ export default function Fornecedores() {
     });
     setEditandoId(f.id);
     setModal('editar');
-    setErro('');
   };
-  const fecharModal = () => { setModal(null); setErro(''); };
+  const fecharModal = () => { setModal(null); };
 
   const salvar = async (e) => {
     e.preventDefault();
-    if (!form.razao_social.trim()) { setErro('Razão social obrigatória.'); return; }
+    if (!form.razao_social.trim()) { error('Razão social obrigatória.', 6000); return; }
     setSalvando(true);
-    setErro('');
     try {
       if (modal === 'criar') {
         await criarFornecedor(form);
@@ -61,21 +62,29 @@ export default function Fornecedores() {
         await editarFornecedor(editandoId, form);
       }
       fecharModal();
+      success(modal === 'criar' ? 'Fornecedor criado com sucesso.' : 'Fornecedor atualizado com sucesso.', 5000);
       carregar();
     } catch (err) {
-      setErro(err.response?.data?.erro || 'Erro ao salvar.');
+      error(err.response?.data?.erro || 'Erro ao salvar.', 7000);
     } finally {
       setSalvando(false);
     }
   };
 
   const toggleAtivo = async (f) => {
-    if (!window.confirm(`Deseja ${f.ativo ? 'inativar' : 'reativar'} "${f.razao_social}"?`)) return;
+    const confirmado = await confirm({
+      title: 'Confirmação',
+      message: `Deseja ${f.ativo ? 'inativar' : 'reativar'} "${f.razao_social}"?`,
+      confirmText: 'Sim',
+      cancelText: 'Não'
+    });
+    if (!confirmado) return;
     try {
       await toggleFornecedor(f.id);
+      success(f.ativo ? 'Fornecedor inativado.' : 'Fornecedor reativado.', 5000);
       carregar();
     } catch (err) {
-      alert(err.response?.data?.erro || 'Erro ao alterar status.');
+      error(err.response?.data?.erro || 'Erro ao alterar status.', 7000);
     }
   };
 
@@ -170,7 +179,6 @@ export default function Fornecedores() {
               </div>
               <div style={{ marginBottom: '1rem' }}><label className="form-label">E-mail</label><input className="form-input" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
               <div style={{ marginBottom: '1rem' }}><label className="form-label">Observação</label><textarea className="form-input" rows={3} style={{ resize: 'vertical' }} value={form.observacao} onChange={(e) => setForm({ ...form, observacao: e.target.value })} /></div>
-              {erro && <p className="alert alert-error" style={{ marginBottom: '1rem' }}>{erro}</p>}
               <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
                 <button type="button" className="btn btn-secondary" onClick={fecharModal}>Cancelar</button>
                 <button type="submit" className="btn btn-primary" disabled={salvando}>{salvando ? 'Salvando...' : 'Salvar'}</button>

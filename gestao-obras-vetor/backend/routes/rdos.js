@@ -4,18 +4,143 @@ const { allQuery, runQuery, getQuery } = require('../config/database');
 const { auth, isGestor } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
 const { PERFIS, inferirPerfil } = require('../constants/access');
+const backendPackage = require('../package.json');
 
 const router = express.Router();
+
+const getPublicBaseUrl = (req) => {
+  const envBase = process.env.PUBLIC_FILE_BASE_URL || process.env.APP_BASE_URL;
+  if (envBase) return String(envBase).replace(/\/$/, '');
+  return `${req.protocol}://${req.get('host')}`;
+};
+
+const getPdfVersionLabel = () => {
+  const appVersion = process.env.APP_VERSION || process.env.RELEASE_VERSION || backendPackage.version || 'desconhecida';
+  const appEnv = process.env.APP_ENV || process.env.NODE_ENV || 'local';
+  return `Versão ${appVersion} (${appEnv})`;
+};
 
 // Auto-migration: adicionar coluna atividades_avulsas se não existir
 runQuery("ALTER TABLE rdos ADD COLUMN atividades_avulsas TEXT").catch(e => {
   if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] atividades_avulsas:', e.message);
 });
+runQuery('ALTER TABLE rdo_fotos ADD COLUMN ordem INTEGER DEFAULT 0').catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_fotos.ordem:', e.message);
+});
+runQuery('ALTER TABLE rdo_fotos ADD COLUMN atividade_avulsa_descricao TEXT').catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_fotos.atividade_avulsa_descricao:', e.message);
+});
+runQuery('ALTER TABLE rdo_materiais ADD COLUMN numero_nf TEXT').catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_materiais.numero_nf:', e.message);
+});
 
-// Gerar número sequencial e único no formato RDO-XXX, baseado em TODOS os RDOs existentes
-const gerarNumeroRDO = async () => {
+const ensureRdoOptionalColumns = async () => {
+  try { await runQuery('ALTER TABLE rdo_fotos ADD COLUMN ordem INTEGER DEFAULT 0'); } catch (_) {}
+  try { await runQuery('ALTER TABLE rdo_fotos ADD COLUMN atividade_avulsa_descricao TEXT'); } catch (_) {}
+  try { await runQuery('ALTER TABLE rdo_materiais ADD COLUMN numero_nf TEXT'); } catch (_) {}
+  try {
+    await runQuery(`
+      CREATE TABLE IF NOT EXISTS rdo_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rdo_id INTEGER NOT NULL,
+        usuario_id INTEGER,
+        acao TEXT NOT NULL CHECK (acao IN ('VIEW', 'UPDATE')),
+        criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE,
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL
+      )
+    `);
+  } catch (_) {}
+  try {
+    await runQuery(`
+      CREATE TABLE IF NOT EXISTS rdo_comentarios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rdo_id INTEGER NOT NULL,
+        usuario_id INTEGER NOT NULL,
+        comentario TEXT NOT NULL,
+        criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE,
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+      )
+    `);
+  } catch (_) {}
+  try {
+    await runQuery(`
+      CREATE TABLE IF NOT EXISTS rdo_materiais (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rdo_id INTEGER NOT NULL,
+        nome_material TEXT NOT NULL,
+        quantidade REAL,
+        unidade TEXT,
+        criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE
+      )
+    `);
+  } catch (_) {}
+  try {
+    await runQuery(`
+      CREATE TABLE IF NOT EXISTS rdo_ocorrencias (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rdo_id INTEGER NOT NULL,
+        titulo TEXT,
+        descricao TEXT NOT NULL,
+        gravidade TEXT,
+        criado_por INTEGER,
+        criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE,
+        FOREIGN KEY (criado_por) REFERENCES usuarios(id)
+      )
+    `);
+  } catch (_) {}
+  try {
+    await runQuery(`
+      CREATE TABLE IF NOT EXISTS rdo_assinaturas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rdo_id INTEGER NOT NULL,
+        usuario_id INTEGER NOT NULL,
+        tipo TEXT NOT NULL,
+        arquivo_assinatura TEXT,
+        assinado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE,
+        FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+      )
+    `);
+  } catch (_) {}
+  try {
+    await runQuery(`
+      CREATE TABLE IF NOT EXISTS rdo_clima (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        rdo_id INTEGER NOT NULL,
+        periodo TEXT NOT NULL,
+        condicao_tempo TEXT,
+        condicao_trabalho TEXT,
+        pluviometria_mm REAL DEFAULT 0,
+        criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE
+      )
+    `);
+  } catch (_) {}
+  try { await runQuery('CREATE INDEX IF NOT EXISTS idx_rdo_logs_rdo_id ON rdo_logs(rdo_id)'); } catch (_) {}
+  try { await runQuery('CREATE INDEX IF NOT EXISTS idx_rdo_logs_usuario_id ON rdo_logs(usuario_id)'); } catch (_) {}
+  try { await runQuery('CREATE INDEX IF NOT EXISTS idx_rdo_logs_acao ON rdo_logs(acao)'); } catch (_) {}
+};
+
+const getRdoFotosOrderBy = async () => {
+  try {
+    const cols = await allQuery('PRAGMA table_info(rdo_fotos)');
+    const hasOrdem = Array.isArray(cols) && cols.some((c) => String(c?.name) === 'ordem');
+    if (hasOrdem) return 'COALESCE(rf.ordem, 0) ASC, rf.criado_em ASC';
+  } catch (_) {}
+  return 'rf.criado_em ASC';
+};
+
+// Gerar número sequencial e único no formato RDO-XXX por tenant/projeto
+const gerarNumeroRDO = async (tenantId, projetoId) => {
   // 1) Buscar todos os IDs já existentes
-  const existentes = await allQuery('SELECT numero_rdo FROM rdos WHERE numero_rdo IS NOT NULL', []);
+  const existentes = await allQuery(
+    'SELECT numero_rdo FROM rdos WHERE numero_rdo IS NOT NULL AND tenant_id = ? AND projeto_id = ?',
+    [tenantId, projetoId]
+  );
 
   // 2) Extrair parte numérica, converter para inteiro e encontrar o maior
   let maior = 0;
@@ -34,7 +159,10 @@ const gerarNumeroRDO = async () => {
   // 4) Garantir unicidade: validar se já existe; se existir, incrementar novamente
   while (true) {
     const candidate = `RDO-${String(nextNum).padStart(3, '0')}`;
-    const exists = await getQuery('SELECT id FROM rdos WHERE numero_rdo = ?', [candidate]);
+    const exists = await getQuery(
+      'SELECT id FROM rdos WHERE numero_rdo = ? AND tenant_id = ? AND projeto_id = ?',
+      [candidate, tenantId, projetoId]
+    );
     if (!exists) return candidate;
     nextNum++;
   }
@@ -189,90 +317,189 @@ router.get('/projeto/:projetoId', auth, async (req, res) => {
 // Obter detalhes de um RDO
 router.get('/:id', auth, async (req, res) => {
   try {
+    await ensureRdoOptionalColumns();
     const { id } = req.params;
 
-    const rdo = await getQuery(`
-      SELECT r.*, u.nome as criado_por_nome, g.nome as aprovado_por_nome,
-             p.nome as projeto_nome, p.empresa_responsavel, p.empresa_executante, p.cidade
-      FROM rdos r
-      LEFT JOIN usuarios u ON r.criado_por = u.id
-      LEFT JOIN usuarios g ON r.aprovado_por = g.id
-      LEFT JOIN projetos p ON r.projeto_id = p.id
-      WHERE r.id = ?
-    `, [id]);
+    let rdo;
+    try {
+      rdo = await getQuery(`
+        SELECT r.*, u.nome as criado_por_nome, g.nome as aprovado_por_nome,
+               p.nome as projeto_nome, p.empresa_responsavel, p.empresa_executante, p.cidade
+        FROM rdos r
+        LEFT JOIN usuarios u ON r.criado_por = u.id
+        LEFT JOIN usuarios g ON r.aprovado_por = g.id
+        LEFT JOIN projetos p ON r.projeto_id = p.id
+        WHERE r.id = ?
+      `, [id]);
+    } catch (_) {
+      // Fallback para schema legado de projetos (colunas opcionais podem não existir)
+      rdo = await getQuery(`
+        SELECT r.*, u.nome as criado_por_nome, g.nome as aprovado_por_nome,
+               p.nome as projeto_nome
+        FROM rdos r
+        LEFT JOIN usuarios u ON r.criado_por = u.id
+        LEFT JOIN usuarios g ON r.aprovado_por = g.id
+        LEFT JOIN projetos p ON r.projeto_id = p.id
+        WHERE r.id = ?
+      `, [id]);
+      if (rdo) {
+        rdo.empresa_responsavel = rdo.empresa_responsavel || null;
+        rdo.empresa_executante = rdo.empresa_executante || null;
+        rdo.cidade = rdo.cidade || null;
+      }
+    }
 
     if (!rdo) {
       return res.status(404).json({ erro: 'RDO não encontrado.' });
     }
 
     // Buscar atividades executadas
-    const atividades = await allQuery(`
-      SELECT ra.*, ae.codigo_eap, COALESCE(ae.nome, ae.descricao) AS descricao
-      FROM rdo_atividades ra
-      INNER JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
-      WHERE ra.rdo_id = ?
-    `, [id]);
+    let atividades = [];
+    try {
+      atividades = await allQuery(`
+        SELECT ra.*, ae.codigo_eap, COALESCE(ae.nome, ae.descricao) AS descricao
+        FROM rdo_atividades ra
+        INNER JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
+        WHERE ra.rdo_id = ?
+      `, [id]);
+    } catch (_) {
+      try {
+        atividades = await allQuery(`
+          SELECT ra.*, ae.codigo_eap, ae.descricao AS descricao
+          FROM rdo_atividades ra
+          LEFT JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
+          WHERE ra.rdo_id = ?
+        `, [id]);
+      } catch (_) {
+        atividades = [];
+      }
+    }
 
     // Buscar anexos
-    const anexos = await allQuery(`
-      SELECT * FROM anexos WHERE rdo_id = ?
-    `, [id]);
+    let anexos = [];
+    try {
+      anexos = await allQuery(`
+        SELECT *
+        FROM anexos
+        WHERE rdo_id = ?
+          AND (
+            LOWER(COALESCE(tipo, '')) LIKE '%pdf%'
+            OR LOWER(COALESCE(nome_arquivo, '')) LIKE '%.pdf'
+          )
+        ORDER BY criado_em DESC
+      `, [id]);
+    } catch (_) {
+      anexos = [];
+    }
 
     // Buscar mão de obra vinculada ao RDO
-    const maoObra = await allQuery(`
-      SELECT rmo.*, mo.nome as nome_colaborador, mo.funcao as funcao_colaborador
-      FROM rdo_mao_obra rmo
-      LEFT JOIN mao_obra mo ON rmo.mao_obra_id = mo.id
-      WHERE rmo.rdo_id = ?
-      ORDER BY rmo.id
-    `, [id]);
+    let maoObra = [];
+    try {
+      maoObra = await allQuery(`
+        SELECT rmo.*, mo.nome as nome_colaborador, mo.funcao as funcao_colaborador
+        FROM rdo_mao_obra rmo
+        LEFT JOIN mao_obra mo ON rmo.mao_obra_id = mo.id
+        WHERE rmo.rdo_id = ?
+        ORDER BY rmo.id
+      `, [id]);
+    } catch (_) {
+      maoObra = [];
+    }
 
     // Buscar fotos vinculadas às atividades do RDO
-    const fotos = await allQuery(`
-      SELECT rf.*, ae.codigo_eap AS atividade_codigo, COALESCE(ae.nome, ae.descricao) AS atividade_descricao, rf.atividade_avulsa_descricao
-      FROM rdo_fotos rf
-      LEFT JOIN rdo_atividades ra ON rf.rdo_atividade_id = ra.id
-      LEFT JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
-      WHERE rf.rdo_id = ?
-      ORDER BY rf.criado_em DESC
-    `, [id]);
+    const fotosOrderBy = await getRdoFotosOrderBy();
+    let fotos = [];
+    try {
+      fotos = await allQuery(`
+        SELECT rf.*, ra.atividade_eap_id AS atividade_eap_id,
+               ae.codigo_eap AS atividade_codigo,
+               COALESCE(ae.nome, ae.descricao) AS atividade_descricao,
+               rf.atividade_avulsa_descricao
+        FROM rdo_fotos rf
+        LEFT JOIN rdo_atividades ra ON rf.rdo_atividade_id = ra.id
+        LEFT JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
+        WHERE rf.rdo_id = ?
+        ORDER BY ${fotosOrderBy}
+      `, [id]);
+    } catch (_) {
+      try {
+        fotos = await allQuery(`
+          SELECT rf.*, ra.atividade_eap_id AS atividade_eap_id,
+                 ae.codigo_eap AS atividade_codigo,
+                 ae.descricao AS atividade_descricao,
+                 NULL AS atividade_avulsa_descricao
+          FROM rdo_fotos rf
+          LEFT JOIN rdo_atividades ra ON rf.rdo_atividade_id = ra.id
+          LEFT JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
+          WHERE rf.rdo_id = ?
+          ORDER BY ${fotosOrderBy}
+        `, [id]);
+      } catch (_) {
+        fotos = [];
+      }
+    }
 
     // Buscar comentários
-    const comentarios = await allQuery(`
-      SELECT rc.*, u.nome as autor_nome
-      FROM rdo_comentarios rc
-      LEFT JOIN usuarios u ON rc.usuario_id = u.id
-      WHERE rc.rdo_id = ?
-      ORDER BY rc.criado_em ASC
-    `, [id]);
+    let comentarios = [];
+    try {
+      comentarios = await allQuery(`
+        SELECT rc.*, u.nome as autor_nome
+        FROM rdo_comentarios rc
+        LEFT JOIN usuarios u ON rc.usuario_id = u.id
+        WHERE rc.rdo_id = ?
+        ORDER BY rc.criado_em ASC
+      `, [id]);
+    } catch (_) {
+      comentarios = [];
+    }
 
     // Materiais recebidos
-    const materiais = await allQuery(`
-      SELECT * FROM rdo_materiais WHERE rdo_id = ? ORDER BY criado_em DESC
-    `, [id]);
+    let materiais = [];
+    try {
+      materiais = await allQuery(`
+        SELECT * FROM rdo_materiais WHERE rdo_id = ? ORDER BY criado_em DESC
+      `, [id]);
+    } catch (_) {
+      materiais = [];
+    }
 
     // Ocorrências
-    const ocorrencias = await allQuery(`
-      SELECT ro.*, u.nome as autor_nome
-      FROM rdo_ocorrencias ro
-      LEFT JOIN usuarios u ON ro.criado_por = u.id
-      WHERE ro.rdo_id = ?
-      ORDER BY ro.criado_em DESC
-    `, [id]);
+    let ocorrencias = [];
+    try {
+      ocorrencias = await allQuery(`
+        SELECT ro.*, u.nome as autor_nome
+        FROM rdo_ocorrencias ro
+        LEFT JOIN usuarios u ON ro.criado_por = u.id
+        WHERE ro.rdo_id = ?
+        ORDER BY ro.criado_em DESC
+      `, [id]);
+    } catch (_) {
+      ocorrencias = [];
+    }
 
     // Assinaturas
-    const assinaturas = await allQuery(`
-      SELECT ra.*, u.nome as usuario_nome
-      FROM rdo_assinaturas ra
-      LEFT JOIN usuarios u ON ra.usuario_id = u.id
-      WHERE ra.rdo_id = ?
-      ORDER BY ra.assinado_em ASC
-    `, [id]);
+    let assinaturas = [];
+    try {
+      assinaturas = await allQuery(`
+        SELECT ra.*, u.nome as usuario_nome
+        FROM rdo_assinaturas ra
+        LEFT JOIN usuarios u ON ra.usuario_id = u.id
+        WHERE ra.rdo_id = ?
+        ORDER BY ra.assinado_em ASC
+      `, [id]);
+    } catch (_) {
+      assinaturas = [];
+    }
 
     // Clima por periodo
-    const clima = await allQuery(`
-      SELECT * FROM rdo_clima WHERE rdo_id = ? ORDER BY id
-    `, [id]);
+    let clima = [];
+    try {
+      clima = await allQuery(`
+        SELECT * FROM rdo_clima WHERE rdo_id = ? ORDER BY id
+      `, [id]);
+    } catch (_) {
+      clima = [];
+    }
 
     rdo.atividades = atividades;
     rdo.anexos = anexos;
@@ -325,6 +552,30 @@ router.get('/:id', auth, async (req, res) => {
 
     res.json(rdo);
 
+    // Registrar log de visualização (com deduplicação em janela curta)
+    try {
+      const viewRecente = await getQuery(
+        `SELECT id
+         FROM rdo_logs
+         WHERE rdo_id = ?
+           AND usuario_id = ?
+           AND acao = 'VIEW'
+           AND criado_em >= datetime('now', '-10 seconds')
+         ORDER BY id DESC
+         LIMIT 1`,
+        [id, req.usuario.id]
+      );
+
+      if (!viewRecente) {
+        await runQuery(
+          'INSERT INTO rdo_logs (rdo_id, usuario_id, acao, criado_em) VALUES (?, ?, ?, CURRENT_TIMESTAMP)',
+          [id, req.usuario.id, 'VIEW']
+        );
+      }
+    } catch (logError) {
+      console.error('Erro ao registrar log de visualização:', logError);
+    }
+
   } catch (error) {
     console.error('Erro ao obter RDO:', error);
     res.status(500).json({ erro: 'Erro ao obter RDO.' });
@@ -338,6 +589,7 @@ router.post('/', auth, [
   body('dia_semana').optional().isString()
 ], async (req, res) => {
   try {
+    await ensureRdoOptionalColumns();
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ erro: 'Dados inválidos.', detalhes: errors.array() });
@@ -366,8 +618,23 @@ router.post('/', auth, [
       atividades
     } = req.body;
 
+    if (!req.tenantId) {
+      return res.status(403).json({ erro: 'Tenant inválido para operação de RDO.' });
+    }
+
+    const projetoTenant = await getQuery('SELECT tenant_id FROM projetos WHERE id = ?', [projeto_id]);
+    if (!projetoTenant || Number(projetoTenant.tenant_id) !== Number(req.tenantId)) {
+      return res.status(403).json({ erro: 'Projeto fora do tenant ativo.' });
+    }
+
+    // Normaliza dados legados: EAPs antigas podem estar sem tenant_id preenchido.
+    await runQuery(
+      'UPDATE atividades_eap SET tenant_id = ? WHERE projeto_id = ? AND (tenant_id IS NULL OR tenant_id = 0)',
+      [req.tenantId, projeto_id]
+    );
+
     // Integridade: projeto precisa ter EAP e criação deve trazer ao menos uma atividade
-    const eapCountRow = await getQuery('SELECT COUNT(*) AS c FROM atividades_eap WHERE projeto_id = ?', [projeto_id]);
+    const eapCountRow = await getQuery('SELECT COUNT(*) AS c FROM atividades_eap WHERE projeto_id = ? AND tenant_id = ?', [projeto_id, req.tenantId]);
     if (!eapCountRow || eapCountRow.c === 0) {
       return res.status(400).json({ erro: 'Projeto sem EAP: crie a EAP antes do RDO.' });
     }
@@ -402,12 +669,15 @@ router.post('/', auth, [
 
     // Validar que todas as atividades pertencem ao mesmo projeto
     for (const atividade of atividadesEapBody) {
-      const rowProj = await getQuery('SELECT projeto_id, quantidade_total FROM atividades_eap WHERE id = ?', [atividade.atividade_eap_id]);
+      const rowProj = await getQuery('SELECT projeto_id, tenant_id, quantidade_total FROM atividades_eap WHERE id = ?', [atividade.atividade_eap_id]);
       if (!rowProj) {
         return res.status(400).json({ erro: 'Atividade EAP inexistente no banco.' });
       }
       if (rowProj.projeto_id !== projeto_id) {
         return res.status(400).json({ erro: 'Atividade EAP pertence a outro projeto.' });
+      }
+      if (Number(rowProj.tenant_id || 0) !== Number(req.tenantId)) {
+        return res.status(400).json({ erro: 'Atividade EAP pertence a outro tenant.' });
       }
       const quantidadeExec = (atividade.quantidade_executada !== undefined && atividade.quantidade_executada !== null && atividade.quantidade_executada !== '')
         ? Number(atividade.quantidade_executada)
@@ -459,8 +729,8 @@ router.post('/', auth, [
 
     // Verificar se já existe RDO para a data informada (ou fallback)
     const rdoExistente = await getQuery(
-      'SELECT id FROM rdos WHERE projeto_id = ? AND data_relatorio = ?',
-      [projeto_id, dataRelatorioStr]
+      'SELECT id FROM rdos WHERE tenant_id = ? AND projeto_id = ? AND data_relatorio = ?',
+      [req.tenantId, projeto_id, dataRelatorioStr]
     );
 
     if (rdoExistente) {
@@ -468,7 +738,7 @@ router.post('/', auth, [
     }
 
     // Gerar número único para RDO
-    const numero_rdo = await gerarNumeroRDO();
+    const numero_rdo = await gerarNumeroRDO(req.tenantId, projeto_id);
 
     // Calcular dia da semana em pt-BR a partir da data escolhida
     const dias = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
@@ -505,15 +775,15 @@ router.post('/', auth, [
 
     const result = await runQuery(`
       INSERT INTO rdos (
-        numero_rdo, projeto_id, data_relatorio, dia_semana,
+        tenant_id, numero_rdo, projeto_id, data_relatorio, dia_semana,
         entrada_saida_inicio, entrada_saida_fim, intervalo_almoco_inicio, intervalo_almoco_fim, horas_trabalhadas,
         clima_manha, tempo_manha, praticabilidade_manha,
         clima_tarde, tempo_tarde, praticabilidade_tarde,
         mao_obra_direta, mao_obra_indireta, mao_obra_terceiros,
         equipamentos, ocorrencias, comentarios, mao_obra_detalhada, atividades_avulsas, criado_por, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
-      numeroRdoFinal, projeto_id, dataRelatorioStr, dia_semana_calc,
+      req.tenantId, numeroRdoFinal, projeto_id, dataRelatorioStr, dia_semana_calc,
       entrada_saida_inicio || '07:00', entrada_saida_fim || '17:00',
       intervalo_almoco_inicio || '12:00', intervalo_almoco_fim || '13:00', horas_calc,
       clima_manha || 'Claro', tempo_manha || '★', praticabilidade_manha || 'Praticável',
@@ -622,6 +892,7 @@ router.post('/', auth, [
 // Atualizar RDO
 router.put('/:id', auth, async (req, res) => {
   try {
+    await ensureRdoOptionalColumns();
     const { id } = req.params;
 
     const rdoAtual = await getQuery('SELECT * FROM rdos WHERE id = ?', [id]);
@@ -772,6 +1043,16 @@ router.put('/:id', auth, async (req, res) => {
     }
 
     await registrarAuditoria('rdos', id, 'UPDATE', rdoAtual, req.body, req.usuario.id);
+
+    // Registrar log de atualização
+    try {
+      await runQuery(
+        'INSERT INTO rdo_logs (rdo_id, usuario_id, acao, criado_em) VALUES (?, ?, ?, CURRENT_TIMESTAMP)',
+        [id, req.usuario.id, 'UPDATE']
+      );
+    } catch (logError) {
+      console.error('Erro ao registrar log de atualização:', logError);
+    }
 
     // Recalcular avanço EAP imediatamente após salvar o RDO
     if (atividades) {
@@ -1006,6 +1287,7 @@ router.get('/:id/pdf', auth, async (req, res) => {
 
   let browser;
   try {
+    await ensureRdoOptionalColumns();
     const { id } = req.params;
 
     // ── Buscar dados do RDO ──────────────────────────────────────────────
@@ -1063,12 +1345,23 @@ router.get('/:id/pdf', auth, async (req, res) => {
       atividadesAvulsas = [];
     }
 
-    const maoObraLista = await allQuery(`
+    // Bases legadas podem não ter todas as tabelas auxiliares do RDO.
+    const safeAllIfTableMissing = async (sql, params = [], fallback = []) => {
+      try {
+        return await allQuery(sql, params);
+      } catch (e) {
+        const msg = String(e?.message || e || '');
+        if (/no such table/i.test(msg)) return fallback;
+        throw e;
+      }
+    };
+
+    const maoObraLista = await safeAllIfTableMissing(`
       SELECT rmo.*, mo.nome AS nome_colaborador, mo.funcao AS funcao_colaborador
       FROM rdo_mao_obra rmo
       LEFT JOIN mao_obra mo ON rmo.mao_obra_id = mo.id
       WHERE rmo.rdo_id = ? ORDER BY rmo.id
-    `, [id]);
+    `, [id], []);
 
     // mao_obra_detalhada JSON
     let maoObraDetalhada = [];
@@ -1084,35 +1377,40 @@ router.get('/:id/pdf', auth, async (req, res) => {
       saida_final: m.horario_saida_final || '—'
     }));
 
-    const fotos = await allQuery(`
-      SELECT rf.*, ae.codigo_eap AS atividade_codigo, COALESCE(ae.nome, ae.descricao) AS atividade_descricao, rf.atividade_avulsa_descricao
+    const fotosOrderBy = await getRdoFotosOrderBy();
+    const fotos = await safeAllIfTableMissing(`
+      SELECT rf.*, ra.atividade_eap_id AS atividade_eap_id,
+             ae.codigo_eap AS atividade_codigo,
+             COALESCE(ae.nome, ae.descricao) AS atividade_descricao,
+             rf.atividade_avulsa_descricao
       FROM rdo_fotos rf
       LEFT JOIN rdo_atividades ra ON rf.rdo_atividade_id = ra.id
       LEFT JOIN atividades_eap ae ON ra.atividade_eap_id = ae.id
-      WHERE rf.rdo_id = ? ORDER BY rf.criado_em ASC
-    `, [id]);
+      WHERE rf.rdo_id = ? ORDER BY ${fotosOrderBy}
+    `, [id], []);
 
-    const ocorrencias = await allQuery(
-      'SELECT * FROM rdo_ocorrencias WHERE rdo_id = ? ORDER BY criado_em ASC', [id]
+    const ocorrencias = await safeAllIfTableMissing(
+      'SELECT * FROM rdo_ocorrencias WHERE rdo_id = ? ORDER BY criado_em ASC', [id], []
     );
-    const comentarios = await allQuery(`
+    const comentarios = await safeAllIfTableMissing(`
       SELECT rc.*, u.nome as autor_nome
       FROM rdo_comentarios rc
       LEFT JOIN usuarios u ON rc.usuario_id = u.id
       WHERE rc.rdo_id = ?
       ORDER BY rc.criado_em ASC
-    `, [id]);
-    const materiais = await allQuery(
-      'SELECT * FROM rdo_materiais WHERE rdo_id = ? ORDER BY criado_em ASC', [id]
+    `, [id], []);
+    const materiais = await safeAllIfTableMissing(
+      'SELECT * FROM rdo_materiais WHERE rdo_id = ? ORDER BY criado_em ASC', [id], []
     );
-    const clima = await allQuery(
-      'SELECT * FROM rdo_clima WHERE rdo_id = ? ORDER BY id', [id]
+    const clima = await safeAllIfTableMissing(
+      'SELECT * FROM rdo_clima WHERE rdo_id = ? ORDER BY id', [id], []
     );
-    const anexos = await allQuery(
+    const anexos = await safeAllIfTableMissing(
       `SELECT * FROM anexos WHERE rdo_id = ?
        AND tipo NOT LIKE 'image%'
-       ORDER BY criado_em ASC`, [id]
+       ORDER BY criado_em ASC`, [id], []
     );
+    const publicBaseUrl = getPublicBaseUrl(req);
 
     let equipamentosLista = [];
     try {
@@ -1168,16 +1466,9 @@ router.get('/:id/pdf', auth, async (req, res) => {
       return (Math.round((tot / 60) * 100) / 100) + ' h';
     };
 
-    // Fotos como base64 para inline no PDF
-    const fotoBase64 = (filename) => {
-      try {
-        const fp = path.join(uploadsDir, filename);
-        if (!fs.existsSync(fp)) return null;
-        const ext = path.extname(filename).toLowerCase().replace('.', '');
-        const mime = ext === 'jpg' ? 'jpeg' : ext;
-        return `data:image/${mime};base64,${fs.readFileSync(fp).toString('base64')}`;
-      } catch { return null; }
-    };
+    // URL pública das fotos (Puppeteer acessa o próprio servidor)
+    const fotoUrl = (filename) =>
+      `http://127.0.0.1:${process.env.PORT || 3001}/uploads/${encodeURIComponent(filename)}`;
 
     // ── HTML template ─────────────────────────────────────────────────────
     const rows = (items, fn) => items.map(fn).join('');
@@ -1294,14 +1585,13 @@ router.get('/:id/pdf', auth, async (req, res) => {
 
     const fotosSection = fotos.length > 0 ? `
       <section>
-        <h2>Fotos do RDO</h2>
+        <h2>Fotos do RDO (${fotos.length})</h2>
         <div class="foto-grid">
           ${rows(fotos, f => {
-            const b64 = fotoBase64(f.caminho_arquivo);
-            if (!b64) return '';
+            const src = fotoUrl(f.caminho_arquivo);
             return `<div class="foto-item">
-              <img src="${b64}" alt="${f.nome_arquivo}" />
-              <p class="foto-desc">${f.atividade_descricao ? `<strong>${f.atividade_codigo ? f.atividade_codigo + ' — ' : ''}${f.atividade_descricao}</strong><br>` : (f.atividade_avulsa_descricao ? `<strong>Avulsa — ${f.atividade_avulsa_descricao}</strong><br>` : '')}${f.descricao || f.nome_arquivo}</p>
+              <img src="${src}" alt="${f.nome_arquivo || 'foto'}" />
+              <p class="foto-desc">${f.atividade_descricao ? `<strong>${f.atividade_codigo ? f.atividade_codigo + ' — ' : ''}${f.atividade_descricao}</strong><br>` : (f.atividade_avulsa_descricao ? `<strong>Avulsa — ${f.atividade_avulsa_descricao}</strong><br>` : '')}${f.descricao || f.nome_arquivo || ''}</p>
             </div>`;
           })}
         </div>
@@ -1311,11 +1601,12 @@ router.get('/:id/pdf', auth, async (req, res) => {
       <section>
         <h2>Materiais Recebidos</h2>
         <table>
-          <thead><tr><th>Material</th><th>Quantidade</th><th>Unidade</th></tr></thead>
+          <thead><tr><th>Material</th><th>Quantidade</th><th>Unidade</th><th>Nº NF</th></tr></thead>
           <tbody>${rows(materiais, m => `<tr>
             <td>${m.nome_material || '—'}</td>
             <td style="text-align:right">${m.quantidade ?? '—'}</td>
             <td>${m.unidade || '—'}</td>
+            <td>${m.numero_nf || '—'}</td>
           </tr>`)}</tbody>
         </table>
       </section>` : '';
@@ -1357,7 +1648,10 @@ router.get('/:id/pdf', auth, async (req, res) => {
       <section>
         <h2>Anexos</h2>
         <ol class="anexo-list">
-          ${rows(anexos, (a, i) => `<li><strong>${a.nome_arquivo}</strong> — ${a.tipo || '—'}${a.tamanho ? ` (${Math.round(a.tamanho / 1024)} KB)` : ''}</li>`)}
+          ${rows(anexos, (a) => {
+            const href = `${publicBaseUrl}/uploads/${encodeURIComponent(a.caminho_arquivo || '')}`;
+            return `<li><a href="${href}" target="_blank" rel="noopener noreferrer"><strong>${a.nome_arquivo}</strong></a> — ${a.tipo || '—'}${a.tamanho ? ` (${Math.round(a.tamanho / 1024)} KB)` : ''}</li>`;
+          })}
         </ol>
       </section>` : '';
 
@@ -1367,37 +1661,37 @@ router.get('/:id/pdf', auth, async (req, res) => {
 <meta charset="UTF-8">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Segoe UI', sans-serif; font-size: 11px; color: #1e293b; background: #fff; }
+  body { font-family: 'Segoe UI', 'Noto Sans', Arial, sans-serif; font-size: 11px; color: #1e293b; background: #fff; }
 
   /* CAPA */
-  .capa { page-break-after: always; padding: 48px 40px; }
-  .capa-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #0ea5e9; padding-bottom: 20px; margin-bottom: 32px; }
+  .capa { page-break-after: always; padding: 38px 32px; }
+  .capa-header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #0ea5e9; padding-bottom: 14px; margin-bottom: 18px; }
   .capa-title { font-size: 28px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
   .capa-subtitle { font-size: 14px; color: #64748b; }
-  .capa-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }
+  .capa-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
   .info-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; }
   .info-card h3 { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; margin-bottom: 12px; }
   .info-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 11px; }
   .info-row .label { color: #64748b; }
   .info-row .value { font-weight: 600; color: #0f172a; text-align: right; max-width: 60%; }
-  .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 32px; }
-  .kpi { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; text-align: center; }
-  .kpi .kpi-val { font-size: 22px; font-weight: 700; color: #0f172a; }
+  .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+  .kpi { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; text-align: center; }
+  .kpi .kpi-val { font-size: 20px; font-weight: 700; color: #0f172a; }
   .kpi .kpi-label { font-size: 10px; color: #64748b; margin-top: 4px; }
   .status-pill { display: inline-block; padding: 4px 12px; border-radius: 20px; color: #fff; font-size: 11px; font-weight: 600; }
   .resumo-row { display: flex; gap: 12px; flex-wrap: wrap; }
   .resumo-chip { background: #e0f2fe; color: #0369a1; padding: 6px 12px; border-radius: 20px; font-size: 11px; font-weight: 500; }
 
   /* SEÇÕES */
-  section { padding: 20px 40px; page-break-inside: avoid; }
+  section { padding: 14px 32px; page-break-inside: auto; }
   section + section { border-top: 1px solid #f1f5f9; }
-  h2 { font-size: 13px; font-weight: 700; color: #0f172a; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.06em; padding-bottom: 6px; border-bottom: 2px solid #0ea5e9; }
+  h2 { font-size: 12px; font-weight: 700; color: #0f172a; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.06em; padding-bottom: 4px; border-bottom: 2px solid #0ea5e9; }
 
   /* TABELAS */
-  table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 9.5px; margin-bottom: 2px; }
   thead tr { background: #f1f5f9; }
-  th { padding: 7px 10px; text-align: left; font-weight: 600; color: #475569; font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 2px solid #e2e8f0; }
-  td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; color: #334155; }
+  th { padding: 5px 8px; text-align: left; font-weight: 600; color: #475569; font-size: 8.8px; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 2px solid #e2e8f0; }
+  td { padding: 5px 8px; border-bottom: 1px solid #f1f5f9; color: #334155; }
   tr:nth-child(even) td { background: #fafafa; }
   code { font-family: monospace; background: #f1f5f9; padding: 1px 4px; border-radius: 3px; font-size: 9px; }
 
@@ -1405,10 +1699,24 @@ router.get('/:id/pdf', auth, async (req, res) => {
   .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; color: #fff; font-size: 9px; font-weight: 600; }
 
   /* FOTOS */
-  .foto-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-  .foto-item { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
-  .foto-item img { width: 100%; max-height: 220px; object-fit: cover; display: block; }
-  .foto-desc { padding: 8px 10px; font-size: 10px; color: #475569; background: #f8fafc; }
+  .foto-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .foto-item {
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .foto-item img {
+    width: 100%;
+    height: auto;
+    max-height: 240px;
+    object-fit: contain;
+    object-position: center;
+    display: block;
+    background: #f8fafc;
+  }
+  .foto-desc { padding: 6px 8px; font-size: 9px; color: #475569; background: #f8fafc; }
 
   /* OCORRÊNCIAS */
   .ocorrencia { background: #fafafa; border: 1px solid #f1f5f9; border-radius: 8px; padding: 12px 16px; margin-bottom: 8px; }
@@ -1485,24 +1793,57 @@ ${anexosSection}
 </body>
 </html>`;
 
-    // ── Lançar puppeteer com Edge do sistema ─────────────────────────────
-    const edgePath = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
+    // ── Lançar puppeteer com navegador disponível no ambiente ─────────────
+    const browserCandidates = [
+      process.env.PUPPETEER_EXECUTABLE_PATH,
+      process.env.CHROME_PATH,
+      process.env.BROWSER_EXECUTABLE_PATH,
+      'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      '/usr/bin/google-chrome',
+      '/usr/bin/chromium-browser',
+      '/usr/bin/chromium'
+    ].filter(Boolean);
+    const executablePath = browserCandidates.find((p) => {
+      try { return fs.existsSync(p); } catch (_) { return false; }
+    });
+
     browser = await puppeteer.launch({
-      headless: true,
-      executablePath: fs.existsSync(edgePath) ? edgePath : undefined,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+      headless: 'new',
+      executablePath: executablePath || undefined,
+      timeout: 60000,
+      protocolTimeout: 120000,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
     });
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: 'load' });
+    page.setDefaultNavigationTimeout(60000);
+    page.setDefaultTimeout(60000);
+    await page.setContent(html, { waitUntil: 'domcontentloaded' });
+    await page.evaluate(async () => {
+      if (document.fonts && document.fonts.ready) {
+        try { await document.fonts.ready; } catch (_) {}
+      }
+      const imgs = Array.from(document.images || []);
+      await Promise.all(imgs.map((img) => {
+        if (img.complete) return Promise.resolve();
+        return new Promise((resolve) => {
+          const done = () => resolve();
+          img.addEventListener('load', done, { once: true });
+          img.addEventListener('error', done, { once: true });
+          setTimeout(done, 5000);
+        });
+      }));
+    });
 
     const safeNomeProjeto = String(rdo.projeto_nome || 'Projeto').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const pdfVersionLabel = getPdfVersionLabel().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const pdfBuffer = await page.pdf({
       format: 'A4',
       printBackground: true,
       displayHeaderFooter: true,
       headerTemplate: '<span></span>',
-      footerTemplate: `<div style="font-size:8px;color:#94a3b8;padding:0 40px;width:100%;box-sizing:border-box;display:flex;justify-content:space-between;font-family:'Segoe UI',sans-serif;align-items:center"><span>${safeNomeProjeto} &nbsp;&middot;&nbsp; ${displayId}</span><span>Pág. <span class="pageNumber"></span>&nbsp;/&nbsp;<span class="totalPages"></span> &nbsp;&mdash;&nbsp; Gerado em ${new Date().toLocaleString('pt-BR')}</span></div>`,
-      margin: { top: '10mm', bottom: '14mm', left: '0', right: '0' }
+      footerTemplate: `<div style="font-size:8px;color:#94a3b8;padding:0 40px;width:100%;box-sizing:border-box;display:flex;justify-content:space-between;font-family:'Inter','Segoe UI','Noto Sans',sans-serif;align-items:center"><span>${safeNomeProjeto} &nbsp;&middot;&nbsp; ${displayId}</span><span>${pdfVersionLabel} &nbsp;&middot;&nbsp; Pág. <span class="pageNumber"></span>&nbsp;/&nbsp;<span class="totalPages"></span> &nbsp;&mdash;&nbsp; Gerado em ${new Date().toLocaleString('pt-BR')}</span></div>`,
+      margin: { top: '8mm', bottom: '10mm', left: '0', right: '0' }
     });
 
     await browser.close();
@@ -1510,12 +1851,130 @@ ${anexosSection}
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${displayId}.pdf"`);
+    res.setHeader('X-PDF-Engine', 'puppeteer');
     res.send(Buffer.from(pdfBuffer));
 
   } catch (error) {
     if (browser) { try { await browser.close(); } catch {} }
     console.error('Erro ao gerar PDF (puppeteer):', error);
-    res.status(500).json({ erro: 'Erro ao gerar PDF: ' + (error.message || 'erro desconhecido') });
+    const puppeteerErrorMessage = String(error?.message || 'erro_desconhecido').replace(/[\r\n]+/g, ' ').slice(0, 240);
+
+    // Fallback para ambientes sem browser headless disponível.
+    try {
+      const PDFDocument = require('pdfkit');
+      const { id } = req.params;
+      const rdoFallback = await getQuery(`
+        SELECT r.*, p.nome AS projeto_nome, u.nome AS criado_por_nome
+        FROM rdos r
+        LEFT JOIN projetos p ON r.projeto_id = p.id
+        LEFT JOIN usuarios u ON r.criado_por = u.id
+        WHERE r.id = ?
+      `, [id]);
+
+      if (!rdoFallback) {
+        return res.status(404).json({ erro: 'RDO não encontrado.' });
+      }
+
+      const atividadesFallback = await allQuery(`
+        SELECT COALESCE(ae.codigo_eap, 'AVULSA') AS codigo_eap,
+               COALESCE(ae.nome, ae.descricao, ra.observacao, 'Atividade') AS descricao,
+               COALESCE(ra.quantidade_executada, 0) AS quantidade_executada,
+               COALESCE(ra.percentual_executado, 0) AS percentual_executado
+        FROM rdo_atividades ra
+        LEFT JOIN atividades_eap ae ON ae.id = ra.atividade_eap_id
+        WHERE ra.rdo_id = ?
+        ORDER BY ae.codigo_eap
+      `, [id]);
+
+      const safeId = String(rdoFallback.numero_rdo || `RDO-${rdoFallback.id}`);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${safeId}.pdf"`);
+      res.setHeader('X-PDF-Engine', 'pdfkit-fallback');
+      res.setHeader('X-PDF-Fallback-Reason', puppeteerErrorMessage.replace(/[\r\n]+/g, ' '));
+
+      const doc = new PDFDocument({ size: 'A4', margin: 36 });
+      doc.pipe(res);
+
+      const fmtDate = (d) => {
+        if (!d) return '—';
+        const dt = new Date(String(d).includes('T') ? d : `${d}T00:00:00`);
+        return Number.isNaN(dt.getTime()) ? String(d) : dt.toLocaleDateString('pt-BR');
+      };
+      const fmtNum = (v) => Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+      const pdfVersionLabel = getPdfVersionLabel();
+      const drawDivider = () => {
+        const y = doc.y;
+        doc.save().moveTo(36, y).lineTo(559, y).lineWidth(0.5).strokeColor('#D1D5DB').stroke().restore();
+        doc.moveDown(0.4);
+      };
+
+      doc.font('Helvetica-Bold').fontSize(17).fillColor('#0F172A').text('Relatório Diário de Obra');
+      doc.moveDown(0.2);
+      doc.font('Helvetica-Bold').fontSize(9).fillColor('#B91C1C').text('MODO COMPATIBILIDADE: fallback ativo (layout reduzido)');
+      doc.moveDown(0.1);
+      doc.font('Helvetica').fontSize(8).fillColor('#7F1D1D').text(`Motivo técnico: ${puppeteerErrorMessage}`);
+      doc.moveDown(0.2);
+      doc.font('Helvetica').fontSize(10).fillColor('#475569').text(`Documento gerado em ${new Date().toLocaleString('pt-BR')}`);
+      doc.moveDown(0.5);
+      drawDivider();
+
+      doc.font('Helvetica-Bold').fontSize(11).fillColor('#111827').text('Resumo');
+      doc.moveDown(0.3);
+      doc.font('Helvetica').fontSize(10).fillColor('#1F2937');
+      doc.text(`RDO: ${safeId}`);
+      doc.text(`Projeto: ${rdoFallback.projeto_nome || '—'}`);
+      doc.text(`Data do relatório: ${fmtDate(rdoFallback.data_relatorio)}`);
+      doc.text(`Status: ${rdoFallback.status || '—'}`);
+      doc.text(`Responsável: ${rdoFallback.criado_por_nome || '—'}`);
+      drawDivider();
+
+      doc.font('Helvetica-Bold').fontSize(11).fillColor('#111827').text(`Atividades (${atividadesFallback.length})`);
+      doc.moveDown(0.3);
+
+      const col = { codigo: 36, desc: 105, qtd: 410, perc: 490 };
+      doc.font('Helvetica-Bold').fontSize(9).fillColor('#334155');
+      doc.text('Código', col.codigo, doc.y, { width: 60 });
+      doc.text('Descrição', col.desc, doc.y, { width: 290 });
+      doc.text('Qtde', col.qtd, doc.y, { width: 70, align: 'right' });
+      doc.text('%', col.perc, doc.y, { width: 60, align: 'right' });
+      doc.moveDown(0.2);
+      drawDivider();
+
+      doc.font('Helvetica').fontSize(9).fillColor('#1F2937');
+      if (atividadesFallback.length === 0) {
+        doc.text('Sem atividades registradas para este RDO.');
+      } else {
+        for (const a of atividadesFallback) {
+          const yStart = doc.y;
+          const codigo = String(a.codigo_eap || 'AVULSA');
+          const desc = String(a.descricao || 'Atividade');
+          const qtd = fmtNum(a.quantidade_executada || 0);
+          const perc = `${fmtNum(a.percentual_executado || 0)}%`;
+
+          doc.text(codigo, col.codigo, yStart, { width: 60 });
+          doc.text(desc, col.desc, yStart, { width: 290 });
+          doc.text(qtd, col.qtd, yStart, { width: 70, align: 'right' });
+          doc.text(perc, col.perc, yStart, { width: 60, align: 'right' });
+
+          const nextY = Math.max(doc.y, yStart + 14);
+          doc.y = nextY;
+
+          if (doc.y > 770) {
+            doc.addPage();
+          }
+        }
+      }
+
+      const footerY = 800;
+      doc.font('Helvetica').fontSize(8).fillColor('#94A3B8');
+      doc.text(pdfVersionLabel, 36, footerY, { width: 250, align: 'left' });
+      doc.text(`Gerado em ${new Date().toLocaleString('pt-BR')}`, 286, footerY, { width: 273, align: 'right' });
+
+      doc.end();
+    } catch (fallbackError) {
+      console.error('Erro no fallback de PDF (pdfkit):', fallbackError);
+      res.status(500).json({ erro: 'Erro ao gerar PDF: ' + (error.message || 'erro desconhecido') });
+    }
   }
 });
 
@@ -1656,6 +2115,29 @@ router.delete('/projeto/:projetoId/todos', [auth, isGestor], async (req, res) =>
   } catch (error) {
     console.error('Erro ao excluir todos os RDOs do projeto:', error);
     res.status(500).json({ erro: 'Erro ao excluir todos os RDOs do projeto.' });
+  }
+});
+
+// Endpoint para consultar logs de visualização e edição de um RDO
+router.get('/:id/logs', auth, async (req, res) => {
+  try {
+    await ensureRdoOptionalColumns();
+    const { id } = req.params;
+    const logs = await allQuery(`
+      SELECT rl.*, u.nome as usuario_nome
+      FROM rdo_logs rl
+      LEFT JOIN usuarios u ON rl.usuario_id = u.id
+      WHERE rl.rdo_id = ?
+      ORDER BY rl.criado_em DESC, rl.id DESC
+    `, [id]);
+    res.json({ logs });
+  } catch (error) {
+    // Em bases legadas, não bloquear o formulário por falha de logs.
+    if (String(error?.message || '').toLowerCase().includes('no such table')) {
+      return res.json({ logs: [] });
+    }
+    console.error('Erro ao buscar logs do RDO:', error);
+    res.status(500).json({ erro: 'Erro ao buscar logs do RDO.' });
   }
 });
 

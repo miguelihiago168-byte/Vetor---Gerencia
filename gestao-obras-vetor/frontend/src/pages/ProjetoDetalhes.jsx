@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import {
-  getProjeto, getRDOStats, getRDOs, getAnexos,
+  getProjeto, getRDOStats, getRDOs, getDashboardGaleriaRdos,
   getDashboardAlmoxarifado, getCurvaS, kanbanRequisicoes, getRNCs
 } from '../services/api';
 import {
@@ -70,7 +70,7 @@ function ProjetoDetalhes() {
   const [stats, setStats] = useState(null);
   const [almox, setAlmox] = useState(null);
   const [rdos, setRdos] = useState([]);
-  const [galeria, setGaleria] = useState([]);
+  const [galeria, setGaleria] = useState({ total_fotos: 0, rdos: [] });
   const [curvaS, setCurvaS] = useState(null);
   const [kanban, setKanban] = useState(null);
   const [rncs, setRncs] = useState([]);
@@ -89,11 +89,12 @@ function ProjetoDetalhes() {
       setProjeto(projetoRes.data);
       setStats(statsRes.data);
 
-      const [almoxRes, curvaSRes, rncsRes, rdosRes] = await Promise.allSettled([
+      const [almoxRes, curvaSRes, rncsRes, rdosRes, galeriaRes] = await Promise.allSettled([
         getDashboardAlmoxarifado(projetoId),
         getCurvaS(projetoId),
         getRNCs(projetoId),
         getRDOs(projetoId),
+        getDashboardGaleriaRdos(projetoId)
       ]);
 
       if (almoxRes.status === 'fulfilled') setAlmox(almoxRes.value.data);
@@ -111,25 +112,11 @@ function ProjetoDetalhes() {
         setKanban(null);
       }
 
-      // Galeria de fotos
-      try {
-        const anexosList = [];
-        for (const rdo of rdosList.slice(0, 20)) {
-          try {
-            const ax = await getAnexos(rdo.id);
-            const imgs = (ax.data || []).filter(a => String(a.tipo).startsWith('image/'));
-            imgs.forEach(img => anexosList.push({
-              id: img.id,
-              nome: img.nome_arquivo,
-              tipo: img.tipo,
-              url: `/uploads/${img.caminho_arquivo}`,
-              rdo_id: rdo.id,
-              criado_em: img.criado_em
-            }));
-          } catch {}
-        }
-        setGaleria(anexosList);
-      } catch {}
+      if (galeriaRes.status === 'fulfilled') {
+        setGaleria(galeriaRes.value.data || { total_fotos: 0, rdos: [] });
+      } else {
+        setGaleria({ total_fotos: 0, rdos: [] });
+      }
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
     } finally {
@@ -266,17 +253,21 @@ function ProjetoDetalhes() {
 
         {/* ── CABEÇALHO ──────────────────────────────────────────────────── */}
         <div style={{
-          background: 'linear-gradient(135deg, #1e40af 0%, #7c3aed 100%)',
-          borderRadius: '16px', padding: '28px 32px', color: 'white',
-          marginBottom: '28px', boxShadow: '0 4px 20px rgba(30,64,175,0.25)'
+          background: 'linear-gradient(135deg, var(--project-panel-bg-start) 0%, var(--project-panel-bg-end) 100%)',
+          border: '1px solid var(--border-default)',
+          borderRadius: '16px',
+          padding: '24px 28px',
+          color: 'var(--text-primary)',
+          marginBottom: '28px',
+          boxShadow: 'var(--shadow-soft)'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
             <div>
-              <div style={{ fontSize: '11px', opacity: 0.7, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              <div style={{ fontSize: '11px', color: 'var(--gray-400)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>
                 Painel do Projeto
               </div>
               <h1 style={{ margin: 0, fontSize: '26px', fontWeight: 700 }}>{projeto?.nome}</h1>
-              <div style={{ marginTop: '10px', fontSize: '13px', opacity: 0.85, display: 'flex', gap: '18px', flexWrap: 'wrap' }}>
+              <div style={{ marginTop: '10px', fontSize: '13px', color: 'var(--gray-500)', display: 'flex', gap: '18px', flexWrap: 'wrap', fontWeight: 600 }}>
                 <span>🏢 {projeto?.empresa_responsavel}</span>
                 <span>🏗️ {projeto?.empresa_executante}</span>
                 <span>📍 {projeto?.cidade}</span>
@@ -284,17 +275,37 @@ function ProjetoDetalhes() {
             </div>
             {diasRestantes !== null && (
               <div style={{
-                background: 'rgba(255,255,255,0.15)', borderRadius: '12px',
-                padding: '14px 22px', textAlign: 'center', backdropFilter: 'blur(4px)',
+                background: diasRestantes < 0
+                  ? 'var(--badge-red-bg)'
+                  : diasRestantes <= 30
+                    ? 'var(--badge-yellow-bg)'
+                    : 'var(--badge-blue-bg)',
+                border: diasRestantes < 0
+                  ? '1px solid var(--badge-red-color)'
+                  : diasRestantes <= 30
+                    ? '1px solid var(--badge-yellow-color)'
+                    : '1px solid var(--badge-blue-color)',
+                borderRadius: '12px',
+                padding: '12px 18px',
+                textAlign: 'center',
                 minWidth: '120px',
               }}>
-                <div style={{ fontSize: '11px', opacity: 0.8, marginBottom: '4px', textTransform: 'uppercase' }}>Prazo</div>
-                <div style={{ fontSize: '32px', fontWeight: 800, lineHeight: 1 }}>
+                <div style={{ fontSize: '11px', color: 'var(--gray-500)', marginBottom: '4px', textTransform: 'uppercase', fontWeight: 700 }}>Prazo</div>
+                <div style={{
+                  fontSize: '32px',
+                  fontWeight: 800,
+                  lineHeight: 1,
+                  color: diasRestantes < 0
+                    ? 'var(--badge-red-color)'
+                    : diasRestantes <= 30
+                      ? 'var(--badge-yellow-color)'
+                      : 'var(--badge-blue-color)'
+                }}>
                   {diasRestantes >= 0 ? diasRestantes : 0}
                 </div>
-                <div style={{ fontSize: '12px', opacity: 0.8 }}>dias restantes</div>
+                <div style={{ fontSize: '12px', color: 'var(--gray-500)', fontWeight: 600 }}>dias restantes</div>
                 {diasRestantes < 0 && (
-                  <div style={{ fontSize: '11px', background: 'var(--badge-red-color)', color: 'white', borderRadius: '4px', padding: '2px 6px', marginTop: '6px' }}>
+                  <div style={{ fontSize: '11px', background: 'var(--badge-red-color)', color: 'white', borderRadius: '4px', padding: '2px 6px', marginTop: '6px', fontWeight: 700 }}>
                     VENCIDO
                   </div>
                 )}
@@ -675,28 +686,38 @@ function ProjetoDetalhes() {
         {/* ── GALERIA DE FOTOS ──────────────────────────────────────────── */}
         <div style={sectionLabel}><span>📷</span> GALERIA DE FOTOS</div>
         <div style={cardBase}>
-          {galeria.length === 0 ? (
+          {(galeria.rdos || []).length === 0 ? (
             <div style={{ padding: '24px', color: '#94a3b8', fontSize: '14px', textAlign: 'center' }}>
               <ImageIcon size={36} color="#cbd5e1" style={{ marginBottom: '10px', display: 'block', margin: '0 auto 10px' }} />
               Nenhuma foto enviada nos RDOs deste projeto.
             </div>
           ) : (
             <>
-              <div className="grid grid-4" style={{ gap: '12px' }}>
-                {galeria.slice(0, 24).map(item => (
-                  <div key={item.id} className="card" style={{ padding: '8px' }}>
-                    <div style={{ width: '100%', aspectRatio: '1/1', overflow: 'hidden', borderRadius: '6px', background: '#f1f5f9' }}>
-                      <img src={item.url} alt={item.nome} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {item.nome}
-                    </div>
+              {(galeria.rdos || []).map((grupo) => (
+                <div key={grupo.rdo_id} style={{ marginBottom: '18px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
+                    {grupo.numero_rdo || `RDO-${String(grupo.rdo_id).padStart(3, '0')}`} • {grupo.data_relatorio ? new Date(grupo.data_relatorio + 'T00:00:00').toLocaleDateString('pt-BR') : 'Sem data'} • {grupo.status || 'Sem status'} • {grupo.total_fotos || 0} foto(s)
                   </div>
-                ))}
-              </div>
-              {galeria.length > 24 && (
-                <div style={{ textAlign: 'center', marginTop: '14px', fontSize: '13px', color: '#64748b' }}>
-                  +{galeria.length - 24} fotos adicionais nos RDOs
+                  <div className="grid grid-4" style={{ gap: '12px' }}>
+                    {(grupo.fotos || []).map((item) => (
+                      <div key={`${grupo.rdo_id}-${item.id}`} className="card" style={{ padding: '8px' }}>
+                        <div style={{ width: '100%', aspectRatio: '1/1', overflow: 'hidden', borderRadius: '6px', background: '#f1f5f9' }}>
+                          <img src={`/uploads/${item.caminho_arquivo}`} alt={item.nome_arquivo || 'foto'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#334155', marginTop: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {item.descricao || item.nome_arquivo}
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {item.atividade_descricao ? `${item.atividade_codigo ? `${item.atividade_codigo} — ` : ''}${item.atividade_descricao}` : (item.atividade_avulsa_descricao ? `Avulsa — ${item.atividade_avulsa_descricao}` : 'Sem atividade')}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {Number(galeria.total_fotos || 0) > 0 && (
+                <div style={{ textAlign: 'center', marginTop: '8px', fontSize: '13px', color: '#64748b' }}>
+                  Total de {galeria.total_fotos} foto(s) distribuídas por RDO.
                 </div>
               )}
             </>

@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getProjetos, createProjeto, updateProjeto, deleteProjeto, getUsuarios, arquivarProjeto, desarquivarProjeto, getDashboardAvanco, copiarEapProjeto } from '../services/api';
+import { getProjetos, createProjeto, updateProjeto, getUsuarios, arquivarProjeto, desarquivarProjeto, getDashboardAvanco, copiarEapProjeto } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
-import { Plus, Edit, Trash2, Users, Calendar, Building, Archive, RotateCcw, Eye, EyeOff } from 'lucide-react';
+import { useNotification } from '../context/NotificationContext';
+import { Plus, Edit, Users, Calendar, Building, Archive, RotateCcw, Eye, EyeOff } from 'lucide-react';
 
 function Projetos() {
   const { confirm } = useDialog();
+  const { success: notifySuccess, error: notifyError } = useNotification();
   const [projetos, setProjetos] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -91,6 +93,7 @@ function Projetos() {
       if (editando) {
         await updateProjeto(editando.id, formData);
         setSucesso('Projeto atualizado com sucesso!');
+        notifySuccess('Projeto atualizado com sucesso!', 4000);
       } else {
         const res = await createProjeto(formData);
         const novoId = res.data?.projeto?.id;
@@ -98,11 +101,15 @@ function Projetos() {
           try {
             await copiarEapProjeto(novoId, Number(copiarEapDe));
             setSucesso('Projeto criado e EAP copiada com sucesso!');
+            notifySuccess('Projeto criado e EAP copiada com sucesso!', 4500);
           } catch (eapErr) {
-            setSucesso('Projeto criado! Não foi possível copiar a EAP: ' + (eapErr.response?.data?.erro || 'Erro desconhecido'));
+            const msg = 'Projeto criado! Não foi possível copiar a EAP: ' + (eapErr.response?.data?.erro || 'Erro desconhecido');
+            setSucesso(msg);
+            notifyError(msg, 6000);
           }
         } else {
           setSucesso('Projeto criado com sucesso!');
+          notifySuccess('Projeto criado com sucesso!', 4000);
         }
       }
       
@@ -111,7 +118,9 @@ function Projetos() {
       
       setTimeout(() => setSucesso(''), 3000);
     } catch (error) {
-      setErro(error.response?.data?.erro || 'Erro ao salvar projeto.');
+      const msg = error.response?.data?.erro || 'Erro ao salvar projeto.';
+      setErro(msg);
+      notifyError(msg, 6000);
     }
   };
 
@@ -147,25 +156,6 @@ function Projetos() {
     setCopiarEapDe('');
   };
 
-  const handleDelete = async (id) => {
-    const ok = await confirm({
-      title: 'Desativar projeto',
-      message: 'Deseja realmente desativar este projeto?',
-      confirmText: 'Desativar',
-      cancelText: 'Cancelar'
-    });
-    if (!ok) return;
-
-    try {
-      await deleteProjeto(id);
-      setSucesso('Projeto desativado com sucesso!');
-      await carregarDados();
-      setTimeout(() => setSucesso(''), 3000);
-    } catch (error) {
-      setErro('Erro ao desativar projeto.');
-    }
-  };
-
   const handleArquivar = async (id) => {
     const ok = await confirm({
       title: 'Arquivar projeto',
@@ -178,10 +168,12 @@ function Projetos() {
     try {
       await arquivarProjeto(id);
       setSucesso('Projeto arquivado com sucesso!');
+      notifySuccess('Projeto arquivado com sucesso!', 4000);
       await carregarDados();
       setTimeout(() => setSucesso(''), 3000);
     } catch (error) {
       setErro('Erro ao arquivar projeto.');
+      notifyError('Erro ao arquivar projeto.', 6000);
     }
   };
 
@@ -197,10 +189,12 @@ function Projetos() {
     try {
       await desarquivarProjeto(id);
       setSucesso('Projeto restaurado com sucesso!');
+      notifySuccess('Projeto restaurado com sucesso!', 4000);
       await carregarDados();
       setTimeout(() => setSucesso(''), 3000);
     } catch (error) {
       setErro('Erro ao restaurar projeto.');
+      notifyError('Erro ao restaurar projeto.', 6000);
     }
   };
 
@@ -367,23 +361,12 @@ function Projetos() {
                     >
                       {showArquivados ? <RotateCcw size={14} /> : <Archive size={14} />}
                     </button>
-                    <button
-                      onClick={() => handleDelete(projeto.id)}
-                      className="btn btn-icon btn-danger"
-                      title="Excluir"
-                      style={{ padding: '5px 8px' }}
-                    >
-                      <Trash2 size={14} />
-                    </button>
                   </div>
                 )}
               </div>
             );
           })}
         </div>
-
-        {sucesso && <div className="alert alert-success">{sucesso}</div>}
-        {erro && <div className="alert alert-error">{erro}</div>}
 
         {showArquivados && (
           <div className="alert" style={{ backgroundColor: 'var(--badge-yellow-bg)', borderLeft: '4px solid var(--badge-yellow-color)', marginBottom: '20px', color: 'var(--badge-yellow-color)' }}>

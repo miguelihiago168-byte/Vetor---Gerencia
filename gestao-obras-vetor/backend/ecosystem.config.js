@@ -12,7 +12,9 @@ module.exports = {
       restart_delay: 5000,
       env: {
         NODE_ENV: "production",
-        PORT: 3001
+        PORT: 3001,
+        APP_ENV: "production",
+        PUPPETEER_EXECUTABLE_PATH: "/usr/bin/chromium-browser"
       },
       env_development: {
         NODE_ENV: "development",

@@ -217,6 +217,20 @@ body.dark-mode .rnc-card:hover {
   border-color: #3a5272 !important;
 }
 
+body.dark-mode .rnc-card-aberta {
+  background: linear-gradient(180deg, #1b2f45 0%, #1b2836 100%) !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 8px 20px rgba(14, 165, 233, 0.22) !important;
+}
+
+body.dark-mode .rnc-card-aberta:hover {
+  border-color: #60a5fa !important;
+  box-shadow: 0 10px 24px rgba(14, 165, 233, 0.30) !important;
+}
+
+body.dark-mode .rnc-card-analise { border-left: 3px solid #f59e0b; }
+body.dark-mode .rnc-card-encerrada { border-left: 3px solid #34d399; }
+
 body.dark-mode .rnc-header-text h1 { color: #e8edf3; }
 body.dark-mode .rnc-header-text p  { color: #607080; }
 
@@ -236,7 +250,7 @@ body.dark-mode .rnc-empty-sub   { color: #607080; }
 
 body.dark-mode .rnc-badge-encerrada { background: rgba(16, 185, 129, 0.15); color: #34d399; }
 body.dark-mode .rnc-badge-analise   { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
-body.dark-mode .rnc-badge-aberta    { background: #1f3044; color: #8fa3b9; }
+body.dark-mode .rnc-badge-aberta    { background: rgba(59, 130, 246, 0.22); color: #93c5fd; border: 1px solid rgba(96, 165, 250, 0.6); }
 
 body.dark-mode .rnc-btn-ghost                      { border-color: #2a4060; color: #8fa3b9; }
 body.dark-mode .rnc-btn-ghost:hover:not(:disabled) { background: #1f3044; border-color: #3a5272; color: #d8e3ec; }
