@@ -1,15 +1,7 @@
 FROM node:18-alpine AS builder
 WORKDIR /app
-
-# Instalar dependências de build necessárias
-RUN apk add --no-cache python3 make g++
-
 COPY frontend/package*.json ./
-
-# Limpar cache e instalar com verbose para debug
-RUN npm cache clean --force && \
-    npm install --legacy-peer-deps
-
+RUN npm install --legacy-peer-deps
 COPY frontend/ .
 RUN npm run build
 
