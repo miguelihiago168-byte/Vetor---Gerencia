@@ -1,7 +1,8 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 COPY frontend/package*.json ./
-RUN npm ci --legacy-peer-deps --no-audit --no-fund
+RUN npm ci --legacy-peer-deps --no-audit --no-fund \
+	&& npm cache clean --force
 COPY frontend/ .
 RUN npm run build
 
