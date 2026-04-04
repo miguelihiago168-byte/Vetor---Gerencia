@@ -3,10 +3,10 @@ name: Deploy para AWS EC2
 on:
   push:
     branches:
-      - principal
+      - main
 
 concurrency:
-  group: deploy-ec2-principal
+  group: deploy-ec2-main
   cancel-in-progress: true
 
 jobs:
@@ -115,10 +115,10 @@ jobs:
               "APP_DIR=/home/ubuntu/app/gestao-obras-vetor",
               "cd $APP_DIR",
               "PREV_COMMIT=$(git rev-parse HEAD || true)",
-              "git fetch origin principal",
-              "NEW_COMMIT=$(git rev-parse origin/principal)",
+              "git fetch origin main",
+              "NEW_COMMIT=$(git rev-parse origin/main)",
               "CHANGED_FILES=$(git diff --name-only $PREV_COMMIT $NEW_COMMIT || true)",
-              "git reset --hard origin/principal",
+              "git reset --hard origin/main",
               "echo '$BACKEND_ENV_B64' | base64 -d > backend/.env",
               "NEED_BACKEND=0",
               "NEED_FRONTEND=0",
@@ -243,10 +243,10 @@ jobs:
             echo ">>> Atualizando código..."
             cd "$APP_DIR"
             PREV_COMMIT="$(git rev-parse HEAD || true)"
-            git fetch origin principal
-            NEW_COMMIT="$(git rev-parse origin/principal)"
+            git fetch origin main
+            NEW_COMMIT="$(git rev-parse origin/main)"
             CHANGED_FILES="$(git diff --name-only "$PREV_COMMIT" "$NEW_COMMIT" || true)"
-            git reset --hard origin/principal
+            git reset --hard origin/main
 
             echo '${{ secrets.BACKEND_ENV }}' > backend/.env
 
