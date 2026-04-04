@@ -1,0 +1,355 @@
+.email-setup-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--bg-primary, #f5f5f5);
+}
+
+.email-setup-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin-top: 70px;
+  padding: 30px;
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+}
+
+.email-setup-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 40px;
+  text-align: center;
+}
+
+.email-setup-header svg {
+  color: var(--primary-color, #0066cc);
+  margin-bottom: 15px;
+}
+
+.email-setup-header h1 {
+  margin: 10px 0;
+  font-size: 28px;
+  color: var(--text-primary, #333);
+}
+
+.email-setup-header p {
+  color: var(--text-secondary, #666);
+  margin: 5px 0 0 0;
+}
+
+.email-setup-form {
+  background: white;
+  border-radius: 8px;
+  padding: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 30px;
+}
+
+.form-section {
+  margin-bottom: 30px;
+}
+
+.form-section:last-of-type {
+  margin-bottom: 20px;
+}
+
+.form-section h3 {
+  font-size: 18px;
+  color: var(--text-primary, #333);
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.presets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.preset-button {
+  padding: 15px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-align: center;
+}
+
+.preset-button:hover {
+  border-color: var(--primary-color, #0066cc);
+  background: var(--hover-bg, #f0f5ff);
+}
+
+.preset-button.active {
+  border-color: var(--primary-color, #0066cc);
+  background: var(--primary-color, #0066cc);
+  color: white;
+}
+
+.preset-name {
+  font-weight: 600;
+  margin-bottom: 5px;
+  font-size: 14px;
+}
+
+.preset-hint {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: var(--text-primary, #333);
+  font-size: 14px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.3s ease;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--primary-color, #0066cc);
+  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+}
+
+.form-input:disabled {
+  background-color: #f5f5f5;
+  color: #999;
+  cursor: not-allowed;
+}
+
+.form-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-secondary, #666);
+}
+
+.form-hint a {
+  color: var(--primary-color, #0066cc);
+  text-decoration: none;
+}
+
+.form-hint a:hover {
+  text-decoration: underline;
+}
+
+.test-result {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.test-result.success {
+  background-color: #f0fdf4;
+  border: 1px solid #10b981;
+  color: #065f46;
+}
+
+.test-result.error {
+  background-color: #fef2f2;
+  border: 1px solid #ef4444;
+  color: #7f1d1d;
+}
+
+.test-result-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.test-result.success svg {
+  color: #10b981;
+}
+
+.test-result.error svg {
+  color: #ef4444;
+}
+
+.test-result-message {
+  flex: 1;
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 30px;
+}
+
+.btn-primary,
+.btn-secondary {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-primary {
+  background-color: var(--primary-color, #0066cc);
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--primary-hover, #0052a3);
+  box-shadow: 0 4px 12px rgba(0, 102, 204, 0.3);
+}
+
+.btn-secondary {
+  background-color: #f0f0f0;
+  color: var(--text-primary, #333);
+  border: 1px solid #ddd;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: #e8e8e8;
+}
+
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.help-section {
+  background: white;
+  border-radius: 8px;
+  padding: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.help-section h3 {
+  font-size: 18px;
+  color: var(--text-primary, #333);
+  margin-bottom: 20px;
+}
+
+.help-content h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #333);
+  margin-top: 15px;
+  margin-bottom: 8px;
+}
+
+.help-content ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.help-content li {
+  padding: 6px 0;
+  color: var(--text-secondary, #666);
+  font-size: 14px;
+  margin-left: 20px;
+  position: relative;
+}
+
+.help-content li:before {
+  content: "▪";
+  position: absolute;
+  left: 0;
+  color: var(--primary-color, #0066cc);
+}
+
+.help-content a {
+  color: var(--primary-color, #0066cc);
+  text-decoration: none;
+}
+
+.help-content a:hover {
+  text-decoration: underline;
+}
+
+.loading-spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  min-height: 400px;
+  color: var(--text-secondary, #666);
+}
+
+@media (max-width: 768px) {
+  .email-setup-container {
+    padding: 20px;
+    margin-top: 60px;
+  }
+
+  .email-setup-form,
+  .help-section {
+    padding: 20px;
+  }
+
+  .email-setup-header h1 {
+    font-size: 22px;
+  }
+
+  .presets-grid {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .btn-primary,
+  .btn-secondary {
+    width: 100%;
+    justify-content: center;
+  }
+}

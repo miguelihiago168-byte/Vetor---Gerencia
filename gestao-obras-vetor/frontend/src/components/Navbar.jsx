@@ -143,6 +143,7 @@ function Navbar() {
   const rotaEap = projetoId ? `/projeto/${projetoId}/eap` : '/eap';
   const rotaCurvaS = projetoId ? `/projeto/${projetoId}/curva-s` : '/curva-s';
   const rotaUsuarios = projetoId ? `/projeto/${projetoId}/usuarios` : '/usuarios';
+  const rotaEmail = projetoId ? `/projeto/${projetoId}/email-dashboard` : '/email-dashboard';
   const identificacaoTopo = usuario?.funcao || perfil || '';
 
   const isGestorGeral = perfil === 'Gestor Geral';
@@ -211,6 +212,9 @@ function Navbar() {
                   Curva S
                 </NavLink>
                 )}
+                <NavLink to={rotaEmail} onClick={(e) => confirmNav(e, rotaEmail)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+                  Email
+                </NavLink>
                 {canViewCompras && (
                 <NavLink to={rotaCompras} onClick={(e) => confirmNav(e, rotaCompras)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
                   Compras
@@ -251,14 +255,18 @@ function Navbar() {
               )}
             </NavLink>
             )}
+            {!temProjetoSelecionado && (
+              <NavLink to={rotaEmail} onClick={(e) => confirmNav(e, rotaEmail)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+                Email
+              </NavLink>
+            )}
             {canViewUsuarios && (
               <NavLink to={rotaUsuarios} onClick={(e) => confirmNav(e, rotaUsuarios)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
                 Usuários
               </NavLink>
             )}
-            </div>
           </div>
-
+          </div>
           <div className="navbar-account">
             <NavLink to="/perfil" className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`} style={{ marginRight: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
               <User size={16} />

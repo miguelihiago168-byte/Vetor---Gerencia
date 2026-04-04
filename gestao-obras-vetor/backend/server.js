@@ -33,6 +33,7 @@ const fornecedoresRoutes = require('./routes/fornecedores');
 // const financeiroRoutes = require('./routes/financeiro');
 const notificacoesRoutes = require('./routes/notificacoes');
 const almoxarifadoRoutes = require('./routes/almoxarifado');
+const emailRoutes = require('./routes/email');
 // Garantir esquema de notificações e índice único para evitar duplicidades
 try {
   const { db } = require('./config/database');
@@ -164,6 +165,7 @@ app.use('/api/fornecedores', fornecedoresRoutes);
 // app.use('/api/financeiro', financeiroRoutes);
 app.use('/api/notificacoes', notificacoesRoutes);
 app.use('/api/almoxarifado', almoxarifadoRoutes);
+app.use('/api/email', emailRoutes);
 
 // Rota de teste
 app.get('/api/health', (req, res) => {

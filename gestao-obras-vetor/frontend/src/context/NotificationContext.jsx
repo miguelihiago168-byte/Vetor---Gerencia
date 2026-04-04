@@ -45,6 +45,7 @@ export const NotificationProvider = ({ children }) => {
   const error = (message, duration) => addNotification(message, 'error', duration);
   const warning = (message, duration) => addNotification(message, 'warning', duration);
   const info = (message, duration) => addNotification(message, 'info', duration);
+  const showNotification = (message, type = 'info', duration = 5000) => addNotification(message, type, duration);
 
   const actionNotify = (message, actionLabel, onAction, type = 'info', duration = 7000) => {
     return addNotification(message, type, duration, { label: actionLabel, onClick: onAction });
@@ -54,6 +55,7 @@ export const NotificationProvider = ({ children }) => {
     <NotificationContext.Provider value={{
       notifications,
       addNotification,
+      showNotification,
       removeNotification,
       success,
       error,

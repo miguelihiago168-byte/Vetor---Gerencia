@@ -252,4 +252,24 @@ export const addRdoFerramenta = (rdoId, data) => api.post(`/almoxarifado/rdo/${r
 
 export const getRdoLogs = (rdoId) => api.get(`/rdos/${rdoId}/logs`);
 
+// Email
+export const getEmailConfig = () => api.get('/email/config');
+export const saveEmailConfig = (data) => api.post('/email/config', data);
+export const testEmailConfig = (data) => api.post('/email/config/test', data);
+export const sendEmail = (data) => api.post('/email/send', data);
+export const sendEmailFormData = (formData) => api.post('/email/send', formData, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+});
+export const uploadEmailInlineImage = (formData) => api.post('/email/upload-image', formData, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+});
+export const getEmailHistory = (params) => api.get('/email/history', { params });
+export const getEmailHistoryDetail = (id) => api.get(`/email/history/${id}`);
+export const getEmailTemplates = () => api.get('/email/templates');
+export const getEmailTemplate = (id) => api.get(`/email/templates/${id}`);
+export const saveEmailTemplate = (data) => api.post('/email/templates', data);
+export const deleteEmailTemplate = (id) => api.delete(`/email/templates/${id}`);
+export const getEmailSignature = () => api.get('/email/signature');
+export const updateEmailSignature = (data) => api.put('/email/signature', data);
+
 export default api;

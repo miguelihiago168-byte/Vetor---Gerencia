@@ -50,6 +50,7 @@ import AlmoxPerdas from './pages/AlmoxPerdas';
 import AlmoxRelatorios from './pages/AlmoxRelatorios';
 import MeuPerfil from './pages/MeuPerfil';
 import PrimeiroAcesso from './pages/PrimeiroAcesso';
+import EmailDashboard from './pages/EmailDashboard';
 import './index.css';
 import './dark-mode.css';
 
@@ -193,6 +194,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
               <Usuarios />
             </PrivateRoute>
           } />
+          <Route path="/projeto/:projetoId/email-dashboard" element={
+            <PrivateRoute>
+              <EmailDashboard />
+            </PrivateRoute>
+          } />
           <Route path="/projeto/:projetoId/rnc" element={
             <PrivateRoute allowedPerfis={PERFIS_RNC}>
               <RNC />
@@ -281,6 +287,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/compras/status/:statusSlug" element={<PrivateRoute allowedPerfis={PERFIS_COMPRAS}><ComprasStatusList /></PrivateRoute>} />
           {/* FINANCEIRO DESATIVADO: <Route path="/financeiro" element={<ProjetoSelector destino="financeiro" />} /> */}
           <Route path="/ativos" element={<ProjetoSelector destino="almoxarifado" />} />
+          {/* Email Dashboard */}
+          <Route path="/email-dashboard" element={<PrivateRoute><EmailDashboard /></PrivateRoute>} />
           <Route path="/" element={<Navigate to="/projetos" replace />} />
                 </Routes>
                 <NotificationContainer />
