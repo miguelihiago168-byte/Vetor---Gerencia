@@ -19,6 +19,38 @@ jobs:
       - name: Baixar código do repositório
         uses: actions/checkout@v4
 
+      - name: Descobrir IP publico do runner
+        id: runner_ip
+        shell: bash
+        run: |
+          set -euo pipefail
+          ip="$(curl -fsSL https://checkip.amazonaws.com | tr -d '\n' | tr -d '\r')"
+          if [ -z "$ip" ]; then
+            echo "Nao foi possivel descobrir o IP publico do runner."
+            exit 1
+          fi
+          echo "ip=$ip" >> "$GITHUB_OUTPUT"
+
+      - name: Configurar credenciais AWS
+        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_REGION != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Liberar SSH temporario no Security Group
+        if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_REGION != '' && secrets.EC2_SECURITY_GROUP_ID != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CIDR="${{ steps.runner_ip.outputs.ip }}/32"
+          SG_ID="${{ secrets.EC2_SECURITY_GROUP_ID }}"
+          aws ec2 authorize-security-group-ingress \
+            --group-id "$SG_ID" \
+            --ip-permissions "[{\"IpProtocol\":\"tcp\",\"FromPort\":22,\"ToPort\":22,\"IpRanges\":[{\"CidrIp\":\"$CIDR\",\"Description\":\"github-actions-temporary-ssh\"}]}]" \
+            || true
+
       - name: Diagnóstico de arquivos no runner
         run: |
           pwd
@@ -160,5 +192,17 @@ jobs:
             fi
 
             sudo docker compose up -d --build
+
+      - name: Revogar SSH temporario do Security Group
+        if: ${{ always() && secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_REGION != '' && secrets.EC2_SECURITY_GROUP_ID != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CIDR="${{ steps.runner_ip.outputs.ip }}/32"
+          SG_ID="${{ secrets.EC2_SECURITY_GROUP_ID }}"
+          aws ec2 revoke-security-group-ingress \
+            --group-id "$SG_ID" \
+            --ip-permissions "[{\"IpProtocol\":\"tcp\",\"FromPort\":22,\"ToPort\":22,\"IpRanges\":[{\"CidrIp\":\"$CIDR\"}]}]" \
+            || true
 
 # Deploy com chaves configuradas
