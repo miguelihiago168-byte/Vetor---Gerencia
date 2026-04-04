@@ -1,7 +1,7 @@
 FROM node:18-alpine AS builder
 WORKDIR /app
 COPY frontend/package*.json ./
-RUN npm install --legacy-peer-deps
+RUN npm ci --legacy-peer-deps 2>&1 || npm install --legacy-peer-deps 2>&1
 COPY frontend/ .
 RUN npm run build
 
