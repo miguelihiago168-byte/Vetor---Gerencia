@@ -120,6 +120,9 @@ jobs:
               "CHANGED_FILES=$(git diff --name-only $PREV_COMMIT $NEW_COMMIT || true)",
               "git reset --hard origin/main",
               "echo '$BACKEND_ENV_B64' | base64 -d > backend/.env",
+              "sudo docker builder prune -af || true",
+              "sudo docker image prune -af || true",
+              "sudo docker container prune -f || true",
               "NEED_BACKEND=0",
               "NEED_FRONTEND=0",
               "echo \"$CHANGED_FILES\" | grep -Eq '^(backend/|docker-compose.yml)' && NEED_BACKEND=1 || true",
@@ -249,6 +252,10 @@ jobs:
             git reset --hard origin/main
 
             echo '${{ secrets.BACKEND_ENV }}' > backend/.env
+
+            sudo docker builder prune -af || true
+            sudo docker image prune -af || true
+            sudo docker container prune -f || true
 
             NEED_BACKEND=0
             NEED_FRONTEND=0
