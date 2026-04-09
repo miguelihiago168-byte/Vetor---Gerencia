@@ -11,7 +11,9 @@ export default function ProjetoSelector({ destino }) {
   const labels = {
     rdos: 'RDOs',
     rnc: 'RNC',
+    planejamento: 'Planejamento',
     eap: 'EAP',
+    gantt: 'Cronograma (Gantt)',
     pedidos: 'Compras',
     financeiro: 'Financeiro',
     almoxarifado: 'Ativos',

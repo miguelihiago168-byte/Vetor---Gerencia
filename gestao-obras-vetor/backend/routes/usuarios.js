@@ -23,8 +23,10 @@ const generateUniqueLoginFromName = async (name) => {
   for (let i = 0; i < 50; i += 1) {
     const suffix = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
     const candidate = `${base}${suffix}`;
-    const exists = await getQuery('SELECT id FROM usuarios WHERE login = ?', [candidate]);
-    if (!exists) return candidate;
+    const existsTenant = await getQuery('SELECT id FROM usuarios WHERE login = ?', [candidate]);
+    if (existsTenant) continue;
+    const existsMain = await getQueryMain('SELECT id FROM usuarios WHERE login = ?', [candidate]);
+    if (!existsMain) return candidate;
   }
   throw new Error('Nao foi possivel gerar login unico.');
 };
@@ -557,9 +559,12 @@ router.post('/', [
 
     const legado = mapPerfilParaLegado(perfil);
 
-    const result = await runQuery(`
-      INSERT INTO usuarios (login, senha, pin, nome, email, perfil, funcao, setor, setor_outro, is_gestor, is_adm, perfil_almoxarifado, tenant_id, criado_por, primeiro_acesso_pendente)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+    // Gravar no banco principal PRIMEIRO para obter o ID canônico.
+    // Inserir com INSERT OR IGNORE usando id explícito causava falha silenciosa
+    // quando o banco principal já tinha outro registro com o mesmo id gerado pelo tenant.
+    const mainResult = await runQueryMain(`
+      INSERT INTO usuarios (login, senha, pin, nome, email, perfil, funcao, setor, setor_outro, is_gestor, is_adm, perfil_almoxarifado, tenant_id, ativo, criado_por, primeiro_acesso_pendente)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 0)
     `, [
       login,
       senhaHash,
@@ -577,12 +582,14 @@ router.post('/', [
       req.usuario.id
     ]);
 
-    // Gravar no banco principal para que o usuário consiga fazer login
-    await runQueryMain(`
-      INSERT OR IGNORE INTO usuarios (id, login, senha, pin, nome, email, perfil, funcao, setor, setor_outro, is_gestor, is_adm, perfil_almoxarifado, tenant_id, ativo, criado_por, primeiro_acesso_pendente)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 0)
+    const usuarioId = mainResult.lastID;
+
+    // Gravar no banco do tenant usando o ID já gerado no banco principal
+    await runQuery(`
+      INSERT OR REPLACE INTO usuarios (id, login, senha, pin, nome, email, perfil, funcao, setor, setor_outro, is_gestor, is_adm, perfil_almoxarifado, tenant_id, criado_por, primeiro_acesso_pendente)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
     `, [
-      result.lastID,
+      usuarioId,
       login,
       senhaHash,
       pinFinal,
@@ -598,15 +605,16 @@ router.post('/', [
       req.usuario.tenant_id,
       req.usuario.id
     ]);
+
     await runQueryMain(
       'INSERT OR IGNORE INTO usuario_tenants (usuario_id, tenant_id, ativo) VALUES (?, ?, 1)',
-      [result.lastID, req.usuario.tenant_id]
+      [usuarioId, req.usuario.tenant_id]
     );
 
-    await sincronizarVinculosProjeto(result.lastID, projetoIds);
+    await sincronizarVinculosProjeto(usuarioId, projetoIds);
 
-    const usuarioCriado = await carregarUsuarioComProjetos(result.lastID);
-    await registrarAuditoria('usuarios', result.lastID, 'CREATE', null, usuarioCriado, req.usuario.id);
+    const usuarioCriado = await carregarUsuarioComProjetos(usuarioId);
+    await registrarAuditoria('usuarios', usuarioId, 'CREATE', null, usuarioCriado, req.usuario.id);
 
     res.status(201).json({
       mensagem: 'Usuário criado com sucesso.',
@@ -619,6 +627,10 @@ router.post('/', [
     }
     if (error?.message === 'Login invalido.') {
       return res.status(400).json({ erro: 'Usuário inválido.' });
+    }
+    const sqliteMsg = String(error?.message || '').toLowerCase();
+    if (sqliteMsg.includes('unique constraint failed: usuarios.login') || sqliteMsg.includes('unique constraint failed')) {
+      return res.status(409).json({ erro: 'Usuário já existe. Escolha outro login.' });
     }
     res.status(500).json({ erro: 'Erro ao criar usuário.' });
   }

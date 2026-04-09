@@ -26,6 +26,14 @@ const diffDays = (fromDateOnly, toDateOnlyValue) => {
   return Math.floor((to - from) / (24 * 60 * 60 * 1000));
 };
 
+const isDiaUtil = (dateOnly) => {
+  if (!dateOnly) return false;
+  const d = new Date(`${dateOnly}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return false;
+  const dow = d.getDay(); // 0=domingo, 6=sábado
+  return dow >= 1 && dow <= 5;
+};
+
 // Dashboard - Avanço físico do projeto
 router.get('/projeto/:projetoId/avanco', auth, async (req, res) => {
   try {
@@ -276,12 +284,23 @@ router.get('/projeto/:projetoId/curva-s', auth, async (req, res) => {
     for (const atividade of atividades) {
       const inicio = atividade.data_inicio_planejada;
       const fim = atividade.data_fim_planejada;
+      const pesoAtividade = Number(atividade.peso_percentual_projeto || 0) * fatorNormalizacao;
       const duracao = Math.max(1, diffDays(inicio, fim) + 1);
-      const avancoPlanejadoDia = (Number(atividade.peso_percentual_projeto || 0) * fatorNormalizacao) / duracao;
 
+      const diasUteis = [];
       for (let i = 0; i < duracao; i += 1) {
         const data = addDays(inicio, i);
         if (data > dataFimSerie) break;
+        if (isDiaUtil(data)) diasUteis.push(data);
+      }
+
+      // Planejado: somente dias úteis (seg-sex).
+      // Fallback evita perder o peso da atividade se a janela cair só em fim de semana.
+      const baseDistribuicao = diasUteis.length > 0 ? diasUteis : [inicio];
+      const avancoPlanejadoDia = pesoAtividade / baseDistribuicao.length;
+
+      for (const data of baseDistribuicao) {
+        if (!data || data > dataFimSerie) continue;
         planejadoPorDia[data] = (planejadoPorDia[data] || 0) + avancoPlanejadoDia;
       }
     }

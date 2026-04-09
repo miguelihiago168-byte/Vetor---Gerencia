@@ -1,8 +1,3 @@
-          <Route path="/perfil" element={
-            <PrivateRoute>
-              <MeuPerfil />
-            </PrivateRoute>
-          } />
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
@@ -33,6 +28,8 @@ import ComprasGlobal from './pages/ComprasGlobal';
 import EAP from './pages/EAP';
 import EAPForm from './pages/EAPForm';
 import CurvaS from './pages/CurvaS';
+import CronogramaGantt from './pages/CronogramaGantt';
+import PlanejamentoDashboard from './pages/PlanejamentoDashboard';
 import RDOs from './pages/RDOs';
 import RDODetalhes from './pages/RDODetalhes';
 import RDOForm2 from './pages/RDOForm2';
@@ -58,6 +55,8 @@ const PERFIS_RDO = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da
 const PERFIS_RNC = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade', 'Fiscal'];
 const PERFIS_CURVA_S = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade', 'Fiscal'];
 const PERFIS_EAP = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade'];
+const PERFIS_GANTT = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade'];
+const PERFIS_PLANEJAMENTO = PERFIS_EAP;
 const PERFIS_COMPRAS = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'ADM', 'Almoxarife'];
 const PERFIS_GESTORES_ADM = ['Gestor Geral', 'ADM'];
 const PERFIS_ATIVOS = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'ADM', 'Almoxarife'];
@@ -94,6 +93,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
               <EAP />
             </PrivateRoute>
           } />
+          <Route path="/projeto/:projetoId/planejamento" element={
+            <PrivateRoute allowedPerfis={PERFIS_PLANEJAMENTO}>
+              <PlanejamentoDashboard />
+            </PrivateRoute>
+          } />
           <Route path="/projeto/:projetoId/eap/novo" element={
             <PrivateRoute allowedPerfis={PERFIS_EAP}>
               <EAPForm />
@@ -109,11 +113,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
               <CurvaS />
             </PrivateRoute>
           } />
-          <Route path="/projeto/:projetoId/rdos" element={
-            <PrivateRoute allowedPerfis={PERFIS_RDO}>
-              <RDOs />
+          <Route path="/projeto/:projetoId/gantt" element={
+            <PrivateRoute allowedPerfis={PERFIS_GANTT}>
+              <CronogramaGantt />
             </PrivateRoute>
           } />
+
           {/* Pedidos legados — mantidos para compatibilidade */}
           <Route path="/projeto/:projetoId/pedidos" element={
             <PrivateRoute allowedPerfis={PERFIS_COMPRAS}>
@@ -166,6 +171,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/projeto/:projetoId/rdo/:rdoId" element={
             <PrivateRoute allowedPerfis={PERFIS_RDO}>
               <RDODetalhes />
+            </PrivateRoute>
+          } />
+          {/* Alias para evitar erro de rota ao acessar detalhes via /rdos/:rdoId */}
+          <Route path="/projeto/:projetoId/rdos" element={
+            <PrivateRoute allowedPerfis={PERFIS_RDO}>
+              <RDOs />
             </PrivateRoute>
           } />
           {/* Alias para evitar erro de rota ao acessar detalhes via /rdos/:rdoId */}
@@ -281,7 +292,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           {/* Rotas globais para navegação lateral */}
           <Route path="/rdos" element={<ProjetoSelector destino="rdos" />} />
           <Route path="/eap" element={<ProjetoSelector destino="eap" />} />
+          <Route path="/planejamento" element={<ProjetoSelector destino="planejamento" />} />
           <Route path="/curva-s" element={<ProjetoSelector destino="curva-s" />} />
+          <Route path="/gantt" element={<ProjetoSelector destino="gantt" />} />
           <Route path="/rnc" element={<ProjetoSelector destino="rnc" />} />
           <Route path="/compras" element={<PrivateRoute allowedPerfis={PERFIS_COMPRAS}><ComprasGlobal /></PrivateRoute>} />
           <Route path="/compras/status/:statusSlug" element={<PrivateRoute allowedPerfis={PERFIS_COMPRAS}><ComprasStatusList /></PrivateRoute>} />

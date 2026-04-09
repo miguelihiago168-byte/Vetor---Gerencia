@@ -453,6 +453,14 @@ code {
   margin-left: 0;
 }
 
+.grouped-menu {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+}
+
 .navbar-account {
   display: inline-flex;
   align-items: center;
@@ -683,6 +691,11 @@ code {
   .navbar-main { width: 100%; }
   .navbar-menu { margin-left: 0; }
   .navbar-account { width: 100%; justify-content: flex-end; }
+  .grouped-menu {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
   .almox-layout { grid-template-columns: 1fr; }
   .almox-sidebar { position: static; }
   .almox-container { padding: 0 12px 16px; }
