@@ -12,6 +12,15 @@ const GanttSidebar = ({ isOpen, onClose, dadosGantt, caminhoCritico, folgas, emb
   const [escalaMin, setEscalaMin] = useState(0);
   const [escalaMax, setEscalaMax] = useState(100);
   const [tooltip, setTooltip] = useState(null);
+  const [isDark, setIsDark] = useState(() => document.body.classList.contains('dark-mode'));
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(document.body.classList.contains('dark-mode'));
+    });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, [])
 
   const isValidDate = (value) => {
     if (!value) return false;
@@ -221,6 +230,7 @@ const GanttSidebar = ({ isOpen, onClose, dadosGantt, caminhoCritico, folgas, emb
                 formatDateBR={formatDateBR}
                 calcularPosicaoTooltip={calcularPosicaoTooltip}
                 setTooltip={setTooltip}
+                isDark={isDark}
               />
               {tooltip && (
                 <div className="gantt-tooltip" style={{ top: tooltip.y, left: tooltip.x }}>
@@ -318,7 +328,26 @@ const ROW_HEIGHT = 38;
 const HEADER_HEIGHT = 28;
 const MIN_PIXELS_PER_DAY = 8;
 
-const GanttChartSVG = ({ dados, escalaMin, escalaMax, getCor, formatDateBR, calcularPosicaoTooltip, setTooltip }) => {
+const GanttChartSVG = ({ dados, escalaMin, escalaMax, getCor, formatDateBR, calcularPosicaoTooltip, setTooltip, isDark }) => {
+  const c = isDark ? {
+    rowEven:    '#1b2836',
+    rowOdd:     '#162030',
+    grid:       '#2a4060',
+    separator:  '#2a4060',
+    headerLine: '#2a4060',
+    tickLabel:  '#607080',
+    rowLabel:   '#c5d3de',
+    arrow:      '#607080',
+  } : {
+    rowEven:    '#fafafa',
+    rowOdd:     '#f2f2f2',
+    grid:       '#e8e8e8',
+    separator:  '#d0d0d0',
+    headerLine: '#ddd',
+    tickLabel:  '#999',
+    rowLabel:   '#333',
+    arrow:      '#888',
+  };
   const totalDays = Math.max(escalaMax - escalaMin, 1);
   const pixelsPerDay = Math.max(Math.floor(800 / totalDays), MIN_PIXELS_PER_DAY);
   const plotWidth = totalDays * pixelsPerDay;
@@ -366,15 +395,17 @@ const GanttChartSVG = ({ dados, escalaMin, escalaMax, getCor, formatDateBR, calc
   });
 
   return (
-    <div className="gantt-svg-container">
+    <div className="gantt-svg-container" style={{ width: '100%' }}>
       <svg
         width={svgWidth}
         height={svgHeight}
-        style={{ fontFamily: 'sans-serif', display: 'block', minWidth: svgWidth }}
+        style={{ fontFamily: 'sans-serif', display: 'block', minWidth: svgWidth, width: '100%' }}
       >
+        {/* Fundo geral */}
+        <rect x={0} y={0} width="100%" height={svgHeight} fill={isDark ? '#1b2836' : '#fff'} />
         <defs>
           <marker id="gantt-arrow" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
-            <polygon points="0 0, 7 2.5, 0 5" fill="#888" />
+            <polygon points="0 0, 7 2.5, 0 5" fill={c.arrow} />
           </marker>
         </defs>
 
@@ -383,8 +414,8 @@ const GanttChartSVG = ({ dados, escalaMin, escalaMax, getCor, formatDateBR, calc
           const x = MARGIN_LEFT + (t - escalaMin) * pixelsPerDay;
           return (
             <g key={t}>
-              <line x1={x} y1={HEADER_HEIGHT} x2={x} y2={svgHeight} stroke="#e8e8e8" />
-              <text x={x} y={HEADER_HEIGHT - 6} textAnchor="middle" fontSize={10} fill="#999">
+              <line x1={x} y1={HEADER_HEIGHT} x2={x} y2={svgHeight} stroke={c.grid} />
+              <text x={x} y={HEADER_HEIGHT - 6} textAnchor="middle" fontSize={10} fill={c.tickLabel}>
                 {`D${t}`}
               </text>
             </g>
@@ -392,10 +423,10 @@ const GanttChartSVG = ({ dados, escalaMin, escalaMax, getCor, formatDateBR, calc
         })}
 
         {/* Linha separadora vertical entre labels e barras */}
-        <line x1={MARGIN_LEFT} y1={0} x2={MARGIN_LEFT} y2={svgHeight} stroke="#d0d0d0" strokeWidth={1} />
+        <line x1={MARGIN_LEFT} y1={0} x2={MARGIN_LEFT} y2={svgHeight} stroke={c.separator} strokeWidth={1} />
 
         {/* Linha separadora do header */}
-        <line x1={0} y1={HEADER_HEIGHT} x2={svgWidth} y2={HEADER_HEIGHT} stroke="#ddd" />
+        <line x1={0} y1={HEADER_HEIGHT} x2={svgWidth} y2={HEADER_HEIGHT} stroke={c.headerLine} />
 
         {/* Linhas de atividades */}
         {dados.map((d, i) => {
@@ -409,11 +440,11 @@ const GanttChartSVG = ({ dados, escalaMin, escalaMax, getCor, formatDateBR, calc
           return (
             <g key={d.id}>
               {/* Fundo alternado */}
-              <rect x={0} y={y} width={svgWidth} height={ROW_HEIGHT} fill={i % 2 === 0 ? '#fafafa' : '#f2f2f2'} />
+              <rect x={0} y={y} width={svgWidth} height={ROW_HEIGHT} fill={i % 2 === 0 ? c.rowEven : c.rowOdd} />
               {/* Indicador de cor na margem esquerda */}
               <rect x={0} y={y + 6} width={3} height={ROW_HEIGHT - 12} rx={1} fill={cor} opacity={0.7} />
               {/* Label da atividade — alinhado à esquerda */}
-              <text x={8} y={y + ROW_HEIGHT / 2 + 4} textAnchor="start" fontSize={11} fill="#333">
+              <text x={8} y={y + ROW_HEIGHT / 2 + 4} textAnchor="start" fontSize={11} fill={c.rowLabel}>
                 {label}
               </text>
               {/* Fundo translúcido (duração planejada) */}
@@ -459,7 +490,7 @@ const GanttChartSVG = ({ dados, escalaMin, escalaMax, getCor, formatDateBR, calc
             key={key}
             d={path}
             fill="none"
-            stroke="#888"
+            stroke={c.arrow}
             strokeWidth={1.5}
             markerEnd="url(#gantt-arrow)"
           />

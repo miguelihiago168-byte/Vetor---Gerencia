@@ -398,6 +398,90 @@
   }
 }
 
+/* ── Dark mode ──────────────────────────────────────────── */
+body.dark-mode .gantt-sidebar {
+  background: var(--card-bg, #1b2836);
+  border-left-color: #2a4060;
+  box-shadow: -2px 0 12px rgba(0, 0, 0, 0.4);
+}
+
+body.dark-mode .gantt-header {
+  background: #162030;
+  border-bottom-color: #2a4060;
+}
+
+body.dark-mode .gantt-titulo h3 { color: #e8edf3; }
+body.dark-mode .gantt-titulo p  { color: #8fa3b9; }
+body.dark-mode .gantt-close     { color: #607080; }
+body.dark-mode .gantt-close:hover { color: #e8edf3; }
+
+body.dark-mode .gantt-legenda {
+  background: #162030;
+  border-radius: 4px;
+}
+
+body.dark-mode .gantt-grafico {
+  background: #1b2836;
+  border-color: #2a4060;
+}
+
+body.dark-mode .info-item {
+  background: #162030;
+  border-left-color: #38bdf8;
+}
+
+body.dark-mode .info-item h4 { color: #c5d3de; }
+body.dark-mode .info-item p  { color: #8fa3b9; }
+body.dark-mode .data-conclusao { color: #38bdf8; }
+
+body.dark-mode .detalhe-item {
+  background: #1b2836;
+  border-left-color: #2a4060;
+}
+
+body.dark-mode .detalhe-nome       { color: #d8e3ec; }
+body.dark-mode .detalhe-col-datas  { color: #607080; }
+body.dark-mode .detalhe-col-pred   { color: #8fa3b9; }
+body.dark-mode .detalhe-col-pct    { color: #a8bcce; }
+body.dark-mode .detalhe-col-folga  { color: #38bdf8; }
+body.dark-mode .detalhe-datas small     { color: #607080; }
+body.dark-mode .detalhe-predecessoras small { color: #8fa3b9; }
+body.dark-mode .detalhe-progresso small    { color: #607080; }
+body.dark-mode .detalhe-folga { color: #38bdf8; }
+
+body.dark-mode .progress-bar { background: #2a4060; }
+body.dark-mode .progress-fill { background: #0ea5e9; }
+
+body.dark-mode .badge-concluida {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+body.dark-mode .badge-critico {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+body.dark-mode .badge-atrasado {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+body.dark-mode .gantt-detalhes {
+  border-top-color: #2a4060;
+}
+
+body.dark-mode .gantt-detalhes h4 { color: #8fa3b9; }
+
+body.dark-mode .gantt-footer {
+  background: #162030;
+  border-top-color: #2a4060;
+  color: #607080;
+}
+
+body.dark-mode .gantt-vazio     { color: #607080; }
+body.dark-mode .gantt-vazio svg { color: #2a4060; }
+
 /* Scrollbar customizado */
 .gantt-content::-webkit-scrollbar {
   width: 6px;

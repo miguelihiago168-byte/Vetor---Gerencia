@@ -135,9 +135,10 @@ code {
 }
 
 .btn-primary {
-  background: #f0f9ff;
-  color: #0369a1;
-  border-color: #0ea5e9;
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  color: #ffffff;
+  border-color: #0284c7;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.30);
 }
 
 .btn-success { background: var(--badge-green-bg);  color: var(--badge-green-color);  border-color: var(--badge-green-color); }
@@ -150,9 +151,9 @@ code {
 .btn-soft-yellow { background: var(--badge-yellow-bg); color: var(--badge-yellow-color); border-color: var(--badge-yellow-color); }
 .btn-soft-blue   { background: var(--badge-blue-bg);   color: var(--badge-blue-color);   border-color: var(--badge-blue-color); }
 .btn-secondary {
-  background: var(--gray-50);
+  background: transparent;
   color: var(--gray-500);
-  border-color: var(--gray-200);
+  border-color: var(--gray-300);
 }
 
 /* Cards */
