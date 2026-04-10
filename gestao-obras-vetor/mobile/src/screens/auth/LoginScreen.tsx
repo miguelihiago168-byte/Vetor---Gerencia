@@ -31,12 +31,14 @@ export default function LoginScreen() {
     }
     setCarregando(true);
     try {
-      const resp = await login({ login: loginInput.trim(), senha: senha.trim() });
+      const usuarioInput = loginInput.trim();
+      const resp = await login({ usuario: usuarioInput, senha: senha.trim() });
       const { token, usuario } = resp.data;
       await loginAuth(token, usuario);
     } catch (e: unknown) {
       const msg =
-        (e as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        (e as { response?: { data?: { erro?: string; error?: string } } })?.response?.data?.erro ??
+        (e as { response?: { data?: { erro?: string; error?: string } } })?.response?.data?.error ??
         'Erro ao fazer login. Verifique o servidor.';
       error(msg);
     } finally {
@@ -54,7 +56,11 @@ export default function LoginScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.logoContainer}>
-            <Text style={styles.logoText}>V</Text>
+            <Image
+              source={require('../../../assets/icon.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
           </View>
           <Text style={styles.titulo}>Vetor Obras</Text>
           <Text style={styles.subtitulo}>Gestão de Obras</Text>
@@ -64,15 +70,13 @@ export default function LoginScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitulo}>Entrar no sistema</Text>
 
-          <Text style={styles.label}>Login</Text>
+          <Text style={styles.label}>Usuário ou e-mail</Text>
           <TextInput
             style={styles.input}
             value={loginInput}
             onChangeText={setLoginInput}
-            placeholder="Ex: 000001"
+            placeholder="Digite seu usuário ou e-mail"
             placeholderTextColor={CORES.desabilitado}
-            keyboardType="numeric"
-            maxLength={6}
             autoCapitalize="none"
             autoCorrect={false}
           />
@@ -135,10 +139,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     elevation: 4,
   },
-  logoText: {
-    fontSize: 40,
-    fontWeight: 'bold',
-    color: CORES.primaria,
+  logoImage: {
+    width: 64,
+    height: 64,
   },
   titulo: {
     fontSize: 28,

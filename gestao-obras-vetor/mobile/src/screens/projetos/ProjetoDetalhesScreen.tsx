@@ -55,6 +55,13 @@ const MODULOS: Modulo[] = [
     cor: '#6A1B9A',
   },
   {
+    key: 'Planejamento',
+    label: 'Planejamento',
+    descricao: 'Curva S e cronograma',
+    icon: 'timeline-text-outline',
+    cor: '#00897B',
+  },
+  {
     key: 'AlmoxDashboard',
     label: 'Almoxarifado',
     descricao: 'Ferramentas e retiradas',

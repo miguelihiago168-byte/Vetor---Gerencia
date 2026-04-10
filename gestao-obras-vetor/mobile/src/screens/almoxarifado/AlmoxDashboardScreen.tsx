@@ -78,7 +78,7 @@ export default function AlmoxDashboardScreen() {
     {
       label: 'Alocadas',
       valor: dados?.ferramentas_alocadas ?? 0,
-      icone: 'account-hard-hat-outline',
+      icone: 'hard-hat',
       cor: CORES.aviso,
       fundo: CORES.avisoClaro,
     },

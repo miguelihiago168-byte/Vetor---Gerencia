@@ -17,6 +17,9 @@ import {
   analisarItemRequisicao,
   marcarItemComprado,
   selecionarCotacaoItem,
+  cancelarItemRequisicao,
+  devolverCotacaoItem,
+  finalizarCotacaoItem,
 } from '../../services/api';
 import { useNotification } from '../../context/NotificationContext';
 import { useAuth } from '../../context/AuthContext';
@@ -29,7 +32,8 @@ interface Item {
   descricao: string;
   quantidade: number;
   unidade?: string;
-  status: keyof typeof STATUS_ITEM_COMPRA;
+  status?: keyof typeof STATUS_ITEM_COMPRA;
+  status_item?: string;
   cotacoes?: Cotacao[];
   cotacao_selecionada_id?: number;
 }
@@ -37,15 +41,28 @@ interface Item {
 interface Cotacao {
   id: number;
   fornecedor_nome?: string;
-  preco_unitario: number;
+  preco_unitario?: number;
+  valor_unitario?: number;
   selecionada?: number;
 }
+
+const statusItemToSlug = (status?: string): string => {
+  const s = String(status || '').toLowerCase();
+  if (s === 'aguardando análise') return 'pendente';
+  if (s === 'reprovado') return 'reprovado';
+  if (s === 'em cotação') return 'em_cotacao';
+  if (s === 'cotação finalizada') return 'cotado';
+  if (s === 'aprovado para compra') return 'aprovado';
+  if (s === 'comprado') return 'comprado';
+  if (s === 'cancelado') return 'cancelado';
+  return s;
+};
 
 export default function ComprasDetalheScreen() {
   const route = useRoute<Route>();
   const { requisicaoId, projetoId } = route.params;
   const { success, error } = useNotification();
-  const { isGestor } = useAuth();
+  const { isGestor, isAdm } = useAuth();
 
   const [req, setReq] = useState<Record<string, unknown> | null>(null);
   const [carregando, setCarregando] = useState(true);
@@ -75,7 +92,7 @@ export default function ComprasDetalheScreen() {
         onPress: async () => {
           try {
             await analisarItemRequisicao(requisicaoId, item.id, {
-              status: 'aprovado',
+              aprovado: true,
             });
             success('Item aprovado!');
             carregar();
@@ -123,6 +140,65 @@ export default function ComprasDetalheScreen() {
     ]);
   };
 
+  const cancelarItem = (item: Item) => {
+    Alert.alert('Cancelar item', `Cancelar "${item.descricao}"?`, [
+      { text: 'Voltar', style: 'cancel' },
+      {
+        text: 'Cancelar item',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await cancelarItemRequisicao(requisicaoId, item.id, {
+              motivo: 'Cancelado via aplicativo mobile',
+            });
+            success('Item cancelado.');
+            carregar();
+          } catch {
+            error('Erro ao cancelar item.');
+          }
+        },
+      },
+    ]);
+  };
+
+  const devolverCotacao = (item: Item) => {
+    Alert.alert('Devolver cotação', `Devolver "${item.descricao}" para cotação?`, [
+      { text: 'Voltar', style: 'cancel' },
+      {
+        text: 'Devolver',
+        onPress: async () => {
+          try {
+            await devolverCotacaoItem(requisicaoId, item.id, {
+              motivo: 'Ajuste solicitado via aplicativo mobile',
+            });
+            success('Item devolvido para cotação.');
+            carregar();
+          } catch {
+            error('Erro ao devolver cotação.');
+          }
+        },
+      },
+    ]);
+  };
+
+  const finalizarCotacao = (item: Item) => {
+    Alert.alert('Finalizar cotação', `Finalizar cotação de "${item.descricao}"?`, [
+      { text: 'Voltar', style: 'cancel' },
+      {
+        text: 'Finalizar',
+        onPress: async () => {
+          try {
+            await finalizarCotacaoItem(requisicaoId, item.id);
+            success('Cotação finalizada.');
+            carregar();
+          } catch {
+            error('Erro ao finalizar cotação.');
+          }
+        },
+      },
+    ]);
+  };
+
   if (carregando) {
     return (
       <View style={styles.centro}>
@@ -156,16 +232,19 @@ export default function ComprasDetalheScreen() {
         <Text style={styles.sub}>
           {itens.length} {itens.length === 1 ? 'item' : 'itens'}
         </Text>
-        {req.observacoes ? (
-          <Text style={styles.obs}>{req.observacoes as string}</Text>
+        {req.observacao_geral ? (
+          <Text style={styles.obs}>{req.observacao_geral as string}</Text>
         ) : null}
       </View>
 
       {/* Itens */}
       <Text style={styles.secaoTitulo}>Itens da Requisição</Text>
       {itens.map((item) => {
-        const statusInfo = STATUS_ITEM_COMPRA[item.status] ?? {
-          label: item.status,
+        const statusOriginal = item.status_item ?? item.status ?? '';
+        const status = statusItemToSlug(statusOriginal);
+        const statusInfo = STATUS_ITEM_COMPRA[statusOriginal as keyof typeof STATUS_ITEM_COMPRA] ??
+          STATUS_ITEM_COMPRA[status as keyof typeof STATUS_ITEM_COMPRA] ?? {
+          label: statusOriginal || status,
           cor: CORES.textoSecundario,
           corFundo: CORES.fundo,
         };
@@ -210,13 +289,12 @@ export default function ComprasDetalheScreen() {
                         {cot.fornecedor_nome ?? 'Fornecedor'}
                       </Text>
                       <Text style={styles.cotacaoPreco}>
-                        R$ {Number(cot.preco_unitario).toFixed(2)}/un
+                        R$ {Number(cot.valor_unitario ?? cot.preco_unitario ?? 0).toFixed(2)}/un
                       </Text>
                     </View>
                     {!cot.selecionada &&
                       isGestor &&
-                      (item.status === 'em_cotacao' ||
-                        item.status === 'cotado') && (
+                      (status === 'em_cotacao' || status === 'cotado') && (
                         <TouchableOpacity
                           style={styles.selecionarBtn}
                           onPress={() => selecionarCotacao(item, cot.id)}
@@ -240,7 +318,7 @@ export default function ComprasDetalheScreen() {
 
             {/* Ações */}
             <View style={styles.itemAcoes}>
-              {isGestor && item.status === 'pendente' && (
+              {isGestor && status === 'pendente' && (
                 <TouchableOpacity
                   style={[
                     styles.acaoBotao,
@@ -253,7 +331,29 @@ export default function ComprasDetalheScreen() {
                   </Text>
                 </TouchableOpacity>
               )}
-              {(item.status === 'cotado' || item.status === 'aprovado') && (
+              {isAdm && status === 'em_cotacao' && (
+                <TouchableOpacity
+                  style={[
+                    styles.acaoBotao,
+                    { backgroundColor: CORES.infoClaro },
+                  ]}
+                  onPress={() => finalizarCotacao(item)}
+                >
+                  <Text style={[styles.acaoBotaoTexto, { color: CORES.info }]}>Finalizar cotação</Text>
+                </TouchableOpacity>
+              )}
+              {isGestor && status === 'cotado' && (
+                <TouchableOpacity
+                  style={[
+                    styles.acaoBotao,
+                    { backgroundColor: CORES.alertaClaro },
+                  ]}
+                  onPress={() => devolverCotacao(item)}
+                >
+                  <Text style={[styles.acaoBotaoTexto, { color: CORES.alerta }]}>Devolver cotação</Text>
+                </TouchableOpacity>
+              )}
+              {isAdm && (status === 'cotado' || status === 'aprovado') && (
                 <TouchableOpacity
                   style={[
                     styles.acaoBotao,
@@ -269,6 +369,17 @@ export default function ComprasDetalheScreen() {
                   >
                     Marcar comprado
                   </Text>
+                </TouchableOpacity>
+              )}
+              {(isAdm || isGestor) && !['comprado', 'cancelado'].includes(status) && (
+                <TouchableOpacity
+                  style={[
+                    styles.acaoBotao,
+                    { backgroundColor: CORES.erroClaro },
+                  ]}
+                  onPress={() => cancelarItem(item)}
+                >
+                  <Text style={[styles.acaoBotaoTexto, { color: CORES.erro }]}>Cancelar item</Text>
                 </TouchableOpacity>
               )}
             </View>

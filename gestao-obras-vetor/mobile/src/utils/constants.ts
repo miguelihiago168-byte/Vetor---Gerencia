@@ -4,7 +4,18 @@
 import Constants from 'expo-constants';
 
 const extra = Constants.expoConfig?.extra as { apiUrl?: string } | undefined;
-export const API_URL: string = extra?.apiUrl ?? 'http://localhost:3001/api';
+const hostUri =
+  Constants.expoConfig?.hostUri ??
+  (Constants.manifest2 as { extra?: { expoGo?: { debuggerHost?: string } } } | null)?.extra?.expoGo?.debuggerHost;
+
+const hostIp = hostUri?.split(':')[0];
+const runtimeApiUrl = hostIp ? `http://${hostIp}:3001/api` : undefined;
+
+export const API_URL: string =
+  (process.env.EXPO_PUBLIC_API_URL as string | undefined) ??
+  extra?.apiUrl ??
+  runtimeApiUrl ??
+  'http://localhost:3001/api';
 
 export const CORES = {
   primaria: '#1565C0',
@@ -87,6 +98,13 @@ export const STATUS_ITEM_COMPRA = {
   cotado: { label: 'Cotado', cor: '#7B1FA2', corFundo: '#F3E5F5' },
   comprado: { label: 'Comprado', cor: '#2E7D32', corFundo: '#E8F5E9' },
   cancelado: { label: 'Cancelado', cor: '#C62828', corFundo: '#FFEBEE' },
+  'Aguardando análise': { label: 'Aguardando análise', cor: '#757575', corFundo: '#F5F5F5' },
+  'Reprovado': { label: 'Reprovado', cor: '#C62828', corFundo: '#FFEBEE' },
+  'Em cotação': { label: 'Em cotação', cor: '#F57F17', corFundo: '#FFFDE7' },
+  'Cotação finalizada': { label: 'Cotação finalizada', cor: '#7B1FA2', corFundo: '#F3E5F5' },
+  'Aprovado para compra': { label: 'Aprovado para compra', cor: '#0277BD', corFundo: '#E1F5FE' },
+  'Comprado': { label: 'Comprado', cor: '#2E7D32', corFundo: '#E8F5E9' },
+  'Cancelado': { label: 'Cancelado', cor: '#757575', corFundo: '#F5F5F5' },
 };
 
 export const PERFIS_GESTOR = [

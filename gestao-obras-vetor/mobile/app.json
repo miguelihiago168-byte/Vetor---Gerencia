@@ -32,7 +32,7 @@
       "expo-font"
     ],
     "extra": {
-      "apiUrl": "http://192.168.2.140:3001/api",
+      "apiUrl": "http://127.0.0.1:3001/api",
       "eas": {
         "projectId": "7fe0b254-885b-4e26-b244-a4b7eae4bee1"
       }
