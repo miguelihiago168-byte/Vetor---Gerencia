@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - principal
 
 concurrency:
   group: deploy-ec2-main
@@ -113,12 +114,13 @@ jobs:
             "commands": [
               "set -e",
               "APP_DIR=/home/ubuntu/app/gestao-obras-vetor",
+              "TARGET_BRANCH=${{ github.ref_name }}",
               "cd $APP_DIR",
               "PREV_COMMIT=$(git rev-parse HEAD || true)",
-              "git fetch origin main",
-              "NEW_COMMIT=$(git rev-parse origin/main)",
+              "git fetch origin $TARGET_BRANCH",
+              "NEW_COMMIT=$(git rev-parse origin/$TARGET_BRANCH)",
               "CHANGED_FILES=$(git diff --name-only $PREV_COMMIT $NEW_COMMIT || true)",
-              "git reset --hard origin/main",
+              "git reset --hard origin/$TARGET_BRANCH",
               "echo '$BACKEND_ENV_B64' | base64 -d > backend/.env",
               "echo '>>> Preservando cache Docker para acelerar builds incrementais.'",
               "export DOCKER_BUILDKIT=1",
@@ -243,14 +245,15 @@ jobs:
             set -e
 
             APP_DIR="/home/ubuntu/app/gestao-obras-vetor"
+            TARGET_BRANCH="${{ github.ref_name }}"
 
             echo ">>> Atualizando código..."
             cd "$APP_DIR"
             PREV_COMMIT="$(git rev-parse HEAD || true)"
-            git fetch origin main
-            NEW_COMMIT="$(git rev-parse origin/main)"
+            git fetch origin "$TARGET_BRANCH"
+            NEW_COMMIT="$(git rev-parse "origin/$TARGET_BRANCH")"
             CHANGED_FILES="$(git diff --name-only "$PREV_COMMIT" "$NEW_COMMIT" || true)"
-            git reset --hard origin/main
+            git reset --hard "origin/$TARGET_BRANCH"
 
             echo '${{ secrets.BACKEND_ENV }}' > backend/.env
 
