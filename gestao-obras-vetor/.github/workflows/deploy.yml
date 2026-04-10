@@ -120,8 +120,9 @@ jobs:
               "CHANGED_FILES=$(git diff --name-only $PREV_COMMIT $NEW_COMMIT || true)",
               "git reset --hard origin/principal",
               "echo '$BACKEND_ENV_B64' | base64 -d > backend/.env",
-              "sudo docker builder prune -af || true",
-              "sudo docker image prune -af || true",
+              "echo '>>> Preservando cache Docker para acelerar builds incrementais.'",
+              "export DOCKER_BUILDKIT=1",
+              "export BUILDKIT_PROGRESS=plain",
               "sudo docker container prune -f || true",
               "NEED_BACKEND=0",
               "NEED_FRONTEND=0",
@@ -253,8 +254,9 @@ jobs:
 
             echo '${{ secrets.BACKEND_ENV }}' > backend/.env
 
-            sudo docker builder prune -af || true
-            sudo docker image prune -af || true
+            echo ">>> Preservando cache Docker para acelerar builds incrementais."
+            export DOCKER_BUILDKIT=1
+            export BUILDKIT_PROGRESS=plain
             sudo docker container prune -f || true
 
             NEED_BACKEND=0
