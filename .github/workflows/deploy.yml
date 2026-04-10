@@ -119,6 +119,31 @@ jobs:
 
           retry rsync -az -e "ssh $SSH_OPTS" "$BASE_DIR/nginx/" ubuntu@${{ secrets.EC2_HOST }}:"$APP_DIR/nginx/"
 
+      - name: Detectar mudanças para build seletivo
+        run: |
+          set -euo pipefail
+
+          BEFORE="${{ github.event.before }}"
+          AFTER="${{ github.sha }}"
+
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            CHANGED_FILES="$(git ls-files)"
+          else
+            CHANGED_FILES="$(git diff --name-only "$BEFORE" "$AFTER" || true)"
+          fi
+
+          NEED_BACKEND=0
+          NEED_FRONTEND=0
+
+          echo "$CHANGED_FILES" | grep -Eq '^(backend/|docker-compose.yml)' && NEED_BACKEND=1 || true
+          echo "$CHANGED_FILES" | grep -Eq '^(frontend/|nginx/|docker-compose.yml)' && NEED_FRONTEND=1 || true
+
+          echo "NEED_BACKEND=$NEED_BACKEND" >> "$GITHUB_ENV"
+          echo "NEED_FRONTEND=$NEED_FRONTEND" >> "$GITHUB_ENV"
+          echo "CHANGED_FILES<<EOF" >> "$GITHUB_ENV"
+          echo "$CHANGED_FILES" >> "$GITHUB_ENV"
+          echo "EOF" >> "$GITHUB_ENV"
+
       - name: Conectar ao servidor e fazer deploy
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -127,7 +152,7 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           timeout: 60s
-          command_timeout: 30m
+          command_timeout: 45m
           script: |
             set -e
 
@@ -159,6 +184,27 @@ jobs:
               cp -R "$LEGACY_DIR_2/uploads/." "$DATA_DIR/uploads/" || true
             fi
 
-            sudo docker compose up -d --build
+            NEED_BACKEND=${{ env.NEED_BACKEND }}
+            NEED_FRONTEND=${{ env.NEED_FRONTEND }}
+
+            echo ">>> Arquivos alterados:"
+            echo "${{ env.CHANGED_FILES }}"
+
+            if [ "$NEED_BACKEND" -eq 1 ] && [ "$NEED_FRONTEND" -eq 1 ]; then
+              echo ">>> Build seletivo: backend + frontend"
+              sudo docker compose up -d --build backend frontend
+            elif [ "$NEED_BACKEND" -eq 1 ]; then
+              echo ">>> Build seletivo: backend"
+              sudo docker compose up -d --build backend
+            elif [ "$NEED_FRONTEND" -eq 1 ]; then
+              echo ">>> Build seletivo: frontend"
+              sudo docker compose up -d --build frontend
+            else
+              echo ">>> Sem mudanças em backend/frontend. Subindo sem rebuild."
+              sudo docker compose up -d backend frontend
+            fi
+
+            echo ">>> Status dos containers:"
+            sudo docker compose ps
 
 # Deploy com chaves configuradas
