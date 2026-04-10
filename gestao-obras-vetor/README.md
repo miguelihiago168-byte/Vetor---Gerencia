@@ -1,6 +1,7 @@
 # Gestão de Obras - Vetor
 
-Sistema completo de gestão de obras com controle de EAP e RDO.
+
+Sistema completo de gestão de obras com módulos de planejamento (EAP, Curva S, Gantt), execução diária (RDO), controle de compras/requisições, almoxarifado, gestão de usuários, RNC, notificações, email e rastreabilidade.
 
 Última atualização de documentação: 01/04/2026.
 
@@ -195,22 +196,25 @@ gestao-obras-vetor/
     └── index.html
 ```
 
+
 ## 📋 Funcionalidades Implementadas
 
-### ✅ Autenticação
+### ✅ Autenticação e Perfis
 - Login com 6 dígitos (login e senha)
 - JWT tokens
 - Proteção de rotas
+- Perfis: Usuário comum, Gestor, ADM, Almoxarife, Fiscal, Gestor de Qualidade
 
 ### ✅ Gestão de Usuários
 - Criação automática de login (sequencial)
-- Perfis: Usuário comum e Gestor
-- Apenas gestor pode promover outros usuários
+- Perfis e permissões editáveis
+- Apenas gestor/adm pode promover outros usuários
+- Vinculação de usuários por projeto
 
 ### ✅ Gestão de Projetos
 - CRUD completo
-- Vinculação de usuários por projeto
 - Campos: nome, empresas, prazo, cidade
+- Arquivar/desarquivar projetos
 
 ### ✅ EAP (Estrutura Analítica do Projeto)
 - Estrutura hierárquica
@@ -218,22 +222,50 @@ gestao-obras-vetor/
 - Status automático (Não iniciada / Em andamento / Concluída)
 - Percentual previsto vs executado
 - Histórico de execuções
+- Curva S e Gantt
+- Dependências e sugestões automáticas
 
 ### ✅ RDO (Relatório Diário de Obra)
 - Preenchimento completo conforme especificação
 - Status com cores:
-  - 🟡 Em preenchimento
-  - 🔵 Em análise
-  - 🟢 Aprovado
-  - 🔴 Reprovado
+   - 🟡 Em preenchimento
+   - 🔵 Em análise
+   - 🟢 Aprovado
+   - 🔴 Reprovado
 - Upload de anexos (fotos, PDFs)
 - Vinculação com atividades da EAP
-- Registro de mão de obra e equipamentos
+- Registro de mão de obra, equipamentos, clima, materiais, ocorrências, assinaturas e fotos
+- Logs de alterações
 
-### ✅ Controle de Aprovação
-- Apenas gestores aprovam/reprovam
-- Recálculo de avanço físico
-- Auditoria completa (quem/quando)
+### ✅ Compras e Requisições
+- Requisições multi-itens
+- Pedidos de compra
+- Fluxo de aprovação e análise
+- Cotação, seleção de fornecedor, status detalhado
+- Kanban de compras
+- Exportação Excel
+
+### ✅ Fornecedores
+- Cadastro, edição e exclusão de fornecedores
+
+### ✅ Almoxarifado
+- Controle de ferramentas, retiradas, devoluções, manutenções, perdas, transferências
+- Relatórios de movimentações
+- Dashboard de ativos
+
+### ✅ RNC (Registro de Não Conformidade)
+- Cadastro, edição, aprovação, correção e exclusão de RNC
+- Upload de anexos e fotos
+- PDF de RNC
+
+### ✅ Notificações
+- Notificações por usuário e contexto
+- Marcação de lidas
+
+### ✅ Email
+- Configuração de SMTP
+- Envio de emails, templates, histórico
+- Upload de imagens para email
 
 ### ✅ Dashboard
 - Avanço físico consolidado
@@ -246,16 +278,20 @@ gestao-obras-vetor/
 - Tabela de auditoria
 - Registro de criador/modificador
 
+
 ## 🔧 APIs Disponíveis
 
 ### Auth
 - `POST /api/auth/login` - Login
+- `POST /api/auth/register` - Cadastro via convite
 
 ### Usuários
 - `GET /api/usuarios` - Listar
 - `POST /api/usuarios` - Criar
-- `PATCH /api/usuarios/:id/gestor` - Alterar permissão
+- `PATCH /api/usuarios/:id/gestor` - Alterar permissão gestor
+- `PATCH /api/usuarios/:id/adm` - Alterar permissão ADM
 - `DELETE /api/usuarios/:id` - Desativar
+- `PATCH /api/usuarios/:id/senha` - Alterar senha
 
 ### Projetos
 - `GET /api/projetos` - Listar
@@ -264,6 +300,7 @@ gestao-obras-vetor/
 - `PUT /api/projetos/:id` - Atualizar
 - `PATCH /api/projetos/:id/arquivar` - Arquivar
 - `PATCH /api/projetos/:id/desarquivar` - Desarquivar
+- `POST /api/projetos/:destinoId/copiar-eap` - Copiar EAP
 
 ### EAP
 - `GET /api/eap/projeto/:projetoId` - Listar atividades
@@ -272,6 +309,9 @@ gestao-obras-vetor/
 - `POST /api/eap/:id/recalcular` - Recalcular avanço
 - `GET /api/eap/:id/historico` - Histórico
 - `DELETE /api/eap/:id` - Deletar
+- `POST /api/eap/projeto/:projetoId/recalcular-tudo` - Recalcular tudo
+- `POST /api/eap/projeto/:projetoId/sugerir-dependencias` - Sugerir dependências
+- `GET /api/eap/projeto/:projetoId/gantt-data` - Dados para Gantt
 
 ### RDOs
 - `GET /api/rdos/projeto/:projetoId` - Listar
@@ -280,35 +320,111 @@ gestao-obras-vetor/
 - `PUT /api/rdos/:id` - Atualizar
 - `PATCH /api/rdos/:id/status` - Alterar status
 - `DELETE /api/rdos/:id` - Deletar
+- `GET /api/rdos/:id/pdf` - PDF do RDO
+- `GET /api/rdos/:id/logs` - Logs do RDO
 
 ### Anexos
-- `POST /api/anexos/upload/:rdoId` - Upload
-- `GET /api/anexos/rdo/:rdoId` - Listar
+- `POST /api/anexos/upload/:rdoId` - Upload RDO
+- `POST /api/anexos/upload-rnc/:rncId` - Upload RNC
+- `GET /api/anexos/rdo/:rdoId` - Listar anexos RDO
+- `GET /api/anexos/rnc/:rncId` - Listar anexos RNC
 - `GET /api/anexos/download/:id` - Download
 - `DELETE /api/anexos/:id` - Deletar
+
+### Compras e Requisições
+- `POST /api/requisicoes` - Criar requisição
+- `GET /api/requisicoes/projeto/:projetoId` - Listar requisições do projeto
+- `GET /api/requisicoes/:id` - Detalhes da requisição
+- `PATCH /api/requisicoes/:id/editar` - Editar requisição
+- `PATCH /api/requisicoes/:id/concluir` - Concluir requisição
+- `PATCH /api/requisicoes/:id/analisar-todos` - Analisar todos os itens
+- `PATCH /api/requisicoes/:id/comprar-todos` - Comprar todos os itens
+- `PATCH /api/requisicoes/:id/itens/:itemId/analisar` - Analisar item
+- `PATCH /api/requisicoes/:id/itens/:itemId/cancelar` - Cancelar item
+- `PATCH /api/requisicoes/:id/itens/:itemId/alterar-quantidade` - Alterar quantidade
+- `POST /api/requisicoes/:id/itens/:itemId/cotacoes` - Adicionar cotação
+- `PATCH /api/requisicoes/:id/itens/:itemId/cotacoes/:cotacaoId` - Editar cotação
+- `PATCH /api/requisicoes/:id/itens/:itemId/cotacoes/:cotacaoId/selecionar` - Selecionar cotação
+- `PATCH /api/requisicoes/:id/itens/:itemId/finalizar-cotacao` - Finalizar cotação
+- `PATCH /api/requisicoes/:id/itens/:itemId/editar` - Editar item
+
+### Pedidos de Compra
+- `POST /api/pedidos-compra` - Criar pedido
+- `GET /api/pedidos-compra/projeto/:projetoId` - Listar pedidos
+- `GET /api/pedidos-compra/:id` - Detalhes
+- `PATCH /api/pedidos-compra/:id/aprovar-inicial` - Aprovar
+- `PATCH /api/pedidos-compra/:id/reprovar` - Reprovar
+- `PATCH /api/pedidos-compra/:id/comprado` - Marcar como comprado
+
+### Fornecedores
+- `GET /api/fornecedores` - Listar
+- `POST /api/fornecedores` - Criar
+- `PATCH /api/fornecedores/:id` - Editar
+- `DELETE /api/fornecedores/:id` - Excluir
+
+### Almoxarifado
+- `GET /api/almoxarifado/perfil` - Perfil do almoxarifado
+- `GET /api/almoxarifado/ferramentas` - Listar ferramentas
+- `POST /api/almoxarifado/ferramentas` - Cadastrar ferramenta
+- `POST /api/almoxarifado/retiradas` - Registrar retirada
+- `POST /api/almoxarifado/devolucoes/:alocacaoId` - Registrar devolução
+- `POST /api/almoxarifado/manutencao/enviar` - Enviar para manutenção
+- `POST /api/almoxarifado/manutencao/:id/concluir` - Concluir manutenção
+- `POST /api/almoxarifado/perdas` - Registrar perda
+- `POST /api/almoxarifado/transferencias` - Transferir ferramenta
+- `GET /api/almoxarifado/dashboard/projeto/:projetoId` - Dashboard de ativos
+- `GET /api/almoxarifado/relatorios/movimentacoes` - Relatório de movimentações
+- `GET /api/almoxarifado/relatorios/perdas` - Relatório de perdas
+
+### RNC
+- `GET /api/rnc/projeto/:projetoId` - Listar RNCs
+- `POST /api/rnc` - Criar RNC
+- `PUT /api/rnc/:id` - Editar RNC
+- `PATCH /api/rnc/:id/status` - Alterar status
+- `POST /api/rnc/:id/enviar-aprovacao` - Enviar para aprovação
+- `POST /api/rnc/:id/corrigir` - Corrigir RNC
+- `DELETE /api/rnc/:id` - Excluir
+- `GET /api/rnc/:id/pdf` - PDF da RNC
+
+### Notificações
+- `GET /api/notificacoes` - Listar notificações
+- `PATCH /api/notificacoes/:id/read` - Marcar como lida
+- `PATCH /api/notificacoes/marcar-todas-lidas` - Marcar todas como lidas
+
+### Email
+- `GET /api/email/config` - Obter config
+- `POST /api/email/config` - Salvar config
+- `POST /api/email/config/test` - Testar config
+- `POST /api/email/send` - Enviar email
+- `GET /api/email/history` - Histórico
+- `GET /api/email/history/:id` - Detalhe do email
+- `GET /api/email/templates` - Listar templates
+- `POST /api/email/templates` - Criar template
+- `GET /api/email/templates/:id` - Detalhe template
+- `DELETE /api/email/templates/:id` - Excluir template
+- `POST /api/email/upload-image` - Upload de imagem
 
 ### Dashboard
 - `GET /api/dashboard/projeto/:projetoId/avanco` - Avanço físico
 - `GET /api/dashboard/projeto/:projetoId/rdos-stats` - Estatísticas
 - `GET /api/dashboard/projeto/:projetoId/galeria-rdos` - Galeria de fotos agrupada por RDO
+- `GET /api/dashboard/projeto/:projetoId/curva-s` - Dados Curva S
+
+### (Financeiro - desativado)
+- Rotas presentes mas desativadas
+
 
 ## 🎯 Próximos Passos
 
-Para expandir o sistema, você pode:
+1. **Aprimorar módulos existentes:**
+   - Melhorias no fluxo de aprovação de compras e requisições
+   - Relatórios customizados (PDF, Excel) para todos os módulos
+   - Filtros e busca avançada em todas as telas
+   - Integração de notificações por email e push
+   - Otimização de performance para grandes obras
 
-1. **Adicionar mais páginas no frontend:**
-   - Listagem de projetos
-   - Gerenciamento de EAP (visual)
-   - Formulário completo de RDO
-   - Gestão de usuários
-   - Seção de RNC
-
-2. **Melhorias:**
-   - Relatórios em PDF
-   - Exportação Excel
-   - Notificações
-   - Busca avançada
-   - Filtros e ordenação
+2. **Financeiro:**
+   - Reativar e aprimorar módulo financeiro (fluxo de caixa, receitas, despesas)
 
 3. **Deploy:**
    - Backend: Heroku, Railway, DigitalOcean

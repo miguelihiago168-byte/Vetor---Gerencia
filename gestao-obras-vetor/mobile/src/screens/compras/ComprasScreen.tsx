@@ -24,8 +24,11 @@ type Nav = NativeStackNavigationProp<AppStackParamList>;
 interface Requisicao {
   id: number;
   numero?: number;
-  titulo: string;
+  numero_requisicao?: string;
+  titulo?: string;
+  descricao_itens?: string;
   status_geral?: string;
+  status_requisicao?: string;
   criado_em?: string;
   criado_por_nome?: string;
   total_itens?: number;
@@ -33,10 +36,14 @@ interface Requisicao {
 }
 
 const STATUS_CORES: Record<string, { cor: string; corFundo: string }> = {
-  pendente: { cor: CORES.textoSecundario, corFundo: CORES.fundo },
-  em_andamento: { cor: CORES.alerta, corFundo: CORES.alertaClaro },
-  concluido: { cor: CORES.sucesso, corFundo: CORES.sucessoClaro },
-  cancelado: { cor: CORES.erro, corFundo: CORES.erroClaro },
+  'em análise': { cor: CORES.textoSecundario, corFundo: CORES.fundo },
+  'em cotação': { cor: CORES.alerta, corFundo: CORES.alertaClaro },
+  'cotações recebidas': { cor: '#7B1FA2', corFundo: '#F3E5F5' },
+  'aguardando decisão gestor geral': { cor: CORES.info, corFundo: CORES.infoClaro },
+  'compra autorizada': { cor: CORES.primaria, corFundo: CORES.primariaMuitoClara },
+  finalizada: { cor: CORES.sucesso, corFundo: CORES.sucessoClaro },
+  'encerrada sem compra': { cor: CORES.erro, corFundo: CORES.erroClaro },
+  entregue: { cor: CORES.sucesso, corFundo: CORES.sucessoClaro },
 };
 
 export default function ComprasScreen() {
@@ -75,8 +82,9 @@ export default function ComprasScreen() {
   };
 
   const renderItem = ({ item }: { item: Requisicao }) => {
-    const s = item.status_geral ?? 'pendente';
-    const cores = STATUS_CORES[s] ?? STATUS_CORES.pendente;
+    const statusBruto = item.status_requisicao ?? item.status_geral ?? 'Em análise';
+    const statusKey = statusBruto.toLowerCase();
+    const cores = STATUS_CORES[statusKey] ?? STATUS_CORES['em análise'];
     const progresso =
       item.total_itens && item.total_itens > 0
         ? Math.round(((item.itens_comprados ?? 0) / item.total_itens) * 100)
@@ -95,16 +103,16 @@ export default function ComprasScreen() {
       >
         <View style={styles.cardHeader}>
           <Text style={styles.cardNumero}>
-            REQ #{item.numero ?? item.id}
+            {item.numero_requisicao ?? `REQ #${item.numero ?? item.id}`}
           </Text>
           <View style={[styles.badge, { backgroundColor: cores.corFundo }]}>
             <Text style={[styles.badgeTexto, { color: cores.cor }]}>
-              {s.replace('_', ' ')}
+              {statusBruto}
             </Text>
           </View>
         </View>
         <Text style={styles.cardTitulo} numberOfLines={2}>
-          {item.titulo}
+          {item.titulo ?? item.descricao_itens ?? 'Requisição de compra'}
         </Text>
         {item.total_itens ? (
           <View style={styles.progressoContainer}>

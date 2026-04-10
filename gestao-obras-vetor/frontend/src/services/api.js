@@ -272,4 +272,16 @@ export const deleteEmailTemplate = (id) => api.delete(`/email/templates/${id}`);
 export const getEmailSignature = () => api.get('/email/signature');
 export const updateEmailSignature = (data) => api.put('/email/signature', data);
 
+// ─── GANTT E DEPENDÊNCIAS (Novo Sistema) ─────────────────────────────────
+export const sugerirDependenciasEAP = (projetoId, modoParalelizacao = true) =>
+  api.post(`/eap/projeto/${projetoId}/sugerir-dependencias`, { modoParalelizacao });
+export const confirmarDependencia = (dependenciaId, aceitar = true) =>
+  api.post(`/eap/dependencia/${dependenciaId}/confirmar`, { aceitar });
+export const listaDependenciasSugeridas = (projetoId) =>
+  api.get(`/eap/projeto/${projetoId}/dependencias-sugeridas`);
+export const aplicarCronogramaGantt = (projetoId) =>
+  api.post('/eap/dependencias/aplicar-cronograma', { projetoId });
+export const obterDadosGantt = (projetoId, params) =>
+  api.get(`/eap/projeto/${projetoId}/gantt-data`, { params });
+
 export default api;

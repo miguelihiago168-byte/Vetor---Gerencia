@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getAtividadesEAP, recalcularEapProjeto, deleteAtividade } from '../services/api';
+import { 
+  getAtividadesEAP, 
+  recalcularEapProjeto, 
+  deleteAtividade
+} from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
 import { useNotification } from '../context/NotificationContext';
-import { Activity, Plus, Eye, ChevronRight, ChevronDown, Trash2 } from 'lucide-react';
+import { Activity, Plus, Eye, ChevronRight, ChevronDown, Trash2, ArrowLeft } from 'lucide-react';
 
-function EAP() {
+function EAP({ hideNavbar = false }) {
   const { projetoId } = useParams();
   const navigate = useNavigate();
   const { isGestor } = useAuth();
@@ -44,6 +48,15 @@ function EAP() {
       newExpanded.add(id);
     }
     setExpandedItems(newExpanded);
+  };
+
+  const formatarDataBr = (valor) => {
+    if (!valor) return '-';
+    const match = String(valor).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) {
+      return `${match[3]}/${match[2]}/${match[1]}`;
+    }
+    return valor;
   };
 
   const handleExcluirAtividade = async (atividade) => {
@@ -155,7 +168,9 @@ function EAP() {
                     <span>Previsto: {atividade.quantidade_total || 0} {atividade.unidade_medida || ''}</span>
                   )}
                   <span>Peso: {atividade.peso_percentual_projeto || atividade.percentual_previsto || 0}%</span>
-                  <span>Planejado: {atividade.data_inicio_planejada || '-'} até {atividade.data_fim_planejada || '-'}</span>
+                  <span>
+                    Planejado: <strong>{formatarDataBr(atividade.data_inicio_planejada)}</strong> até <strong>{formatarDataBr(atividade.data_fim_planejada)}</strong>
+                  </span>
                   <span>Executado: {atividade.percentual_executado || 0}%</span>
                   <span>Status: {atividade.status}</span>
                 </div>
@@ -237,10 +252,18 @@ function EAP() {
 
   return (
     <>
-      <Navbar />
+      {!hideNavbar && <Navbar />}
       <div className="container" style={{ paddingTop: '24px', paddingBottom: '40px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
-          <h1>EAP do Projeto</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            {!hideNavbar && (
+              <button className="btn btn-secondary" onClick={() => navigate(`/projeto/${projetoId}/planejamento`)}>
+                <ArrowLeft size={16} />
+                Voltar ao Planejamento
+              </button>
+            )}
+            <h1 style={{ margin: 0 }}>EAP do Projeto</h1>
+          </div>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button className="btn btn-primary" onClick={() => navigate(`/projeto/${projetoId}/eap/novo`)}>
               <Plus size={16} />

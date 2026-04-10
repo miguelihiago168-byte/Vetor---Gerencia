@@ -75,6 +75,10 @@
   margin-bottom: 20px;
 }
 
+.eap-field-compact {
+  margin-bottom: 0;
+}
+
 .eap-grid-code-name {
   display: grid;
   grid-template-columns: 170px 1fr;
@@ -84,6 +88,12 @@
 .eap-grid-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.eap-grid-dependency-type {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px);
   gap: 12px;
 }
 
@@ -117,6 +127,39 @@
 .eap-textarea {
   min-height: 86px;
   resize: vertical;
+}
+
+.eap-dependency-box {
+  margin-bottom: 14px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border-default);
+  background: color-mix(in srgb, var(--card-bg) 88%, var(--bg-tertiary) 12%);
+}
+
+.eap-dependency-header {
+  margin-bottom: 12px;
+}
+
+.eap-dependency-header strong {
+  display: block;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.eap-dependency-header p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.eap-field-help {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 0.83rem;
+  line-height: 1.35;
 }
 
 .eap-actions {
@@ -222,7 +265,8 @@ body.dark-mode .eap-input::-webkit-calendar-picker-indicator {
   }
 
   .eap-grid-code-name,
-  .eap-grid-2 {
+  .eap-grid-2,
+  .eap-grid-dependency-type {
     grid-template-columns: 1fr;
   }
 }

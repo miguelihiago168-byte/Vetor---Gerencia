@@ -22,6 +22,8 @@ function EAPForm() {
     data_inicio_planejada: '',
     data_fim_planejada: '',
     pai_id: '',
+    predecessora_id: '',
+    tipo_vinculo_dependencia: 'FS',
     unidade_medida: '',
     quantidade_total: ''
   });
@@ -102,6 +104,8 @@ function EAPForm() {
           data_inicio_planejada: atividade.data_inicio_planejada || '',
           data_fim_planejada: atividade.data_fim_planejada || '',
           pai_id: atividade.pai_id || '',
+          predecessora_id: atividade.predecessora_id || '',
+          tipo_vinculo_dependencia: atividade.tipo_vinculo_dependencia || 'FS',
           unidade_medida: atividade.unidade_medida || '',
           quantidade_total: String(atividade.quantidade_total ?? '')
         });
@@ -130,6 +134,8 @@ function EAPForm() {
         ...formData,
         projeto_id: projetoId,
         pai_id: formData.pai_id || null,
+        predecessora_id: formData.predecessora_id || null,
+        tipo_vinculo_dependencia: formData.tipo_vinculo_dependencia || 'FS',
         peso_percentual_projeto: formData.peso_percentual_projeto === ''
           ? (formData.pai_id ? undefined : 0)
           : Number(formData.peso_percentual_projeto),
@@ -172,7 +178,22 @@ function EAPForm() {
     });
   };
 
-  const atividadesPai = atividades.filter(a => !a.pai_id);
+  const ordenarPorCodigoEap = (lista) => [...lista].sort((a, b) => {
+    const codigoA = String(a.codigo_eap || '');
+    const codigoB = String(b.codigo_eap || '');
+    return codigoA.localeCompare(codigoB, 'pt-BR', { numeric: true, sensitivity: 'base' });
+  });
+
+  const formatarOpcaoAtividade = (atividade) => {
+    const codigo = atividade.codigo_eap ? `${atividade.codigo_eap} - ` : '';
+    const nome = atividade.nome || atividade.descricao || 'Sem descrição';
+    return `${codigo}${nome}`;
+  };
+
+  const atividadesPai = ordenarPorCodigoEap(atividades.filter(a => !a.pai_id));
+  const atividadesPredecessoras = ordenarPorCodigoEap(
+    atividades.filter(a => String(a.id) !== String(atividadeId))
+  );
   const isAtividadePai = !formData.pai_id;
 
   return (
@@ -284,10 +305,58 @@ function EAPForm() {
                   <option value="">Nenhuma (atividade raiz)</option>
                   {atividadesPai.map(atividade => (
                     <option key={atividade.id} value={atividade.id}>
-                      {atividade.codigo_eap} - {atividade.nome || atividade.descricao || 'Sem descrição'}
+                      {formatarOpcaoAtividade(atividade)}
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div className="eap-dependency-box">
+                <div className="eap-dependency-header">
+                  <strong>Sequência no cronograma</strong>
+                  <p>Defina manualmente qual atividade precisa acontecer antes desta.</p>
+                </div>
+
+                <div className="eap-field">
+                  <label className="eap-label">
+                    Predecessora / Dependência (opcional)
+                  </label>
+                  <select
+                    name="predecessora_id"
+                    value={formData.predecessora_id}
+                    onChange={handleChange}
+                    className="eap-input"
+                  >
+                    <option value="">Nenhuma predecessora</option>
+                    {atividadesPredecessoras.map((atividade) => (
+                      <option key={atividade.id} value={atividade.id}>
+                        {formatarOpcaoAtividade(atividade)}
+                      </option>
+                    ))}
+                  </select>
+                  <small className="eap-field-help">
+                    Exemplo: escolha a atividade que deve terminar antes desta começar.
+                  </small>
+                </div>
+
+                <div className="eap-grid-dependency-type">
+                  <div className="eap-field eap-field-compact">
+                    <label className="eap-label">
+                      Tipo de vínculo
+                    </label>
+                    <select
+                      name="tipo_vinculo_dependencia"
+                      value={formData.tipo_vinculo_dependencia}
+                      onChange={handleChange}
+                      className="eap-input"
+                      disabled={!formData.predecessora_id}
+                    >
+                      <option value="FS">Fim para Início (FS)</option>
+                      <option value="SS">Início para Início (SS)</option>
+                      <option value="FF">Fim para Fim (FF)</option>
+                    </select>
+                  </div>
+                </div>
               </div>
 
               <div className="eap-grid-2">
@@ -384,12 +453,12 @@ function EAPForm() {
               <ol>
                 <li>Selecione a Atividade Pai no campo correspondente.</li>
                 <li>O código da filha é sugerido automaticamente (ex.: 2.1.1).</li>
-                <li>Preencha datas e peso da filha para controle do avanço físico.</li>
+                <li>Preencha datas, peso e, se necessário, a predecessora para controlar a sequência.</li>
               </ol>
             </div>
 
             <p className="eap-info-tip">
-              Dica: comece pelas atividades pai e depois detalhe as filhas para evitar retrabalho.
+              Dica: use a predecessora para definir a sequência manualmente no cronograma, sem depender só das sugestões automáticas.
             </p>
           </aside>
         </div>

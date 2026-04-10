@@ -7,9 +7,14 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { getNotificacoes, marcarNotificacaoLida } from '../../services/api';
+import {
+  getNotificacoes,
+  marcarNotificacaoLida,
+  marcarTodasNotificacoesLidas,
+} from '../../services/api';
 import { useNotification } from '../../context/NotificationContext';
 import { CORES } from '../../utils/constants';
 import { formatDistanceToNow, parseISO } from 'date-fns';
@@ -66,6 +71,25 @@ export default function NotificacoesScreen() {
     }
   };
 
+  const marcarTodas = () => {
+    if (!notificacoes.some((n) => !n.lida)) return;
+
+    Alert.alert('Marcar todas', 'Marcar todas as notificações como lidas?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Confirmar',
+        onPress: async () => {
+          try {
+            await marcarTodasNotificacoesLidas();
+            setNotificacoes((prev) => prev.map((n) => ({ ...n, lida: true })));
+          } catch {
+            error('Não foi possível marcar todas como lidas.');
+          }
+        },
+      },
+    ]);
+  };
+
   if (carregando) {
     return (
       <View style={styles.centro}>
@@ -95,6 +119,16 @@ export default function NotificacoesScreen() {
           <MaterialCommunityIcons name="bell-sleep-outline" size={52} color={CORES.textoSecundario} />
           <Text style={styles.vazioTexto}>Nenhuma notificação.</Text>
         </View>
+      }
+      ListHeaderComponent={
+        notificacoes.length > 0 ? (
+          <View style={styles.headerAcoes}>
+            <TouchableOpacity style={styles.marcarTodasBtn} onPress={marcarTodas}>
+              <MaterialCommunityIcons name="check-all" size={18} color={CORES.primaria} />
+              <Text style={styles.marcarTodasTexto}>Marcar todas como lidas</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null
       }
       renderItem={({ item }) => {
         const tipoKey = item.tipo ?? 'geral';
@@ -148,6 +182,18 @@ const styles = StyleSheet.create({
   centro: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   vazio: { alignItems: 'center', paddingTop: 80, gap: 12 },
   vazioTexto: { fontSize: 15, color: CORES.textoSecundario },
+  headerAcoes: { marginBottom: 10 },
+  marcarTodasBtn: {
+    alignSelf: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: CORES.primariaMuitoClara,
+  },
+  marcarTodasTexto: { color: CORES.primaria, fontSize: 12, fontWeight: '600' },
   card: {
     backgroundColor: CORES.superficie,
     borderRadius: 14,

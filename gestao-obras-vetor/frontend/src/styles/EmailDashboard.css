@@ -768,6 +768,330 @@
   overflow: auto;
 }
 
+/* ── Dark mode ────────────────────────────────────────────── */
+body.dark-mode .email-dashboard-wrapper {
+  background-color: var(--bg-primary, #0d1b2a);
+}
+
+body.dark-mode .mail-sidebar {
+  background: linear-gradient(180deg, #1b2836 0%, #162030 100%);
+  border-color: #2a4060;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+
+body.dark-mode .mail-sidebar-header {
+  color: #607080;
+  border-bottom-color: #2a4060;
+}
+
+body.dark-mode .mail-sidebar-group-title { color: #607080; }
+body.dark-mode .mail-sidebar-divider { border-top-color: #2a4060; }
+body.dark-mode .mail-menu-item { color: #c5d3de; }
+
+body.dark-mode .mail-menu-item:hover {
+  background: rgba(14, 165, 233, 0.08);
+  border-color: rgba(14, 165, 233, 0.15);
+  color: #e8edf3;
+}
+
+body.dark-mode .mail-menu-item.active {
+  background: rgba(37, 99, 235, 0.15);
+  border-color: rgba(37, 99, 235, 0.25);
+  color: #e8edf3;
+  box-shadow: inset 3px 0 0 #38bdf8;
+}
+
+body.dark-mode .mail-main {
+  background: #1b2836;
+  border-color: #2a4060;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+body.dark-mode .composer-card {
+  background: linear-gradient(180deg, #1b2836 0%, #162030 100%);
+  border-color: #2a4060;
+}
+
+body.dark-mode .composer-header { border-bottom-color: #2a4060; }
+body.dark-mode .composer-header h2 { color: #e8edf3; }
+body.dark-mode .composer-header p { color: #8fa3b9; }
+
+body.dark-mode .templates-section {
+  background: #162030;
+  border-color: #2a4060;
+}
+
+body.dark-mode .form-section h3 { color: #e8edf3; }
+body.dark-mode .form-section label { color: #c5d3de; }
+
+body.dark-mode .template-card {
+  background: #1b2836;
+  border-color: #2a4060;
+}
+
+body.dark-mode .template-card:hover {
+  border-color: #0ea5e9;
+  background: #162030;
+}
+
+body.dark-mode .template-card.selected {
+  border-color: #0ea5e9;
+  background: rgba(14, 165, 233, 0.1);
+}
+
+body.dark-mode .template-name { color: #e8edf3; }
+body.dark-mode .template-subject { color: #8fa3b9; }
+
+body.dark-mode .form-input,
+body.dark-mode .form-textarea {
+  background: #162030;
+  border-color: #2a4060;
+  color: #e8edf3;
+}
+
+body.dark-mode .form-input:focus,
+body.dark-mode .form-textarea:focus {
+  border-color: #0ea5e9;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2);
+}
+
+body.dark-mode .field-hint { color: #607080; }
+
+body.dark-mode .btn-select-user {
+  background: #1b2836;
+  border-color: #2a4060;
+  color: #8fa3b9;
+}
+
+body.dark-mode .user-dropdown {
+  background: #1b2836;
+  border-color: #2a4060;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.45);
+}
+
+body.dark-mode .user-item:hover { background: #162030; }
+body.dark-mode .user-name { color: #e8edf3; }
+body.dark-mode .user-email { color: #8fa3b9; }
+
+body.dark-mode .preview-section { border-top-color: #2a4060; }
+
+body.dark-mode .btn-toggle-preview {
+  background: #162030;
+  border-color: #2a4060;
+  color: #c5d3de;
+}
+
+body.dark-mode .email-preview {
+  background: #162030;
+  border-color: #2a4060;
+}
+
+body.dark-mode .preview-content {
+  background: #1b2836;
+  border-color: #2a4060;
+  color: #c5d3de;
+}
+
+body.dark-mode .form-actions { border-top-color: #2a4060; }
+
+body.dark-mode .mail-quill-editor .ql-toolbar,
+body.dark-mode .mail-quill-signature .ql-toolbar {
+  border-color: #2a4060;
+  background: #162030;
+}
+
+body.dark-mode .mail-quill-editor .ql-container,
+body.dark-mode .mail-quill-signature .ql-container {
+  border-color: #2a4060;
+  background: #1b2836;
+  color: #e8edf3;
+}
+
+body.dark-mode .mail-quill-editor .ql-editor,
+body.dark-mode .mail-quill-signature .ql-editor {
+  background: #1b2836;
+  color: #e8edf3;
+}
+
+body.dark-mode .mail-quill-editor .ql-editor.ql-blank::before,
+body.dark-mode .mail-quill-signature .ql-editor.ql-blank::before {
+  color: #607080;
+}
+
+body.dark-mode .mail-quill-editor .ql-stroke,
+body.dark-mode .mail-quill-signature .ql-stroke {
+  stroke: #a8bcce;
+}
+
+body.dark-mode .mail-quill-editor .ql-fill,
+body.dark-mode .mail-quill-signature .ql-fill {
+  fill: #a8bcce;
+}
+
+body.dark-mode .mail-quill-editor .ql-picker,
+body.dark-mode .mail-quill-signature .ql-picker,
+body.dark-mode .mail-quill-editor .ql-picker-label,
+body.dark-mode .mail-quill-signature .ql-picker-label,
+body.dark-mode .mail-quill-editor .ql-picker-item,
+body.dark-mode .mail-quill-signature .ql-picker-item {
+  color: #c5d3de;
+}
+
+body.dark-mode .mail-quill-editor .ql-toolbar button:hover .ql-stroke,
+body.dark-mode .mail-quill-signature .ql-toolbar button:hover .ql-stroke,
+body.dark-mode .mail-quill-editor .ql-toolbar button.ql-active .ql-stroke,
+body.dark-mode .mail-quill-signature .ql-toolbar button.ql-active .ql-stroke,
+body.dark-mode .mail-quill-editor .ql-picker-label:hover .ql-stroke,
+body.dark-mode .mail-quill-signature .ql-picker-label:hover .ql-stroke,
+body.dark-mode .mail-quill-editor .ql-picker-label.ql-active .ql-stroke,
+body.dark-mode .mail-quill-signature .ql-picker-label.ql-active .ql-stroke {
+  stroke: #38bdf8;
+}
+
+body.dark-mode .mail-quill-editor .ql-toolbar button:hover .ql-fill,
+body.dark-mode .mail-quill-signature .ql-toolbar button:hover .ql-fill,
+body.dark-mode .mail-quill-editor .ql-toolbar button.ql-active .ql-fill,
+body.dark-mode .mail-quill-signature .ql-toolbar button.ql-active .ql-fill {
+  fill: #38bdf8;
+}
+
+body.dark-mode .mail-quill-editor .ql-toolbar button:hover,
+body.dark-mode .mail-quill-signature .ql-toolbar button:hover,
+body.dark-mode .mail-quill-editor .ql-toolbar button.ql-active,
+body.dark-mode .mail-quill-signature .ql-toolbar button.ql-active {
+  background: rgba(14, 165, 233, 0.08);
+  border-radius: 6px;
+}
+
+body.dark-mode .mail-quill-editor .ql-picker-options,
+body.dark-mode .mail-quill-signature .ql-picker-options {
+  background: #162030;
+  border-color: #2a4060;
+}
+
+body.dark-mode .mail-quill-editor .ql-picker-item:hover,
+body.dark-mode .mail-quill-signature .ql-picker-item:hover,
+body.dark-mode .mail-quill-editor .ql-picker-item.ql-selected,
+body.dark-mode .mail-quill-signature .ql-picker-item.ql-selected,
+body.dark-mode .mail-quill-editor .ql-picker-label:hover,
+body.dark-mode .mail-quill-signature .ql-picker-label:hover,
+body.dark-mode .mail-quill-editor .ql-picker-label.ql-active,
+body.dark-mode .mail-quill-signature .ql-picker-label.ql-active {
+  color: #38bdf8;
+}
+
+body.dark-mode .attachment-chip {
+  background: rgba(14, 165, 233, 0.1);
+  border-color: rgba(14, 165, 233, 0.25);
+  color: #c5d3de;
+}
+
+body.dark-mode .attachment-chip button { color: #38bdf8; }
+
+body.dark-mode .preset-button {
+  background: #1b2836;
+  border-color: #2a4060;
+  color: #c5d3de;
+}
+
+body.dark-mode .preset-button.active {
+  border-color: #0ea5e9;
+  background: rgba(14, 165, 233, 0.1);
+}
+
+body.dark-mode .preset-name { color: #e8edf3; }
+body.dark-mode .preset-hint { color: #607080; }
+
+body.dark-mode .emails-table thead {
+  background: #162030;
+  border-bottom-color: #2a4060;
+}
+
+body.dark-mode .emails-table th { color: #8fa3b9; }
+body.dark-mode .emails-table td { color: #c5d3de; }
+body.dark-mode .emails-table tbody tr { border-bottom-color: #2a4060; }
+body.dark-mode .emails-table tbody tr:hover { background: #162030; }
+body.dark-mode .error-row { background: rgba(239, 68, 68, 0.08); }
+body.dark-mode .date-cell { color: #607080; }
+
+body.dark-mode .btn-view-details {
+  background: #1b2836;
+  border-color: #2a4060;
+  color: #8fa3b9;
+}
+
+body.dark-mode .btn-view-details:hover {
+  border-color: #0ea5e9;
+  color: #38bdf8;
+}
+
+body.dark-mode .empty-state { color: #607080; }
+body.dark-mode .empty-state h3 { color: #c5d3de; }
+
+body.dark-mode .modal-overlay { background: rgba(0, 0, 0, 0.7); }
+
+body.dark-mode .modal-content {
+  background: #1b2836;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+body.dark-mode .modal-header,
+body.dark-mode .modal-actions { border-color: #2a4060; }
+
+body.dark-mode .modal-header h2,
+body.dark-mode .modal-header h3 { color: #e8edf3; }
+
+body.dark-mode .btn-close { color: #607080; }
+body.dark-mode .btn-close:hover { color: #e8edf3; }
+
+body.dark-mode .detail-group label { color: #607080; }
+body.dark-mode .detail-group p { color: #c5d3de; }
+
+body.dark-mode .detail-group.error {
+  background: rgba(239, 68, 68, 0.08);
+  border-left-color: #f87171;
+}
+
+body.dark-mode .email-body-preview {
+  background: #162030;
+  border-color: #2a4060;
+  color: #c5d3de;
+}
+
+body.dark-mode .status-badge.success { background: rgba(16, 185, 129, 0.12); color: #34d399; }
+body.dark-mode .status-badge.error { background: rgba(239, 68, 68, 0.12); color: #f87171; }
+
+body.dark-mode .test-result.success {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: #10b981;
+  color: #34d399;
+}
+
+body.dark-mode .test-result.error {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #ef4444;
+  color: #f87171;
+}
+
+body.dark-mode .email-dashboard-wrapper .btn-primary {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  border-color: #0284c7;
+}
+
+body.dark-mode .email-dashboard-wrapper .btn-secondary {
+  background: #162030;
+  border-color: #2a4060;
+  color: #c5d3de;
+}
+
+body.dark-mode .email-dashboard-wrapper .btn-secondary:hover:not(:disabled) {
+  background: #1b2836;
+  border-color: #3a5272;
+  color: #e8edf3;
+}
+
+body.dark-mode .signature-toggle { color: #c5d3de; }
+
 @media (max-width: 980px) {
   .mail-shell {
     grid-template-columns: 1fr;

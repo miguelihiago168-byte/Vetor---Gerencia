@@ -115,6 +115,71 @@ const initDatabase = async () => {
     });
     console.log('✓ Tabela atividades_eap criada');
 
+    // Tabela de Dependências entre Atividades
+    await new Promise((resolve, reject) => {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS atividades_dependencias (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          projeto_id INTEGER NOT NULL,
+          tenant_id INTEGER,
+          atividade_origem_id INTEGER NOT NULL,
+          atividade_destino_id INTEGER NOT NULL,
+          tipo_vinculo TEXT DEFAULT 'FS' CHECK(tipo_vinculo IN ('FS', 'FF', 'SS')),
+          sugerida_por_sistema INTEGER DEFAULT 1,
+          confirmada_usuario INTEGER DEFAULT 0,
+          score_sugestao REAL,
+          motivo_sugestao TEXT,
+          criada_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+          atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+          confirmada_em DATETIME,
+          confirmada_por INTEGER,
+          FOREIGN KEY (projeto_id) REFERENCES projetos(id) ON DELETE CASCADE,
+          FOREIGN KEY (atividade_origem_id) REFERENCES atividades_eap(id) ON DELETE CASCADE,
+          FOREIGN KEY (atividade_destino_id) REFERENCES atividades_eap(id) ON DELETE CASCADE,
+          FOREIGN KEY (confirmada_por) REFERENCES usuarios(id),
+          UNIQUE(atividade_origem_id, atividade_destino_id)
+        )
+      `, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+    console.log('✓ Tabela atividades_dependencias criada');
+
+    // Criar índices para performance
+    await new Promise((resolve, reject) => {
+      db.run(`
+        CREATE INDEX IF NOT EXISTS idx_dependencias_projeto 
+        ON atividades_dependencias(projeto_id, confirmada_usuario)
+      `, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+    console.log('✓ Índice idx_dependencias_projeto criado');
+
+    await new Promise((resolve, reject) => {
+      db.run(`
+        CREATE INDEX IF NOT EXISTS idx_dependencias_origem 
+        ON atividades_dependencias(atividade_origem_id)
+      `, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+    console.log('✓ Índice idx_dependencias_origem criado');
+
+    await new Promise((resolve, reject) => {
+      db.run(`
+        CREATE INDEX IF NOT EXISTS idx_dependencias_destino 
+        ON atividades_dependencias(atividade_destino_id)
+      `, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+    console.log('✓ Índice idx_dependencias_destino criado');
+
     // Tabela de RDOs
     await new Promise((resolve, reject) => {
       db.run(`

@@ -14,6 +14,7 @@ import RNCDetalhesScreen from '../screens/rnc/RNCDetalhesScreen';
 import RNCFormScreen from '../screens/rnc/RNCFormScreen';
 import ComprasScreen from '../screens/compras/ComprasScreen';
 import ComprasDetalheScreen from '../screens/compras/ComprasDetalheScreen';
+import PlanejamentoScreen from '../screens/planejamento/PlanejamentoScreen';
 import AlmoxDashboardScreen from '../screens/almoxarifado/AlmoxDashboardScreen';
 import AlmoxRetiradaScreen from '../screens/almoxarifado/AlmoxRetiradaScreen';
 import AlmoxDevolucaoScreen from '../screens/almoxarifado/AlmoxDevolucaoScreen';
@@ -32,6 +33,7 @@ export type AppStackParamList = {
   RNCForm: { projetoId: number; rncId?: number };
   Compras: { projetoId: number; projetoNome: string };
   ComprasDetalhe: { requisicaoId: number; projetoId: number };
+  Planejamento: { projetoId: number; projetoNome: string };
   AlmoxDashboard: { projetoId: number; projetoNome: string };
   AlmoxRetirada: { projetoId: number };
   AlmoxDevolucao: { projetoId: number };
@@ -105,6 +107,11 @@ export default function AppNavigator() {
         name="Compras"
         component={ComprasScreen}
         options={{ title: 'Compras' }}
+      />
+      <Stack.Screen
+        name="Planejamento"
+        component={PlanejamentoScreen}
+        options={{ title: 'Planejamento' }}
       />
       <Stack.Screen
         name="ComprasDetalhe"

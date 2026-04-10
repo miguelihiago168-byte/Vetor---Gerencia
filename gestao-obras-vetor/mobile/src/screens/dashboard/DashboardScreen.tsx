@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,10 @@ import {
   RefreshControl,
   Dimensions,
 } from 'react-native';
-import { useRoute, RouteProp } from '@react-navigation/native';
+import { useRoute, RouteProp, useFocusEffect } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BarChart } from 'react-native-chart-kit';
-import { getDashboardAvanco, getRDOStats } from '../../services/api';
+import { getCurvaS, getDashboardAvanco, getRDOStats } from '../../services/api';
 import { useNotification } from '../../context/NotificationContext';
 import { AppStackParamList } from '../../navigation/AppNavigator';
 import { CORES } from '../../utils/constants';
@@ -72,8 +72,53 @@ export default function DashboardScreen() {
         getDashboardAvanco(projetoId),
         getRDOStats(projetoId),
       ]);
-      setAvanco(rAvanco.data);
-      setStats(rStats.data);
+
+      let previstoCurvaS: number | null = null;
+      try {
+        const curvaResp = await getCurvaS(projetoId);
+        const indicadorPlanejado = Number(curvaResp.data?.indicadores?.avanco_planejado);
+        if (!Number.isNaN(indicadorPlanejado)) {
+          previstoCurvaS = indicadorPlanejado;
+        }
+      } catch {
+        // Curva S pode retornar erro quando EAP não está totalmente estruturada.
+      }
+
+      const avancoRaw = rAvanco.data ?? {};
+      const avancoGeral = avancoRaw.avanco_geral ?? {};
+      const atividadesPrincipais = Array.isArray(avancoRaw.atividades_principais)
+        ? avancoRaw.atividades_principais
+        : [];
+
+      const percentualPrevisto = atividadesPrincipais.length > 0
+        ? atividadesPrincipais.reduce(
+            (acc: number, item: { percentual_previsto?: number }) =>
+              acc + Number(item.percentual_previsto ?? 0),
+            0,
+          ) / atividadesPrincipais.length
+        : 0;
+
+      const percentualPrevistoFinal =
+        previstoCurvaS !== null && previstoCurvaS !== undefined
+          ? previstoCurvaS
+          : percentualPrevisto;
+
+      setAvanco({
+        percentual_previsto: Number(percentualPrevistoFinal || 0),
+        percentual_executado: Number(avancoGeral.avanco_medio || 0),
+        atividades_total: Number(avancoGeral.total_atividades || 0),
+        atividades_concluidas: Number(avancoGeral.concluidas || 0),
+        atividades_em_andamento: Number(avancoGeral.em_andamento || 0),
+      });
+
+      const statsRaw = rStats.data ?? {};
+      setStats({
+        total: Number(statsRaw.total_rdos ?? statsRaw.total ?? 0),
+        aprovados: Number(statsRaw.aprovados ?? 0),
+        em_analise: Number(statsRaw.em_analise ?? 0),
+        reprovados: Number(statsRaw.reprovados ?? 0),
+        em_preenchimento: Number(statsRaw.em_preenchimento ?? 0),
+      });
     } catch {
       error('Erro ao carregar dados do dashboard.');
     } finally {
@@ -82,9 +127,11 @@ export default function DashboardScreen() {
     }
   }, [projetoId, error]);
 
-  useEffect(() => {
-    carregar();
-  }, [carregar]);
+  useFocusEffect(
+    useCallback(() => {
+      carregar();
+    }, [carregar]),
+  );
 
   if (carregando) {
     return (
