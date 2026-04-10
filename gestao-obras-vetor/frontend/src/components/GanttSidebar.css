@@ -521,6 +521,7 @@ body.dark-mode .gantt-vazio svg { color: #2a4060; }
   z-index: 10000;
   max-width: 300px;
   line-height: 1.6;
+  color: #333;
 }
 
 .gantt-tooltip strong {
@@ -528,4 +529,15 @@ body.dark-mode .gantt-vazio svg { color: #2a4060; }
   margin-bottom: 4px;
   color: #222;
   font-size: 13px;
+}
+
+body.dark-mode .gantt-tooltip {
+  background: #1f3044;
+  border-color: #2a4060;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  color: #c5d3de;
+}
+
+body.dark-mode .gantt-tooltip strong {
+  color: #e8edf3;
 }
