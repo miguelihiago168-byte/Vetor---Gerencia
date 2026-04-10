@@ -4,6 +4,7 @@
 Sistema completo de gestão de obras com módulos de planejamento (EAP, Curva S, Gantt), execução diária (RDO), controle de compras/requisições, almoxarifado, gestão de usuários, RNC, notificações, email e rastreabilidade.
 
 Última atualização de documentação: 01/04/2026.
+Observação: linha adicionada em 10/04/2026 para acionar novo deploy na branch main.
 
 ## 🚀 Tecnologias
 
@@ -480,4 +481,5 @@ ISC - Uso interno da Vetor
 **Desenvolvido para Vetor - Sistema de Gestão de Obras**
 
 # Teste de Deploy Final
+
 
