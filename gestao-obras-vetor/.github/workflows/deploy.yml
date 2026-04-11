@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - principal
 
 concurrency:
   group: deploy-ec2-main
