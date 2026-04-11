@@ -14,4 +14,4 @@ ios/
 *.log
 .env
 keys/
-
+internal_docs/

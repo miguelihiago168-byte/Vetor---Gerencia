@@ -237,12 +237,12 @@ function Navbar() {
                 </NavLink>
               )}
 
-              <NavLink to={rotaPerfil} onClick={(e) => confirmNav(e, rotaPerfil)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-                Perfil
-              </NavLink>
             </div>
           </div>
           <div className="navbar-account">
+            <NavLink to={rotaPerfil} onClick={(e) => confirmNav(e, rotaPerfil)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+              Perfil
+            </NavLink>
             <button onClick={handleLogout} className="btn btn-danger" style={{ padding: '10px 14px' }}>
               <LogOut size={16} />
               Sair
