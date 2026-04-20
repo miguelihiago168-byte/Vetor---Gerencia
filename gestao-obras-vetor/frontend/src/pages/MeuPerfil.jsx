@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { ArrowLeft, KeyRound, ShieldCheck, User } from 'lucide-react';
+import { ArrowLeft, KeyRound } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { hasForbiddenPasswordSequence } from '../utils/passwordPolicy';
 import './MeuPerfil.css';
@@ -65,6 +65,15 @@ function MeuPerfil() {
   const nomeExibicao = usuario?.nome || usuario?.login;
   const perfilExibicao = usuario?.perfil || 'Sem perfil';
   const funcaoExibicao = usuario?.funcao || 'Não informada';
+  const ultimoProjetoId = (() => {
+    try {
+      return localStorage.getItem('navbar_last_project_id');
+    } catch (_) {
+      return null;
+    }
+  })();
+  const rotaVoltar = ultimoProjetoId ? `/projeto/${ultimoProjetoId}` : '/projetos';
+  const tituloVoltar = ultimoProjetoId ? 'Voltar para o dashboard da obra' : 'Voltar para projetos';
 
   return (
     <>
@@ -77,7 +86,7 @@ function MeuPerfil() {
             <p className="perfil-page-subtitle">Consulte seus dados de acesso e altere sua senha.</p>
           </div>
 
-          <button className="btn btn-secondary perfil-back-btn" onClick={() => navigate('/projetos')} title="Voltar para projetos">
+          <button className="btn btn-secondary perfil-back-btn" onClick={() => navigate(rotaVoltar)} title={tituloVoltar}>
             <ArrowLeft size={18} />
             Voltar
           </button>
@@ -182,44 +191,6 @@ function MeuPerfil() {
               </div>
             </form>
           </section>
-
-          <aside className="card perfil-side-card">
-            <div className="perfil-section-header">
-              <div>
-                <p className="perfil-section-eyebrow">Orientações</p>
-                <h2 className="card-title">Boas práticas</h2>
-              </div>
-              <div className="perfil-section-icon perfil-section-icon-soft">
-                <ShieldCheck size={18} />
-              </div>
-            </div>
-
-            <div className="perfil-side-list">
-              <div className="perfil-side-item">
-                <User size={16} />
-                <div>
-                  <strong>Conta vinculada ao seu login</strong>
-                  <p>Use sempre o login {usuario?.login} para manter a rastreabilidade das operações.</p>
-                </div>
-              </div>
-
-              <div className="perfil-side-item">
-                <KeyRound size={16} />
-                <div>
-                  <strong>Senha padronizada</strong>
-                  <p>O sistema utiliza senha numérica de 6 dígitos para agilizar o acesso em campo.</p>
-                </div>
-              </div>
-
-              <div className="perfil-side-item">
-                <ShieldCheck size={16} />
-                <div>
-                  <strong>Troca imediata</strong>
-                  <p>Ao salvar, a nova senha passa a valer no mesmo instante para suas próximas sessões.</p>
-                </div>
-              </div>
-            </div>
-          </aside>
         </div>
       </div>
     </>

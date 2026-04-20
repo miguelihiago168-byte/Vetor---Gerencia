@@ -17,7 +17,26 @@ function Navbar() {
 
   // tenta extrair projetoId da rota atual (/projeto/:projetoId/...)
   const projetoMatch = (location.pathname || '').match(/\/projeto\/(\d+)/);
-  const projetoId = projetoMatch ? projetoMatch[1] : null;
+  const projetoIdAtual = projetoMatch ? projetoMatch[1] : null;
+  const [projetoIdPersistido, setProjetoIdPersistido] = useState(() => {
+    try {
+      return localStorage.getItem('navbar_last_project_id');
+    } catch (_) {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    if (!projetoIdAtual) return;
+    setProjetoIdPersistido(projetoIdAtual);
+    try {
+      localStorage.setItem('navbar_last_project_id', projetoIdAtual);
+    } catch (_) {
+      // ignorar falha de persistencia
+    }
+  }, [projetoIdAtual]);
+
+  const projetoId = projetoIdAtual || projetoIdPersistido || null;
   const temProjetoSelecionado = Boolean(projetoId);
 
   const [pendCompras, setPendCompras] = useState(0);
