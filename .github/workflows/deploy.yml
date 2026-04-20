@@ -137,8 +137,7 @@ jobs:
           # Se git diff falhou e retornou vazio, forcar rebuild completo
           if [ -z "$CHANGED_FILES" ]; then
             echo ">>> CHANGED_FILES vazio (shallow clone ou erro no diff). Forcando rebuild completo."
-            CHANGED_FILES="gestao-obras-vetor/backend/server.js
-gestao-obras-vetor/frontend/index.html"
+            CHANGED_FILES="$(printf 'gestao-obras-vetor/backend/server.js\ngestao-obras-vetor/frontend/index.html')"
           fi
 
           NEED_BACKEND=0
