@@ -145,7 +145,6 @@ jobs:
 
           echo "$CHANGED_FILES" | grep -Eq '^(gestao-obras-vetor/)?backend/|^(gestao-obras-vetor/)?docker-compose\.yml$' && NEED_BACKEND=1 || true
           echo "$CHANGED_FILES" | grep -Eq '^(gestao-obras-vetor/)?frontend/|^(gestao-obras-vetor/)?nginx/|^(gestao-obras-vetor/)?docker-compose\.yml$' && NEED_FRONTEND=1 || true
-          echo "$CHANGED_FILES" | grep -Eq '^(\.github/workflows/deploy\.yml|gestao-obras-vetor/\.github/workflows/deploy\.yml)$' && NEED_BACKEND=1 && NEED_FRONTEND=1 || true
 
           echo "NEED_BACKEND=$NEED_BACKEND" >> "$GITHUB_ENV"
           echo "NEED_FRONTEND=$NEED_FRONTEND" >> "$GITHUB_ENV"
