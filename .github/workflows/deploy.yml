@@ -195,24 +195,51 @@ jobs:
             NEED_BACKEND=${{ env.NEED_BACKEND }}
             NEED_FRONTEND=${{ env.NEED_FRONTEND }}
 
+            echo ">>> Estado inicial de memoria (free -h):"
+            free -h || true
+
+            # Evita travamento em instancias pequenas: cria swap se nao houver nenhuma ativa.
+            if ! sudo swapon --show | grep -q .; then
+              echo ">>> Nenhuma swap ativa. Criando swap de 2G..."
+              sudo fallocate -l 2G /swapfile || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048
+              sudo chmod 600 /swapfile
+              sudo mkswap /swapfile
+              sudo swapon /swapfile
+              if ! grep -q '^/swapfile ' /etc/fstab; then
+                echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
+              fi
+            else
+              echo ">>> Swap ja ativa."
+            fi
+
+            echo ">>> Memoria apos garantir swap:"
+            free -h || true
+
+            export COMPOSE_PARALLEL_LIMIT=1
+
             echo ">>> Arquivos alterados:"
             echo "${{ env.CHANGED_FILES }}"
 
             if [ "$NEED_BACKEND" -eq 1 ] && [ "$NEED_FRONTEND" -eq 1 ]; then
-              echo ">>> Build seletivo: backend + frontend"
-              sudo docker compose up -d --build backend frontend
+              echo ">>> Build seletivo sequencial: backend + frontend"
+              sudo -E docker compose build backend
+              sudo -E docker compose up -d backend
+              sudo -E docker compose build frontend
+              sudo -E docker compose up -d frontend
             elif [ "$NEED_BACKEND" -eq 1 ]; then
               echo ">>> Build seletivo: backend"
-              sudo docker compose up -d --build backend
+              sudo -E docker compose build backend
+              sudo -E docker compose up -d backend
             elif [ "$NEED_FRONTEND" -eq 1 ]; then
               echo ">>> Build seletivo: frontend"
-              sudo docker compose up -d --build frontend
+              sudo -E docker compose build frontend
+              sudo -E docker compose up -d frontend
             else
               echo ">>> Sem mudanças em backend/frontend. Subindo sem rebuild."
-              sudo docker compose up -d backend frontend
+              sudo -E docker compose up -d backend frontend
             fi
 
             echo ">>> Status dos containers:"
-            sudo docker compose ps
+            sudo -E docker compose ps
 
 # Deploy com chaves configuradas
