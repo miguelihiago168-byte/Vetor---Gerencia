@@ -155,6 +155,60 @@ const runMulter = (middleware) => (req, res, next) => {
   });
 };
 
+const ensureEmailTables = async () => {
+  const tables = [
+    `CREATE TABLE IF NOT EXISTS email_config (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id INTEGER,
+      provider TEXT NOT NULL DEFAULT 'custom',
+      smtp_host TEXT NOT NULL DEFAULT '',
+      smtp_port INTEGER NOT NULL DEFAULT 587,
+      smtp_user TEXT NOT NULL DEFAULT '',
+      smtp_pass_encrypted TEXT NOT NULL DEFAULT '',
+      from_name TEXT NOT NULL DEFAULT '',
+      from_email TEXT NOT NULL DEFAULT '',
+      is_active INTEGER DEFAULT 1,
+      created_by_user_id INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(tenant_id)
+    )`,
+    `CREATE TABLE IF NOT EXISTS email_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id INTEGER,
+      name TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      body_html TEXT NOT NULL,
+      description TEXT,
+      created_by_user_id INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
+    `CREATE TABLE IF NOT EXISTS email_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id INTEGER,
+      sender_user_id INTEGER,
+      recipient_email TEXT NOT NULL,
+      subject TEXT,
+      body_html TEXT,
+      template_used TEXT,
+      status TEXT DEFAULT 'PENDENTE',
+      error_message TEXT,
+      sent_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`
+  ];
+
+  for (const sql of tables) {
+    await new Promise((resolve, reject) => {
+      db.run(sql, [], (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+  }
+};
+
 const ensureSignatureColumn = async () => {
   const columns = await new Promise((resolve, reject) => {
     db.all('PRAGMA table_info(usuarios)', [], (err, rows) => {
@@ -766,5 +820,8 @@ router.delete('/templates/:id', auth, async (req, res) => {
     res.status(500).json({ error: 'Erro ao deletar template' });
   }
 });
+
+// Garantir tabelas de email na inicialização
+ensureEmailTables().catch((err) => console.error('Erro ao criar tabelas de email:', err));
 
 module.exports = router;

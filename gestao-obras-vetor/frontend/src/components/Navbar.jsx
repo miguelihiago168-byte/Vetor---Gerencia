@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogOut } from 'lucide-react';
+import { LogOut, User, ChevronDown } from 'lucide-react';
 import { useLeaveGuard } from '../context/LeaveGuardContext';
 import { listarPedidosPorProjeto, getRDOs, getRNCs, getNotificacoes, marcarNotificacaoLida, getRequisicoesBadges } from '../services/api';
 import { useNotification } from '../context/NotificationContext';
@@ -27,6 +27,8 @@ function Navbar() {
   const [pendRnc, setPendRnc] = useState(0);
   const [notifCompras, setNotifCompras] = useState(0);
   const [notifTotal, setNotifTotal] = useState(0);
+  const [perfilDropdownOpen, setPerfilDropdownOpen] = useState(false);
+  const perfilDropdownRef = useRef(null);
   const { info } = useNotification();
 
   useEffect(() => {
@@ -129,11 +131,23 @@ function Navbar() {
   };
 
   const handleLogout = async (e) => {
+    setPerfilDropdownOpen(false);
     const ok = await confirmNav(e);
     if (!ok) return;
     logout();
     navigate('/login');
   };
+
+  // Fechar dropdown ao clicar fora
+  useEffect(() => {
+    const handler = (e) => {
+      if (perfilDropdownRef.current && !perfilDropdownRef.current.contains(e.target)) {
+        setPerfilDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const rotaRdos = projetoId ? `/projeto/${projetoId}/rdos` : '/rdos';
   const rotaRnc = projetoId ? `/projeto/${projetoId}/rnc` : '/rnc';
@@ -240,13 +254,53 @@ function Navbar() {
             </div>
           </div>
           <div className="navbar-account">
-            <NavLink to={rotaPerfil} onClick={(e) => confirmNav(e, rotaPerfil)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-              Perfil
-            </NavLink>
-            <button onClick={handleLogout} className="btn btn-danger" style={{ padding: '10px 14px' }}>
-              <LogOut size={16} />
-              Sair
-            </button>
+            <div className="navbar-perfil-dropdown" ref={perfilDropdownRef} style={{ position: 'relative' }}>
+              <button
+                className={`navbar-link navbar-perfil-btn${perfilDropdownOpen ? ' active' : ''}`}
+                onClick={() => setPerfilDropdownOpen((v) => !v)}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer' }}
+              >
+                <User size={16} />
+                Perfil
+                <ChevronDown size={14} style={{ transition: 'transform 0.2s', transform: perfilDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+              </button>
+              {perfilDropdownOpen && (
+                <div className="navbar-perfil-menu" style={{
+                  position: 'absolute',
+                  right: 0,
+                  top: '100%',
+                  marginTop: 6,
+                  background: 'var(--bg-card, #fff)',
+                  border: '1px solid var(--border-color, #e5e7eb)',
+                  borderRadius: 8,
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                  minWidth: 160,
+                  zIndex: 1000,
+                  overflow: 'hidden'
+                }}>
+                  {usuario && (
+                    <div style={{ padding: '10px 16px', fontSize: 12, color: 'var(--text-muted, #6b7280)', borderBottom: '1px solid var(--border-color, #e5e7eb)' }}>
+                      {usuario.nome || usuario.login}
+                    </div>
+                  )}
+                  <NavLink
+                    to={rotaPerfil}
+                    onClick={async (e) => { setPerfilDropdownOpen(false); await confirmNav(e, rotaPerfil); }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', textDecoration: 'none', color: 'inherit', fontSize: 14 }}
+                  >
+                    <User size={14} />
+                    Meu Perfil
+                  </NavLink>
+                  <button
+                    onClick={handleLogout}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 16px', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-danger, #ef4444)', fontSize: 14, textAlign: 'left' }}
+                  >
+                    <LogOut size={14} />
+                    Sair
+                  </button>
+                </div>
+              )}
+            </div>
             <ThemeToggle />
           </div>
         </div>
