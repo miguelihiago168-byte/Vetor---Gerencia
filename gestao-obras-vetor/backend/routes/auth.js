@@ -154,7 +154,11 @@ const cleanupExpiredTrials = async () => {
   ).catch(() => []);
 
   for (const t of expired) {
-    await purgeTenantData(Number(t.id));
+    // Apenas desativa; dados preservados até o usuário confirmar exclusão
+    await runQuery(
+      'UPDATE tenants SET trial_ativo = 0, ativo = 0 WHERE id = ?',
+      [Number(t.id)]
+    ).catch(() => {});
   }
 };
 
@@ -229,14 +233,35 @@ router.post('/login', [
       return res.status(403).json({ erro: 'Conta sem tenant ativo.' });
     }
 
-    const tenant = await getQuery('SELECT id, trial_expires_at FROM tenants WHERE id = ? AND ativo = 1', [tenantIdAtivo]);
+    const tenant = await getQuery(
+      'SELECT id, trial_expires_at, trial_ativo, ativo FROM tenants WHERE id = ?',
+      [tenantIdAtivo]
+    );
     if (!tenant) {
+      return res.status(403).json({ erro: 'Tenant não encontrado.' });
+    }
+
+    // Conta desativada por expiração de trial
+    if (Number(tenant.ativo) === 0 && tenant.trial_expires_at) {
+      return res.status(403).json({
+        codigo: 'TRIAL_EXPIRADO',
+        erro: 'Seu período de teste de 30 dias expirou. Assine o serviço para continuar.',
+        tenant_id: tenantIdAtivo
+      });
+    }
+
+    if (Number(tenant.ativo) === 0) {
       return res.status(403).json({ erro: 'Tenant inativo ou inexistente.' });
     }
 
+    // Edge case: trial vencido mas cleanup ainda não rodou
     if (tenant.trial_expires_at && new Date(tenant.trial_expires_at) <= new Date()) {
-      await purgeTenantData(tenantIdAtivo);
-      return res.status(403).json({ erro: 'Período de teste expirado. Conta e dados removidos.' });
+      await runQuery('UPDATE tenants SET trial_ativo = 0, ativo = 0 WHERE id = ?', [tenantIdAtivo]);
+      return res.status(403).json({
+        codigo: 'TRIAL_EXPIRADO',
+        erro: 'Seu período de teste de 30 dias expirou. Assine o serviço para continuar.',
+        tenant_id: tenantIdAtivo
+      });
     }
 
     let obrasVinculadas = [];
@@ -713,4 +738,48 @@ router.post('/redefinir-senha', [
     return res.status(500).json({ erro: 'Erro ao redefinir senha.' });
   }
 });
+
+// Cancelamento e exclusão definitiva de conta (trial expirado)
+router.post('/cancelar-conta', [
+  body('login').isString().trim().notEmpty(),
+  body('senha').isString().isLength({ min: 1, max: 72 }),
+  body('tenant_id').isInt()
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ erro: 'Dados inválidos.' });
+    }
+
+    const { login: loginInput, senha, tenant_id } = req.body;
+
+    // Valida credenciais independente do status do tenant
+    const usuario = await getQuery(
+      'SELECT id, senha AS senhaHash FROM usuarios WHERE ativo = 1 AND (login = ? OR lower(email) = lower(?))',
+      [loginInput.trim(), loginInput.trim()]
+    );
+
+    if (!usuario) {
+      return res.status(401).json({ erro: 'Credenciais inválidas.' });
+    }
+
+    const senhaValida = await verifyPasswordWithLegacySupport(senha, usuario.senhaHash);
+    if (!senhaValida) {
+      return res.status(401).json({ erro: 'Credenciais inválidas.' });
+    }
+
+    const numericTenantId = Number(tenant_id);
+    if (!numericTenantId) {
+      return res.status(400).json({ erro: 'tenant_id inválido.' });
+    }
+
+    await purgeTenantData(numericTenantId);
+
+    return res.json({ mensagem: 'Conta excluída definitivamente.' });
+  } catch (error) {
+    console.error('Erro em cancelar-conta:', error);
+    return res.status(500).json({ erro: 'Erro ao excluir conta.' });
+  }
+});
+
 module.exports = router;

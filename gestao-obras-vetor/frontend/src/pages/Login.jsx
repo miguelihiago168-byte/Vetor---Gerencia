@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { login as loginAPI, registerTrialAccount, esqueciSenha } from '../services/api';
-import { ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { login as loginAPI, registerTrialAccount, esqueciSenha, cancelarConta } from '../services/api';
+import { ArrowRight, Eye, EyeOff, CalendarX } from 'lucide-react';
 import './Login.css';
 
 const getPasswordStrength = (value) => {
@@ -63,6 +63,9 @@ function Login() {
   const [sucesso, setSucesso] = useState('');
   const [loading, setLoading] = useState(false);
   const [esqueciLogin, setEsqueciLogin] = useState('');
+  const [trialExpirado, setTrialExpirado] = useState(null); // { tenant_id, login, senha }
+  const [confirmarExclusao, setConfirmarExclusao] = useState(false);
+  const [cancelandoConta, setCancelandoConta] = useState(false);
 
   const { loginAuth } = useAuth();
   const navigate = useNavigate();
@@ -114,9 +117,33 @@ function Login() {
       loginAuth(response.data.token, response.data.usuario, manterLogin);
       navigate(response.data?.usuario?.primeiro_acesso_pendente ? '/primeiro-acesso' : '/projetos');
     } catch (error) {
-      setErro(normalizeAuthErrorMessage(error.response?.data?.erro || 'Erro ao fazer login.'));
+      const codigo = error.response?.data?.codigo;
+      if (codigo === 'TRIAL_EXPIRADO') {
+        setTrialExpirado({
+          tenant_id: error.response.data.tenant_id,
+          login: loginForm.usuario.trim(),
+          senha: loginForm.senha,
+        });
+      } else {
+        setErro(normalizeAuthErrorMessage(error.response?.data?.erro || 'Erro ao fazer login.'));
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCancelarConta = async () => {
+    setCancelandoConta(true);
+    setErro('');
+    try {
+      await cancelarConta(trialExpirado);
+      setTrialExpirado(null);
+      setConfirmarExclusao(false);
+      setSucesso('Conta excluída com sucesso.');
+    } catch {
+      setErro('Erro ao excluir conta. Tente novamente.');
+    } finally {
+      setCancelandoConta(false);
     }
   };
 
@@ -182,6 +209,7 @@ function Login() {
   };
 
   return (
+    <>
     <div className="login-page login-split-layout">
       {/* Coluna esquerda: Imagem */}
       <div className="login-image-col">
@@ -430,6 +458,115 @@ function Login() {
         )}
       </div>
     </div>
+
+    {/* Modal: Trial expirado */}
+    {trialExpirado && (
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 9999,
+        background: 'rgba(15,23,42,0.65)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16
+      }}>
+        <div style={{
+          background: '#fff', borderRadius: 20, padding: '40px 36px',
+          maxWidth: 440, width: '100%',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.22)',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center'
+        }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: '50%',
+            background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            marginBottom: 20
+          }}>
+            <CalendarX size={30} color="#d97706" />
+          </div>
+
+          <h2 style={{ margin: '0 0 10px', fontSize: '1.2rem', fontWeight: 800, color: '#0f172a' }}>
+            Período de teste encerrado
+          </h2>
+          <p style={{ margin: '0 0 24px', fontSize: '0.9rem', color: '#475569', lineHeight: 1.55 }}>
+            Seu período de <strong>30 dias gratuitos</strong> expirou. Seus dados estão preservados.
+            Assine o serviço para continuar usando o sistema, ou cancele a conta para excluir todos os dados permanentemente.
+          </p>
+
+          {!confirmarExclusao ? (
+            <>
+              <button
+                disabled
+                style={{
+                  width: '100%', height: 48, borderRadius: 12, border: 'none',
+                  background: '#e2e8f0', color: '#94a3b8', fontWeight: 700, fontSize: 15,
+                  cursor: 'not-allowed', marginBottom: 12, display: 'flex',
+                  alignItems: 'center', justifyContent: 'center', gap: 8
+                }}
+              >
+                Assinar serviço
+                <span style={{
+                  background: '#0ea5e9', color: '#fff', fontSize: 10, fontWeight: 700,
+                  borderRadius: 99, padding: '2px 8px', letterSpacing: '0.05em'
+                }}>EM BREVE</span>
+              </button>
+
+              <button
+                onClick={() => setConfirmarExclusao(true)}
+                style={{
+                  width: '100%', height: 44, borderRadius: 12, border: '1.5px solid #fecaca',
+                  background: '#fff', color: '#dc2626', fontWeight: 600, fontSize: 14,
+                  cursor: 'pointer', marginBottom: 16
+                }}
+              >
+                Excluir minha conta e dados
+              </button>
+
+              <button
+                type="button"
+                className="login-link-btn"
+                onClick={() => setTrialExpirado(null)}
+                style={{ fontSize: 13, color: '#94a3b8' }}
+              >
+                Fechar
+              </button>
+            </>
+          ) : (
+            <>
+              <div style={{
+                background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10,
+                padding: '12px 16px', marginBottom: 20, width: '100%', textAlign: 'left'
+              }}>
+                <p style={{ margin: 0, fontSize: 13, color: '#dc2626', fontWeight: 600 }}>
+                  ⚠️ Atenção: esta ação é irreversível.
+                </p>
+                <p style={{ margin: '6px 0 0', fontSize: 13, color: '#7f1d1d' }}>
+                  Todos os seus projetos, RDOs, EAP, compras e demais dados serão excluídos permanentemente e não poderão ser recuperados.
+                </p>
+              </div>
+
+              <button
+                onClick={handleCancelarConta}
+                disabled={cancelandoConta}
+                style={{
+                  width: '100%', height: 48, borderRadius: 12, border: 'none',
+                  background: cancelandoConta ? '#e2e8f0' : '#dc2626',
+                  color: cancelandoConta ? '#94a3b8' : '#fff',
+                  fontWeight: 700, fontSize: 15, cursor: cancelandoConta ? 'not-allowed' : 'pointer',
+                  marginBottom: 12
+                }}
+              >
+                {cancelandoConta ? 'Excluindo...' : 'Confirmar exclusão definitiva'}
+              </button>
+
+              <button
+                type="button"
+                className="login-link-btn"
+                onClick={() => setConfirmarExclusao(false)}
+              >
+                ← Voltar
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    )}
+    </>
   );
 }
 
