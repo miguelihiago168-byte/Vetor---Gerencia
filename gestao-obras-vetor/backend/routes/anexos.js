@@ -7,6 +7,16 @@ const { auth } = require('../middleware/auth');
 
 const router = express.Router();
 
+const ensureAnexosRncSchema = async () => {
+  // Ambientes legados (principalmente tenant DB) podem não ter colunas de RNC.
+  try {
+    await runQuery('ALTER TABLE anexos ADD COLUMN rnc_id INTEGER');
+  } catch (_) { /* coluna já existe */ }
+  try {
+    await runQuery("ALTER TABLE anexos ADD COLUMN categoria TEXT DEFAULT 'registro'");
+  } catch (_) { /* coluna já existe */ }
+};
+
 // Criar diretório de uploads se não existir
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadsDir)) {
@@ -28,11 +38,11 @@ const uploadGeral = multer({
   storage: storage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
   fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|pdf|doc|docx|xls|xlsx/;
+    const allowedTypes = /jpeg|jpg|png|webp|gif|heic|heif|pdf|doc|docx|xls|xlsx/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype);
+    const mimetype = allowedTypes.test(String(file.mimetype || '').toLowerCase());
 
-    if (mimetype && extname) {
+    if (mimetype || extname) {
       return cb(null, true);
     } else {
       cb(new Error('Tipo de arquivo não permitido.'));
@@ -84,35 +94,51 @@ router.post('/upload/:rdoId', auth, uploadPdfRdo.single('arquivo'), async (req, 
 // Upload de arquivo para RNC
 router.post('/upload-rnc/:rncId', auth, uploadGeral.single('arquivo'), async (req, res) => {
   try {
+    await ensureAnexosRncSchema();
+
     if (!req.file) {
       return res.status(400).json({ erro: 'Nenhum arquivo enviado.' });
     }
 
     const { rncId } = req.params;
-    const rnc = await getQuery('SELECT id, status, criado_por, responsavel_id FROM rnc WHERE id = ?', [rncId]);
+    const rnc = await getQuery('SELECT id, projeto_id, rdo_id, status, criado_por, responsavel_id FROM rnc WHERE id = ?', [rncId]);
     if (!rnc) {
       return res.status(404).json({ erro: 'RNC não encontrada.' });
     }
     if (rnc.status === 'Encerrada') {
       return res.status(403).json({ erro: 'Não é permitido anexar arquivos em RNC encerrada.' });
     }
-    if (rnc.criado_por !== req.usuario.id && rnc.responsavel_id !== req.usuario.id && !req.usuario.is_gestor) {
+    const uid = String(req.usuario?.id ?? '');
+    const podeAnexar = uid === String(rnc.criado_por ?? '') || uid === String(rnc.responsavel_id ?? '') || Boolean(req.usuario?.is_gestor);
+    if (!podeAnexar) {
       return res.status(403).json({ erro: 'Sem permissão para anexar arquivos nesta RNC.' });
     }
 
+    // Compatibilidade com bases antigas: anexos.rdo_id pode ser NOT NULL.
+    let rdoIdForInsert = rnc.rdo_id || null;
+    if (!rdoIdForInsert) {
+      const rdoFallback = await getQuery('SELECT id FROM rdos WHERE projeto_id = ? ORDER BY id DESC LIMIT 1', [rnc.projeto_id]);
+      rdoIdForInsert = rdoFallback?.id || null;
+    }
+    if (!rdoIdForInsert) {
+      return res.status(400).json({ erro: 'Não foi possível anexar fotos: esta RNC não possui RDO vinculado e o projeto não tem RDO cadastrado.' });
+    }
+
     const { originalname, filename, mimetype, size } = req.file;
+    const categoria = req.body.categoria === 'correcao' ? 'correcao' : 'registro';
 
     const result = await runQuery(`
-      INSERT INTO anexos (rnc_id, tipo, nome_arquivo, caminho_arquivo, tamanho)
-      VALUES (?, ?, ?, ?, ?)
-    `, [rncId, mimetype, originalname, filename, size]);
+      INSERT INTO anexos (rdo_id, rnc_id, tipo, nome_arquivo, caminho_arquivo, tamanho, categoria)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, [rdoIdForInsert, rncId, mimetype, originalname, filename, size, categoria]);
 
     res.status(201).json({
       mensagem: 'Arquivo enviado com sucesso.',
       anexo: {
         id: result.lastID,
         nome_arquivo: originalname,
-        tipo: mimetype
+        tipo: mimetype,
+        categoria
       }
     });
 
@@ -150,11 +176,18 @@ router.get('/rdo/:rdoId', auth, async (req, res) => {
 // Listar anexos de uma RNC
 router.get('/rnc/:rncId', auth, async (req, res) => {
   try {
+    await ensureAnexosRncSchema();
+
     const { rncId } = req.params;
-    const anexos = await allQuery(
-      'SELECT * FROM anexos WHERE rnc_id = ? ORDER BY criado_em DESC',
-      [rncId]
-    );
+    const { categoria } = req.query;
+    let sql = 'SELECT * FROM anexos WHERE rnc_id = ?';
+    const params = [rncId];
+    if (categoria === 'registro' || categoria === 'correcao') {
+      sql += ' AND (categoria = ? OR (? = \'registro\' AND categoria IS NULL))';
+      params.push(categoria, categoria);
+    }
+    sql += ' ORDER BY criado_em DESC';
+    const anexos = await allQuery(sql, params);
     res.json(anexos);
   } catch (error) {
     console.error('Erro ao listar anexos (RNC):', error);

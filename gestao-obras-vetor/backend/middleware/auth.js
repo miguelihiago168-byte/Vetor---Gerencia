@@ -6,7 +6,9 @@ const { PERFIS, inferirPerfil } = require('../constants/access');
 
 const auth = async (req, res, next) => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
+    // Accept token from Authorization header OR ?token= query param (for file downloads)
+    const headerToken = req.header('Authorization')?.replace('Bearer ', '');
+    const token = headerToken || req.query?.token;
     
     if (!token) {
       return res.status(401).json({ erro: 'Acesso negado. Token não fornecido.' });

@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { ArrowLeft, KeyRound } from 'lucide-react';
+import { ArrowLeft, KeyRound, User, Mail, Phone, Pencil, Check, X, Camera } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { hasForbiddenPasswordSequence } from '../utils/passwordPolicy';
+import { patchUsuarioInfo, patchUsuarioAvatar } from '../services/api';
 import './MeuPerfil.css';
 
 function MeuPerfil() {
@@ -16,8 +17,77 @@ function MeuPerfil() {
   const [loadingSenha, setLoadingSenha] = useState(false);
   const navigate = useNavigate();
 
+  // Edição de dados pessoais
+  const [editando, setEditando] = useState(false);
+  const [editNome, setEditNome] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editTelefone, setEditTelefone] = useState('');
+  const [salvandoInfo, setSalvandoInfo] = useState(false);
+
+  // Avatar
+  const avatarInputRef = useRef(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  const cleanText = (value) => {
+    if (value == null) return '';
+    const text = String(value).trim();
+    if (!text) return '';
+    if (text.toLowerCase() === 'null' || text.toLowerCase() === 'undefined') return '';
+    return text;
+  };
+
+  const getToken = () => localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+
   if (loading) return <div className="loading"><div className="spinner"></div></div>;
   if (!usuario) return <Navigate to="/login" />;
+
+  const iniciarEdicao = () => {
+    setEditNome(usuario?.nome || '');
+    setEditEmail(usuario?.email || '');
+    setEditTelefone(usuario?.telefone || '');
+    setEditando(true);
+  };
+
+  const cancelarEdicao = () => setEditando(false);
+
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAvatar(true);
+    try {
+      const fd = new FormData();
+      fd.append('avatar', file);
+      const res = await patchUsuarioAvatar(usuario.id, fd);
+      const novoAvatar = res?.data?.avatar;
+      if (novoAvatar && typeof atualizarUsuarioLogado === 'function') {
+        atualizarUsuarioLogado({ avatar: novoAvatar });
+      }
+    } catch (err) {
+      await alert({ title: 'Erro', message: err.response?.data?.erro || 'Erro ao enviar foto.' });
+    } finally {
+      setUploadingAvatar(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleSalvarInfo = async () => {
+    setSalvandoInfo(true);
+    try {
+      const res = await patchUsuarioInfo(usuario.id, { nome: editNome, email: editEmail, telefone: editTelefone });
+      const usuarioAtualizado = res?.data?.usuario || {
+        nome: editNome,
+        email: editEmail,
+        telefone: editTelefone,
+      };
+      if (typeof atualizarUsuarioLogado === 'function') atualizarUsuarioLogado(usuarioAtualizado);
+      setEditando(false);
+      await alert({ title: 'Sucesso', message: 'Informações atualizadas.' });
+    } catch (e) {
+      await alert({ title: 'Erro', message: e.response?.data?.erro || e.message });
+    } finally {
+      setSalvandoInfo(false);
+    }
+  };
 
   const handleTrocarSenha = async (e) => {
     e.preventDefault();
@@ -37,7 +107,7 @@ function MeuPerfil() {
     try {
       const resp = await fetch(`/api/usuarios/${usuario.id}/senha`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${usuario.token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
         body: JSON.stringify({ senhaAtual, novaSenha })
       });
       if (!resp.ok) {
@@ -93,13 +163,21 @@ function MeuPerfil() {
         </div>
 
         <div className="perfil-grid">
+          {/* Informações do usuário */}
           <section className="card perfil-section-card">
             <div className="perfil-user-card">
-              <div className="perfil-avatar">
-                <span className="perfil-avatar-iniciais">{getInitials(nomeExibicao)}</span>
+              <div className="perfil-avatar perfil-avatar-clickable" onClick={() => avatarInputRef.current?.click()} title="Clique para trocar a foto">
+                {usuario?.avatar
+                  ? <img src={`/uploads/${usuario.avatar}`} alt="avatar" className="perfil-avatar-image" />
+                  : <span className="perfil-avatar-iniciais">{getInitials(nomeExibicao)}</span>
+                }
+                <div className="perfil-avatar-camera-badge">
+                  {uploadingAvatar ? <span style={{ fontSize: 10, color: '#fff' }}>...</span> : <Camera size={12} color="#fff" />}
+                </div>
+                <input ref={avatarInputRef} type="file" accept="image/jpeg,image/jpg,image/png,image/webp" style={{ display: 'none' }} onChange={handleAvatarChange} />
               </div>
 
-              <div className="perfil-user-main">
+              <div className="perfil-user-main" style={{ flex: 1 }}>
                 <h2 className="perfil-user-name">{nomeExibicao}</h2>
                 <div className="perfil-user-meta">
                   <div className="perfil-meta-item">
@@ -118,6 +196,60 @@ function MeuPerfil() {
               </div>
             </div>
 
+            {/* Dados pessoais editáveis */}
+            <div className="perfil-section-header" style={{ marginTop: 24 }}>
+              <div>
+                <p className="perfil-section-eyebrow">Dados pessoais</p>
+                <h2 className="card-title">Informações de contato</h2>
+              </div>
+              <div className="perfil-section-icon">
+                <User size={18} />
+              </div>
+            </div>
+
+            {!editando ? (
+              <div style={{ marginTop: 12 }}>
+                <div className="perfil-info-row">
+                  <Mail size={14} style={{ opacity: 0.6 }} />
+                  <span className="perfil-meta-label">E-mail:</span>
+                  <span>{cleanText(usuario?.email) || <em style={{ opacity: 0.5 }}>Não informado</em>}</span>
+                </div>
+                <div className="perfil-info-row">
+                  <Phone size={14} style={{ opacity: 0.6 }} />
+                  <span className="perfil-meta-label">Telefone:</span>
+                  <span>{cleanText(usuario?.telefone) || <em style={{ opacity: 0.5 }}>Não informado</em>}</span>
+                </div>
+                <button className="btn btn-secondary perfil-inline-btn" onClick={iniciarEdicao}>
+                  <Pencil size={14} /> Editar informações
+                </button>
+              </div>
+            ) : (
+              <div className="perfil-edit-wrap">
+                <div className="form-group">
+                  <label className="form-label">Nome completo</label>
+                  <input className="form-input" type="text" value={editNome} onChange={e => setEditNome(e.target.value)} placeholder="Seu nome" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">E-mail</label>
+                  <input className="form-input" type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder="seuemail@exemplo.com" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Telefone</label>
+                  <input className="form-input" type="tel" value={editTelefone} onChange={e => setEditTelefone(e.target.value)} placeholder="(99) 99999-9999" />
+                </div>
+                <div className="perfil-edit-actions">
+                  <button className="btn btn-primary perfil-inline-btn" disabled={salvandoInfo} onClick={handleSalvarInfo}>
+                    <Check size={14} /> {salvandoInfo ? 'Salvando...' : 'Salvar'}
+                  </button>
+                  <button className="btn btn-secondary perfil-inline-btn" onClick={cancelarEdicao}>
+                    <X size={14} /> Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
+
+          <section className="card perfil-section-card">
             <div className="perfil-section-header">
               <div>
                 <p className="perfil-section-eyebrow">Segurança</p>

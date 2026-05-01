@@ -86,15 +86,33 @@ const createTransporter = (config) => {
 };
 
 /**
- * Testa a conexão SMTP
+ * Testa a conexão SMTP e retorna mensagem descritiva de erro
  */
 const validateSmtpConfig = async (config) => {
   try {
     const transporter = createTransporter(config);
     const result = await transporter.verify();
-    return { success: result, message: result ? 'Conexão SMTP validada' : 'Falha na validação de SMTP' };
+    return { success: result, message: result ? 'Conexão SMTP validada com sucesso!' : 'Falha na validação de SMTP' };
   } catch (error) {
-    return { success: false, message: `Erro na validação: ${error.message}` };
+    const code = error.code || '';
+    const errno = String(error.errno || '');
+    let mensagem = `Erro: ${error.message}`;
+
+    if (code === 'EAUTH' || error.responseCode === 535 || error.responseCode === 534) {
+      mensagem = 'Autenticação rejeitada. Para Gmail: use uma Senha de App (não sua senha normal). Acesse myaccount.google.com → Segurança → Senhas de app. Para Outlook: verifique usuário e senha.';
+    } else if (code === 'ECONNREFUSED' || errno === 'ECONNREFUSED') {
+      mensagem = `Conexão recusada na porta ${config.smtp_port}. Verifique se o host (${config.smtp_host}) e a porta estão corretos. Gmail: porta 465 (SSL) ou 587 (TLS). Outlook: porta 587 (TLS).`;
+    } else if (code === 'ETIMEDOUT' || code === 'ECONNRESET') {
+      mensagem = `Timeout ao conectar em ${config.smtp_host}:${config.smtp_port}. O servidor pode estar bloqueando a conexão ou a porta está errada.`;
+    } else if (code === 'ESOCKET' || code === 'ENOTFOUND') {
+      mensagem = `Host "${config.smtp_host}" não encontrado. Verifique o endereço do servidor SMTP.`;
+    } else if (error.message && error.message.toLowerCase().includes('certificate')) {
+      mensagem = `Erro de certificado SSL/TLS. Tente trocar a porta: use 465 para SSL direto ou 587 para STARTTLS.`;
+    } else if (error.responseCode === 550 || error.responseCode === 553) {
+      mensagem = `E-mail remetente (${config.smtp_user}) rejeitado pelo servidor. Verifique se o endereço está correto.`;
+    }
+
+    return { success: false, message: mensagem, detalhe_tecnico: error.message };
   }
 };
 

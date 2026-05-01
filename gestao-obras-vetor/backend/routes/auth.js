@@ -272,7 +272,7 @@ router.post('/login', [
         verificado: !!tenantIdAtivo
       },
       process.env.JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_IN }
+      { expiresIn: req.body.manterLogin === false ? '8h' : JWT_EXPIRES_IN }
     );
 
     res.json({
@@ -282,6 +282,8 @@ router.post('/login', [
         login: usuario.login,
         nome: usuario.nome,
         email: usuario.email,
+        telefone: usuario.telefone || null,
+        avatar: usuario.avatar || null,
         funcao: usuario.funcao || perfil,
         perfil,
         setor: usuario.setor || null,
@@ -543,6 +545,7 @@ router.post('/register/:token', [
     await runQuery('UPDATE convites SET usado = 1, usado_em = CURRENT_TIMESTAMP, usuario_id = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?', [usuarioId, convite.id]);
 
     if (!process.env.JWT_SECRET) {
+
       return res.status(500).json({ erro: 'Configuração inválida do servidor (JWT_SECRET).' });
     }
 
@@ -587,5 +590,127 @@ router.post('/register/:token', [
     res.status(500).json({ erro: 'Erro ao criar conta por convite.' });
   }
 });
+// Recuperação de senha — solicitar token
+router.post('/esqueci-senha', [
+  body('login').isString().trim().notEmpty().withMessage('Informe o login ou e-mail.')
+], async (req, res) => {
+  try {
+    await runQuery('ALTER TABLE usuarios ADD COLUMN password_reset_token TEXT').catch(() => {});
+    await runQuery('ALTER TABLE usuarios ADD COLUMN password_reset_expires DATETIME').catch(() => {});
 
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.json({ mensagem: 'Se o usuário existir, as instruções foram enviadas ao e-mail cadastrado.' });
+    }
+
+    const loginInput = String(req.body.login || '').trim();
+
+    const usuario = await getQuery(
+      'SELECT id, login, nome, email, tenant_id FROM usuarios WHERE ativo = 1 AND (login = ? OR lower(email) = lower(?))',
+      [loginInput, loginInput]
+    );
+
+    if (!usuario || !usuario.email) {
+      return res.json({ mensagem: 'Se o usuário existir, as instruções foram enviadas ao e-mail cadastrado.' });
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(); // 2 horas
+
+    await runQuery(
+      'UPDATE usuarios SET password_reset_token = ?, password_reset_expires = ? WHERE id = ?',
+      [token, expires, usuario.id]
+    );
+
+    try {
+      const { sendEmail } = require('../services/emailService');
+      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const resetUrl = `${baseUrl}/redefinir-senha/${token}`;
+
+      const htmlBody = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px; background: #f8fafc; border-radius: 12px;">
+          <h2 style="color: #0284c7; margin-top: 0;">Redefinição de senha</h2>
+          <p>Olá, <strong>${usuario.nome}</strong>.</p>
+          <p>Recebemos uma solicitação para redefinir a senha da sua conta no sistema <strong>Vetor Gestão de Obras</strong>.</p>
+          <p>Clique no botão abaixo para criar uma nova senha. O link é válido por <strong>2 horas</strong>.</p>
+          <div style="text-align: center; margin: 32px 0;">
+            <a href="${resetUrl}" style="background: #0284c7; color: #fff; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 15px; display: inline-block;">
+              Redefinir minha senha
+            </a>
+          </div>
+          <p style="color: #64748b; font-size: 13px;">Se você não solicitou a redefinição, ignore este e-mail. Sua senha permanecerá a mesma.</p>
+          <p style="color: #94a3b8; font-size: 12px;">Ou acesse: <a href="${resetUrl}" style="color: #0284c7;">${resetUrl}</a></p>
+        </div>
+      `;
+
+      await sendEmail(
+        usuario.tenant_id,
+        null,
+        usuario.email,
+        'Redefinição de senha — Vetor Gestão de Obras',
+        htmlBody,
+        null,
+        { includeSignature: false }
+      );
+    } catch (emailErr) {
+      console.warn('Falha ao enviar e-mail de recuperação de senha:', emailErr?.message || emailErr);
+    }
+
+    return res.json({ mensagem: 'Se o usuário existir, as instruções foram enviadas ao e-mail cadastrado.' });
+  } catch (error) {
+    console.error('Erro em esqueci-senha:', error);
+    return res.json({ mensagem: 'Se o usuário existir, as instruções foram enviadas ao e-mail cadastrado.' });
+  }
+});
+
+// Recuperação de senha — redefinir com token
+router.post('/redefinir-senha', [
+  body('token').isString().trim().notEmpty().withMessage('Token inválido.'),
+  body('senha').isString().isLength({ min: 1, max: 72 }).withMessage('Senha inválida.')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ erro: errors.array()[0].msg });
+    }
+
+    const { token, senha } = req.body;
+
+    if (!token || token.length < 32) {
+      return res.status(400).json({ erro: 'Token inválido.' });
+    }
+
+    if (hasForbiddenPasswordSequence(senha)) {
+      return res.status(400).json({ erro: 'Senha não pode conter sequências simples (ex: 1234, abcd).' });
+    }
+
+    const usuario = await getQuery(
+      'SELECT id, password_reset_token, password_reset_expires FROM usuarios WHERE ativo = 1 AND password_reset_token = ?',
+      [token]
+    );
+
+    if (!usuario) {
+      return res.status(400).json({ erro: 'Token inválido ou expirado.' });
+    }
+
+    if (!usuario.password_reset_expires || new Date(usuario.password_reset_expires) <= new Date()) {
+      await runQuery(
+        'UPDATE usuarios SET password_reset_token = NULL, password_reset_expires = NULL WHERE id = ?',
+        [usuario.id]
+      );
+      return res.status(400).json({ erro: 'Link expirado. Solicite um novo link de recuperação.' });
+    }
+
+    const senhaHash = await bcrypt.hash(String(senha), 10);
+    await runQuery(
+      'UPDATE usuarios SET senha = ?, password_reset_token = NULL, password_reset_expires = NULL WHERE id = ?',
+      [senhaHash, usuario.id]
+    );
+
+    return res.json({ mensagem: 'Senha redefinida com sucesso. Você já pode fazer login.' });
+  } catch (error) {
+    console.error('Erro em redefinir-senha:', error);
+    return res.status(500).json({ erro: 'Erro ao redefinir senha.' });
+  }
+});
 module.exports = router;

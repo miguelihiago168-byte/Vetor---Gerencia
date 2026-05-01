@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { login as loginAPI, registerTrialAccount } from '../services/api';
+import { login as loginAPI, registerTrialAccount, esqueciSenha } from '../services/api';
 import { ArrowRight, Eye, EyeOff } from 'lucide-react';
 import './Login.css';
 
@@ -58,12 +58,34 @@ function Login() {
   const [usuarioManual, setUsuarioManual] = useState(false);
   const [showLoginSenha, setShowLoginSenha] = useState(false);
   const [showCadastroSenha, setShowCadastroSenha] = useState(false);
+  const [manterLogin, setManterLogin] = useState(true);
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
   const [loading, setLoading] = useState(false);
+  const [esqueciLogin, setEsqueciLogin] = useState('');
 
   const { loginAuth } = useAuth();
   const navigate = useNavigate();
+
+  const handleEsqueciSenha = async (e) => {
+    e.preventDefault();
+    setErro('');
+    setSucesso('');
+    if (!esqueciLogin.trim()) {
+      setErro('Informe seu login ou e-mail.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await esqueciSenha(esqueciLogin.trim());
+      setSucesso('Se o usuário existir, as instruções foram enviadas ao e-mail cadastrado.');
+      setEsqueciLogin('');
+    } catch {
+      setSucesso('Se o usuário existir, as instruções foram enviadas ao e-mail cadastrado.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -87,8 +109,9 @@ function Login() {
       const response = await loginAPI({
         usuario: credential,
         senha: loginForm.senha,
+        manterLogin,
       });
-      loginAuth(response.data.token, response.data.usuario);
+      loginAuth(response.data.token, response.data.usuario, manterLogin);
       navigate(response.data?.usuario?.primeiro_acesso_pendente ? '/primeiro-acesso' : '/projetos');
     } catch (error) {
       setErro(normalizeAuthErrorMessage(error.response?.data?.erro || 'Erro ao fazer login.'));
@@ -195,7 +218,7 @@ function Login() {
         {erro && <div className="login-error">{erro}</div>}
         {sucesso && <div className="login-success">{sucesso}</div>}
 
-        {modo === 'login' ? (
+        {modo === 'login' && (
           <form onSubmit={handleLogin}>
             <div className="login-field">
               <label className="login-label">Usuário ou e-mail</label>
@@ -232,8 +255,66 @@ function Login() {
               {loading ? 'Entrando...' : 'Entrar'}
               <ArrowRight size={18} />
             </button>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, cursor: 'pointer', fontSize: '0.85rem', color: 'var(--text-secondary, #6b7280)' }}>
+              <input
+                type="checkbox"
+                checked={manterLogin}
+                onChange={(e) => setManterLogin(e.target.checked)}
+                style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--primary, #6366f1)' }}
+              />
+              Manter conectado
+            </label>
+
+            <div style={{ textAlign: 'center', marginTop: 16 }}>
+              <button
+                type="button"
+                className="login-link-btn"
+                onClick={() => { setModo('esqueci'); setErro(''); setSucesso(''); }}
+              >
+                Esqueci minha senha
+              </button>
+            </div>
           </form>
-        ) : (
+        )}
+
+        {modo === 'esqueci' && (
+          <form onSubmit={handleEsqueciSenha}>
+            <p style={{ fontSize: '0.9rem', color: '#475569', marginBottom: 16, marginTop: 0 }}>
+              Informe seu login ou e-mail cadastrado. Se encontrarmos sua conta, enviaremos as instruções de recuperação.
+            </p>
+            <div className="login-field">
+              <label className="login-label">Login ou e-mail</label>
+              <input
+                type="text"
+                className="login-input"
+                maxLength="120"
+                value={esqueciLogin}
+                onChange={(e) => setEsqueciLogin(e.target.value.trimStart())}
+                placeholder="Seu login ou e-mail"
+                autoFocus
+                required
+              />
+            </div>
+
+            <button type="submit" className="login-btn" disabled={loading}>
+              {loading ? 'Enviando...' : 'Enviar instruções'}
+              <ArrowRight size={18} />
+            </button>
+
+            <div style={{ textAlign: 'center', marginTop: 16 }}>
+              <button
+                type="button"
+                className="login-link-btn"
+                onClick={() => { setModo('login'); setErro(''); setSucesso(''); }}
+              >
+                ← Voltar ao login
+              </button>
+            </div>
+          </form>
+        )}
+
+        {modo === 'cadastro' && (
           <form onSubmit={handleCadastro}>
             <div className="login-field">
               <label className="login-label">Nome completo</label>

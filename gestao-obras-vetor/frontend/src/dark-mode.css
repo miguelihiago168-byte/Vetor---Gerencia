@@ -295,3 +295,20 @@ body.dark-mode select,
 body.dark-mode select option {
   color-scheme: dark;
 }
+
+
+/* -- Dashboard -------------------------------------------- */
+.dashboard-status-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.dashboard-status-badge.status-ok      { background-color: #E8F5E9; color: #2E7D32; }
+.dashboard-status-badge.status-pendente { background-color: #FFF3E0; color: #E65100; }
+.dashboard-status-badge.status-erro    { background-color: #FFEBEE; color: #C62828; }
+
+body.dark-mode .dashboard-status-badge.status-ok      { background-color: rgba(46,125,50,0.25);  color: #81c784; }
+body.dark-mode .dashboard-status-badge.status-pendente { background-color: rgba(230,81,0,0.25);   color: #ffb74d; }
+body.dark-mode .dashboard-status-badge.status-erro    { background-color: rgba(198,40,40,0.25);  color: #ef9a9a; }

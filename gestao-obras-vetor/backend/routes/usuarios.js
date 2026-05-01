@@ -1,5 +1,8 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const { body, validationResult } = require('express-validator');
 const { allQuery, runQuery, getQuery, runQueryMain, getQueryMain } = require('../config/database');
 const { auth } = require('../middleware/auth');
@@ -9,6 +12,22 @@ const { PERFIS, PERFIS_LISTA, SETORES, SETORES_LISTA, normalizarPerfil, mapPerfi
 const { hasForbiddenPasswordSequence } = require('../services/passwordPolicy');
 
 const router = express.Router();
+
+// Multer para avatar
+const uploadsDir = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+const avatarStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadsDir),
+  filename: (req, file, cb) => cb(null, `avatar-${req.params.id}-${Date.now()}${path.extname(file.originalname)}`)
+});
+const uploadAvatar = multer({
+  storage: avatarStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (/jpeg|jpg|png|webp/.test(path.extname(file.originalname).toLowerCase())) return cb(null, true);
+    cb(new Error('Somente imagens (jpg, png, webp) são permitidas.'));
+  }
+});
 
 const normalizeLogin = (value) => String(value || '').trim().replace(/\s+/g, '').toLowerCase();
 const normalizeName = (value) => String(value || '')
@@ -884,6 +903,63 @@ router.patch('/:id/senha', [auth], async (req, res) => {
   } catch (error) {
     console.error('Erro ao alterar senha:', error);
     res.status(500).json({ erro: 'Erro ao alterar senha.' });
+  }
+});
+
+// Atualizar avatar do próprio usuário
+router.patch('/:id/avatar', auth, uploadAvatar.single('avatar'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (Number(id) !== Number(req.usuario.id)) {
+      return res.status(403).json({ erro: 'Você só pode atualizar seu próprio avatar.' });
+    }
+    if (!req.file) return res.status(400).json({ erro: 'Nenhuma imagem enviada.' });
+
+    // Garantir que a coluna avatar existe (caso o server não tenha sido reiniciado após migration)
+    try {
+      await runQuery('ALTER TABLE usuarios ADD COLUMN avatar TEXT', []);
+    } catch (_) { /* coluna já existe, ok */ }
+
+    // Remove avatar antigo se existir
+    try {
+      const atual = await getQuery('SELECT avatar FROM usuarios WHERE id = ?', [id]);
+      if (atual?.avatar) {
+        const oldPath = path.join(uploadsDir, atual.avatar);
+        if (fs.existsSync(oldPath)) fs.unlink(oldPath, () => {});
+      }
+    } catch (_) { /* ignora se SELECT falhar */ }
+
+    const avatarFilename = req.file.filename;
+    await runQuery('UPDATE usuarios SET avatar = ? WHERE id = ?', [avatarFilename, id]);
+    res.json({ mensagem: 'Avatar atualizado.', avatar: avatarFilename });
+  } catch (error) {
+    console.error('Erro ao atualizar avatar:', error);
+    res.status(500).json({ erro: error?.message || 'Erro ao atualizar avatar.' });
+  }
+});
+
+// Atualizar informações de perfil do próprio usuário (nome, email, telefone)
+router.patch('/:id/info', [auth], async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (Number(id) !== Number(req.usuario.id)) {
+      return res.status(403).json({ erro: 'Você só pode atualizar seu próprio perfil.' });
+    }
+    const { nome, email, telefone } = req.body;
+    const campos = [];
+    const valores = [];
+    if (nome !== undefined) { campos.push('nome = ?'); valores.push(String(nome).trim().slice(0, 120)); }
+    if (email !== undefined) { campos.push('email = ?'); valores.push(String(email).trim().slice(0, 200) || null); }
+    if (telefone !== undefined) { campos.push('telefone = ?'); valores.push(String(telefone).trim().slice(0, 30) || null); }
+    if (campos.length === 0) return res.status(400).json({ erro: 'Nenhum campo para atualizar.' });
+    campos.push('atualizado_em = CURRENT_TIMESTAMP');
+    valores.push(id);
+    await runQuery(`UPDATE usuarios SET ${campos.join(', ')} WHERE id = ?`, valores);
+    const atualizado = await getQuery('SELECT id, nome, email, telefone, login, perfil, funcao FROM usuarios WHERE id = ?', [id]);
+    res.json({ mensagem: 'Perfil atualizado.', usuario: atualizado });
+  } catch (error) {
+    console.error('Erro ao atualizar perfil:', error);
+    res.status(500).json({ erro: 'Erro ao atualizar perfil.' });
   }
 });
 

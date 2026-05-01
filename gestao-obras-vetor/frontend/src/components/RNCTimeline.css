@@ -12,6 +12,16 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/* Inside sidebar card — no extra background/border/margin */
+.rnc-det-timeline-card .rnc-timeline {
+  margin-bottom: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  min-width: 0;
+}
+
 /* ── cada passo ── */
 .rnc-timeline__item {
   display: flex;

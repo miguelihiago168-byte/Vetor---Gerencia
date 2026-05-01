@@ -360,6 +360,7 @@ export default function RequisicaoDetalhe() {
           podeGestor={podeGestor}
           podeADM={podeADM}
           reqId={id}
+          reqStatus={req.status_requisicao}
           onAnalisar={() => { setFormAnalise({ aprovado: null, motivo: '' }); setModalAnalise({ itemId: item.id }); setErro(''); }}
           onCotacoes={() => abrirModalCotacao(item)}
           onSelecionar={selecionarFornecedor}
@@ -758,11 +759,12 @@ export default function RequisicaoDetalhe() {
 /* ──────────────────────────────────────────────────────────────────────────
    Sub-componente: card de item ativo
 ──────────────────────────────────────────────────────────────────────────── */
-function ItemCard({ item, idx, perfil, podeGestor, podeADM, reqId,
+function ItemCard({ item, idx, perfil, podeGestor, podeADM, reqId, reqStatus,
   onAnalisar, onCotacoes, onSelecionar, onAutorizar, onCancelar, onDevolver, onAlterar, onEditar }) {
 
   const temCotacoes  = (item.cotacoes?.length || 0) > 0;
   const cotCompletas = (item.cotacoes?.length || 0) >= 3;
+  const reqFinalizada = ['Finalizada', 'Encerrada sem compra'].includes(reqStatus);
 
   return (
     <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
@@ -838,27 +840,27 @@ function ItemCard({ item, idx, perfil, podeGestor, podeADM, reqId,
 
       {/* Ações */}
       <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-        {podeGestor && item.status_item === 'Aguardando análise' && (
+        {podeGestor && !reqFinalizada && item.status_item === 'Aguardando análise' && (
           <button className="btn btn-soft-green" style={{ padding: '6px 14px', fontSize: '0.85rem' }} onClick={onAnalisar}>
             Analisar Item
           </button>
         )}
-        {podeADM && ['Em cotação', 'Cotação finalizada'].includes(item.status_item) && (
+        {podeADM && !reqFinalizada && ['Em cotação', 'Cotação finalizada'].includes(item.status_item) && (
           <button className="btn btn-soft-blue" style={{ padding: '6px 14px', fontSize: '0.85rem' }} onClick={onCotacoes}>
             {cotCompletas ? '✎ Editar Cotações' : `+ Cotações (${item.cotacoes?.length || 0}/3)`}
           </button>
         )}
-        {podeADM && item.status_item === 'Aprovado para compra' && (
+        {podeADM && !reqFinalizada && item.status_item === 'Aprovado para compra' && (
           <button className="btn btn-soft-green" style={{ padding: '6px 14px', fontSize: '0.85rem' }} onClick={onAutorizar}>
             ✓ Autorizar Compra
           </button>
         )}
-        {podeADM && !['Comprado', 'Cancelado'].includes(item.status_item) && perfil !== 'ADM' && (
+        {podeADM && !reqFinalizada && !['Comprado', 'Cancelado'].includes(item.status_item) && perfil !== 'ADM' && (
           <button className="btn btn-soft-yellow" style={{ padding: '6px 14px', fontSize: '0.85rem' }} onClick={onEditar}>
             ✎ Editar Item
           </button>
         )}
-        {podeGestor && item.status_item === 'Cotação finalizada' && (
+        {podeGestor && !reqFinalizada && item.status_item === 'Cotação finalizada' && (
           <button className="btn btn-soft-red" style={{ padding: '6px 14px', fontSize: '0.85rem' }} onClick={onDevolver}>
             ↩ Devolver Cotação
           </button>

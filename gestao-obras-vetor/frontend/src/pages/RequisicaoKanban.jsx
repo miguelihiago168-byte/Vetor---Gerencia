@@ -21,7 +21,7 @@ import {
 } from '../services/api';
 import {
   AlertTriangle, Eye, ThumbsUp, Tag, Filter, X, ChevronDown,
-  LayoutList, LayoutGrid,
+  LayoutList, LayoutGrid, Package,
 } from 'lucide-react';
 
 const TIPOS_MATERIAL = [
@@ -345,6 +345,7 @@ export default function RequisicaoKanban() {
   const [confirmacao, setConfirmacao] = useState(null);
   const [viewMode, setViewMode] = useState('normal');
   const [confirmLoading, setConfirmLoading] = useState(false);
+  const [mostrarFinalizadas, setMostrarFinalizadas] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
@@ -568,8 +569,17 @@ export default function RequisicaoKanban() {
         </div>
       ) : (
         <DndContext sensors={sensors} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd}>
+          {/* Toggle para exibir requisições finalizadas/compradas */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.6rem' }}>
+            <button
+              onClick={() => setMostrarFinalizadas(v => !v)}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, background: mostrarFinalizadas ? '#dcfce7' : '#f8fafc', border: `1px solid ${mostrarFinalizadas ? '#22c55e' : '#e2e8f0'}`, borderRadius: 8, padding: '4px 12px', fontSize: '0.78rem', fontWeight: 600, color: mostrarFinalizadas ? '#15803d' : '#64748b', cursor: 'pointer' }}
+            >
+              <Package size={13} /> {mostrarFinalizadas ? 'Ocultar finalizadas' : 'Ver finalizadas'}
+            </button>
+          </div>
           <div style={{ display: 'flex', gap: '0.9rem', overflowX: 'auto', paddingBottom: '2rem', alignItems: 'flex-start', minHeight: 400 }}>
-            {colunas.map((col) => {
+            {colunas.filter(col => mostrarFinalizadas || col.id !== 'comprado').map((col) => {
               const conf = COL_CONFIG[col.id] || { cor: '#64748b', bg: '#f1f5f9' };
               return (
                 <DroppableColumn key={col.id} id={col.id} isOver={overColId === col.id}>

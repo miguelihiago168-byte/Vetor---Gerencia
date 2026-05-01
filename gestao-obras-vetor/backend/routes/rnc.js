@@ -7,13 +7,147 @@ const { auth, isGestor } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
 
 const router = express.Router();
-// Gerar PDF da RNC (tenant-aware)
+
+const normalizeUploadPath = (rawPath) => {
+  if (rawPath == null) return '';
+  const text = String(rawPath).trim();
+  if (!text) return '';
+  return text
+    .replace(/\\/g, '/')
+    .replace(/^\/+/, '')
+    .replace(/^uploads\//i, '');
+};
+
+const safeEncodePath = (rawPath) => {
+  try {
+    return encodeURI(normalizeUploadPath(rawPath));
+  } catch (_) {
+    return '';
+  }
+};
+
+const safeText = (value, fallback = '—') => {
+  if (value == null) return fallback;
+  const text = String(value).trim();
+  if (!text || text.toLowerCase() === 'null' || text.toLowerCase() === 'undefined') return fallback;
+  return text;
+};
+
+const PDF_TIME_ZONE = process.env.PDF_TIME_ZONE || process.env.APP_TIME_ZONE || 'America/Sao_Paulo';
+
+const formatDateTimeBr = (value) => {
+  if (!value) return '—';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: PDF_TIME_ZONE,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).format(date);
+};
+
+const formatDateBr = (value) => {
+  if (!value) return '—';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: PDF_TIME_ZONE,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  }).format(date);
+};
+
+const isImageByNameOrMime = (item) => {
+  const mime = String(item?.tipo || '').toLowerCase();
+  const name = String(item?.nome_arquivo || '').toLowerCase();
+  return mime.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|heic|heif)$/.test(name);
+};
+
+const canEmbedInPdf = (item) => {
+  const mime = String(item?.tipo || '').toLowerCase();
+  const name = String(item?.nome_arquivo || '').toLowerCase();
+  if (mime.includes('jpeg') || mime.includes('jpg') || mime.includes('png')) return true;
+  return /\.(jpg|jpeg|png)$/.test(name);
+};
+
+const extractLegacyRegistroFotos = (rawValue) => {
+  if (!rawValue) return [];
+
+  const collectPath = (entry) => {
+    if (!entry) return '';
+    if (typeof entry === 'string') return entry;
+    if (typeof entry === 'object') {
+      return entry.caminho_arquivo || entry.path || entry.url || entry.src || entry.nome_arquivo || '';
+    }
+    return '';
+  };
+
+  let items = [];
+  if (typeof rawValue === 'string') {
+    const trimmed = rawValue.trim();
+    if (!trimmed) return [];
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        items = parsed;
+      } else if (parsed && typeof parsed === 'object') {
+        items = [parsed];
+      }
+    } catch (_) {
+      items = trimmed.split(/[\n,;]+/g);
+    }
+  } else if (Array.isArray(rawValue)) {
+    items = rawValue;
+  }
+
+  const result = [];
+  for (const item of items) {
+    const candidate = collectPath(item);
+    if (!candidate) continue;
+    const normalized = normalizeUploadPath(candidate);
+    if (!normalized) continue;
+    if (!/\.(jpg|jpeg|png|webp|gif|heic|heif)$/i.test(normalized)) continue;
+
+    result.push({
+      tipo: 'image/legacy',
+      nome_arquivo: path.basename(normalized),
+      caminho_arquivo: normalized,
+      categoria: 'registro'
+    });
+  }
+
+  return result;
+};
+
+const ensureRncAnexosSchema = async () => {
+  // Compatibilidade com bancos legados/tenant que ainda não possuem colunas de RNC.
+  try {
+    await runQuery('ALTER TABLE anexos ADD COLUMN rnc_id INTEGER');
+  } catch (_) { /* coluna já existe */ }
+  try {
+    await runQuery("ALTER TABLE anexos ADD COLUMN categoria TEXT DEFAULT 'registro'");
+  } catch (_) { /* coluna já existe */ }
+};
+// Gerar PDF da RNC (puppeteer — HTML → PDF com layout rico)
 router.get('/:id/pdf', auth, async (req, res) => {
+  const puppeteer = require('puppeteer');
+  let browser;
   try {
     const { id } = req.params;
     const tenantId = req.tenantId;
     if (!tenantId) return res.status(400).json({ erro: 'Tenant não definido.' });
-    // Busca RNC apenas se o projeto for do tenant
+
+    await ensureRncAnexosSchema();
+
     const rnc = await getQuery(`
       SELECT r.*, p.nome AS projeto_nome, u.nome AS criado_por_nome, g.nome AS responsavel_nome, rd.data_relatorio AS rdo_data
       FROM rnc r
@@ -21,107 +155,356 @@ router.get('/:id/pdf', auth, async (req, res) => {
       LEFT JOIN usuarios u ON r.criado_por = u.id
       LEFT JOIN usuarios g ON r.responsavel_id = g.id
       LEFT JOIN rdos rd ON r.rdo_id = rd.id
-      WHERE r.id = ? AND p.tenant_id = ?
-    `, [id, tenantId]);
-    if (!rnc) return res.status(404).json({ erro: 'RNC não encontrada ou não pertence ao seu tenant.' });
-    const PDFDocument = require('pdfkit');
-    const doc = new PDFDocument({ size: 'A4', layout: 'portrait', margin: 40 });
-    const uploadsDir = path.join(__dirname, '..', 'uploads');
-    const publicBaseUrl = (process.env.PUBLIC_FILE_BASE_URL || process.env.APP_BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
-    const anexos = await allQuery(
-      'SELECT * FROM anexos WHERE rnc_id = ? ORDER BY criado_em ASC',
-      [id]
-    );
-    const fotos = anexos.filter((a) => String(a.tipo || '').startsWith('image/'));
-    const outrosAnexos = anexos.filter((a) => !String(a.tipo || '').startsWith('image/'));
+      WHERE r.id = ?
+    `, [id]);
+    if (!rnc) return res.status(404).json({ erro: 'RNC não encontrada.' });
+
+    const port = process.env.PORT || 3001;
+    const fotoUrl = (caminho) => {
+      const norm = normalizeUploadPath(caminho);
+      return norm ? `http://127.0.0.1:${port}/uploads/${encodeURIComponent(norm)}` : '';
+    };
+
+    const anexos = await allQuery('SELECT * FROM anexos WHERE rnc_id = ? ORDER BY criado_em ASC', [id]);
+    const legacyFotos = extractLegacyRegistroFotos(rnc.registros_fotograficos);
+    const merged = [...anexos];
+    for (const lf of legacyFotos) {
+      if (!merged.some(a => normalizeUploadPath(a.caminho_arquivo) === normalizeUploadPath(lf.caminho_arquivo))) merged.push(lf);
+    }
+    const fotos = merged.filter(a => a.categoria !== 'correcao' && isImageByNameOrMime(a));
+    const fotosCorrecao = merged.filter(a => a.categoria === 'correcao' && isImageByNameOrMime(a));
+    const anexosNaoImagem = merged.filter((a) => !isImageByNameOrMime(a));
+
+    const statusMap = {
+      'Aberta': { label: 'Aberta', cls: 'aberta' },
+      'Em andamento': { label: 'Aberta', cls: 'aberta' },
+      'Em análise': { label: 'Em aprovação', cls: 'analise' },
+      'Encerrada': { label: 'Encerrada', cls: 'encerrada' },
+      'Reprovada': { label: 'Reprovada', cls: 'reprovada' },
+    };
+    const sm = statusMap[rnc.status] || { label: rnc.status, cls: 'aberta' };
+
+    const gravCls = (() => {
+      const g = (rnc.gravidade || '').toLowerCase();
+      if (g.includes('cr')) return 'critica';
+      if (g === 'alta') return 'alta';
+      if (g.includes('m')) return 'media';
+      return 'baixa';
+    })();
+
+    const activeStep = (() => {
+      if (rnc.status === 'Em análise') return 2;
+      if (rnc.status === 'Encerrada') return 3;
+      return 1;
+    })();
+    const rdoLabel = rnc.rdo_id ? `RDO #${rnc.rdo_id}${rnc.rdo_data ? ` - ${formatDateBr(rnc.rdo_data)}` : ''}` : 'Não vinculado';
+
+    const stepHtml = (idx, label) => {
+      const state = idx < activeStep ? 'done' : idx === activeStep ? 'active' : 'pending';
+      const circle = state === 'done' ? '✓' : state === 'active' ? '●' : '○';
+      return `<div class="prog-step">
+        <div class="prog-circle prog-${state}">${circle}</div>
+        <span class="prog-label ${state === 'active' ? 'prog-label-active' : ''}">${label}</span>
+      </div>`;
+    };
+    const lineHtml = (idx) => `<div class="prog-line ${idx < activeStep ? 'prog-line-done' : ''}"></div>`;
+
+    const escape = (v) => String(v || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const nl2br = (v) => escape(v).replace(/\n/g, '<br>');
+
+    const photoGridHtml = (photos) => photos.length === 0 ? '' : `
+      <div class="photo-grid">
+        ${photos.map(f => `<div class="photo-item">
+          <img src="${fotoUrl(f.caminho_arquivo)}" alt="${escape(f.nome_arquivo)}" onerror="this.style.display='none'" />
+          <div class="photo-name">${escape(f.nome_arquivo)}</div>
+        </div>`).join('')}
+      </div>`;
+
+    const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #1e293b; background: #fff; }
+
+  .header { background: linear-gradient(135deg, #1e40af 0%, #1d4ed8 100%); color: #fff; padding: 22px 32px; }
+  .header-crumb { font-size: 10px; color: rgba(255,255,255,.65); margin-bottom: 6px; }
+  .header-title { font-size: 20px; font-weight: 700; margin-bottom: 10px; }
+  .header-badges { display: flex; gap: 8px; flex-wrap: wrap; }
+  .header-meta { margin-top: 12px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .header-meta-item { background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.22); border-radius: 8px; padding: 8px 10px; }
+  .header-meta-label { font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: rgba(255,255,255,.74); margin-bottom: 3px; }
+  .header-meta-value { font-size: 11px; font-weight: 600; color: #fff; word-break: break-word; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 600; }
+  .s-aberta    { background: #2563eb; color: #fff; }
+  .s-analise   { background: #d97706; color: #fff; }
+  .s-encerrada { background: #16a34a; color: #fff; }
+  .s-reprovada { background: #dc2626; color: #fff; }
+  .g-critica { background: #dc2626; color: #fff; }
+  .g-alta    { background: #f97316; color: #fff; }
+  .g-media   { background: #f59e0b; color: #fff; }
+  .g-baixa   { background: #22c55e; color: #fff; }
+  .b-origem  { background: rgba(255,255,255,.2); color: #fff; }
+
+  .progress { display: flex; align-items: center; padding: 14px 32px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+  .prog-step { display: flex; flex-direction: column; align-items: center; gap: 3px; flex: 0 0 auto; }
+  .prog-circle { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
+  .prog-done    { background: #16a34a; color: #fff; }
+  .prog-active  { background: #2563eb; color: #fff; }
+  .prog-pending { background: #e2e8f0; color: #94a3b8; }
+  .prog-label { font-size: 9px; color: #64748b; }
+  .prog-label-active { color: #2563eb; font-weight: 700; }
+  .prog-line { flex: 1; height: 2px; background: #e2e8f0; margin: 0 4px 14px; }
+  .prog-line-done { background: #16a34a; }
+
+  .body { display: block; padding: 18px 32px; }
+  .main { display: flex; flex-direction: column; gap: 12px; }
+
+  .card { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; page-break-inside: avoid; break-inside: avoid; }
+  .card-head { display: flex; align-items: center; gap: 10px; padding: 9px 14px; border-bottom: 1px solid #f1f5f9; background: #fafafa; }
+  .card-icon { width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  .i-red   { background: #fee2e2; }
+  .i-blue  { background: #dbeafe; }
+  .i-green { background: #dcfce7; }
+  .i-teal  { background: #ccfbf1; }
+  .i-amber { background: #fef3c7; }
+  .card-head h3 { font-size: 12px; font-weight: 700; color: #0f172a; flex: 1; }
+  .card-body { padding: 12px 14px; }
+  .card-blue  { border-color: #bfdbfe; }
+  .card-blue  .card-head { background: #dbeafe; border-bottom-color: #bfdbfe; }
+  .card-green { border-color: #bbf7d0; }
+  .card-green .card-head { background: #dcfce7; border-bottom-color: #bbf7d0; }
+
+  .desc { font-size: 11px; line-height: 1.65; color: #374151; }
+  .label-small { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #64748b; margin: 0 0 4px; }
+  .inline-info { display: flex; align-items: center; gap: 5px; font-size: 10px; color: #64748b; margin-top: 7px; }
+  .inline-info strong { color: #374151; }
+
+  .summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+  .summary-item { padding: 8px 10px; border: 1px solid #e2e8f0; border-radius: 6px; background: #f8fafc; }
+  .summary-label { font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: #64748b; margin-bottom: 4px; }
+  .summary-value { font-size: 11px; font-weight: 600; color: #0f172a; word-break: break-word; }
+
+  .photo-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+  .photo-item { border-radius: 6px; overflow: hidden; border: 1px solid #e2e8f0; page-break-inside: avoid; break-inside: avoid; }
+  .photo-item img { width: 100%; height: 145px; object-fit: cover; display: block; background: #f8fafc; }
+  .photo-name { padding: 4px 6px; font-size: 9px; color: #64748b; background: #f8fafc; }
+
+  .tl-item { display: flex; gap: 8px; margin-bottom: 10px; }
+  .tl-track { display: flex; flex-direction: column; align-items: center; }
+  .tl-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; margin-top: 2px; }
+  .tl-line { width: 1px; flex: 1; background: #e2e8f0; margin-top: 3px; }
+  .tl-content { flex: 1; }
+  .tl-label { font-size: 10px; font-weight: 600; color: #0f172a; }
+  .tl-date  { font-size: 9px; color: #94a3b8; }
+  .tl-detail { font-size: 9px; color: #64748b; margin-top: 2px; }
+
+  .attachments-list { margin-top: 8px; border-top: 1px dashed #cbd5e1; padding-top: 8px; }
+  .attachments-list li { font-size: 10px; color: #475569; margin-bottom: 4px; }
+  .footer { margin: 12px 32px 8px; padding-top: 10px; border-top: 1px solid #e2e8f0; text-align: center; font-size: 9px; color: #94a3b8; }
+  @page { size: A4; margin: 10mm 8mm 12mm 8mm; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-crumb">RNC #${id} &nbsp;·&nbsp; ${escape(rnc.projeto_nome)}</div>
+  <div class="header-title">${escape(rnc.titulo)}</div>
+  <div class="header-badges">
+    <span class="badge s-${sm.cls}">${sm.label}</span>
+    ${rnc.gravidade ? `<span class="badge g-${gravCls}">${escape(rnc.gravidade)}</span>` : ''}
+    ${rnc.origem ? `<span class="badge b-origem">${escape(rnc.origem)}</span>` : ''}
+  </div>
+  <div class="header-meta">
+    <div class="header-meta-item"><div class="header-meta-label">Responsável</div><div class="header-meta-value">${escape(rnc.responsavel_nome || 'Não definido')}</div></div>
+    <div class="header-meta-item"><div class="header-meta-label">RDO vinculado</div><div class="header-meta-value">${escape(rdoLabel)}</div></div>
+    <div class="header-meta-item"><div class="header-meta-label">Área afetada</div><div class="header-meta-value">${escape(rnc.area_afetada || 'Não informado')}</div></div>
+    <div class="header-meta-item"><div class="header-meta-label">Prazo</div><div class="header-meta-value">${escape(rnc.data_prevista_encerramento ? formatDateBr(rnc.data_prevista_encerramento) : 'Não definido')}</div></div>
+    <div class="header-meta-item"><div class="header-meta-label">Aberta em</div><div class="header-meta-value">${escape(formatDateBr(rnc.criado_em))}</div></div>
+    <div class="header-meta-item"><div class="header-meta-label">Encerrada em</div><div class="header-meta-value">${escape(rnc.resolvido_em ? formatDateBr(rnc.resolvido_em) : '—')}</div></div>
+    <div class="header-meta-item"><div class="header-meta-label">Aberta por</div><div class="header-meta-value">${escape(rnc.criado_por_nome || 'Não informado')}</div></div>
+    <div class="header-meta-item"><div class="header-meta-label">Norma/Ref.</div><div class="header-meta-value">${escape(rnc.norma_referencia || 'N/A')}</div></div>
+  </div>
+</div>
+
+<div class="progress">
+  ${stepHtml(0, 'Registro')}
+  ${lineHtml(0)}
+  ${stepHtml(1, 'Correção')}
+  ${lineHtml(1)}
+  ${stepHtml(2, 'Aprovação')}
+  ${lineHtml(2)}
+  ${stepHtml(3, 'Encerrada')}
+</div>
+
+<div class="body">
+  <div class="main">
+
+    <div class="card">
+      <div class="card-head"><div class="card-icon i-amber">📌</div><h3>Resumo da ocorrência</h3></div>
+      <div class="card-body">
+        <div class="summary-grid">
+          <div class="summary-item"><div class="summary-label">Projeto</div><div class="summary-value">${escape(rnc.projeto_nome)}</div></div>
+          <div class="summary-item"><div class="summary-label">RDO vinculado</div><div class="summary-value">${escape(rdoLabel)}</div></div>
+          <div class="summary-item"><div class="summary-label">Responsável</div><div class="summary-value">${escape(rnc.responsavel_nome || 'Não definido')}</div></div>
+          <div class="summary-item"><div class="summary-label">Prazo de correção</div><div class="summary-value">${escape(rnc.data_prevista_encerramento ? formatDateBr(rnc.data_prevista_encerramento) : 'Não definido')}</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><div class="card-icon i-red">⚠</div><h3>Não Conformidade</h3></div>
+      <div class="card-body">
+        <p class="desc">${nl2br(rnc.descricao)}</p>
+        ${rnc.norma_referencia ? `<div class="inline-info">ℹ <span>Norma/Referência: <strong>${escape(rnc.norma_referencia)}</strong></span></div>` : ''}
+      </div>
+    </div>
+
+    ${rnc.acao_corretiva ? `<div class="card card-blue">
+      <div class="card-head"><div class="card-icon i-blue">🔧</div><h3>O que deve ser corrigido</h3></div>
+      <div class="card-body">
+        <p class="desc">${nl2br(rnc.acao_corretiva)}</p>
+        ${rnc.responsavel_nome ? `<div class="inline-info">👤 <span>Responsável: <strong>${escape(rnc.responsavel_nome)}</strong></span></div>` : ''}
+        ${rnc.data_prevista_encerramento ? `<div class="inline-info">📅 <span>Prazo: <strong>${formatDateBr(rnc.data_prevista_encerramento)}</strong></span></div>` : ''}
+      </div>
+    </div>` : ''}
+
+    ${fotos.length > 0 ? `<div class="card">
+      <div class="card-head"><div class="card-icon i-teal">📷</div><h3>Evidências fotográficas (${fotos.length})</h3></div>
+      <div class="card-body">${photoGridHtml(fotos)}</div>
+    </div>` : ''}
+
+    ${rnc.descricao_correcao ? `<div class="card card-green">
+      <div class="card-head"><div class="card-icon i-green">✓</div><h3>Correção realizada</h3></div>
+      <div class="card-body">
+        <p class="label-small">Resposta:</p>
+        <p class="desc">${nl2br(rnc.descricao_correcao)}</p>
+        ${fotosCorrecao.length > 0 ? `<p class="label-small" style="margin-top:10px">Galeria da correção:</p>${photoGridHtml(fotosCorrecao)}` : ''}
+      </div>
+    </div>` : ''}
+
+    ${anexosNaoImagem.length > 0 ? `<div class="card">
+      <div class="card-head"><div class="card-icon i-teal">📎</div><h3>Anexos complementares (${anexosNaoImagem.length})</h3></div>
+      <div class="card-body">
+        <ul class="attachments-list">
+          ${anexosNaoImagem.map((a) => `<li>${escape(a.nome_arquivo || 'arquivo')} ${a.tamanho ? `(${Math.max(1, Math.round(Number(a.tamanho || 0) / 1024))} KB)` : ''}</li>`).join('')}
+        </ul>
+      </div>
+    </div>` : ''}
+
+    <div class="card">
+      <div class="card-head"><div class="card-icon i-blue">🕓</div><h3>Histórico</h3></div>
+      <div class="card-body">
+        <div class="tl-item">
+          <div class="tl-track"><div class="tl-dot" style="background:#2563eb"></div><div class="tl-line"></div></div>
+          <div class="tl-content">
+            <div class="tl-label">RNC registrada</div>
+            <div class="tl-date">${formatDateTimeBr(rnc.criado_em)}</div>
+            <div class="tl-detail">${escape(rnc.titulo)}</div>
+          </div>
+        </div>
+        ${rnc.descricao_correcao ? `<div class="tl-item">
+          <div class="tl-track"><div class="tl-dot" style="background:#16a34a"></div><div class="tl-line"></div></div>
+          <div class="tl-content">
+            <div class="tl-label">Correção registrada</div>
+            <div class="tl-date">${formatDateTimeBr(rnc.atualizado_em)}</div>
+            <div class="tl-detail">${escape(String(rnc.descricao_correcao || '').slice(0, 60))}${String(rnc.descricao_correcao || '').length > 60 ? '…' : ''}</div>
+          </div>
+        </div>` : ''}
+        ${rnc.status === 'Em análise' ? `<div class="tl-item">
+          <div class="tl-track"><div class="tl-dot" style="background:#d97706"></div></div>
+          <div class="tl-content">
+            <div class="tl-label">Enviada para aprovação</div>
+            <div class="tl-date">${formatDateTimeBr(rnc.atualizado_em)}</div>
+          </div>
+        </div>` : ''}
+        ${rnc.status === 'Encerrada' ? `<div class="tl-item">
+          <div class="tl-track"><div class="tl-dot" style="background:#16a34a"></div></div>
+          <div class="tl-content">
+            <div class="tl-label">RNC encerrada</div>
+            <div class="tl-date">${formatDateTimeBr(rnc.atualizado_em)}</div>
+          </div>
+        </div>` : ''}
+        ${rnc.status === 'Reprovada' ? `<div class="tl-item">
+          <div class="tl-track"><div class="tl-dot" style="background:#dc2626"></div></div>
+          <div class="tl-content">
+            <div class="tl-label">Correção reprovada</div>
+            <div class="tl-date">${formatDateTimeBr(rnc.atualizado_em)}</div>
+          </div>
+        </div>` : ''}
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="footer">
+  Gerado em: ${formatDateTimeBr(new Date())} &nbsp;·&nbsp; RNC #${id} &nbsp;·&nbsp; ${escape(rnc.projeto_nome || '')}
+</div>
+
+</body>
+</html>`;
+
+    const browserCandidates = [
+      process.env.PUPPETEER_EXECUTABLE_PATH,
+      process.env.CHROME_PATH,
+      process.env.BROWSER_EXECUTABLE_PATH,
+      'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+      'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+      '/usr/bin/google-chrome',
+      '/usr/bin/chromium-browser',
+      '/usr/bin/chromium'
+    ].filter(Boolean);
+    const executablePath = browserCandidates.find((p) => { try { return fs.existsSync(p); } catch { return false; } });
+
+    browser = await puppeteer.launch({
+      headless: 'new',
+      executablePath: executablePath || undefined,
+      timeout: 60000,
+      protocolTimeout: 120000,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+    });
+    const page = await browser.newPage();
+    page.setDefaultNavigationTimeout(60000);
+    page.setDefaultTimeout(60000);
+    await page.setContent(html, { waitUntil: 'domcontentloaded' });
+    await page.evaluate(async () => {
+      const imgs = Array.from(document.images || []);
+      await Promise.all(imgs.map((img) => {
+        if (img.complete) return Promise.resolve();
+        return new Promise((resolve) => {
+          const done = () => resolve();
+          img.addEventListener('load', done, { once: true });
+          img.addEventListener('error', done, { once: true });
+          setTimeout(done, 5000);
+        });
+      }));
+    });
+
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
+      printBackground: true,
+      displayHeaderFooter: true,
+      headerTemplate: '<span></span>',
+      footerTemplate: `<div style="font-size:8px;color:#94a3b8;padding:0 40px;width:100%;box-sizing:border-box;display:flex;justify-content:space-between;font-family:'Segoe UI',Arial,sans-serif;align-items:center"><span>RNC #${id} &nbsp;·&nbsp; ${safeText(rnc.projeto_nome, '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span><span>Pág. <span class="pageNumber"></span>&nbsp;/&nbsp;<span class="totalPages"></span></span></div>`,
+      margin: { top: '8mm', bottom: '10mm', left: '0', right: '0' }
+    });
+
+    await browser.close();
+    browser = null;
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="RNC-${id}.pdf"`);
-    doc.pipe(res);
-    doc.fontSize(20).text('RELATÓRIO DE NÃO CONFORMIDADE', { align: 'center' });
-    doc.moveDown();
-    doc.fontSize(16).text(`Projeto: ${rnc.projeto_nome || rnc.projeto_id}`, { align: 'center' });
-    doc.moveDown();
-    doc.fontSize(14).text(`Título: ${rnc.titulo}`);
-    doc.text(`Status: ${rnc.status}`);
-    doc.text(`Gravidade: ${rnc.gravidade}`);
-    if (rnc.data_prevista_encerramento) doc.text(`Data prevista para encerramento: ${new Date(rnc.data_prevista_encerramento).toLocaleDateString('pt-BR')}`);
-    if (rnc.origem) doc.text(`Origem: ${rnc.origem}`);
-    if (rnc.area_afetada) doc.text(`Área afetada: ${rnc.area_afetada}`);
-    if (rnc.norma_referencia) doc.text(`Norma/Referência: ${rnc.norma_referencia}`);
-    doc.text(`Responsável: ${rnc.responsavel_nome || 'N/A'}`);
-    if (rnc.rdo_id) doc.text(`RDO Relacionado: ${rnc.rdo_id} (${rnc.rdo_data ? new Date(rnc.rdo_data).toLocaleDateString('pt-BR') : 'N/A'})`);
-    doc.text(`Criado por: ${rnc.criado_por_nome || 'N/A'}`);
-    doc.text(`Criado em: ${rnc.criado_em ? new Date(rnc.criado_em).toLocaleString('pt-BR') : 'N/A'}`);
-    if (rnc.resolvido_em) doc.text(`Encerrado em: ${new Date(rnc.resolvido_em).toLocaleString('pt-BR')}`);
-    doc.moveDown();
-    doc.fontSize(12).text('Descrição:', { underline: true });
-    doc.text(rnc.descricao || '—');
-    doc.moveDown();
-    if (rnc.acao_corretiva) {
-      doc.text('Ação Corretiva:', { underline: true });
-      doc.text(rnc.acao_corretiva);
-      doc.moveDown();
-    }
-    if (rnc.descricao_correcao) {
-      doc.text('Correção realizada:', { underline: true });
-      doc.text(rnc.descricao_correcao);
-      doc.moveDown();
-    }
-    if (rnc.registros_fotograficos) {
-      doc.text('Registros fotográficos:', { underline: true });
-      doc.text(rnc.registros_fotograficos);
-      doc.moveDown();
-    }
+    res.setHeader('X-PDF-Engine', 'puppeteer');
+    res.send(Buffer.from(pdfBuffer));
 
-    if (fotos.length > 0) {
-      doc.text('Fotos anexadas:', { underline: true });
-      doc.moveDown(0.5);
-
-      for (const foto of fotos) {
-        const imgPath = path.join(uploadsDir, foto.caminho_arquivo || '');
-        if (fs.existsSync(imgPath)) {
-          try {
-            const maxWidth = 500;
-            const maxHeight = 260;
-            doc.image(imgPath, {
-              fit: [maxWidth, maxHeight],
-              align: 'left',
-              valign: 'top'
-            });
-            doc.moveDown(0.3);
-          } catch (_) {
-            doc.fontSize(10).fillColor('#b91c1c').text(`Falha ao renderizar imagem: ${foto.nome_arquivo || 'arquivo'}`);
-          }
-        } else {
-          doc.fontSize(10).fillColor('#b91c1c').text(`Arquivo de imagem não encontrado: ${foto.nome_arquivo || 'arquivo'}`);
-        }
-
-        const fotoUrl = `${publicBaseUrl}/uploads/${encodeURIComponent(foto.caminho_arquivo || '')}`;
-        doc.fontSize(10).fillColor('black').text(`Arquivo: ${foto.nome_arquivo || '—'}`);
-        doc.fillColor('#0b5fff').text('Abrir arquivo original', { link: fotoUrl, underline: true });
-        doc.fillColor('black').moveDown();
-      }
-    }
-
-    if (outrosAnexos.length > 0) {
-      doc.moveDown();
-      doc.text('Outros anexos:', { underline: true });
-      doc.moveDown(0.4);
-      for (const anexo of outrosAnexos) {
-        const fileUrl = `${publicBaseUrl}/uploads/${encodeURIComponent(anexo.caminho_arquivo || '')}`;
-        const tamanhoKb = anexo.tamanho ? `${Math.round(Number(anexo.tamanho) / 1024)} KB` : '—';
-        doc.fillColor('black').fontSize(10).text(`${anexo.nome_arquivo || 'anexo'} (${anexo.tipo || 'tipo desconhecido'}, ${tamanhoKb})`);
-        doc.fillColor('#0b5fff').text('Abrir anexo', { link: fileUrl, underline: true });
-        doc.fillColor('black').moveDown(0.4);
-      }
-    }
-
-    doc.fontSize(10).text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, { align: 'center' });
-    doc.end();
   } catch (error) {
+    if (browser) { try { await browser.close(); } catch (_) {} }
     console.error('Erro ao gerar PDF da RNC:', error);
-    res.status(500).json({ erro: 'Erro ao gerar PDF.' });
+    if (!res.headersSent) {
+      return res.status(500).json({ erro: 'Erro ao gerar PDF da RNC: ' + (error?.message || 'erro desconhecido') });
+    }
   }
 });
 
@@ -162,7 +545,8 @@ router.post('/', auth, [
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ erro: 'Dados inválidos.' });
+      const campos = errors.array().map(e => e.path || e.param).join(', ');
+      return res.status(400).json({ erro: `Dados inválidos: campos obrigatórios não preenchidos (${campos}).` });
     }
 
     const {
@@ -245,7 +629,8 @@ router.put('/:id', auth, async (req, res) => {
       return res.status(403).json({ erro: 'Não é possível editar uma RNC encerrada.' });
     }
 
-    if (rncAtual.criado_por !== req.usuario.id && !req.usuario.is_gestor) {
+    const uid = String(req.usuario?.id ?? '');
+    if (uid !== String(rncAtual.criado_por ?? '') && !req.usuario.is_gestor) {
       return res.status(403).json({ erro: 'Sem permissão para editar esta RNC.' });
     }
 
@@ -366,7 +751,9 @@ router.post('/:id/enviar-aprovacao', auth, async (req, res) => {
     if (!rncAtual) return res.status(404).json({ erro: 'RNC não encontrada.' });
 
     // somente criador ou responsável podem enviar para aprovação
-    if (rncAtual.criado_por !== req.usuario.id && rncAtual.responsavel_id !== req.usuario.id && !req.usuario.is_gestor) {
+    const uid = String(req.usuario?.id ?? '');
+    const podeEnviar = uid === String(rncAtual.criado_por ?? '') || uid === String(rncAtual.responsavel_id ?? '') || Boolean(req.usuario?.is_gestor);
+    if (!podeEnviar) {
       return res.status(403).json({ erro: 'Sem permissão para enviar para aprovação.' });
     }
 
@@ -428,7 +815,9 @@ router.post('/:id/corrigir', auth, async (req, res) => {
     if (!rncAtual) return res.status(404).json({ erro: 'RNC não encontrada.' });
 
     // somente criador, responsável ou gestor podem submeter correção
-    if (rncAtual.criado_por !== req.usuario.id && rncAtual.responsavel_id !== req.usuario.id && !req.usuario.is_gestor) {
+    const uid = String(req.usuario?.id ?? '');
+    const podeCorrigir = uid === String(rncAtual.criado_por ?? '') || uid === String(rncAtual.responsavel_id ?? '') || Boolean(req.usuario?.is_gestor);
+    if (!podeCorrigir) {
       return res.status(403).json({ erro: 'Sem permissão para submeter correção.' });
     }
 

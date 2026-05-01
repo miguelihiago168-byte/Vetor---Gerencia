@@ -97,6 +97,21 @@ try {
     console.warn('Aviso: não foi possível garantir coluna rnc.registros_fotograficos:', e?.message || e);
   });
 
+  // Adicionar categoria aos anexos de RNC (registro | correcao)
+  ensureColumn('anexos', 'categoria', "categoria TEXT DEFAULT 'registro'").catch((e) => {
+    console.warn('Aviso: não foi possível garantir coluna anexos.categoria:', e?.message || e);
+  });
+
+  // Adicionar telefone ao perfil do usuário
+  ensureColumn('usuarios', 'telefone', 'telefone TEXT').catch((e) => {
+    console.warn('Aviso: não foi possível garantir coluna usuarios.telefone:', e?.message || e);
+  });
+
+  // Adicionar avatar ao perfil do usuário
+  ensureColumn('usuarios', 'avatar', 'avatar TEXT').catch((e) => {
+    console.warn('Aviso: não foi possível garantir coluna usuarios.avatar:', e?.message || e);
+  });
+
   // Garantir tabelas do módulo de requisições/compras multi-itens
   migrateAddRequisicoes().catch((e) => {
     console.warn('Aviso: não foi possível aplicar schema de requisições:', e?.message || e);

@@ -288,6 +288,24 @@
   cursor: not-allowed;
 }
 
+/* Link button (esqueci minha senha / voltar) */
+.login-link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #0ea5e9;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.login-link-btn:hover {
+  color: #0284c7;
+  text-decoration: underline;
+}
+
 /* Error */
 .login-error {
   margin-bottom: 18px;

@@ -8,13 +8,12 @@ import {
   Clock, Tag, ThumbsUp, Package, AlertCircle,
 } from 'lucide-react';
 
-// Configuração dos 5 status do fluxo
+// Configuração dos status do fluxo ativo (finalizadas ficam no Histórico)
 const STATUS_FLOW = [
   { slug: 'solicitado',         label: 'Solicitado',           icon: <Tag size={13} />,          statuses: ['Em análise'] },
   { slug: 'em-cotacao',         label: 'Em cotação',           icon: <Clock size={13} />,        statuses: ['Em cotação'] },
   { slug: 'aguardando-decisao', label: 'Aguard. decisão',      icon: <AlertCircle size={13} />,  statuses: ['Cotações recebidas', 'Aguardando decisão gestor geral'] },
   { slug: 'aprovado-compra',    label: 'Aprovado p/ compra',   icon: <ThumbsUp size={13} />,     statuses: ['Compra autorizada'] },
-  { slug: 'comprado',           label: 'Comprado',             icon: <Package size={13} />,      statuses: ['Finalizada'] },
 ];
 
 // Slugs com badge colorido (requer ação) por perfil

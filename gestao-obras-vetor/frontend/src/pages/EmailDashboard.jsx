@@ -13,7 +13,11 @@ import {
   getEmailTemplates,
   getUsuarios,
   getEmailSignature,
-  updateEmailSignature
+  updateEmailSignature,
+  toggleEmailFavorito,
+  deleteEmailHistory,
+  syncImapEmails,
+  getReceivedEmails,
 } from '../services/api';
 import {
   Inbox,
@@ -33,7 +37,8 @@ import {
   ShieldAlert,
   Paperclip,
   Image as ImageIcon,
-  Save
+  Save,
+  MoreVertical
 } from 'lucide-react';
 import 'react-quill/dist/quill.snow.css';
 import '../styles/EmailDashboard.css';
@@ -43,18 +48,27 @@ const SMTP_PRESETS = {
     provider: 'Google',
     smtp_host: 'smtp.gmail.com',
     smtp_port: 587,
+    imap_host: 'imap.gmail.com',
+    imap_port: 993,
+    imap_tls: 1,
     example: 'seu-email@gmail.com'
   },
   microsoft: {
     provider: 'Microsoft',
     smtp_host: 'smtp.outlook.com',
     smtp_port: 587,
+    imap_host: 'outlook.office365.com',
+    imap_port: 993,
+    imap_tls: 1,
     example: 'seu-email@outlook.com'
   },
   custom: {
     provider: 'Outro',
     smtp_host: '',
     smtp_port: 587,
+    imap_host: '',
+    imap_port: 993,
+    imap_tls: 1,
     example: ''
   }
 };
@@ -122,7 +136,12 @@ function EmailDashboard() {
     smtp_user: '',
     smtp_pass: '',
     from_name: '',
-    from_email: ''
+    from_email: '',
+    imap_host: 'imap.gmail.com',
+    imap_port: 993,
+    imap_user: '',
+    imap_pass: '',
+    imap_tls: 1
   });
   const [composerFormData, setComposerFormData] = useState({
     to_email: '',
@@ -149,10 +168,13 @@ function EmailDashboard() {
   const [sendingEmail, setSendingEmail] = useState(false);
   const [savingSignature, setSavingSignature] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
+    const [receivedEmails, setReceivedEmails] = useState([]);
+    const [syncingImap, setSyncingImap] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [showUserList, setShowUserList] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState(null);
   const quillRef = useRef(null);
   const imageInputRef = useRef(null);
 
@@ -178,12 +200,6 @@ function EmailDashboard() {
     }
   }, [activeTab]);
 
-  const emailsReceived = useMemo(() => {
-    const localUserMail = (configFormData.from_email || '').trim().toLowerCase();
-    if (!localUserMail) return [];
-    return allHistory.filter((email) => (email.recipient_email || '').toLowerCase() === localUserMail);
-  }, [allHistory, configFormData.from_email]);
-
   const loadInitialData = async () => {
     try {
       setLoading(true);
@@ -199,7 +215,12 @@ function EmailDashboard() {
             smtp_user: config.smtp_user || '',
             smtp_pass: '',
             from_name: config.from_name || '',
-            from_email: config.from_email || ''
+            from_email: config.from_email || '',
+            imap_host: config.imap_host || '',
+            imap_port: config.imap_port || 993,
+            imap_user: config.imap_user || '',
+            imap_pass: '',
+            imap_tls: config.imap_tls !== undefined ? config.imap_tls : 1
           });
 
           if (config.smtp_host === 'smtp.gmail.com') {
@@ -240,10 +261,29 @@ function EmailDashboard() {
       }
 
       await loadEmailHistory();
+      try {
+        const recv = await getReceivedEmails();
+        if (Array.isArray(recv?.data?.data)) setReceivedEmails(recv.data.data);
+      } catch {}
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSyncImap = async () => {
+    setSyncingImap(true);
+    try {
+      const res = await syncImapEmails();
+      const synced = res?.data?.synced ?? 0;
+      showNotification(synced > 0 ? `${synced} email(s) novo(s) recebido(s)` : 'Nenhum email novo', 'success');
+      const recv = await getReceivedEmails();
+      if (Array.isArray(recv?.data?.data)) setReceivedEmails(recv.data.data);
+    } catch (error) {
+      showNotification(error?.response?.data?.error || 'Erro ao sincronizar emails', 'error');
+    } finally {
+      setSyncingImap(false);
     }
   };
 
@@ -254,8 +294,8 @@ function EmailDashboard() {
       const data = response?.data?.data;
       if (Array.isArray(data)) {
         setAllHistory(data);
-        setEmailsSent(data.filter((e) => e.status === 'ENVIADO'));
-        setEmailsErrors(data.filter((e) => e.status === 'ERRO'));
+        setEmailsSent(data.filter((e) => e.status === 'ENVIADO' && !e.excluido));
+        setEmailsErrors(data.filter((e) => e.status === 'ERRO' && !e.excluido));
       }
     } catch (error) {
       console.error('Erro ao carregar historico:', error);
@@ -271,7 +311,10 @@ function EmailDashboard() {
       ...prev,
       provider: preset.provider,
       smtp_host: preset.smtp_host,
-      smtp_port: preset.smtp_port
+      smtp_port: preset.smtp_port,
+      imap_host: preset.imap_host || '',
+      imap_port: preset.imap_port || 993,
+      imap_tls: preset.imap_tls !== undefined ? preset.imap_tls : 1
     }));
     setTestResult(null);
   };
@@ -280,7 +323,7 @@ function EmailDashboard() {
     const { name, value } = e.target;
     setConfigFormData((prev) => ({
       ...prev,
-      [name]: name === 'smtp_port' ? Number(value) : value
+      [name]: (name === 'smtp_port' || name === 'imap_port') ? Number(value) : value
     }));
     setTestResult(null);
   };
@@ -303,7 +346,7 @@ function EmailDashboard() {
       });
       const payload = response?.data || {};
 
-      setTestResult({ success: payload.success, message: payload.message });
+      setTestResult({ success: payload.success, message: payload.message, detalhe: payload.detalhe_tecnico });
       if (payload.success) {
         showNotification('Conexão SMTP validada com sucesso!', 'success');
       } else {
@@ -487,16 +530,57 @@ function EmailDashboard() {
   };
 
   const handleViewDetails = (email) => {
-    setSelectedEmail(email);
-    setShowDetailModal(true);
+    setSelectedEmail(prev => prev?.id === email.id ? null : email);
+    setShowDetailModal(false);
+  };
+
+  const handleToggleFavorito = async (e, email) => {
+    e.stopPropagation();
+    setOpenMenuId(null);
+    try {
+      const res = await toggleEmailFavorito(email.id);
+      const novoFavorito = res?.data?.favorito ?? (email.favorito ? 0 : 1);
+      setAllHistory(prev => prev.map(e => e.id === email.id ? { ...e, favorito: novoFavorito } : e));
+      showNotification(novoFavorito ? 'Adicionado aos favoritos' : 'Removido dos favoritos', 'success');
+    } catch {
+      showNotification('Erro ao favoritar email', 'error');
+    }
+  };
+
+  const handleDeleteEmail = async (e, email) => {
+    e.stopPropagation();
+    setOpenMenuId(null);
+    try {
+      const res = await deleteEmailHistory(email.id);
+      const permanente = res?.data?.permanente;
+      if (permanente) {
+        setAllHistory(prev => prev.filter(e => e.id !== email.id));
+        showNotification('Email excluído permanentemente', 'success');
+      } else {
+        setAllHistory(prev => prev.map(e => e.id === email.id ? { ...e, excluido: 1 } : e));
+        if (selectedEmail?.id === email.id) setSelectedEmail(null);
+        showNotification('Email movido para a lixeira', 'success');
+      }
+    } catch {
+      showNotification('Erro ao excluir email', 'error');
+    }
   };
 
   const handleCloseModal = () => {
+    setSelectedEmail(null);
     setShowDetailModal(false);
-    setTimeout(() => setSelectedEmail(null), 150);
   };
 
   const formatDate = (dateString) => {
+    if (!dateString) return '-';
+    const d = new Date(dateString);
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+    if (isToday) return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+  };
+
+  const formatDateFull = (dateString) => {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleString('pt-BR');
   };
@@ -521,31 +605,101 @@ function EmailDashboard() {
     }
 
     return (
-      <div className="emails-table-wrapper">
-        <table className="emails-table">
-          <thead>
-            <tr>
-              <th>Para</th>
-              <th>Assunto</th>
-              <th>Data</th>
-              <th>Ação</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((email) => (
-              <tr key={email.id} className={email.status === 'ERRO' ? 'error-row' : ''}>
-                <td>{email.recipient_email}</td>
-                <td className="subject-cell">{email.subject}</td>
-                <td className="date-cell">{formatDate(email.created_at)}</td>
-                <td>
-                  <button className="btn-view-details" onClick={() => handleViewDetails(email)}>
-                    <Eye size={16} />
+      <div className={`gmail-pane${selectedEmail ? ' has-detail' : ''}`}>
+        {/* Email list */}
+        <div className="gmail-list">
+          {rows.map((email) => {
+            const isSelected = selectedEmail?.id === email.id;
+            const isError = email.status === 'ERRO';
+            return (
+              <div
+                key={email.id}
+                className={`gmail-row${isSelected ? ' gmail-row-selected' : ''}${isError ? ' gmail-row-error' : ''}`}
+                onClick={() => handleViewDetails(email)}
+              >
+                <div className="gmail-row-avatar">
+                  {(email.recipient_email || '?')[0].toUpperCase()}
+                </div>
+                <div className="gmail-row-body">
+                  <div className="gmail-row-top">
+                    <span className="gmail-row-recipient">{email.recipient_email}</span>
+                    <span className="gmail-row-date">{formatDate(email.created_at)}</span>
+                  </div>
+                  <div className="gmail-row-subject">{email.subject || '(sem assunto)'}</div>
+                  {isError && email.error_message && (
+                    <div className="gmail-row-preview gmail-row-preview-error">{email.error_message}</div>
+                  )}
+                </div>
+                {email.favorito ? <Star size={14} className="gmail-row-star-icon" /> : null}
+                {isError && <span className="gmail-err-dot" title="Erro de envio" />}
+                <div className="gmail-row-menu" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    className="gmail-row-menu-btn"
+                    title="Mais ações"
+                    onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === email.id ? null : email.id); }}
+                  >
+                    <MoreVertical size={16} />
                   </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  {openMenuId === email.id && (
+                    <div className="gmail-row-dropdown">
+                      <button onClick={(e) => handleToggleFavorito(e, email)}>
+                        <Star size={14} />
+                        {email.favorito ? 'Remover favorito' : 'Favoritar'}
+                      </button>
+                      <button className="gmail-dropdown-danger" onClick={(e) => handleDeleteEmail(e, email)}>
+                        <Trash2 size={14} />
+                        {email.excluido ? 'Excluir permanentemente' : 'Mover para lixeira'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Email detail panel */}
+        {selectedEmail && (
+          <div className="gmail-detail">
+            <div className="gmail-detail-header">
+              <h2 className="gmail-detail-subject">{selectedEmail.subject || '(sem assunto)'}</h2>
+              <button className="gmail-detail-close" onClick={handleCloseModal} title="Fechar">✕</button>
+            </div>
+
+            <div className="gmail-detail-meta">
+              <div className="gmail-detail-avatar">{(selectedEmail.recipient_email || '?')[0].toUpperCase()}</div>
+              <div>
+                <div className="gmail-detail-from">
+                  Para: <strong>{selectedEmail.recipient_email}</strong>
+                  {selectedEmail.status === 'ERRO'
+                    ? <span className="gmail-status-badge error">Falhou</span>
+                    : <span className="gmail-status-badge sent">Enviado</span>
+                  }
+                </div>
+                <div className="gmail-detail-date">{formatDateFull(selectedEmail.created_at)}</div>
+              </div>
+            </div>
+
+            {selectedEmail.error_message && (
+              <div className="gmail-error-banner">
+                <AlertCircle size={15} />
+                {selectedEmail.error_message}
+              </div>
+            )}
+
+            <div className="gmail-detail-body">
+              {selectedEmail.body_html
+                ? <iframe
+                    srcDoc={selectedEmail.body_html}
+                    title="Conteúdo do email"
+                    className="gmail-body-iframe"
+                    sandbox="allow-same-origin"
+                  />
+                : <p style={{ color: '#94a3b8', fontSize: 14 }}>(Sem conteúdo HTML)</p>
+              }
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -593,17 +747,54 @@ function EmailDashboard() {
           <section className="mail-main">
             {activeTab === 'recebidos' && (
               <div className="tab-pane">
-                {configFormData.from_email ? (
-                  renderHistoryTable(
-                    emailsReceived,
-                    'Sem emails recebidos',
-                    'A caixa de entrada ainda não possui mensagens para este e-mail configurado.'
-                  )
-                ) : (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={handleSyncImap}
+                    disabled={syncingImap}
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '7px 14px' }}
+                  >
+                    {syncingImap ? <Loader size={15} className="spinning" /> : <Inbox size={15} />}
+                    {syncingImap ? 'Sincronizando...' : 'Sincronizar Caixa de Entrada'}
+                  </button>
+                </div>
+                {receivedEmails.length === 0 ? (
                   <div className="empty-state">
                     <Inbox size={42} />
-                    <h3>Configure seu e-mail primeiro</h3>
-                    <p>Preencha a aba de configurações para identificar sua caixa de entrada.</p>
+                    <h3>Nenhum email recebido</h3>
+                    <p>Configure o IMAP na aba Configurações e clique em "Sincronizar" para buscar emails.</p>
+                  </div>
+                ) : (
+                  <div className="email-list">
+                    {receivedEmails.map((email) => (
+                      <div key={email.id} className="gmail-row" onClick={() => setSelectedEmail(prev => prev?.id === email.id ? null : email)}>
+                        <div className="gmail-row-icon"><Inbox size={16} /></div>
+                        <div className="gmail-row-from">{email.from_name || email.from_email}</div>
+                        <div className="gmail-row-subject">
+                          <span className="gmail-row-subj">{email.subject}</span>
+                          {email.from_email && <span className="gmail-row-preview"> — {email.from_email}</span>}
+                        </div>
+                        <div className="gmail-row-date">{email.received_at ? new Date(email.received_at).toLocaleDateString('pt-BR') : ''}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {selectedEmail && receivedEmails.some(e => e.id === selectedEmail.id) && (
+                  <div className="email-detail-panel" style={{ marginTop: '16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '20px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                      <div>
+                        <strong>{selectedEmail.subject}</strong>
+                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+                          De: {selectedEmail.from_name} &lt;{selectedEmail.from_email}&gt; — {selectedEmail.received_at ? new Date(selectedEmail.received_at).toLocaleString('pt-BR') : ''}
+                        </div>
+                      </div>
+                      <button type="button" onClick={() => setSelectedEmail(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: '#94a3b8' }}>×</button>
+                    </div>
+                    {selectedEmail.body_html
+                      ? <div dangerouslySetInnerHTML={{ __html: selectedEmail.body_html }} style={{ fontSize: '14px', lineHeight: '1.6' }} />
+                      : <pre style={{ whiteSpace: 'pre-wrap', fontSize: '13px' }}>{selectedEmail.body_text}</pre>
+                    }
                   </div>
                 )}
               </div>
@@ -621,11 +812,11 @@ function EmailDashboard() {
 
             {activeTab === 'favoritos' && (
               <div className="tab-pane">
-                <div className="empty-state">
-                  <Star size={42} />
-                  <h3>Nenhum favorito</h3>
-                  <p>Os e-mails favoritados aparecerão nesta pasta.</p>
-                </div>
+                {renderHistoryTable(
+                  allHistory.filter(e => e.favorito && !e.excluido),
+                  'Nenhum favorito',
+                  'Marque emails com estrela para vê-los aqui.'
+                )}
               </div>
             )}
 
@@ -641,11 +832,11 @@ function EmailDashboard() {
 
             {activeTab === 'lixeira' && (
               <div className="tab-pane">
-                <div className="empty-state">
-                  <Trash2 size={42} />
-                  <h3>Lixeira vazia</h3>
-                  <p>Mensagens removidas aparecerão aqui temporariamente.</p>
-                </div>
+                {renderHistoryTable(
+                  allHistory.filter(e => e.excluido),
+                  'Lixeira vazia',
+                  'Emails excluídos aparecem aqui. Clique nos 3 pontinhos para excluir permanentemente.'
+                )}
               </div>
             )}
 
@@ -912,11 +1103,52 @@ function EmailDashboard() {
                     </div>
                   </div>
 
+                  <div className="form-section" style={{ borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
+                    <h3 style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Inbox size={16} /> Configuração IMAP (Recebimento)
+                    </h3>
+                    <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '12px' }}>
+                      Preencha para receber emails na aba Recebidos. Para Gmail use <strong>imap.gmail.com</strong> porta 993 e a mesma Senha de App.
+                    </p>
+                    <div className="form-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+                      <div className="form-group">
+                        <label>Servidor IMAP</label>
+                        <input type="text" name="imap_host" value={configFormData.imap_host} onChange={handleConfigChange} className="form-input" placeholder="imap.gmail.com" />
+                      </div>
+                      <div className="form-group">
+                        <label>Porta IMAP</label>
+                        <input type="number" name="imap_port" value={configFormData.imap_port} onChange={handleConfigChange} className="form-input" placeholder="993" />
+                      </div>
+                      <div className="form-group">
+                        <label>Usuário IMAP (opcional, padrão = usuário SMTP)</label>
+                        <input type="text" name="imap_user" value={configFormData.imap_user} onChange={handleConfigChange} className="form-input" placeholder="igual ao email SMTP" />
+                      </div>
+                      <div className="form-group">
+                        <label>Senha IMAP (opcional, padrão = senha SMTP)</label>
+                        <input type="password" name="imap_pass" value={configFormData.imap_pass} onChange={handleConfigChange} className="form-input" placeholder="deixe em branco para usar a mesma senha SMTP" />
+                      </div>
+                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={configFormData.imap_tls === 1 || configFormData.imap_tls === true}
+                        onChange={(e) => setConfigFormData(prev => ({ ...prev, imap_tls: e.target.checked ? 1 : 0 }))}
+                      />
+                      Usar TLS/SSL (recomendado, porta 993)
+                    </label>
+                  </div>
+
                   {testResult && (
                     <div className={`test-result ${testResult.success ? 'success' : 'error'}`}>
                       <div className="test-result-icon">{testResult.success ? <Check size={20} /> : <AlertCircle size={20} />}</div>
                       <div className="test-result-message">
                         {testResult.success ? testResult.message : resolveSmtpErrorMsg(testResult.message)}
+                        {!testResult.success && testResult.detalhe && (
+                          <details style={{ marginTop: 6, fontSize: '0.8em', opacity: 0.7 }}>
+                            <summary style={{ cursor: 'pointer' }}>Detalhe técnico</summary>
+                            <code>{testResult.detalhe}</code>
+                          </details>
+                        )}
                       </div>
                     </div>
                   )}
@@ -949,61 +1181,6 @@ function EmailDashboard() {
           </section>
         </div>
       </div>
-
-      {showDetailModal && selectedEmail && (
-        <div className="modal-overlay" onClick={handleCloseModal}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Detalhes do Email</h2>
-              <button className="btn-close" onClick={handleCloseModal}>x</button>
-            </div>
-
-            <div className="modal-body">
-              <div className="detail-group">
-                <label>Status</label>
-                <span className={`status-badge ${selectedEmail.status === 'ENVIADO' ? 'success' : 'error'}`}>
-                  {selectedEmail.status}
-                </span>
-              </div>
-
-              <div className="detail-group">
-                <label>Email Destinatário</label>
-                <p>{selectedEmail.recipient_email}</p>
-              </div>
-
-              <div className="detail-group">
-                <label>Assunto</label>
-                <p>{selectedEmail.subject}</p>
-              </div>
-
-              <div className="detail-group">
-                <label>Data de Envio</label>
-                <p>{formatDate(selectedEmail.created_at)}</p>
-              </div>
-
-              {selectedEmail.error_message && (
-                <div className="detail-group error">
-                  <label>Erro</label>
-                  <p className="error-text">{selectedEmail.error_message}</p>
-                </div>
-              )}
-
-              {selectedEmail.body_html && (
-                <div className="detail-group">
-                  <label>Corpo do Email</label>
-                  <div className="email-body-preview">
-                    <div dangerouslySetInnerHTML={{ __html: selectedEmail.body_html }} />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="modal-actions">
-              <button className="btn-secondary" onClick={handleCloseModal}>Fechar</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

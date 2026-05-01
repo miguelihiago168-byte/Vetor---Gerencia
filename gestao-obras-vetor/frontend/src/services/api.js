@@ -10,7 +10,7 @@ const api = axios.create({
 // Interceptor para adicionar token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -28,6 +28,8 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('usuario');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('usuario');
       window.location.href = '/login';
     }
     return Promise.reject(error);
@@ -39,6 +41,8 @@ export const login = (credentials) => api.post('/auth/login', credentials);
 export const registerTrialAccount = (data) => api.post('/auth/register', data);
 export const validateInviteToken = (token) => api.get(`/auth/register/${token}`);
 export const registerWithInviteToken = (token, data) => api.post(`/auth/register/${token}`, data);
+export const esqueciSenha = (login) => api.post('/auth/esqueci-senha', { login });
+export const redefinirSenha = (token, senha) => api.post('/auth/redefinir-senha', { token, senha });
 
 // Usuários
 export const getUsuarios = (params) => api.get('/usuarios', { params });
@@ -50,6 +54,8 @@ export const updateUsuario = (id, data) => api.put(`/usuarios/${id}`, data);
 export const concluirPrimeiroAcesso = (data) => api.patch('/usuarios/me/primeiro-acesso', data);
 export const updateUsuarioGestor = (id, isGestor) => api.patch(`/usuarios/${id}/gestor`, { is_gestor: isGestor });
 export const updateUsuarioAdm = (id, isAdm) => api.patch(`/usuarios/${id}/adm`, { is_adm: isAdm });
+export const patchUsuarioInfo = (id, data) => api.patch(`/usuarios/${id}/info`, data);
+export const patchUsuarioAvatar = (id, formData) => api.patch(`/usuarios/${id}/avatar`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 export const deleteUsuario = (id) => api.delete(`/usuarios/${id}`);
 export const bulkUpdateUsuarios = (ids, campo, valor, projeto_id) =>
   api.patch('/usuarios/bulk-update', { ids, campo, valor, projeto_id });
@@ -123,7 +129,7 @@ export const deleteAnexo = (id) => api.delete(`/anexos/${id}`);
 export const uploadAnexoRNC = (rncId, formData) => api.post(`/anexos/upload-rnc/${rncId}`, formData, {
   headers: { 'Content-Type': 'multipart/form-data' }
 });
-export const getAnexosRNC = (rncId) => api.get(`/anexos/rnc/${rncId}`);
+export const getAnexosRNC = (rncId, categoria) => api.get(`/anexos/rnc/${rncId}`, { params: categoria ? { categoria } : undefined });
 
 // Dashboard
 export const getDashboardAvanco = (projetoId) => api.get(`/dashboard/projeto/${projetoId}/avanco`);
@@ -140,6 +146,7 @@ export const updateStatusRNC = (id, status) => api.patch(`/rnc/${id}/status`, { 
 export const submitCorrecaoRNC = (id, data) => api.post(`/rnc/${id}/corrigir`, data);
 export const deleteRNC = (id) => api.delete(`/rnc/${id}`);
 export const enviarRncParaAprovacao = (id) => api.post(`/rnc/${id}/enviar-aprovacao`);
+export const getRNCPDF = (id) => api.get(`/rnc/${id}/pdf`, { responseType: 'blob' });
 
 // Notificações
 export const getNotificacoes = () => api.get('/notificacoes');
@@ -265,6 +272,10 @@ export const uploadEmailInlineImage = (formData) => api.post('/email/upload-imag
 });
 export const getEmailHistory = (params) => api.get('/email/history', { params });
 export const getEmailHistoryDetail = (id) => api.get(`/email/history/${id}`);
+export const toggleEmailFavorito = (id) => api.patch(`/email/history/${id}/favorito`);
+export const deleteEmailHistory = (id) => api.delete(`/email/history/${id}`);
+export const syncImapEmails = () => api.post('/email/imap/sync');
+export const getReceivedEmails = () => api.get('/email/received');
 export const getEmailTemplates = () => api.get('/email/templates');
 export const getEmailTemplate = (id) => api.get(`/email/templates/${id}`);
 export const saveEmailTemplate = (data) => api.post('/email/templates', data);

@@ -113,7 +113,7 @@ function Dashboard() {
         {/* Menu Lateral */}
         <div style={{
           width: '240px',
-          background: 'white',
+          background: 'var(--card-bg)',
           borderRight: '1px solid var(--gray-100)',
           padding: '24px 0'
         }}>
@@ -258,14 +258,14 @@ function Dashboard() {
                     key={rdo.id}
                     style={{
                       padding: '12px',
-                      backgroundColor: '#f5f5f5',
+                      backgroundColor: 'var(--bg-secondary)',
                       borderRadius: '6px',
                       borderLeft: `3px solid ${rdo.status === 'Em preenchimento' ? '#FF9800' : '#4CAF50'}`,
                       cursor: 'pointer',
                       transition: 'background-color 0.2s'
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#efefef'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div>
@@ -276,16 +276,7 @@ function Dashboard() {
                           {rdo.data_relatorio ? new Date(rdo.data_relatorio).toLocaleDateString('pt-BR') : 'Data não definida'}
                         </small>
                       </div>
-                      <span
-                        style={{
-                          padding: '4px 8px',
-                          borderRadius: '4px',
-                          fontSize: '11px',
-                          fontWeight: 'bold',
-                          backgroundColor: rdo.status === 'Em preenchimento' ? '#FFF3E0' : '#E8F5E9',
-                          color: rdo.status === 'Em preenchimento' ? '#E65100' : '#2E7D32'
-                        }}
-                      >
+                      <span className={`dashboard-status-badge ${rdo.status === 'Em preenchimento' ? 'status-pendente' : 'status-ok'}`}>
                         {rdo.status}
                       </span>
                     </div>
@@ -318,14 +309,14 @@ function Dashboard() {
                     key={rnc.id}
                     style={{
                       padding: '12px',
-                      backgroundColor: '#f5f5f5',
+                      backgroundColor: 'var(--bg-secondary)',
                       borderRadius: '6px',
                       borderLeft: `3px solid ${rnc.status === 'Encerrada' ? '#4CAF50' : '#FF5722'}`,
                       cursor: 'pointer',
                       transition: 'background-color 0.2s'
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#efefef'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-secondary)'}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div>
@@ -336,16 +327,7 @@ function Dashboard() {
                           {rnc.criado_em ? new Date(rnc.criado_em).toLocaleDateString('pt-BR') : 'Data não definida'}
                         </small>
                       </div>
-                      <span
-                        style={{
-                          padding: '4px 8px',
-                          borderRadius: '4px',
-                          fontSize: '11px',
-                          fontWeight: 'bold',
-                          backgroundColor: rnc.status === 'Encerrada' ? '#E8F5E9' : '#FFEBEE',
-                          color: rnc.status === 'Encerrada' ? '#2E7D32' : '#C62828'
-                        }}
-                      >
+                      <span className={`dashboard-status-badge ${rnc.status === 'Encerrada' ? 'status-ok' : 'status-erro'}`}>
                         {rnc.status}
                       </span>
                     </div>

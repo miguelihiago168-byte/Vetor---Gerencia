@@ -10,6 +10,7 @@ import PrivateRoute from './components/PrivateRoute';
 import NotificationContainer from './components/NotificationContainer';
 import Login from './pages/Login';
 import CriarConta from './pages/CriarConta';
+import RedefinirSenha from './pages/RedefinirSenha';
 // Dashboard removido como página inicial; manter rota para compatibilidade opcional
 import Dashboard from './pages/Dashboard';
 import Projetos from './pages/Projetos';
@@ -73,6 +74,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
                 <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register/:token" element={<CriarConta />} />
+          <Route path="/redefinir-senha/:token" element={<RedefinirSenha />} />
           <Route path="/criar-conta" element={<Navigate to="/login" replace />} />
           <Route path="/primeiro-acesso" element={<PrivateRoute allowPendingFirstAccess><PrimeiroAcesso /></PrivateRoute>} />
           <Route path="/perfil" element={<PrivateRoute><MeuPerfil /></PrivateRoute>} />
