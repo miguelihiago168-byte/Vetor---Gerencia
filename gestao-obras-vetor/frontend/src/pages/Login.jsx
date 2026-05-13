@@ -291,8 +291,11 @@ function Login() {
                 onChange={(e) => setManterLogin(e.target.checked)}
                 style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--primary, #6366f1)' }}
               />
-              Manter conectado
+              Manter conectado por 30 dias
             </label>
+            <div style={{ marginTop: 6, fontSize: '0.8rem', color: 'var(--text-secondary, #6b7280)' }}>
+              Desmarcado: sessão com validade menor (8h), mas sem desconectar ao fechar o navegador.
+            </div>
 
             <div style={{ textAlign: 'center', marginTop: 16 }}>
               <button

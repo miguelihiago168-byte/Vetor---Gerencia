@@ -44,17 +44,12 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const loginAuth = (token, dadosUsuario, manterLogin = true) => {
-    const storage = manterLogin ? localStorage : sessionStorage;
-    // Limpa o outro storage para evitar conflito
-    if (manterLogin) {
-      sessionStorage.removeItem('token');
-      sessionStorage.removeItem('usuario');
-    } else {
-      localStorage.removeItem('token');
-      localStorage.removeItem('usuario');
-    }
-    storage.setItem('token', token);
-    storage.setItem('usuario', JSON.stringify(dadosUsuario));
+    // No web, mantém a sessão no localStorage para sobreviver ao fechamento do navegador.
+    // O parâmetro manterLogin segue sendo usado no backend para definir a duração do token.
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('usuario');
+    localStorage.setItem('token', token);
+    localStorage.setItem('usuario', JSON.stringify(dadosUsuario));
     localStorage.setItem('app_version', APP_VERSION);
     setUsuario(dadosUsuario);
   };
