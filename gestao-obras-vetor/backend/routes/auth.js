@@ -309,6 +309,7 @@ router.post('/login', [
         email: usuario.email,
         telefone: usuario.telefone || null,
         avatar: usuario.avatar || null,
+        presenca_status: usuario.presenca_status || 'disponivel',
         funcao: usuario.funcao || perfil,
         perfil,
         setor: usuario.setor || null,

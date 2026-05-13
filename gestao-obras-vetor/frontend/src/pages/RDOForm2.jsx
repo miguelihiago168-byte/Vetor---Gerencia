@@ -2093,7 +2093,7 @@ function RDOForm2() {
               <span style={{ color: '#94a3b8' }}>— {new Date(formData.data_relatorio + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
             )}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+          <div className="rdo-actions-bar-right">
             {rdoId && (
               <>
                 {ultimaAlteracao && (
@@ -2101,7 +2101,7 @@ function RDOForm2() {
                     Última alteração: {ultimaAlteracao.usuario_nome || 'Usuário removido'} em {parseTS(ultimaAlteracao.criado_em)?.toLocaleString('pt-BR') ?? '—'}
                   </div>
                 )}
-                <div style={{ display: 'flex', gap: '16px', marginBottom: 4 }}>
+                <div className="rdo-actions-links">
                   <a href="#" style={{ color: '#2563eb', fontSize: 13, textDecoration: 'underline' }} onClick={(e) => { e.preventDefault(); setShowLogModal('edicao'); }}>
                     Log de edições {logsEdicao.length > 0 ? `(${logsEdicao.length})` : ''}
                   </a>
@@ -2111,17 +2111,20 @@ function RDOForm2() {
                 </div>
               </>
             )}
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button className="btn btn-secondary" onClick={() => navigate(`/projeto/${projetoId}/rdos`)}>
-                Voltar
+            <div className="rdo-actions-buttons">
+              <button className="btn btn-secondary rdo-action-btn" onClick={() => navigate(`/projeto/${projetoId}/rdos`)}>
+                <span className="rdo-action-label-desktop">Voltar</span>
+                <span className="rdo-action-label-mobile">Voltar</span>
               </button>
-              <button className="btn btn-secondary" onClick={() => salvar('rascunho')}
+              <button className="btn btn-secondary rdo-action-btn" onClick={() => salvar('rascunho')}
                 disabled={isSaving || !formData.data_relatorio}>
-                {isSaving ? 'Salvando...' : 'Salvar rascunho'}
+                <span className="rdo-action-label-desktop">{isSaving ? 'Salvando...' : 'Salvar rascunho'}</span>
+                <span className="rdo-action-label-mobile">{isSaving ? 'Salvando...' : 'Rascunho'}</span>
               </button>
-              <button className="btn btn-success" onClick={() => salvar('analise')}
+              <button className="btn btn-success rdo-action-btn" onClick={() => salvar('analise')}
                 disabled={isSaving || !formData.data_relatorio}>
-                {isSaving ? 'Enviando...' : 'Enviar para aprovação'}
+                <span className="rdo-action-label-desktop">{isSaving ? 'Enviando...' : 'Enviar para aprovação'}</span>
+                <span className="rdo-action-label-mobile">{isSaving ? 'Enviando...' : 'Enviar'}</span>
               </button>
             </div>
           </div>

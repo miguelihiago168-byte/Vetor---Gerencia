@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ReactQuill from 'react-quill';
 import Navbar from '../components/Navbar';
@@ -18,6 +18,7 @@ import {
   deleteEmailHistory,
   syncImapEmails,
   getReceivedEmails,
+  deleteReceivedEmail,
 } from '../services/api';
 import {
   Inbox,
@@ -38,7 +39,10 @@ import {
   Paperclip,
   Image as ImageIcon,
   Save,
-  MoreVertical
+  MoreVertical,
+  Reply,
+  Forward,
+  ArrowLeft,
 } from 'lucide-react';
 import 'react-quill/dist/quill.snow.css';
 import '../styles/EmailDashboard.css';
@@ -88,6 +92,7 @@ const MENU_ITEMS = [
 const VALID_TABS = new Set(MENU_ITEMS.map((item) => item.key));
 const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_ATTACHMENTS = '.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg';
+const AUTO_IMAP_SYNC_INTERVAL_MS = 90000;
 
 const quillModules = {
   toolbar: [
@@ -168,15 +173,23 @@ function EmailDashboard() {
   const [sendingEmail, setSendingEmail] = useState(false);
   const [savingSignature, setSavingSignature] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
-    const [receivedEmails, setReceivedEmails] = useState([]);
-    const [syncingImap, setSyncingImap] = useState(false);
+  const [receivedEmails, setReceivedEmails] = useState([]);
+  const [syncingImap, setSyncingImap] = useState(false);
+  const [imapSyncState, setImapSyncState] = useState({
+    status: 'idle',
+    message: '',
+    detail: '',
+    at: null
+  });
   const [testResult, setTestResult] = useState(null);
   const [showUserList, setShowUserList] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState(null);
+  const [selectedReceivedEmail, setSelectedReceivedEmail] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [openMenuId, setOpenMenuId] = useState(null);
   const quillRef = useRef(null);
   const imageInputRef = useRef(null);
+  const syncingImapRef = useRef(false);
 
   useEffect(() => {
     setSearchParams({ tab: activeTab }, { replace: true });
@@ -199,6 +212,18 @@ function EmailDashboard() {
       loadEmailHistory();
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    if (!selectedReceivedEmail) return;
+    const refreshed = receivedEmails.find((email) => String(email.id) === String(selectedReceivedEmail.id));
+    if (!refreshed) {
+      setSelectedReceivedEmail(null);
+      return;
+    }
+    if (refreshed !== selectedReceivedEmail) {
+      setSelectedReceivedEmail(refreshed);
+    }
+  }, [receivedEmails, selectedReceivedEmail]);
 
   const loadInitialData = async () => {
     try {
@@ -272,20 +297,80 @@ function EmailDashboard() {
     }
   };
 
-  const handleSyncImap = async () => {
+  const runImapSync = useCallback(async ({ manual = false } = {}) => {
+    if (syncingImapRef.current) return;
+
+    syncingImapRef.current = true;
     setSyncingImap(true);
+
+    if (manual) {
+      setImapSyncState({
+        status: 'running',
+        message: 'Sincronizacao em andamento...',
+        detail: '',
+        at: new Date().toISOString()
+      });
+    }
+
     try {
       const res = await syncImapEmails();
-      const synced = res?.data?.synced ?? 0;
-      showNotification(synced > 0 ? `${synced} email(s) novo(s) recebido(s)` : 'Nenhum email novo', 'success');
+      const synced = Number(res?.data?.synced ?? 0);
+      const successMsg = synced > 0
+        ? `${synced} email(s) novo(s) recebido(s)`
+        : 'Sincronizacao concluida: nenhum email novo';
+
+      if (manual || synced > 0) {
+        showNotification(successMsg, 'success');
+      }
+
+      setImapSyncState({
+        status: 'success',
+        message: manual || synced > 0 ? successMsg : 'Sincronizacao automatica ativa',
+        detail: '',
+        at: new Date().toISOString()
+      });
+
       const recv = await getReceivedEmails();
-      if (Array.isArray(recv?.data?.data)) setReceivedEmails(recv.data.data);
+      if (Array.isArray(recv?.data?.data)) {
+        setReceivedEmails(recv.data.data);
+      }
     } catch (error) {
-      showNotification(error?.response?.data?.error || 'Erro ao sincronizar emails', 'error');
+      const apiError = error?.response?.data?.error;
+      const detailError = error?.response?.data?.detalhe || error?.message || '';
+      const userMsg = apiError || (detailError ? `Erro ao sincronizar emails: ${detailError}` : 'Erro ao sincronizar emails');
+      showNotification(userMsg, 'error', 9000);
+      setImapSyncState({
+        status: 'error',
+        message: userMsg,
+        detail: detailError,
+        at: new Date().toISOString()
+      });
     } finally {
+      syncingImapRef.current = false;
       setSyncingImap(false);
     }
+  }, [showNotification]);
+
+  const handleSyncImap = async () => {
+    await runImapSync({ manual: true });
   };
+
+  useEffect(() => {
+    if (activeTab !== 'recebidos') {
+      return;
+    }
+
+    const syncWhenVisible = () => {
+      if (document.visibilityState === 'visible') {
+        runImapSync({ manual: false });
+      }
+    };
+
+    syncWhenVisible();
+    const intervalId = setInterval(syncWhenVisible, AUTO_IMAP_SYNC_INTERVAL_MS);
+
+    return () => clearInterval(intervalId);
+  }, [activeTab, runImapSync]);
 
   const loadEmailHistory = async () => {
     try {
@@ -487,6 +572,61 @@ function EmailDashboard() {
     setComposerFormData((prev) => ({ ...prev, to_email: userEmail }));
     setShowUserList(false);
   };
+
+  const handleReplyEmail = useCallback((email) => {
+    const quotedHtml = `
+<br/><br/>
+<div style="border-left: 3px solid #ccc; padding-left: 12px; color: #666; margin-top: 12px;">
+  <p><strong>Em ${email.received_at ? new Date(email.received_at).toLocaleString('pt-BR') : ''}, ${email.from_name || email.from_email} escreveu:</strong></p>
+  ${email.body_html || `<pre style="white-space:pre-wrap">${email.body_text || ''}</pre>`}
+</div>`;
+    setComposerFormData({
+      to_email: email.from_email || '',
+      subject: email.subject ? `Re: ${email.subject.replace(/^(Re:\s*)+/i, '')}` : '',
+      html_body: quotedHtml,
+      template_name: '',
+    });
+    setAttachments([]);
+    setSelectedTemplate(null);
+    setSelectedReceivedEmail(null);
+    setActiveTab('novo-email');
+  }, []);
+
+  const handleForwardEmail = useCallback((email) => {
+    const forwardedHtml = `
+<br/><br/>
+<div style="border-left: 3px solid #ccc; padding-left: 12px; color: #666; margin-top: 12px;">
+  <p><strong>---------- Mensagem encaminhada ----------</strong></p>
+  <p><strong>De:</strong> ${email.from_name ? `${email.from_name} &lt;${email.from_email}&gt;` : email.from_email || ''}</p>
+  <p><strong>Data:</strong> ${email.received_at ? new Date(email.received_at).toLocaleString('pt-BR') : ''}</p>
+  <p><strong>Assunto:</strong> ${email.subject || ''}</p>
+  <br/>
+  ${email.body_html || `<pre style="white-space:pre-wrap">${email.body_text || ''}</pre>`}
+</div>`;
+    setComposerFormData({
+      to_email: '',
+      subject: email.subject ? `Fwd: ${email.subject.replace(/^(Fwd:\s*)+/i, '')}` : '',
+      html_body: forwardedHtml,
+      template_name: '',
+    });
+    setAttachments([]);
+    setSelectedTemplate(null);
+    setSelectedReceivedEmail(null);
+    setActiveTab('novo-email');
+  }, []);
+
+  const handleDeleteReceivedEmail = useCallback(async (email) => {
+    if (!window.confirm(`Excluir o email "${email.subject || '(sem assunto)'}"?`)) return;
+    try {
+      await deleteReceivedEmail(email.id);
+      setReceivedEmails((prev) => prev.filter((e) => e.id !== email.id));
+      setSelectedReceivedEmail(null);
+      showNotification('Email excluído', 'success');
+    } catch (err) {
+      console.error('Erro ao excluir email recebido:', err);
+      showNotification('Erro ao excluir email', 'error');
+    }
+  }, [showNotification]);
 
   const handleSendEmail = async (e) => {
     e.preventDefault();
@@ -747,10 +887,10 @@ function EmailDashboard() {
           <section className="mail-main">
             {activeTab === 'recebidos' && (
               <div className="tab-pane">
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+                <div className="mail-sync-actions">
                   <button
                     type="button"
-                    className="btn-primary"
+                    className="btn-primary mail-sync-button"
                     onClick={handleSyncImap}
                     disabled={syncingImap}
                     style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', padding: '7px 14px' }}
@@ -759,43 +899,156 @@ function EmailDashboard() {
                     {syncingImap ? 'Sincronizando...' : 'Sincronizar Caixa de Entrada'}
                   </button>
                 </div>
+                {imapSyncState.status !== 'idle' && (
+                  <div
+                    style={{
+                      marginBottom: '12px',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      fontSize: '13px',
+                      border: imapSyncState.status === 'error' ? '1px solid #fecaca' : '1px solid #bfdbfe',
+                      background: imapSyncState.status === 'error' ? '#fef2f2' : '#eff6ff',
+                      color: imapSyncState.status === 'error' ? '#991b1b' : '#1e3a8a'
+                    }}
+                  >
+                    <strong>{imapSyncState.message}</strong>
+                    {imapSyncState.detail && imapSyncState.detail !== imapSyncState.message && (
+                      <div style={{ marginTop: '4px', opacity: 0.9 }}>{imapSyncState.detail}</div>
+                    )}
+                    {imapSyncState.at && (
+                      <div style={{ marginTop: '4px', opacity: 0.75 }}>
+                        Ultima tentativa: {new Date(imapSyncState.at).toLocaleString('pt-BR')}
+                      </div>
+                    )}
+                  </div>
+                )}
                 {receivedEmails.length === 0 ? (
                   <div className="empty-state">
                     <Inbox size={42} />
                     <h3>Nenhum email recebido</h3>
-                    <p>Configure o IMAP na aba Configurações e clique em "Sincronizar" para buscar emails.</p>
+                    <p>Configure o IMAP na aba Configurações. A sincronização automática busca novos emails periodicamente.</p>
                   </div>
                 ) : (
-                  <div className="email-list">
-                    {receivedEmails.map((email) => (
-                      <div key={email.id} className="gmail-row" onClick={() => setSelectedEmail(prev => prev?.id === email.id ? null : email)}>
-                        <div className="gmail-row-icon"><Inbox size={16} /></div>
-                        <div className="gmail-row-from">{email.from_name || email.from_email}</div>
-                        <div className="gmail-row-subject">
-                          <span className="gmail-row-subj">{email.subject}</span>
-                          {email.from_email && <span className="gmail-row-preview"> — {email.from_email}</span>}
-                        </div>
-                        <div className="gmail-row-date">{email.received_at ? new Date(email.received_at).toLocaleDateString('pt-BR') : ''}</div>
+                  !selectedReceivedEmail ? (
+                    <div className="gmail-pane">
+                      <div className="gmail-list">
+                        {receivedEmails.map((email) => (
+                          <div
+                            key={email.id}
+                            className="gmail-row"
+                            onClick={() => setSelectedReceivedEmail(email)}
+                          >
+                            <div className="gmail-row-avatar">
+                              {((email.from_name || email.from_email || '?')[0] || '?').toUpperCase()}
+                            </div>
+                            <div className="gmail-row-body">
+                              <div className="gmail-row-top">
+                                <span className="gmail-row-recipient">{email.from_name || email.from_email}</span>
+                                <span className="gmail-row-date">{email.received_at ? formatDate(email.received_at) : ''}</span>
+                              </div>
+                              <div className="gmail-row-subject">{email.subject || '(sem assunto)'}</div>
+                              {email.from_email && <div className="gmail-row-preview">{email.from_email}</div>}
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                )}
-                {selectedEmail && receivedEmails.some(e => e.id === selectedEmail.id) && (
-                  <div className="email-detail-panel" style={{ marginTop: '16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '20px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                      <div>
-                        <strong>{selectedEmail.subject}</strong>
-                        <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-                          De: {selectedEmail.from_name} &lt;{selectedEmail.from_email}&gt; — {selectedEmail.received_at ? new Date(selectedEmail.received_at).toLocaleString('pt-BR') : ''}
-                        </div>
-                      </div>
-                      <button type="button" onClick={() => setSelectedEmail(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px', color: '#94a3b8' }}>×</button>
                     </div>
-                    {selectedEmail.body_html
-                      ? <div dangerouslySetInnerHTML={{ __html: selectedEmail.body_html }} style={{ fontSize: '14px', lineHeight: '1.6' }} />
-                      : <pre style={{ whiteSpace: 'pre-wrap', fontSize: '13px' }}>{selectedEmail.body_text}</pre>
-                    }
-                  </div>
+                  ) : (
+                    <div className="received-mail-reader">
+                      <div className="received-mail-reader-topbar">
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => setSelectedReceivedEmail(null)}
+                        >
+                          <ArrowLeft size={16} style={{ marginRight: 6 }} />
+                          Voltar
+                        </button>
+                        <div className="received-mail-reader-actions">
+                          <button
+                            type="button"
+                            className="btn-action-email btn-reply"
+                            title="Responder"
+                            onClick={() => handleReplyEmail(selectedReceivedEmail)}
+                          >
+                            <Reply size={16} />
+                            Responder
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-action-email btn-forward"
+                            title="Encaminhar"
+                            onClick={() => handleForwardEmail(selectedReceivedEmail)}
+                          >
+                            <Forward size={16} />
+                            Encaminhar
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-action-email btn-delete"
+                            title="Excluir"
+                            onClick={() => handleDeleteReceivedEmail(selectedReceivedEmail)}
+                          >
+                            <Trash2 size={16} />
+                            Excluir
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="gmail-detail received-mail-reader-detail">
+                        <div className="gmail-detail-header">
+                          <h2 className="gmail-detail-subject">{selectedReceivedEmail.subject || '(sem assunto)'}</h2>
+                        </div>
+
+                        <div className="gmail-detail-meta">
+                          <div className="gmail-detail-avatar">{((selectedReceivedEmail.from_name || selectedReceivedEmail.from_email || '?')[0] || '?').toUpperCase()}</div>
+                          <div>
+                            <div className="gmail-detail-from">
+                              De: <strong>{selectedReceivedEmail.from_name || selectedReceivedEmail.from_email}</strong>
+                            </div>
+                            <div className="gmail-detail-date">
+                              {selectedReceivedEmail.received_at ? formatDateFull(selectedReceivedEmail.received_at) : '-'}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="gmail-detail-body">
+                          {selectedReceivedEmail.body_html
+                            ? (
+                              <div
+                                className="gmail-detail-body-content"
+                                dangerouslySetInnerHTML={{ __html: selectedReceivedEmail.body_html }}
+                              />
+                            )
+                            : (
+                              <div className="gmail-detail-body-content">
+                                <pre style={{ whiteSpace: 'pre-wrap', fontSize: '13px' }}>{selectedReceivedEmail.body_text || '(Sem conteudo)'}</pre>
+                              </div>
+                            )
+                          }
+                        </div>
+
+                        <div className="received-mail-reader-footer">
+                          <button
+                            type="button"
+                            className="btn-action-email btn-reply"
+                            onClick={() => handleReplyEmail(selectedReceivedEmail)}
+                          >
+                            <Reply size={16} />
+                            Responder
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-action-email btn-forward"
+                            onClick={() => handleForwardEmail(selectedReceivedEmail)}
+                          >
+                            <Forward size={16} />
+                            Encaminhar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )
                 )}
               </div>
             )}

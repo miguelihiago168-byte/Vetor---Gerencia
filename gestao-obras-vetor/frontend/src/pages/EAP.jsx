@@ -162,7 +162,7 @@ function EAP({ hideNavbar = false }) {
                     </span>
                   )}
                 </div>
-                <div style={{ display: 'flex', gap: '15px', fontSize: '13px', color: 'var(--gray-600)' }}>
+                <div style={{ display: 'flex', gap: '10px 15px', fontSize: '13px', color: 'var(--gray-600)', flexWrap: 'wrap' }}>
                   {/* Para atividades mãe, não exibir previsto */}
                   {!hasChildren && (
                     <span>Previsto: {atividade.quantidade_total || 0} {atividade.unidade_medida || ''}</span>
@@ -177,7 +177,7 @@ function EAP({ hideNavbar = false }) {
               </div>
             </div>
             
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
               <button
                 className="btn btn-secondary"
                 onClick={() => navigate(`/projeto/${projetoId}/eap/${atividade.id}`)}

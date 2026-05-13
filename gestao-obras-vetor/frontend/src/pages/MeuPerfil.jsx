@@ -5,8 +5,14 @@ import { useNavigate, Navigate } from 'react-router-dom';
 import { ArrowLeft, KeyRound, User, Mail, Phone, Pencil, Check, X, Camera } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { hasForbiddenPasswordSequence } from '../utils/passwordPolicy';
-import { patchUsuarioInfo, patchUsuarioAvatar } from '../services/api';
+import { patchUsuarioInfo, patchUsuarioAvatar, patchUsuarioPresenca } from '../services/api';
 import './MeuPerfil.css';
+
+const PRESENCA_OPTIONS = [
+  { value: 'disponivel', label: 'Disponível' },
+  { value: 'ausente', label: 'Ausente' },
+  { value: 'indisponivel', label: 'Indisponível' }
+];
 
 function MeuPerfil() {
   const { usuario, atualizarUsuarioLogado, loading } = useAuth();
@@ -27,6 +33,7 @@ function MeuPerfil() {
   // Avatar
   const avatarInputRef = useRef(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [atualizandoPresenca, setAtualizandoPresenca] = useState(false);
 
   const cleanText = (value) => {
     if (value == null) return '';
@@ -86,6 +93,27 @@ function MeuPerfil() {
       await alert({ title: 'Erro', message: e.response?.data?.erro || e.message });
     } finally {
       setSalvandoInfo(false);
+    }
+  };
+
+  const handleAtualizarPresenca = async (novoStatus) => {
+    if (!usuario?.id || !novoStatus || atualizandoPresenca) return;
+    if (String(usuario?.presenca_status || 'disponivel') === String(novoStatus)) return;
+
+    setAtualizandoPresenca(true);
+    try {
+      const res = await patchUsuarioPresenca(usuario.id, novoStatus);
+      const atualizado = res?.data?.usuario || { presenca_status: novoStatus };
+      if (typeof atualizarUsuarioLogado === 'function') {
+        atualizarUsuarioLogado({
+          presenca_status: atualizado.presenca_status || novoStatus,
+          presenca_atualizado_em: atualizado.presenca_atualizado_em || null
+        });
+      }
+    } catch (e) {
+      await alert({ title: 'Erro', message: e.response?.data?.erro || 'Erro ao atualizar presença.' });
+    } finally {
+      setAtualizandoPresenca(false);
     }
   };
 
@@ -179,6 +207,23 @@ function MeuPerfil() {
 
               <div className="perfil-user-main" style={{ flex: 1 }}>
                 <h2 className="perfil-user-name">{nomeExibicao}</h2>
+                <div className="perfil-presenca-wrap">
+                  {PRESENCA_OPTIONS.map((option) => {
+                    const ativo = String(usuario?.presenca_status || 'disponivel') === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={`perfil-presenca-btn${ativo ? ' active' : ''}`}
+                        disabled={atualizandoPresenca}
+                        onClick={() => handleAtualizarPresenca(option.value)}
+                      >
+                        <span className={`perfil-presenca-dot ${option.value}`} />
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
                 <div className="perfil-user-meta">
                   <div className="perfil-meta-item">
                     <span className="perfil-meta-label">Login</span>

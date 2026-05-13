@@ -109,6 +109,47 @@
   margin-bottom: 14px;
 }
 
+.perfil-presenca-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.perfil-presenca-btn {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.perfil-presenca-btn.active {
+  border-color: #60a5fa;
+  background: #eaf4ff;
+}
+
+.perfil-presenca-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #22c55e;
+}
+
+.perfil-presenca-dot.ausente {
+  background: #f59e0b;
+}
+
+.perfil-presenca-dot.indisponivel {
+  background: #94a3b8;
+}
+
 .perfil-user-meta {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

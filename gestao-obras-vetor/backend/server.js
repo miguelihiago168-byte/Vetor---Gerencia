@@ -1,7 +1,13 @@
 require('dotenv').config();
 const express = require('express');
+const http = require('http');
 const cors = require('cors');
 const path = require('path');
+const jwt = require('jsonwebtoken');
+const { Server } = require('socket.io');
+const { carregarPerfilUsuario } = require('./middleware/rbac');
+const { ensureTenantDatabase, runWithTenantContext, getQuery } = require('./config/database');
+const { setMensageriaBroadcaster } = require('./services/mensageriaRealtime');
 
 const app = express();
 
@@ -34,6 +40,7 @@ const fornecedoresRoutes = require('./routes/fornecedores');
 const notificacoesRoutes = require('./routes/notificacoes');
 const almoxarifadoRoutes = require('./routes/almoxarifado');
 const emailRoutes = require('./routes/email');
+const mensagensRoutes = require('./routes/mensagens');
 // Garantir esquema de notificações e índice único para evitar duplicidades
 try {
   const { db } = require('./config/database');
@@ -181,6 +188,111 @@ app.use('/api/fornecedores', fornecedoresRoutes);
 app.use('/api/notificacoes', notificacoesRoutes);
 app.use('/api/almoxarifado', almoxarifadoRoutes);
 app.use('/api/email', emailRoutes);
+app.use('/api/mensagens', mensagensRoutes);
+
+const createRealtimeServer = (server) => {
+  const io = new Server(server, {
+    cors: {
+      origin: true,
+      credentials: true
+    }
+  });
+
+  io.use(async (socket, next) => {
+    try {
+      const headerToken = socket.handshake.auth?.token
+        || String(socket.handshake.headers?.authorization || '').replace('Bearer ', '');
+
+      if (!headerToken) return next(new Error('Token ausente.'));
+
+      const decoded = jwt.verify(headerToken, process.env.JWT_SECRET);
+      const usuarioAtual = await carregarPerfilUsuario(decoded.id);
+      if (!usuarioAtual) return next(new Error('Usuário inválido.'));
+
+      const tokenTenantIds = Array.isArray(decoded.tenant_ids)
+        ? decoded.tenant_ids.map((t) => Number(t)).filter(Boolean)
+        : [];
+      const tenantId = Number(decoded.tenant_id || tokenTenantIds[0]);
+
+      if (!tenantId) return next(new Error('Tenant inválido.'));
+      if (tokenTenantIds.length > 0 && !tokenTenantIds.includes(tenantId)) {
+        return next(new Error('Tenant fora do escopo do usuário.'));
+      }
+
+      await ensureTenantDatabase(tenantId);
+
+      socket.data.usuario = {
+        id: Number(usuarioAtual.id),
+        nome: usuarioAtual.nome,
+        tenantId
+      };
+
+      return next();
+    } catch (error) {
+      return next(new Error('Falha na autenticação do socket.'));
+    }
+  });
+
+  io.on('connection', (socket) => {
+    const { tenantId, id: usuarioId } = socket.data.usuario;
+    socket.join(`tenant:${tenantId}`);
+    socket.join(`tenant:${tenantId}:user:${usuarioId}`);
+
+    socket.on('mensagens:join-conversa', async ({ conversaId }) => {
+      const id = Number(conversaId);
+      if (!id) return;
+
+      try {
+        await runWithTenantContext(tenantId, async () => {
+          const conversa = await getQuery(
+            `SELECT id
+             FROM mensagem_conversas
+             WHERE id = ?
+               AND tenant_id = ?
+               AND (usuario_a_id = ? OR usuario_b_id = ?)
+             LIMIT 1`,
+            [id, tenantId, usuarioId, usuarioId]
+          );
+
+          if (conversa) socket.join(`tenant:${tenantId}:conversa:${id}`);
+        });
+      } catch (_) {
+        // ignora join inválido
+      }
+    });
+
+    socket.on('mensagens:leave-conversa', ({ conversaId }) => {
+      const id = Number(conversaId);
+      if (!id) return;
+      socket.leave(`tenant:${tenantId}:conversa:${id}`);
+    });
+  });
+
+  setMensageriaBroadcaster((eventName, event) => {
+    const tenantId = Number(event?.tenantId);
+    if (!tenantId) return;
+
+    const targetUsers = Array.isArray(event.targetUserIds)
+      ? event.targetUserIds.map((u) => Number(u)).filter(Boolean)
+      : [];
+
+    if (targetUsers.length === 0) {
+      io.to(`tenant:${tenantId}`).emit(eventName, event.payload);
+      return;
+    }
+
+    targetUsers.forEach((userId) => {
+      io.to(`tenant:${tenantId}:user:${userId}`).emit(eventName, event.payload);
+    });
+
+    const conversaId = Number(event?.conversaId);
+    if (conversaId) {
+      io.to(`tenant:${tenantId}:conversa:${conversaId}`).emit(eventName, event.payload);
+    }
+  });
+
+  return io;
+};
 
 // Rota de teste
 app.get('/api/health', (req, res) => {
@@ -213,9 +325,13 @@ const startServer = (maxAttempts = 10) => {
 
   const tryListen = () => {
     attempt += 1;
-    const server = app.listen(PORT, () => {
+    const server = http.createServer(app);
+    createRealtimeServer(server);
+
+    server.listen(PORT, () => {
       console.log(`\nServidor inicializado na porta ${PORT}`);
       console.log(`Acesse http://localhost:${PORT}/api/health`);
+      console.log(`Socket.IO ativo em ws://localhost:${PORT}`);
       console.log('Credenciais padrão: Login: 000001 Senha: 123456');
 
       // Recalcular EAP ao iniciar para corrigir eventuais inconsistências

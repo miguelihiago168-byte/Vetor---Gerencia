@@ -29,6 +29,8 @@ const uploadAvatar = multer({
   }
 });
 
+const PRESENCAS_VALIDAS = ['disponivel', 'ausente', 'indisponivel'];
+
 const normalizeLogin = (value) => String(value || '').trim().replace(/\s+/g, '').toLowerCase();
 const normalizeName = (value) => String(value || '')
   .normalize('NFD')
@@ -149,7 +151,9 @@ const sincronizarVinculosProjeto = async (usuarioId, projetoIds) => {
 
 const carregarUsuarioComProjetos = async (id) => {
   const usuario = await getQuery(`
-    SELECT id, login, nome, email, pin, perfil, funcao, setor, setor_outro, is_gestor, is_adm, perfil_almoxarifado, ativo, criado_em, atualizado_em
+    SELECT id, login, nome, email, pin, perfil, funcao, setor, setor_outro, is_gestor, is_adm, perfil_almoxarifado, avatar,
+           COALESCE(presenca_status, 'disponivel') AS presenca_status, presenca_atualizado_em,
+           ativo, criado_em, atualizado_em
     FROM usuarios
     WHERE id = ?
   `, [id]);
@@ -190,6 +194,10 @@ router.use(async (req, res, next) => {
     if (!temProjetoId) {
       await runQuery('ALTER TABLE mao_obra_direta ADD COLUMN projeto_id INTEGER');
     }
+
+    try { await runQuery('ALTER TABLE usuarios ADD COLUMN avatar TEXT'); } catch (_) {}
+    try { await runQuery("ALTER TABLE usuarios ADD COLUMN presenca_status TEXT DEFAULT 'disponivel'"); } catch (_) {}
+    try { await runQuery('ALTER TABLE usuarios ADD COLUMN presenca_atualizado_em DATETIME'); } catch (_) {}
 
     next();
   } catch (error) {
@@ -237,7 +245,9 @@ router.get('/', [auth, requirePermission(PERMISSIONS.USERS_VIEW)], async (req, r
     }
 
     const usuarios = await allQuery(`
-      SELECT id, login, nome, email, pin, perfil, funcao, setor, setor_outro, is_gestor, is_adm, perfil_almoxarifado, ativo, criado_em
+      SELECT id, login, nome, email, pin, perfil, funcao, setor, setor_outro, is_gestor, is_adm, perfil_almoxarifado, avatar,
+             COALESCE(presenca_status, 'disponivel') AS presenca_status, presenca_atualizado_em,
+             ativo, criado_em
       FROM usuarios
       ${filtros.length ? `WHERE ${filtros.join(' AND ')}` : ''}
       ORDER BY nome
@@ -955,11 +965,50 @@ router.patch('/:id/info', [auth], async (req, res) => {
     campos.push('atualizado_em = CURRENT_TIMESTAMP');
     valores.push(id);
     await runQuery(`UPDATE usuarios SET ${campos.join(', ')} WHERE id = ?`, valores);
-    const atualizado = await getQuery('SELECT id, nome, email, telefone, login, perfil, funcao FROM usuarios WHERE id = ?', [id]);
+    const atualizado = await getQuery(
+      `SELECT id, nome, email, telefone, login, perfil, funcao, avatar,
+              COALESCE(presenca_status, 'disponivel') AS presenca_status, presenca_atualizado_em
+       FROM usuarios WHERE id = ?`,
+      [id]
+    );
     res.json({ mensagem: 'Perfil atualizado.', usuario: atualizado });
   } catch (error) {
     console.error('Erro ao atualizar perfil:', error);
     res.status(500).json({ erro: 'Erro ao atualizar perfil.' });
+  }
+});
+
+router.patch('/:id/presenca', [
+  auth,
+  body('presenca_status').isString().trim().isIn(PRESENCAS_VALIDAS)
+], async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (Number(id) !== Number(req.usuario.id)) {
+      return res.status(403).json({ erro: 'Você só pode atualizar sua própria presença.' });
+    }
+
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ erro: 'Status de presença inválido.' });
+    }
+
+    const presencaStatus = String(req.body.presenca_status).trim().toLowerCase();
+    await runQuery(
+      'UPDATE usuarios SET presenca_status = ?, presenca_atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+      [presencaStatus, id]
+    );
+
+    const atualizado = await getQuery(
+      `SELECT id, avatar, COALESCE(presenca_status, 'disponivel') AS presenca_status, presenca_atualizado_em
+       FROM usuarios WHERE id = ?`,
+      [id]
+    );
+
+    res.json({ mensagem: 'Status de presença atualizado.', usuario: atualizado });
+  } catch (error) {
+    console.error('Erro ao atualizar presença:', error);
+    res.status(500).json({ erro: 'Erro ao atualizar status de presença.' });
   }
 });
 

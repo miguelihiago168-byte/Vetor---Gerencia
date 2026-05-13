@@ -18,7 +18,8 @@ export default function ProjetoSelector({ destino }) {
     financeiro: 'Financeiro',
     almoxarifado: 'Ativos',
     usuarios: 'Usuários',
-    'curva-s': 'Curva S'
+    'curva-s': 'Curva S',
+    mensagens: 'Mensagens'
   };
 
   const destinoPath = (projetoId) => `/projeto/${projetoId}/${destino}`;

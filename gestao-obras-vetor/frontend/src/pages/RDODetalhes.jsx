@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
 import { FileText, Download, ArrowLeft, MapPin, Building2, User, Calendar, Save } from 'lucide-react';
 import { KPICards } from '../components/RDOTimeline';
+import './RDO.css';
 
 function RDODetalhes() {
   const { projetoId, rdoId } = useParams();
@@ -110,6 +111,11 @@ function RDODetalhes() {
     return s || 'N/A';
   };
 
+  const numeroRdoRaw = String(rdo?.numero_rdo || rdo?.id || '').trim();
+  const numeroRdoExibicao = /^rdo[-\s]*/i.test(numeroRdoRaw)
+    ? numeroRdoRaw.replace(/^rdo[-\s]*/i, '').trim()
+    : numeroRdoRaw.padStart(2, '0');
+
   const aprovarRDO = async () => {
     try {
       await updateStatusRDO(rdoId, 'Aprovado');
@@ -189,14 +195,14 @@ function RDODetalhes() {
       <Navbar />
       <div className="container" style={{ paddingTop: '24px', paddingBottom: '40px' }}>
         {/* Cabeçalho: título + ações */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div className="rdo-view-header">
+          <div className="rdo-view-header-left">
             <button className="btn btn-secondary" onClick={() => navigate(`/projeto/${projetoId}/rdos`)}>
               <ArrowLeft size={16} />
             </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <h1 style={{ margin: 0 }}>{`RDO - ${(rdo.numero_rdo || String(rdo.id)).toString().padStart(2,'0')}`}</h1>
-              <span style={{
+            <div className="rdo-view-title-row">
+              <h1 className="rdo-view-title">{`RDO ${numeroRdoExibicao}`}</h1>
+              <span className="rdo-view-status" style={{
                 padding: '4px 10px',
                 background: (function(){
                   if (rdo.status === 'Aprovado') return '#2E7D32';
@@ -213,22 +219,22 @@ function RDODetalhes() {
               </span>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="btn btn-primary" onClick={handleDownloadPDF}>
+          <div className="rdo-view-actions">
+            <button className="btn btn-primary rdo-view-action-btn" onClick={handleDownloadPDF}>
               <Download size={16} /> PDF
             </button>
             {canAprovarRdo && rdo.status === 'Em análise' && (
-              <button className="btn btn-success" onClick={aprovarRDO}>
+              <button className="btn btn-success rdo-view-action-btn" onClick={aprovarRDO}>
                 Aprovar
               </button>
             )}
             {canReprovarRdo && rdo.status === 'Em análise' && (
-              <button className="btn btn-danger" onClick={reprovarRDO}>
+              <button className="btn btn-danger rdo-view-action-btn" onClick={reprovarRDO}>
                 Reprovar
               </button>
             )}
             {isGestor && rdo.status === 'Aprovado' && (
-              <button className="btn btn-warning" onClick={async () => {
+              <button className="btn btn-warning rdo-view-action-btn rdo-view-action-btn-wide" onClick={async () => {
                 try {
                   await updateStatusRDO(rdoId, 'Em preenchimento');
                   setRdo(prev => ({ ...prev, status: 'Em preenchimento' }));
@@ -265,32 +271,32 @@ function RDODetalhes() {
           <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
             <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Condições Climáticas</span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
-            <div style={{ borderRight: '1px solid #F3F4F6' }}>
-              <div style={{ padding: '6px 16px', borderBottom: '1px solid #F3F4F6', background: '#FAFAFA' }}>
-                <span style={{ fontSize: '11px', fontWeight: 600, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Manhã</span>
+          <div className="rdo-weather-grid">
+            <div className="rdo-weather-col rdo-weather-col-left">
+              <div className="rdo-weather-col-head">
+                <span className="rdo-weather-col-title">Manhã</span>
               </div>
               {[
                 { label: 'Clima', value: rdo.clima_manha || 'N/A' },
                 { label: 'Praticabilidade', value: rdo.praticabilidade_manha || 'N/A' },
               ].map((row, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
-                  <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#9CA3AF', fontWeight: 600 }}>{row.label}</span>
-                  <span style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{row.value}</span>
+                <div key={i} className="rdo-weather-row">
+                  <span className="rdo-weather-label">{row.label}</span>
+                  <span className="rdo-weather-value">{row.value}</span>
                 </div>
               ))}
             </div>
-            <div>
-              <div style={{ padding: '6px 16px', borderBottom: '1px solid #F3F4F6', background: '#FAFAFA' }}>
-                <span style={{ fontSize: '11px', fontWeight: 600, color: '#6B7280', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Tarde</span>
+            <div className="rdo-weather-col">
+              <div className="rdo-weather-col-head">
+                <span className="rdo-weather-col-title">Tarde</span>
               </div>
               {[
                 { label: 'Clima', value: rdo.clima_tarde || 'N/A' },
                 { label: 'Praticabilidade', value: rdo.praticabilidade_tarde || 'N/A' },
               ].map((row, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
-                  <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: '#9CA3AF', fontWeight: 600 }}>{row.label}</span>
-                  <span style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{row.value}</span>
+                <div key={i} className="rdo-weather-row">
+                  <span className="rdo-weather-label">{row.label}</span>
+                  <span className="rdo-weather-value">{row.value}</span>
                 </div>
               ))}
             </div>

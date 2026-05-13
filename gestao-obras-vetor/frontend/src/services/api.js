@@ -57,6 +57,7 @@ export const updateUsuarioGestor = (id, isGestor) => api.patch(`/usuarios/${id}/
 export const updateUsuarioAdm = (id, isAdm) => api.patch(`/usuarios/${id}/adm`, { is_adm: isAdm });
 export const patchUsuarioInfo = (id, data) => api.patch(`/usuarios/${id}/info`, data);
 export const patchUsuarioAvatar = (id, formData) => api.patch(`/usuarios/${id}/avatar`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+export const patchUsuarioPresenca = (id, presenca_status) => api.patch(`/usuarios/${id}/presenca`, { presenca_status });
 export const deleteUsuario = (id) => api.delete(`/usuarios/${id}`);
 export const bulkUpdateUsuarios = (ids, campo, valor, projeto_id) =>
   api.patch('/usuarios/bulk-update', { ids, campo, valor, projeto_id });
@@ -153,6 +154,27 @@ export const getRNCPDF = (id) => api.get(`/rnc/${id}/pdf`, { responseType: 'blob
 export const getNotificacoes = () => api.get('/notificacoes');
 export const marcarNotificacaoLida = (id) => api.patch(`/notificacoes/${id}/read`);
 export const marcarTodasNotificacoesLidas = () => api.patch('/notificacoes/marcar-todas-lidas');
+
+// Mensageria
+export const getMensagensNaoLidasCount = () => api.get('/mensagens/nao-lidas/count');
+export const criarConversaDireta = (data) => api.post('/mensagens/conversas/direta', data);
+export const listarConversas = (params) => api.get('/mensagens/conversas', { params });
+export const listarMensagensConversa = (conversaId, params) =>
+  api.get(`/mensagens/conversas/${conversaId}/mensagens`, { params });
+export const enviarMensagemConversa = (conversaId, data) =>
+  api.post(`/mensagens/conversas/${conversaId}/mensagens`, data);
+export const marcarConversaComoLida = (conversaId) =>
+  api.patch(`/mensagens/conversas/${conversaId}/marcar-lidas`);
+export const editarMensagem = (mensagemId, data) =>
+  api.patch(`/mensagens/mensagens/${mensagemId}`, data);
+export const removerMensagem = (mensagemId) =>
+  api.delete(`/mensagens/mensagens/${mensagemId}`);
+export const limparMensagensApagadasConversa = (conversaId) =>
+  api.delete(`/mensagens/conversas/${conversaId}/mensagens-apagadas`);
+export const anexarArquivoMensagem = (mensagemId, formData) =>
+  api.post(`/mensagens/mensagens/${mensagemId}/anexos`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
 
 // ─── Fornecedores ─────────────────────────────────────────────────────────
 export const listarFornecedores = (params) => api.get('/fornecedores', { params });
@@ -275,6 +297,7 @@ export const getEmailHistory = (params) => api.get('/email/history', { params })
 export const getEmailHistoryDetail = (id) => api.get(`/email/history/${id}`);
 export const toggleEmailFavorito = (id) => api.patch(`/email/history/${id}/favorito`);
 export const deleteEmailHistory = (id) => api.delete(`/email/history/${id}`);
+export const deleteReceivedEmail = (id) => api.delete(`/email/received/${id}`);
 export const syncImapEmails = () => api.post('/email/imap/sync');
 export const getReceivedEmails = () => api.get('/email/received');
 export const getEmailTemplates = () => api.get('/email/templates');

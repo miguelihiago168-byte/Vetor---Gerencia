@@ -15,6 +15,7 @@ const router = express.Router();
 const EMAIL_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
 const EMAIL_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
 const EMAIL_ATTACHMENT_MAX_COUNT = 5;
+const IMAP_FIRST_SYNC_MAX_UID_WINDOW = 200;
 const EMAIL_ALLOWED_ATTACHMENT_EXTENSIONS = new Set([
   '.pdf',
   '.doc',
@@ -357,18 +358,20 @@ router.post('/config',
         return res.status(400).json({ error: 'Tenant não identificado' });
       }
 
-            const { provider, smtp_host, smtp_port, smtp_user, smtp_pass, from_name, from_email,
-              imap_host, imap_port, imap_user, imap_pass, imap_tls } = req.body;
-
-            const encryptedPass = emailService.encrypt(smtp_pass);
-            const encryptedImapPass = imap_pass ? emailService.encrypt(imap_pass) : '';
-            const imapUser = String(imap_user || smtp_user || '').trim();
-            const imapHost = sanitizeImapHost(imap_host) || getDefaultImapHostByProvider(provider);
-            const imapPort = imap_port ? Number(imap_port) : 993;
-            const imapTls = imap_tls !== undefined ? Number(imap_tls) : 1;
+      const { provider, smtp_host, smtp_port, smtp_user, smtp_pass, from_name, from_email,
+        imap_host, imap_port, imap_user, imap_pass, imap_tls } = req.body;
 
       // Verificar se já existe config, se sim UPDATE, se não INSERT
       const existingConfig = await emailService.getConfigForTenant(tenantId);
+      const encryptedPass = emailService.encrypt(smtp_pass);
+      const hasNewImapPass = typeof imap_pass === 'string' && imap_pass.trim() !== '';
+      const encryptedImapPass = hasNewImapPass
+        ? emailService.encrypt(imap_pass)
+        : (existingConfig?.imap_pass_encrypted || '');
+      const imapUser = String(imap_user || smtp_user || '').trim();
+      const imapHost = sanitizeImapHost(imap_host) || getDefaultImapHostByProvider(provider);
+      const imapPort = imap_port ? Number(imap_port) : 993;
+      const imapTls = imap_tls !== undefined ? Number(imap_tls) : 1;
 
       const sql = existingConfig
         ? `UPDATE email_config
@@ -800,9 +803,34 @@ router.post('/imap/sync', auth, async (req, res) => {
     const imapHost = sanitizeImapHost(config.imap_host) || getDefaultImapHostByProvider(config.provider);
     if (!imapHost) return res.status(400).json({ error: 'Host IMAP não configurado. Preencha os campos IMAP na aba Configurações.' });
 
+    appendSmtpLog('imap_sync_start', req, {
+      tenant_id: tenantId,
+      imap_host: imapHost,
+      imap_port: config.imap_port || 993,
+      imap_user: config.imap_user || config.smtp_user || ''
+    });
+
     let imapPass = config.smtp_pass;
     if (config.imap_pass_encrypted) {
-      try { imapPass = emailService.decrypt(config.imap_pass_encrypted); } catch {}
+      try {
+        imapPass = emailService.decrypt(config.imap_pass_encrypted);
+      } catch (decryptError) {
+        appendSmtpLog('imap_sync_decrypt_error', req, {
+          tenant_id: tenantId,
+          imap_host: imapHost,
+          imap_user: config.imap_user || config.smtp_user || ''
+        }, decryptError);
+        return res.status(400).json({
+          error: 'Nao foi possivel ler a senha IMAP salva. Reabra a aba Configuracoes, informe a senha IMAP e salve novamente.',
+          detalhe: decryptError.message
+        });
+      }
+    } else {
+      appendSmtpLog('imap_sync_fallback_smtp_pass', req, {
+        tenant_id: tenantId,
+        imap_host: imapHost,
+        imap_user: config.imap_user || config.smtp_user || ''
+      });
     }
     const imapUser = String(config.imap_user || config.smtp_user || '').trim();
     const imapPort = config.imap_port || 993;
@@ -820,12 +848,16 @@ router.post('/imap/sync', auth, async (req, res) => {
       port: imapPort,
       secure: imapTls,
       auth: { user: imapUser, pass: imapPass },
+      authTimeout: 20000,
+      socketTimeout: 30000,
       logger: false
     });
 
     await client.connect();
     const lock = await client.getMailboxLock('INBOX');
     let synced = 0;
+    let scanned = 0;
+    let resetPerformed = false;
 
     try {
       const lastRow = await new Promise((resolve, reject) => {
@@ -833,16 +865,49 @@ router.post('/imap/sync', auth, async (req, res) => {
           if (err) reject(err); else resolve(row);
         });
       });
-      const lastUid = lastRow?.maxuid || 0;
-      const searchRange = lastUid > 0 ? `${lastUid + 1}:*` : '1:*';
+      let lastUid = Number(lastRow?.maxuid || 0);
+      const mailboxUidNext = Number(client.mailbox?.uidNext || 1);
 
-      const msgs = [];
-      for await (const msg of client.fetch({ uid: searchRange }, { uid: true, envelope: true, source: true }, { uid: true })) {
-        if (msg.uid > lastUid) msgs.push({ uid: msg.uid, envelope: msg.envelope, source: msg.source });
+      if (lastUid > 0 && mailboxUidNext > 0 && lastUid >= mailboxUidNext) {
+        appendSmtpLog('imap_sync_uid_regression', req, {
+          tenant_id: tenantId,
+          last_uid: lastUid,
+          mailbox_uid_next: mailboxUidNext,
+          action: 'reset_received_emails'
+        });
+
+        await new Promise((resolve, reject) => {
+          db.run('DELETE FROM received_emails WHERE tenant_id = ?', [tenantId], (err) => {
+            if (err) reject(err); else resolve();
+          });
+        });
+
+        resetPerformed = true;
+        lastUid = 0;
       }
 
-      for (const msg of msgs) {
+      const firstSyncStartUid = Math.max(mailboxUidNext - IMAP_FIRST_SYNC_MAX_UID_WINDOW, 1);
+      const searchRange = lastUid > 0 ? `${lastUid + 1}:*` : `${firstSyncStartUid}:*`;
+
+      appendSmtpLog('imap_sync_fetch_range', req, {
+        tenant_id: tenantId,
+        last_uid: lastUid,
+        mailbox_uid_next: mailboxUidNext,
+        search_range: searchRange,
+        first_sync_window: IMAP_FIRST_SYNC_MAX_UID_WINDOW
+      });
+
+      for await (const msg of client.fetch({ uid: searchRange }, { uid: true, envelope: true, source: true }, { uid: true })) {
+        if (msg.uid <= lastUid) {
+          continue;
+        }
+
+        scanned++;
         try {
+          if (!msg.source) {
+            console.error('Email IMAP sem source para uid=' + msg.uid);
+            continue;
+          }
           const parsed = await simpleParser(msg.source);
           const fromAddr = msg.envelope?.from?.[0] || {};
           const fromEmail = fromAddr.address || '';
@@ -853,16 +918,16 @@ router.post('/imap/sync', auth, async (req, res) => {
           const bodyText = parsed.text || '';
           const receivedAt = (msg.envelope?.date || parsed.date || new Date()).toISOString();
 
-          await new Promise((resolve, reject) => {
+          const inserted = await new Promise((resolve, reject) => {
             db.run(
               `INSERT OR IGNORE INTO received_emails
                (tenant_id, imap_uid, from_email, from_name, to_email, subject, body_html, body_text, received_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [tenantId, msg.uid, fromEmail, fromName, toList, subject, bodyHtml, bodyText, receivedAt],
-              function(err) { if (err) reject(err); else resolve(this.lastID); }
+              function(err) { if (err) reject(err); else resolve(this.changes || 0); }
             );
           });
-          synced++;
+          synced += inserted;
         } catch (parseErr) {
           console.error('Erro ao parsear email IMAP uid=' + msg.uid + ':', parseErr.message);
         }
@@ -872,9 +937,11 @@ router.post('/imap/sync', auth, async (req, res) => {
     }
 
     await client.logout();
-    res.json({ success: true, synced });
+    appendSmtpLog('imap_sync_success', req, { tenant_id: tenantId, imap_host: imapHost, scanned, synced, reset_performed: resetPerformed });
+    res.json({ success: true, scanned, synced, resetPerformed });
   } catch (error) {
     console.error('Erro IMAP sync:', error);
+    appendSmtpLog('imap_sync_error', req, {}, error);
     const host = sanitizeImapHost(error?.host || '');
     const friendly = buildImapFriendlyError(error, host || 'host-desconhecido', error?.port || 993);
     res.status(500).json({ error: friendly, detalhe: error.message });
@@ -902,6 +969,36 @@ router.get('/received', auth, async (req, res) => {
   } catch (error) {
     console.error('Erro ao listar emails recebidos:', error);
     res.status(500).json({ error: 'Erro ao listar emails recebidos' });
+  }
+});
+
+/**
+ * DELETE /api/email/received/:id
+ * Excluir email recebido
+ */
+router.delete('/received/:id', auth, async (req, res) => {
+  try {
+    const tenantId = getTenantId(req);
+    const emailId = req.params.id;
+    if (!tenantId) return res.status(400).json({ error: 'Tenant não identificado' });
+
+    const existing = await new Promise((resolve, reject) => {
+      db.get('SELECT id FROM received_emails WHERE id = ? AND tenant_id = ?', [emailId, tenantId], (err, row) => {
+        if (err) reject(err); else resolve(row);
+      });
+    });
+    if (!existing) return res.status(404).json({ error: 'Email não encontrado' });
+
+    await new Promise((resolve, reject) => {
+      db.run('DELETE FROM received_emails WHERE id = ? AND tenant_id = ?', [emailId, tenantId], function(err) {
+        if (err) reject(err); else resolve();
+      });
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Erro ao excluir email recebido:', error);
+    res.status(500).json({ error: 'Erro ao excluir email recebido' });
   }
 });
 

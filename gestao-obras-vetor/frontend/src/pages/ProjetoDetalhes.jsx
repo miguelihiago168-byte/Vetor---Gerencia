@@ -249,7 +249,7 @@ function ProjetoDetalhes() {
   return (
     <>
       <Navbar />
-      <div className="container" style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px 48px' }}>
+      <div className="container" style={{ maxWidth: '1200px', margin: '0 auto', paddingBottom: '48px' }}>
 
         {/* ── CABEÇALHO ──────────────────────────────────────────────────── */}
         <div style={{
@@ -318,7 +318,7 @@ function ProjetoDetalhes() {
             BLOCO 1 — STATUS DA OBRA
         ══════════════════════════════════════════════════════════════════ */}
         <div style={sectionLabel}><span>🏗️</span> STATUS DA OBRA</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '32px' }}>
+        <div className="pd-grid-2" style={{ gap: '16px', marginBottom: '32px' }}>
 
           {/* Prazo da Obra */}
           <div style={cardBase}>
@@ -366,7 +366,7 @@ function ProjetoDetalhes() {
               <div style={iconBox('linear-gradient(135deg,#6366f1,#8b5cf6)')}><Activity size={18} color="white" /></div>
               <span style={{ fontWeight: 600, fontSize: '15px' }}>Saúde da Obra</span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <div className="pd-mini-grid-2" style={{ gap: '8px' }}>
               <SemaforoPill cor={prazoStatus}    label="Prazo"     icone="📅" />
               <SemaforoPill cor={comprasStatus}  label="Compras"   icone="🛒" />
               <SemaforoPill cor={qualidadeStatus} label="Qualidade" icone="✅" />
@@ -390,7 +390,7 @@ function ProjetoDetalhes() {
             BLOCO 2 — PROGRESSO
         ══════════════════════════════════════════════════════════════════ */}
         <div style={sectionLabel}><span>📈</span> PROGRESSO</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '32px' }}>
+        <div className="pd-grid-2" style={{ gap: '16px', marginBottom: '32px' }}>
 
           {/* RDOs */}
           <div style={cardBase}>
@@ -400,7 +400,7 @@ function ProjetoDetalhes() {
             </div>
             {stats && (
               <>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '8px', marginBottom: '14px' }}>
+                <div className="pd-mini-grid-3" style={{ gap: '8px', marginBottom: '14px' }}>
                   {[
                     { label: 'Total',       value: stats.total_rdos      || 0, cor: '#6366f1', bg: '#f0f0fe' },
                     { label: '🟢 Aprovados', value: stats.aprovados       || 0, cor: '#15803d', bg: '#f0fdf4' },
@@ -471,7 +471,7 @@ function ProjetoDetalhes() {
               </div>
             ) : (
               <>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '14px' }}>
+                <div className="pd-mini-grid-2" style={{ gap: '8px', marginBottom: '14px' }}>
                   <div style={{ background: '#eff6ff', borderRadius: '8px', padding: '10px', textAlign: 'center' }}>
                     <div style={{ fontSize: '20px', fontWeight: 700, color: '#1d4ed8' }}>{curvaSPlanejado}%</div>
                     <div style={{ fontSize: '11px', color: '#64748b' }}>Planejado</div>
@@ -509,12 +509,7 @@ function ProjetoDetalhes() {
             BLOCO 3 — OPERAÇÃO
         ══════════════════════════════════════════════════════════════════ */}
         <div style={sectionLabel}><span>⚙️</span> OPERAÇÃO</div>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: kanban !== null ? '1fr 1fr 1fr' : '1fr 1fr',
-          gap: '16px',
-          marginBottom: '32px',
-        }}>
+        <div className={kanban !== null ? 'pd-grid-3' : 'pd-grid-2'} style={{ gap: '16px', marginBottom: '32px' }}>
 
           {/* Compras (apenas se tiver permissão) */}
           {kanban !== null && (

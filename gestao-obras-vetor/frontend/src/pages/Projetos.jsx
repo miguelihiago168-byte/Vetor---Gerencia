@@ -219,11 +219,11 @@ function Projetos() {
     <>
       <Navbar />
       <div className="container">
-        <div className="flex-between mb-4">
-          <h1>Projetos</h1>
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+        <div className="flex-between mb-4 projetos-header" style={{ flexWrap: 'wrap', gap: '12px' }}>
+          <h1 style={{ margin: 0 }}>Projetos</h1>
+          <div className="projetos-actions" style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
             <button 
-              className={`btn ${showArquivados ? 'btn-secondary' : 'btn-outline'}`}
+              className={`btn projetos-btn-toggle ${showArquivados ? 'btn-secondary' : 'btn-outline'}`}
               onClick={() => setShowArquivados(!showArquivados)}
               style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
             >
@@ -231,7 +231,7 @@ function Projetos() {
               {showArquivados ? 'Mostrar ativos' : 'Mostrar arquivados'}
             </button>
             {isGestor && (
-              <button onClick={() => abrirModal()} className="btn btn-primary">
+              <button onClick={() => abrirModal()} className="btn btn-primary projetos-btn-new">
                 <Plus size={20} />
                 Novo Projeto
               </button>

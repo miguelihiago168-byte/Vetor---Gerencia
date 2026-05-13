@@ -542,6 +542,274 @@
   color: #64748b;
 }
 
+.rdo-actions-bar-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.rdo-actions-links {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 4px;
+}
+
+.rdo-actions-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.rdo-action-btn {
+  min-height: 40px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  box-shadow: none;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.rdo-action-btn.btn-secondary {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+.rdo-action-btn.btn-success {
+  background: #ecfdf5;
+  border-color: #86efac;
+  color: #166534;
+}
+
+/* ── Visualização do RDO (detalhes) ─────────────────────── */
+.rdo-view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.rdo-view-header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.rdo-view-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.rdo-view-title {
+  margin: 0;
+  line-height: 1.05;
+  font-size: clamp(28px, 5vw, 48px);
+}
+
+.rdo-view-status {
+  white-space: nowrap;
+}
+
+.rdo-view-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.rdo-view-action-btn {
+  min-height: 40px;
+}
+
+.rdo-weather-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.rdo-weather-col {
+  min-width: 0;
+}
+
+.rdo-weather-col-left {
+  border-right: 1px solid #f3f4f6;
+}
+
+.rdo-weather-col-head {
+  padding: 6px 16px;
+  border-bottom: 1px solid #f3f4f6;
+  background: #fafafa;
+}
+
+.rdo-weather-col-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.rdo-weather-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.rdo-weather-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #9ca3af;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rdo-weather-value {
+  font-size: 14px;
+  color: #111827;
+  font-weight: 500;
+  text-align: right;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.rdo-action-label-mobile {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .rdo-weather-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rdo-weather-col-left {
+    border-right: none;
+    border-bottom: 1px solid #f3f4f6;
+  }
+
+  .rdo-view-header {
+    align-items: flex-start;
+  }
+
+  .rdo-view-header-left,
+  .rdo-view-actions {
+    width: 100%;
+  }
+
+  .rdo-view-actions {
+    justify-content: flex-start;
+    gap: 8px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rdo-view-actions .btn {
+    min-height: 40px;
+    padding: 8px 12px;
+    font-size: 14px;
+    width: 100%;
+    min-width: 0;
+    white-space: normal;
+    line-height: 1.2;
+    justify-content: center;
+    text-align: center;
+    box-shadow: none;
+  }
+
+  .rdo-view-action-btn-wide {
+    grid-column: 1 / -1;
+  }
+
+  .rdo-view-title {
+    font-size: 44px;
+    line-height: 0.98;
+    letter-spacing: -0.03em;
+  }
+
+  .rdo-view-title-row {
+    width: 100%;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .rdo-view-header-left {
+    align-items: flex-start;
+  }
+
+  .rdo-actions-bar {
+    padding: 6px 10px;
+    gap: 6px;
+    flex-direction: column;
+    align-items: stretch;
+    box-shadow: 0 -2px 10px rgba(15, 23, 42, 0.05);
+  }
+
+  .rdo-actions-bar .rdo-status-chip {
+    display: none;
+  }
+
+  .rdo-actions-bar-right {
+    width: 100%;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .rdo-actions-links {
+    gap: 10px;
+    margin-bottom: 0;
+    flex-wrap: wrap;
+  }
+
+  .rdo-actions-buttons {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .rdo-action-btn {
+    width: 100%;
+    min-height: 34px;
+    padding: 6px 8px;
+    font-size: 12px;
+    line-height: 1.1;
+    justify-content: center;
+    border-radius: 9px;
+    box-shadow: none !important;
+    border-width: 1px;
+    font-weight: 500;
+  }
+
+  .rdo-action-label-desktop {
+    display: none;
+  }
+
+  .rdo-action-label-mobile {
+    display: inline;
+    white-space: nowrap;
+  }
+
+  .rdo-actions-bar .rdo-action-btn.btn-secondary {
+    background: #ffffff !important;
+    color: #64748b !important;
+    border-color: #d1d9e6 !important;
+  }
+
+  .rdo-actions-bar .rdo-action-btn.btn-success {
+    background: #f0fdf4 !important;
+    color: #15803d !important;
+    border-color: #bbf7d0 !important;
+  }
+}
+
 /* ── Progresso bar ─────────────────────────────────────────── */
 .rdo-progress-bar-wrap {
   width: 100%;
