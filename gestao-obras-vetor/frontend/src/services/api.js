@@ -7,6 +7,38 @@ const api = axios.create({
   }
 });
 
+const shouldForceLogout = (error) => {
+  if (error.response?.status !== 401) return false;
+
+  const url = String(error.config?.url || '');
+  // Rotas públicas de autenticação podem retornar 401 sem invalidar sessão já salva.
+  if (
+    url.includes('/auth/login')
+    || url.includes('/auth/register')
+    || url.includes('/auth/esqueci-senha')
+    || url.includes('/auth/redefinir-senha')
+    || url.includes('/auth/cancelar-conta')
+  ) {
+    return false;
+  }
+
+  const msg = String(error.response?.data?.erro || error.response?.data?.error || '').toLowerCase();
+  const authErrors = [
+    'token inválido',
+    'token invalido',
+    'token não fornecido',
+    'token nao fornecido',
+    'usuário inválido ou inativo',
+    'usuario invalido ou inativo',
+    'jwt expired',
+    'jwt malformed',
+    'invalid token',
+    'invalid signature'
+  ];
+
+  return authErrors.some((item) => msg.includes(item));
+};
+
 // Interceptor para adicionar token
 api.interceptors.request.use(
   (config) => {
@@ -25,7 +57,7 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    if (shouldForceLogout(error)) {
       localStorage.removeItem('token');
       localStorage.removeItem('usuario');
       sessionStorage.removeItem('token');
