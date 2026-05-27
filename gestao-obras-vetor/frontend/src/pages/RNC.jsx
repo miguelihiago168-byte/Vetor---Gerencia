@@ -76,6 +76,14 @@ function RNC() {
     return 'rnc-chip rnc-chip-default';
   };
 
+  const cardStatusClass = (s) => {
+    if (s === 'Em andamento' || s === 'Aberta') return 'rnc-card-aberta';
+    if (s === 'Encerrada') return 'rnc-card-encerrada';
+    if (s === 'Em análise') return 'rnc-card-analise';
+    if (s === 'Reprovada') return 'rnc-card-reprovada';
+    return '';
+  };
+
   useEffect(() => {
     carregarRNCs();
   }, [projetoId]);
@@ -228,7 +236,7 @@ function RNC() {
               return (
                 <div
                   key={rnc.id}
-                  className="rnc-card"
+                  className={`rnc-card ${cardStatusClass(rnc.status)}`}
                   onClick={() => navigate(`/projeto/${projetoId}/rnc/${rnc.id}`)}
                 >
                   <div className="rnc-card-top">

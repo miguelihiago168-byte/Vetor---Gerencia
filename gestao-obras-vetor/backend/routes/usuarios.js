@@ -860,6 +860,49 @@ router.delete('/:id', [auth, requirePermission(PERMISSIONS.USERS_MANAGE)], async
   }
 });
 
+router.delete('/:id/permanente', [auth, requirePermission(PERMISSIONS.USERS_MANAGE)], async (req, res) => {
+  try {
+    const { id } = req.params;
+    const usuarioId = Number(id);
+
+    if (!Number.isInteger(usuarioId) || usuarioId <= 0) {
+      return res.status(400).json({ erro: 'ID de usuário inválido.' });
+    }
+
+    if (usuarioId === Number(req.usuario.id)) {
+      return res.status(400).json({ erro: 'Não é permitido excluir permanentemente o próprio usuário.' });
+    }
+
+    const usuarioAnterior = await carregarUsuarioComProjetos(usuarioId);
+    if (!usuarioAnterior) {
+      return res.status(404).json({ erro: 'Usuário não encontrado.' });
+    }
+
+    // Remove vínculos antes da remoção física
+    await runQuery('DELETE FROM projeto_usuarios WHERE usuario_id = ?', [usuarioId]);
+    await runQueryMain('DELETE FROM projeto_usuarios WHERE usuario_id = ?', [usuarioId]);
+    await runQueryMain('DELETE FROM usuario_tenants WHERE usuario_id = ?', [usuarioId]);
+
+    const tenantDelete = await runQuery('DELETE FROM usuarios WHERE id = ?', [usuarioId]);
+    const mainDelete = await runQueryMain('DELETE FROM usuarios WHERE id = ?', [usuarioId]);
+
+    if ((tenantDelete?.changes || 0) === 0 && (mainDelete?.changes || 0) === 0) {
+      return res.status(404).json({ erro: 'Usuário não encontrado para exclusão permanente.' });
+    }
+
+    await registrarAuditoria('usuarios', usuarioId, 'DELETE_PERMANENTE', usuarioAnterior, null, req.usuario.id);
+
+    res.json({ mensagem: 'Usuário excluído permanentemente com sucesso.' });
+  } catch (error) {
+    console.error('Erro ao excluir usuário permanentemente:', error);
+    const msg = String(error?.message || '').toLowerCase();
+    if (msg.includes('foreign key') || msg.includes('constraint')) {
+      return res.status(409).json({ erro: 'Não foi possível excluir permanentemente: usuário possui vínculos obrigatórios no sistema.' });
+    }
+    res.status(500).json({ erro: 'Erro ao excluir usuário permanentemente.' });
+  }
+});
+
 router.patch('/:id/senha', [auth], async (req, res) => {
   try {
     const { id } = req.params;

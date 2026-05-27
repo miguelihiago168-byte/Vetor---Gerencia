@@ -72,7 +72,7 @@ export default function CotacoesFinalizadas() {
         ].map((c) => (
           <div key={c.label} className="card" style={{ flex: '1 1 160px', padding: '1rem' }}>
             <p style={{ margin: 0, color: 'var(--gray-400)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{c.label}</p>
-            <p style={{ margin: '0.3rem 0 0', fontWeight: 700, fontSize: '1.25rem', color: 'var(--secondary)' }}>{c.valor}</p>
+            <p style={{ margin: '0.3rem 0 0', fontWeight: 700, fontSize: '1.25rem', color: 'var(--text-primary)' }}>{c.valor}</p>
           </div>
         ))}
       </div>
@@ -148,10 +148,10 @@ export default function CotacoesFinalizadas() {
                         {i.fornecedor_cnpj && <div style={{ color: 'var(--gray-400)', fontSize: '0.75rem' }}>{i.fornecedor_cnpj}</div>}
                       </td>
                       <td style={{ textAlign: 'right' }}>{fmt(i.valor_unitario)}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 600, color: '#047857' }}>{fmt(i.valor_total)}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 600, color: 'var(--success)' }}>{fmt(i.valor_total)}</td>
                       <td style={{ textAlign: 'center' }}>
                         {i.economia_pct != null ? (
-                          <span style={{ color: i.economia_pct >= 0 ? '#047857' : 'var(--danger)', fontWeight: 600 }}>
+                          <span style={{ color: i.economia_pct >= 0 ? 'var(--success)' : 'var(--danger)', fontWeight: 600 }}>
                             {i.economia_pct >= 0 ? '▼' : '▲'} {Math.abs(i.economia_pct).toFixed(1)}%
                           </span>
                         ) : '—'}

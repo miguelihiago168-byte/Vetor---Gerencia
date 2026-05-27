@@ -364,46 +364,33 @@ function Navbar() {
           </button>
 
           <div className="navbar-account navbar-account-desktop">
-            <div className="navbar-perfil-dropdown" ref={perfilDropdownRef} style={{ position: 'relative' }}>
+            <div className="navbar-perfil-dropdown" ref={perfilDropdownRef}>
               <button
                 className={`navbar-link navbar-perfil-btn${perfilDropdownOpen ? ' active' : ''}`}
                 onClick={() => setPerfilDropdownOpen((v) => !v)}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer' }}
               >
                 <User size={16} />
                 Perfil
                 <ChevronDown size={14} style={{ transition: 'transform 0.2s', transform: perfilDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
               </button>
               {perfilDropdownOpen && (
-                <div className="navbar-perfil-menu" style={{
-                  position: 'absolute',
-                  right: 0,
-                  top: '100%',
-                  marginTop: 6,
-                  background: 'var(--bg-card, #fff)',
-                  border: '1px solid var(--border-color, #e5e7eb)',
-                  borderRadius: 8,
-                  boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-                  minWidth: 160,
-                  zIndex: 1000,
-                  overflow: 'hidden'
-                }}>
+                <div className="navbar-perfil-menu">
                   {usuario && (
-                    <div style={{ padding: '10px 16px', fontSize: 12, color: 'var(--text-muted, #6b7280)', borderBottom: '1px solid var(--border-color, #e5e7eb)' }}>
+                    <div className="navbar-perfil-menu-user">
                       {usuario.nome || usuario.login}
                     </div>
                   )}
                   <NavLink
                     to={rotaPerfil}
                     onClick={async (e) => { setPerfilDropdownOpen(false); await confirmNav(e, rotaPerfil); }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', textDecoration: 'none', color: 'inherit', fontSize: 14 }}
+                    className="navbar-perfil-menu-link"
                   >
                     <User size={14} />
                     Meu Perfil
                   </NavLink>
                   <button
                     onClick={handleLogout}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 16px', border: 'none', background: 'none', cursor: 'pointer', color: 'var(--color-danger, #ef4444)', fontSize: 14, textAlign: 'left' }}
+                    className="navbar-perfil-menu-logout"
                   >
                     <LogOut size={14} />
                     Sair

@@ -305,22 +305,22 @@ function RDODetalhes() {
 
         {/* Mão de Obra */}
         <div className="card" style={{ padding: '0', marginBottom: '16px', overflow: 'hidden' }}>
-          <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
-            <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Mão de Obra</span>
+          <div className="rdo-det-titlebar" style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
+            <span className="rdo-det-titlebar-label" style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Mão de Obra</span>
           </div>
           {(Array.isArray(rdo.mao_obra_detalhada) && rdo.mao_obra_detalhada.length > 0 ? rdo.mao_obra_detalhada : maoObra).length > 0 ? (
             <div>
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr', padding: '6px 16px', background: '#F9FAFB', borderBottom: '1px solid #F3F4F6' }}>
+              <div className="rdo-det-head-row" style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr', padding: '6px 16px', background: '#F9FAFB', borderBottom: '1px solid #F3F4F6' }}>
                 {['Nome', 'Função', 'Tipo', 'Horas'].map(h => (
-                  <span key={h} style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#9CA3AF' }}>{h}</span>
+                  <span key={h} className="rdo-det-head-label" style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#9CA3AF' }}>{h}</span>
                 ))}
               </div>
               {(Array.isArray(rdo.mao_obra_detalhada) && rdo.mao_obra_detalhada.length > 0 ? rdo.mao_obra_detalhada : maoObra).map((item, index) => (
-                <div key={index} style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
-                  <span style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{item.nome || item.nome_colaborador || '-'}</span>
-                  <span style={{ fontSize: '14px', color: '#374151' }}>{item.funcao || item.funcao_colaborador || '-'}</span>
-                  <span style={{ fontSize: '14px', color: '#374151' }}>{item.tipo ? String(item.tipo) : '-'}</span>
-                  <span style={{ fontSize: '14px', color: '#374151' }}>{(item.horas || item.horas_trabalhadas || (function(){
+                <div key={index} className="rdo-det-data-row" style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
+                  <span className="rdo-det-text-strong" style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{item.nome || item.nome_colaborador || '-'}</span>
+                  <span className="rdo-det-text" style={{ fontSize: '14px', color: '#374151' }}>{item.funcao || item.funcao_colaborador || '-'}</span>
+                  <span className="rdo-det-text" style={{ fontSize: '14px', color: '#374151' }}>{item.tipo ? String(item.tipo) : '-'}</span>
+                  <span className="rdo-det-text" style={{ fontSize: '14px', color: '#374151' }}>{(item.horas || item.horas_trabalhadas || (function(){
                     const toMin = (t) => { const m = String(t||'').match(/(\d{1,2}):(\d{2})/); return m ? (parseInt(m[1],10)*60+parseInt(m[2],10)) : null; };
                     const ini = toMin(item.entrada);
                     const fim = toMin(item.saida_final);
@@ -335,25 +335,25 @@ function RDODetalhes() {
               ))}
             </div>
           ) : (
-            <div style={{ padding: '16px', color: '#9CA3AF', fontSize: '14px' }}>Nenhum registro de mão de obra.</div>
+            <div className="rdo-det-empty" style={{ padding: '16px', color: '#9CA3AF', fontSize: '14px' }}>Nenhum registro de mão de obra.</div>
           )}
         </div>
 
         {/* Equipamentos */}
         {(rdo.equipamentos_lista || []).length > 0 && (
           <div className="card" style={{ padding: '0', marginBottom: '16px', overflow: 'hidden' }}>
-            <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Equipamentos</span>
+            <div className="rdo-det-titlebar" style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
+              <span className="rdo-det-titlebar-label" style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Equipamentos</span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', padding: '6px 16px', background: '#F9FAFB', borderBottom: '1px solid #F3F4F6' }}>
+            <div className="rdo-det-head-row" style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', padding: '6px 16px', background: '#F9FAFB', borderBottom: '1px solid #F3F4F6' }}>
               {['Equipamento', 'Quantidade'].map(h => (
-                <span key={h} style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#9CA3AF' }}>{h}</span>
+                <span key={h} className="rdo-det-head-label" style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#9CA3AF' }}>{h}</span>
               ))}
             </div>
             {(rdo.equipamentos_lista || []).map((eq, idx) => (
-              <div key={eq.id || idx} style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
-                <span style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{eq.nome}</span>
-                <span style={{ fontSize: '14px', color: '#374151' }}>{eq.quantidade}</span>
+              <div key={eq.id || idx} className="rdo-det-data-row" style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
+                <span className="rdo-det-text-strong" style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{eq.nome}</span>
+                <span className="rdo-det-text" style={{ fontSize: '14px', color: '#374151' }}>{eq.quantidade}</span>
               </div>
             ))}
           </div>
@@ -361,29 +361,29 @@ function RDODetalhes() {
 
         {/* Atividades Executadas */}
         <div className="card" style={{ padding: '0', marginBottom: '16px', overflow: 'hidden' }}>
-          <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
-            <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Atividades Executadas</span>
+          <div className="rdo-det-titlebar" style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
+            <span className="rdo-det-titlebar-label" style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Atividades Executadas</span>
           </div>
           {(rdo.atividades || []).length > 0 ? (
             <div>
-              <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr 1fr', padding: '6px 16px', background: '#F9FAFB', borderBottom: '1px solid #F3F4F6' }}>
+              <div className="rdo-det-head-row" style={{ display: 'grid', gridTemplateColumns: '3fr 1fr 1fr', padding: '6px 16px', background: '#F9FAFB', borderBottom: '1px solid #F3F4F6' }}>
                 {['Atividade', 'Qtd', '%'].map(h => (
-                  <span key={h} style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#9CA3AF' }}>{h}</span>
+                  <span key={h} className="rdo-det-head-label" style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#9CA3AF' }}>{h}</span>
                 ))}
               </div>
               {(rdo.atividades || []).map(atividade => (
-                <div key={atividade.id} style={{ display: 'grid', gridTemplateColumns: '3fr 1fr 1fr', padding: '8px 16px', borderBottom: '1px solid #F3F4F6', alignItems: 'center' }}>
+                <div key={atividade.id} className="rdo-det-data-row" style={{ display: 'grid', gridTemplateColumns: '3fr 1fr 1fr', padding: '8px 16px', borderBottom: '1px solid #F3F4F6', alignItems: 'center' }}>
                   <div>
-                    <div style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{atividade.codigo_eap ? `${atividade.codigo_eap} — ` : ''}{atividade.descricao}</div>
-                    {atividade.observacao && <div style={{ fontSize: '12px', color: '#9CA3AF', marginTop: '2px' }}>{atividade.observacao}</div>}
+                    <div className="rdo-det-text-strong" style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{atividade.codigo_eap ? `${atividade.codigo_eap} — ` : ''}{atividade.descricao}</div>
+                    {atividade.observacao && <div className="rdo-det-head-label" style={{ fontSize: '12px', color: '#9CA3AF', marginTop: '2px' }}>{atividade.observacao}</div>}
                   </div>
-                  <span style={{ fontSize: '14px', color: '#374151' }}>{atividade.quantidade_executada ?? '-'}</span>
-                  <span style={{ fontSize: '14px', color: '#374151' }}>{atividade.percentual_executado != null ? `${atividade.percentual_executado}%` : '-'}</span>
+                  <span className="rdo-det-text" style={{ fontSize: '14px', color: '#374151' }}>{atividade.quantidade_executada ?? '-'}</span>
+                  <span className="rdo-det-text" style={{ fontSize: '14px', color: '#374151' }}>{atividade.percentual_executado != null ? `${atividade.percentual_executado}%` : '-'}</span>
                 </div>
               ))}
             </div>
           ) : (
-            <div style={{ padding: '16px', color: '#9CA3AF', fontSize: '14px' }}>Nenhuma atividade registrada neste RDO.</div>
+            <div className="rdo-det-empty" style={{ padding: '16px', color: '#9CA3AF', fontSize: '14px' }}>Nenhuma atividade registrada neste RDO.</div>
           )}
         </div>
 

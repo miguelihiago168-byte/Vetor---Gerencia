@@ -682,6 +682,40 @@
   overflow-wrap: anywhere;
 }
 
+.rdo-det-titlebar {
+  background: #f9fafb;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.rdo-det-titlebar-label {
+  color: #6b7280;
+}
+
+.rdo-det-head-row {
+  background: #f9fafb;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.rdo-det-head-label {
+  color: #9ca3af;
+}
+
+.rdo-det-data-row {
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.rdo-det-text-strong {
+  color: #111827;
+}
+
+.rdo-det-text {
+  color: #374151;
+}
+
+.rdo-det-empty {
+  color: #9ca3af;
+}
+
 .rdo-action-label-mobile {
   display: none;
 }

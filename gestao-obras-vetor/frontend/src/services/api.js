@@ -91,6 +91,7 @@ export const patchUsuarioInfo = (id, data) => api.patch(`/usuarios/${id}/info`, 
 export const patchUsuarioAvatar = (id, formData) => api.patch(`/usuarios/${id}/avatar`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 export const patchUsuarioPresenca = (id, presenca_status) => api.patch(`/usuarios/${id}/presenca`, { presenca_status });
 export const deleteUsuario = (id) => api.delete(`/usuarios/${id}`);
+export const deleteUsuarioPermanente = (id) => api.delete(`/usuarios/${id}/permanente`);
 export const bulkUpdateUsuarios = (ids, campo, valor, projeto_id) =>
   api.patch('/usuarios/bulk-update', { ids, campo, valor, projeto_id });
 export const getMaoObraDireta = (params) => api.get('/usuarios/mao-obra-direta', { params });

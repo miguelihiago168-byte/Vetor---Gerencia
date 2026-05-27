@@ -6,6 +6,7 @@ import {
   getUsuario,
   createUsuario,
   updateUsuario,
+  deleteUsuarioPermanente,
   bulkUpdateUsuarios,
   getProjetos,
   getMaoObraDireta,
@@ -333,6 +334,24 @@ function Usuarios() {
       setSucesso('Usuário reativado com sucesso.');
     } catch {
       setErro('Erro ao reativar usuário.');
+    }
+  };
+
+  const excluirPermanente = async (id) => {
+    const ok = await confirm({
+      title: 'Excluir permanentemente',
+      message: 'Esta ação remove o usuário de forma definitiva e não pode ser desfeita. Deseja continuar?',
+      confirmText: 'Excluir permanente',
+      cancelText: 'Cancelar'
+    });
+    if (!ok) return;
+
+    try {
+      await deleteUsuarioPermanente(id);
+      await carregarDados();
+      setSucesso('Usuário excluído permanentemente com sucesso.');
+    } catch (error) {
+      setErro(error.response?.data?.erro || 'Erro ao excluir usuário permanentemente.');
     }
   };
 
@@ -751,9 +770,14 @@ function Usuarios() {
                                       </button>
                                     </>
                                   ) : (
-                                    <button className="btn btn-success" style={{ padding: '4px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => reativar(u.id)}>
-                                      <RotateCcw size={13} /> Reativar
-                                    </button>
+                                    <>
+                                      <button className="btn btn-success" style={{ padding: '4px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => reativar(u.id)}>
+                                        <RotateCcw size={13} /> Reativar
+                                      </button>
+                                      <button className="btn btn-danger" style={{ padding: '4px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => excluirPermanente(u.id)}>
+                                        <Trash2 size={13} /> Excluir
+                                      </button>
+                                    </>
                                   )}
                                 </div>
                               </td>
