@@ -340,8 +340,8 @@ function Navbar() {
             <div className="navbar-brand-left">
               <img src="/logo_vetor.png" alt="Vetor" className="navbar-logo-img" />
               <span className="navbar-brand-name">Vetor</span>
+              <span className="navbar-brand-subtitle">Gestão de Obras</span>
             </div>
-            <span className="navbar-brand-subtitle">Gestão de Obras</span>
           </NavLink>
 
           <div className="navbar-main">

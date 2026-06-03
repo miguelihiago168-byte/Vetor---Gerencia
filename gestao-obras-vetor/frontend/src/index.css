@@ -409,8 +409,10 @@ code {
 
 .navbar-brand {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  gap: 4px;
   color: var(--secondary);
   text-decoration: none;
   min-width: fit-content;
@@ -422,6 +424,7 @@ code {
   align-items: center;
   justify-content: center;
   line-height: 1;
+  gap: 2px;
 }
 
 .navbar-logo-img {
@@ -442,11 +445,10 @@ code {
 }
 
 .navbar-brand-subtitle {
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 600;
   color: var(--gray-500);
   letter-spacing: 0.01em;
-  white-space: nowrap;
 }
 
 .navbar-menu {
