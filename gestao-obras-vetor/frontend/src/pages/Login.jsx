@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { login as loginAPI, registerTrialAccount, esqueciSenha, cancelarConta } from '../services/api';
+import { login as loginAPI, registerTrialAccount, esqueciSenha, cancelarConta, renovarTrial } from '../services/api';
 import { ArrowRight, Eye, EyeOff, CalendarX } from 'lucide-react';
 import './Login.css';
 
@@ -77,6 +77,8 @@ function Login() {
   const [trialExpirado, setTrialExpirado] = useState(null); // { tenant_id, login, senha }
   const [confirmarExclusao, setConfirmarExclusao] = useState(false);
   const [cancelandoConta, setCancelandoConta] = useState(false);
+  const [codigoRenovacao, setCodigoRenovacao] = useState('');
+  const [tentandoRenovar, setTentandoRenovar] = useState(false);
 
   const { loginAuth } = useAuth();
   const navigate = useNavigate();
@@ -140,6 +142,28 @@ function Login() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRenovarTrial = async (e) => {
+    e.preventDefault();
+    setTentandoRenovar(true);
+    setErro('');
+    try {
+      await renovarTrial({
+        tenant_id: trialExpirado.tenant_id,
+        codigo: codigoRenovacao.trim(),
+      });
+      setTrialExpirado(null);
+      setCodigoRenovacao('');
+      setSucesso('Trial renovado com sucesso! Acesse novamente seu sistema.');
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (error) {
+      setErro(normalizeAuthErrorMessage(error.response?.data?.erro || 'Erro ao renovar trial.'));
+    } finally {
+      setTentandoRenovar(false);
     }
   };
 
@@ -514,8 +538,37 @@ function Login() {
             Assine o serviço para continuar usando o sistema, ou cancele a conta para excluir todos os dados permanentemente.
           </p>
 
+          {erro && <div style={{ marginBottom: 16, padding: '12px 14px', borderRadius: 10, background: '#fef2f2', border: '1px solid #fecaca', fontSize: '0.85rem', color: '#dc2626', textAlign: 'left', width: '100%' }}>{erro}</div>}
+
           {!confirmarExclusao ? (
             <>
+              <form onSubmit={handleRenovarTrial} style={{ width: '100%', marginBottom: 16 }}>
+                <input
+                  type="text"
+                  placeholder="Código de renovação"
+                  value={codigoRenovacao}
+                  onChange={(e) => setCodigoRenovacao(e.target.value)}
+                  style={{
+                    width: '100%', height: 44, borderRadius: 12, border: '1.5px solid #cbd5e1',
+                    padding: '0 14px', fontSize: 14, marginBottom: 12, boxSizing: 'border-box',
+                    fontFamily: 'inherit'
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={tentandoRenovar || !codigoRenovacao.trim()}
+                  style={{
+                    width: '100%', height: 44, borderRadius: 12, border: 'none',
+                    background: tentandoRenovar || !codigoRenovacao.trim() ? '#cbd5e1' : '#10b981',
+                    color: tentandoRenovar || !codigoRenovacao.trim() ? '#64748b' : '#fff',
+                    fontWeight: 600, fontSize: 14, cursor: tentandoRenovar || !codigoRenovacao.trim() ? 'not-allowed' : 'pointer',
+                    marginBottom: 12
+                  }}
+                >
+                  {tentandoRenovar ? 'Renovando...' : 'Renovar trial'}
+                </button>
+              </form>
+
               <button
                 disabled
                 style={{
@@ -546,7 +599,7 @@ function Login() {
               <button
                 type="button"
                 className="login-link-btn"
-                onClick={() => setTrialExpirado(null)}
+                onClick={() => { setTrialExpirado(null); setCodigoRenovacao(''); setErro(''); }}
                 style={{ fontSize: 13, color: '#94a3b8' }}
               >
                 Fechar
@@ -583,7 +636,7 @@ function Login() {
               <button
                 type="button"
                 className="login-link-btn"
-                onClick={() => setConfirmarExclusao(false)}
+                onClick={() => { setConfirmarExclusao(false); setErro(''); }}
               >
                 ← Voltar
               </button>

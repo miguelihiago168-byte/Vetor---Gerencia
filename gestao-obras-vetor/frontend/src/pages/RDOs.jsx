@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getRDOs, getRdoPDF } from '../services/api';
+import { getRDOs, getRdoPDF, addRdoComentario, updateStatusRDO } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { FileText, Plus, Eye, MoreHorizontal, CheckCircle, XCircle, RotateCcw } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
@@ -27,6 +27,12 @@ function RDOs() {
   const [openDropdown, setOpenDropdown] = useState(null);
   const [showCopyModal, setShowCopyModal] = useState(false);
   const [copyChecked, setCopyChecked] = useState(false);
+
+  // Estados para modal de solicitar correção
+  const [showSolicitarCorrecaoModal, setShowSolicitarCorrecaoModal] = useState(false);
+  const [rdoSelecionadoCorrecao, setRdoSelecionadoCorrecao] = useState(null);
+  const [textoCorrecao, setTextoCorrecao] = useState('');
+  const [isEnviandoCorrecao, setIsEnviandoCorrecao] = useState(false);
 
   // Fecha dropdown ao clicar fora
   useEffect(() => {
@@ -137,6 +143,36 @@ function RDOs() {
       const msg = 'Falha ao voltar para edição: ' + (err.response?.data?.erro || err.message);
       notifyError(msg, 6000);
       await alert({ title: 'Erro', message: msg });
+    }
+  };
+
+  const solicitarCorrecaoRDO = async () => {
+    try {
+      if (!textoCorrecao.trim()) {
+        await alert({ title: 'Aviso', message: 'Por favor, descreva a correção solicitada.' });
+        return;
+      }
+      
+      setIsEnviandoCorrecao(true);
+      
+      // Adicionar comentário com a solicitação de correção
+      await addRdoComentario(rdoSelecionadoCorrecao, { comentario: `[SOLICITAR CORREÇÃO] ${textoCorrecao}` });
+      
+      // Atualizar status do RDO para "Em preenchimento" para permitir edição
+      await updateStatusRDO(rdoSelecionadoCorrecao, 'Em preenchimento');
+      
+      setRdos(prev => prev.map(r => r.id === rdoSelecionadoCorrecao ? { ...r, status: 'Em preenchimento' } : r));
+      setTextoCorrecao('');
+      setShowSolicitarCorrecaoModal(false);
+      setRdoSelecionadoCorrecao(null);
+      setSucesso('Correção solicitada com sucesso.');
+      success('Correção solicitada com sucesso.', 4000);
+    } catch (error) {
+      const msg = 'Falha ao solicitar correção: ' + (error.response?.data?.erro || error.message);
+      notifyError(msg, 6000);
+      await alert({ title: 'Erro', message: msg });
+    } finally {
+      setIsEnviandoCorrecao(false);
     }
   };
 
@@ -387,6 +423,22 @@ function RDOs() {
                                   </>
                                 )}
 
+                                {/* Solicitar Correção: Gestor Geral, Gestor de Obra e Fiscal */}
+                                {canReprovarRdo && isPending && (
+                                  <button
+                                    className="rdo-dropdown-item warning"
+                                    onClick={e => {
+                                      e?.stopPropagation?.();
+                                      setOpenDropdown(null);
+                                      setRdoSelecionadoCorrecao(rdo.id);
+                                      setShowSolicitarCorrecaoModal(true);
+                                    }}
+                                  >
+                                    <RotateCcw size={14} />
+                                    Solicitar Correção
+                                  </button>
+                                )}
+
                                 {/* Gestor: voltar para edição em RDOs aprovados */}
                                 {isGestor && isAprovado && (
                                   <>
@@ -417,6 +469,72 @@ function RDOs() {
         )}
 
       </div>
+
+      {/* Modal de Solicitar Correção */}
+      {showSolicitarCorrecaoModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '12px',
+            padding: '24px',
+            maxWidth: '500px',
+            width: '90%',
+            boxShadow: '0 20px 25px rgba(0, 0, 0, 0.15)'
+          }}>
+            <h2 style={{ marginBottom: '16px', color: '#111827', fontSize: '20px' }}>Solicitar Correção</h2>
+            <p style={{ marginBottom: '16px', color: '#6B7280', fontSize: '14px' }}>
+              Descreva quais correções devem ser feitas neste RDO.
+            </p>
+            <textarea
+              value={textoCorrecao}
+              onChange={(e) => setTextoCorrecao(e.target.value)}
+              placeholder="Ex: Revisar as quantidades de mão de obra registradas..."
+              style={{
+                width: '100%',
+                minHeight: '120px',
+                padding: '12px',
+                borderRadius: '8px',
+                border: '1px solid #D1D5DB',
+                fontFamily: 'inherit',
+                fontSize: '14px',
+                marginBottom: '16px',
+                resize: 'vertical'
+              }}
+            />
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setShowSolicitarCorrecaoModal(false);
+                  setTextoCorrecao('');
+                  setRdoSelecionadoCorrecao(null);
+                }}
+                className="btn btn-secondary"
+                disabled={isEnviandoCorrecao}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={solicitarCorrecaoRDO}
+                className="btn btn-warning"
+                disabled={isEnviandoCorrecao || !textoCorrecao.trim()}
+              >
+                {isEnviandoCorrecao ? 'Enviando...' : 'Solicitar Correção'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

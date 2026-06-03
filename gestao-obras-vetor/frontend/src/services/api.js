@@ -76,6 +76,7 @@ export const registerWithInviteToken = (token, data) => api.post(`/auth/register
 export const esqueciSenha = (login) => api.post('/auth/esqueci-senha', { login });
 export const redefinirSenha = (token, senha) => api.post('/auth/redefinir-senha', { token, senha });
 export const cancelarConta = (data) => api.post('/auth/cancelar-conta', data);
+export const renovarTrial = (data) => api.post('/auth/renovar-trial', data);
 
 // Usuários
 export const getUsuarios = (params) => api.get('/usuarios', { params });

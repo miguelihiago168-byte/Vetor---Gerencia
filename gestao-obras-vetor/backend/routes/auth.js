@@ -13,6 +13,7 @@ const { hasForbiddenPasswordSequence } = require('../services/passwordPolicy');
 
 const router = express.Router();
 const GLOBAL_SIGNUP_CODE = process.env.GLOBAL_SIGNUP_CODE || '052298';
+const TRIAL_RENEWAL_CODE = process.env.TRIAL_RENEWAL_CODE || '050398';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '30d';
 
 const normalizeLogin = (value) => String(value || '')
@@ -780,6 +781,51 @@ router.post('/cancelar-conta', [
   } catch (error) {
     console.error('Erro em cancelar-conta:', error);
     return res.status(500).json({ erro: 'Erro ao excluir conta.' });
+  }
+});
+
+// Renovação de trial com código especial
+router.post('/renovar-trial', [
+  body('tenant_id').isInt().withMessage('tenant_id é obrigatório.'),
+  body('codigo').isString().trim().notEmpty().withMessage('Código é obrigatório.')
+], async (req, res) => {
+  try {
+    await ensureTenantTrialColumns();
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ erro: errors.array()[0].msg });
+    }
+
+    const { tenant_id, codigo } = req.body;
+    const numericTenantId = Number(tenant_id);
+
+    if (!numericTenantId) {
+      return res.status(400).json({ erro: 'tenant_id inválido.' });
+    }
+
+    if (String(codigo).trim() !== TRIAL_RENEWAL_CODE) {
+      return res.status(403).json({ erro: 'Código de renovação inválido.' });
+    }
+
+    const tenant = await getQuery('SELECT id, trial_expires_at FROM tenants WHERE id = ?', [numericTenantId]);
+    if (!tenant) {
+      return res.status(404).json({ erro: 'Tenant não encontrado.' });
+    }
+
+    const novaDataExpiracao = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    await runQuery(
+      'UPDATE tenants SET trial_expires_at = ?, trial_ativo = 1, ativo = 1 WHERE id = ?',
+      [novaDataExpiracao, numericTenantId]
+    );
+
+    return res.json({
+      mensagem: 'Trial renovado por mais 30 dias.',
+      trial_expires_at: novaDataExpiracao,
+      dias_teste: 30
+    });
+  } catch (error) {
+    console.error('Erro em renovar-trial:', error);
+    return res.status(500).json({ erro: 'Erro ao renovar trial.' });
   }
 });
 

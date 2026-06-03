@@ -626,6 +626,14 @@
 
 .rdo-view-action-btn {
   min-height: 40px;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+.rdo-view-action-btn:hover {
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 .rdo-weather-grid {
