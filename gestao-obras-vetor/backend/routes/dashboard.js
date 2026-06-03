@@ -355,9 +355,15 @@ router.get('/projeto/:projetoId/curva-s', auth, async (req, res) => {
       : inicioProjeto;
 
     const acumuladoRealAtividade = {};
-    atividades.forEach(a => {
+    atividadesParaSerie.forEach(a => {
       acumuladoRealAtividade[a.id] = 0;
     });
+
+    const baselineRealAtual = atividadesParaSerie.reduce((total, atividade) => {
+      const peso = Number(pesosPorAtividade[atividade.id] || 0);
+      const percentual = Number(atividade.percentual_executado || 0) / 100;
+      return total + peso * percentual;
+    }, 0);
 
     const serie = [];
     let acumuladoPlanejado = 0;
@@ -388,6 +394,14 @@ router.get('/projeto/:projetoId/curva-s', auth, async (req, res) => {
         planejado: Math.round(acumuladoPlanejado * 100) / 100,
         real: Math.round(acumuladoReal * 100) / 100
       });
+    }
+
+    if (serie.length) {
+      const ultimo = serie[serie.length - 1];
+      const realBaseline = Math.round(Math.min(100, baselineRealAtual) * 100) / 100;
+      if (realBaseline > ultimo.real) {
+        ultimo.real = realBaseline;
+      }
     }
 
     const pontoAtual = serie.length ? serie[serie.length - 1] : { planejado: 0, real: 0 };
