@@ -32,6 +32,17 @@ const getPasswordStrength = (value) => {
   return { level: 'extraforte', score, label: 'Extraforte', color: '#0ea5e9' };
 };
 
+const isSequentialPassword = (value) => {
+  const pwd = String(value || '').toLowerCase().replace(/\s+/g, '');
+  if (!pwd) return false;
+  const banned = [
+    '123456', '1234567', '12345678', '123456789', '0123456789',
+    'qwerty', 'qwertyu', 'qwertyuiop', 'asdfgh', 'asdfghj', 'zxcvbn',
+    'abcdef', 'abcdefg', 'abcdefgh', 'abcdefghi', 'password'
+  ];
+  return banned.some((seq) => pwd.includes(seq));
+};
+
 const normalizeName = (value) => {
   return String(value || '')
     .normalize('NFD')
@@ -176,6 +187,17 @@ function Login() {
 
     if (!cadastroForm.senha) {
       setErro('Senha é obrigatória.');
+      return;
+    }
+
+    if (isSequentialPassword(cadastroForm.senha)) {
+      setErro('Senhas sequenciais (ex.: 123456789, qwertyuiop, abcdefgh) não são aceitas.');
+      return;
+    }
+
+    const senhaStrength = getPasswordStrength(cadastroForm.senha);
+    if (senhaStrength.level === 'fraca') {
+      setErro('Senha muito fraca. Use uma senha com nível mínimo Médio (mais caracteres, números e símbolos).');
       return;
     }
 
@@ -433,6 +455,9 @@ function Login() {
                     </div>
                     <small className="login-helper" style={{ color: strength.color }}>
                       Nível da senha: {strength.label}{strength.level === 'fraca' ? ' - Sugestão: adicione mais letras maiúsculas, números e caracteres especiais.' : ''}
+                    </small>
+                    <small className="login-helper" style={{ color: 'var(--text-secondary, #6b7280)', display: 'block', marginTop: 6 }}>
+                      Senhas sequenciais (ex.: 123456789, qwertyuiop, abcdefgh) não são aceitas. Mínimo requerido: Nível Médio.
                     </small>
                   </>
                 );
