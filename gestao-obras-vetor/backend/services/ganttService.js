@@ -625,6 +625,9 @@ function recalcularCronograma(atividades, dependenciasConfirmadas = []) {
         } else if (tipo === 'FF') {
           // Finish-to-Finish: fim da sucessora >= fim da predecessora.
           inicioMinimo = adicionarDias(datasPred.fim, -(datasOriginais.duracao - 1));
+        } else if (tipo === 'SF') {
+          // Start-to-Finish: fim da sucessora >= início da predecessora.
+          inicioMinimo = adicionarDias(datasPred.inicio, -(datasOriginais.duracao - 1));
         } else {
           // FS (padrão): sucessora inicia no dia seguinte ao fim da predecessora.
           inicioMinimo = adicionarDias(datasPred.fim, 1);

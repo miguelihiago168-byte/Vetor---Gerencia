@@ -1,6 +1,7 @@
 const express = require('express');
 const { allQuery, runQuery, getQuery } = require('../config/database');
 const { auth } = require('../middleware/auth');
+const ganttService = require('../services/ganttService');
 
 const router = express.Router();
 
@@ -260,7 +261,15 @@ router.get('/projeto/:projetoId/curva-s', auth, async (req, res) => {
       });
     }
 
-    const totalPesos = atividades.reduce((acc, atividade) => acc + Number(atividade.peso_percentual_projeto || 0), 0);
+    const dependenciasConfirmadas = await allQuery(
+      `SELECT * FROM atividades_dependencias WHERE projeto_id = ? AND confirmada_usuario = 1`,
+      [projetoId]
+    );
+
+    const { novasAtividades: atividadesPlanejadas } = ganttService.recalcularCronograma(atividades, dependenciasConfirmadas);
+    const atividadesParaSerie = atividadesPlanejadas && atividadesPlanejadas.length > 0 ? atividadesPlanejadas : atividades;
+
+    const totalPesos = atividadesParaSerie.reduce((acc, atividade) => acc + Number(atividade.peso_percentual_projeto || 0), 0);
     if (totalPesos <= 0.0001) {
       return res.status(400).json({
         erro: 'Não há pesos válidos para cálculo da Curva S.',
@@ -271,17 +280,17 @@ router.get('/projeto/:projetoId/curva-s', auth, async (req, res) => {
     const fatorNormalizacao = 100 / totalPesos;
 
     const hoje = toDateOnly(new Date());
-    const inicioProjeto = atividades.map(a => a.data_inicio_planejada).sort()[0];
-    const fimPlanejado = atividades.map(a => a.data_fim_planejada).sort().reverse()[0];
+    const inicioProjeto = atividadesParaSerie.map(a => a.data_inicio_planejada).sort()[0];
+    const fimPlanejado = atividadesParaSerie.map(a => a.data_fim_planejada).sort().reverse()[0];
     const dataFimSerie = hoje < fimPlanejado ? hoje : fimPlanejado;
 
     const pesosPorAtividade = {};
-    atividades.forEach(a => {
+    atividadesParaSerie.forEach(a => {
       pesosPorAtividade[a.id] = Number(a.peso_percentual_projeto || 0) * fatorNormalizacao;
     });
 
     const planejadoPorDia = {};
-    for (const atividade of atividades) {
+    for (const atividade of atividadesParaSerie) {
       const inicio = atividade.data_inicio_planejada;
       const fim = atividade.data_fim_planejada;
       const pesoAtividade = Number(atividade.peso_percentual_projeto || 0) * fatorNormalizacao;
