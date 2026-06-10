@@ -62,6 +62,7 @@ function RDODetalhes() {
 
       if (rdoRes.status === 'fulfilled') {
         setRdo(rdoRes.value.data);
+        setComentarios(rdoRes.value.data?.comentarios || []);
       } else {
         const err = rdoRes.reason;
         const msg = err?.response?.data?.erro || err?.message || 'RDO não encontrado';
@@ -151,7 +152,7 @@ function RDODetalhes() {
       setIsEnviandoCorrecao(true);
       
       // Adicionar comentário com a solicitação de correção
-      await addRdoComentario(rdoId, { comentario: `[SOLICITAR CORREÇÃO] ${textoCorrecao}` });
+      await addRdoComentario(rdoId, { comentario: `[SOLICITAR CORRECAO] ${textoCorrecao.trim()}` });
       
       // Atualizar status do RDO para "Em preenchimento" para permitir edição
       await updateStatusRDO(rdoId, 'Em preenchimento');

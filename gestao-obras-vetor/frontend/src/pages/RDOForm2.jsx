@@ -43,6 +43,12 @@ const parseTS = (s) => {
   return new Date(str.replace(' ', 'T') + 'Z');
 };
 
+const normalizeRdoStatus = (status) =>
+  String(status || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
 const Section = ({ id, num, title, badge, children, isOpen, onToggle }) => (
   <div className="rdo-section">
     <div className="rdo-section-header" onClick={() => onToggle(id)}>
@@ -76,6 +82,7 @@ function RDOForm2() {
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [loadedRdoStatus, setLoadedRdoStatus] = useState('');
   const [execucaoAcum, setExecucaoAcum] = useState({});
   const [colaboradoresDisponiveis, setColaboradoresDisponiveis] = useState([]);
 
@@ -279,11 +286,19 @@ function RDOForm2() {
           }
           if (!rdo) return;
 
-          if (rdo.status === 'Aprovado') {
-            notifyInfo('Este RDO está aprovado e não pode ser editado.', 5000);
+          const statusNorm = normalizeRdoStatus(rdo.status);
+          if (statusNorm === 'aprovado' || statusNorm === 'em analise') {
+            notifyInfo(
+              statusNorm === 'em analise'
+                ? 'Este RDO já foi enviado para aprovação.'
+                : 'Este RDO está aprovado e não pode ser editado.',
+              5000
+            );
             navigate(`/projeto/${projetoId}/rdos/${rdoId}`);
             return;
           }
+
+          setLoadedRdoStatus(rdo.status || '');
 
           setFormData({
             data_relatorio: rdo.data_relatorio,
@@ -358,6 +373,7 @@ function RDOForm2() {
           } catch {}
 
         } else {
+          setLoadedRdoStatus('');
           // Novo RDO: copiar mão de obra, equipamentos e atividades não concluídas do último RDO
           const copyLast = location.state?.copyLast;
           if (copyLast) {
@@ -1227,6 +1243,7 @@ function RDOForm2() {
     const nome = String(a?.nome_arquivo || a?.nome_original || '').toLowerCase();
     return tipo.includes('pdf') || nome.endsWith('.pdf');
   });
+  const canEditRdo = !rdoId || (!!loadedRdoStatus && ['em preenchimento', 'reprovado'].includes(normalizeRdoStatus(loadedRdoStatus)));
 
   /* ══════════════════════════════════════════════════
      RENDER
@@ -2116,16 +2133,20 @@ function RDOForm2() {
                 <span className="rdo-action-label-desktop">Voltar</span>
                 <span className="rdo-action-label-mobile">Voltar</span>
               </button>
-              <button className="btn btn-secondary rdo-action-btn" onClick={() => salvar('rascunho')}
-                disabled={isSaving || !formData.data_relatorio}>
-                <span className="rdo-action-label-desktop">{isSaving ? 'Salvando...' : 'Salvar rascunho'}</span>
-                <span className="rdo-action-label-mobile">{isSaving ? 'Salvando...' : 'Rascunho'}</span>
-              </button>
-              <button className="btn btn-success rdo-action-btn" onClick={() => salvar('analise')}
-                disabled={isSaving || !formData.data_relatorio}>
-                <span className="rdo-action-label-desktop">{isSaving ? 'Enviando...' : 'Enviar para aprovação'}</span>
-                <span className="rdo-action-label-mobile">{isSaving ? 'Enviando...' : 'Enviar'}</span>
-              </button>
+              {canEditRdo && (
+                <>
+                  <button className="btn btn-secondary rdo-action-btn" onClick={() => salvar('rascunho')}
+                    disabled={isSaving || !formData.data_relatorio}>
+                    <span className="rdo-action-label-desktop">{isSaving ? 'Salvando...' : 'Salvar rascunho'}</span>
+                    <span className="rdo-action-label-mobile">{isSaving ? 'Salvando...' : 'Rascunho'}</span>
+                  </button>
+                  <button className="btn btn-success rdo-action-btn" onClick={() => salvar('analise')}
+                    disabled={isSaving || !formData.data_relatorio}>
+                    <span className="rdo-action-label-desktop">{isSaving ? 'Enviando...' : 'Enviar para aprovação'}</span>
+                    <span className="rdo-action-label-mobile">{isSaving ? 'Enviando...' : 'Enviar'}</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

@@ -76,6 +76,12 @@ function RDOs() {
   const getRdoNumber = (rdo) =>
     rdo.numero_rdo ? String(rdo.numero_rdo) : `RDO-${String(rdo.id).padStart(3, '0')}`;
 
+  const normalizeStatus = (status) =>
+    String(status || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+
   useEffect(() => {
     carregarRDOs();
   }, [projetoId]);
@@ -305,22 +311,24 @@ function RDOs() {
                 {/* ── Cards ── */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {lista.map(rdo => {
-                    const isAprovado = rdo.status === 'Aprovado';
-                    const isPending  = rdo.status === 'Em preenchimento' || rdo.status === 'Em análise';
+                    const statusNorm = normalizeStatus(rdo.status);
+                    const isAprovado = statusNorm === 'aprovado';
+                    const isEmAnalise = statusNorm === 'em analise';
+                    const isVisualizacao = isAprovado || isEmAnalise;
 
                     return (
                       <div
                         key={rdo.id}
                         className="rdo-card"
                         onClick={() => {
-                          if (isAprovado) {
-                            if (!isGestor) info('RDO aprovado. Somente visualização disponível.', 4500);
+                          if (isVisualizacao) {
+                            if (!isGestor) info('RDO em modo de visualização.', 4500);
                             navigate(`/projeto/${projetoId}/rdos/${rdo.id}`);
                             return;
                           }
                           navigate(`/projeto/${projetoId}/rdos/${rdo.id}/editar`);
                         }}
-                        title={isAprovado ? 'Ver detalhes do RDO' : 'Editar RDO'}
+                        title={isVisualizacao ? 'Ver detalhes do RDO' : 'Editar RDO'}
                       >
                         {/* Informações */}
                         <div className="rdo-card-body">
@@ -397,7 +405,7 @@ function RDOs() {
                                 </button>
 
                                 {/* Aprovar: somente Gestor Geral / Gestor de Obra */}
-                                {canAprovarRdo && isPending && (
+                                {canAprovarRdo && isEmAnalise && (
                                   <>
                                     <div className="rdo-dropdown-divider" />
                                     <button
@@ -410,7 +418,7 @@ function RDOs() {
                                   </>
                                 )}
                                 {/* Reprovar: Gestor Geral, Gestor de Obra e Fiscal */}
-                                {canReprovarRdo && isPending && (
+                                {canReprovarRdo && isEmAnalise && (
                                   <>
                                     {!canAprovarRdo && <div className="rdo-dropdown-divider" />}
                                     <button
@@ -424,7 +432,7 @@ function RDOs() {
                                 )}
 
                                 {/* Solicitar Correção: Gestor Geral, Gestor de Obra e Fiscal */}
-                                {canReprovarRdo && isPending && (
+                                {canReprovarRdo && isEmAnalise && (
                                   <button
                                     className="rdo-dropdown-item warning"
                                     onClick={e => {

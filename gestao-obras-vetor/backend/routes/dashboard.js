@@ -299,7 +299,6 @@ router.get('/projeto/:projetoId/curva-s', auth, async (req, res) => {
       const diasUteis = [];
       for (let i = 0; i < duracao; i += 1) {
         const data = addDays(inicio, i);
-        if (data > dataFimSerie) break;
         if (isDiaUtil(data)) diasUteis.push(data);
       }
 

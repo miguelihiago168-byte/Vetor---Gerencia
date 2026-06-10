@@ -581,6 +581,14 @@
   color: #166534;
 }
 
+.rdo-action-btn.btn-success:hover,
+.rdo-action-btn.btn-success:focus-visible {
+  background: #dcfce7;
+  border-color: #4ade80;
+  color: #14532d;
+  opacity: 1;
+}
+
 /* ── Visualização do RDO (detalhes) ─────────────────────── */
 .rdo-view-header {
   display: flex;
@@ -849,6 +857,14 @@
     background: #f0fdf4 !important;
     color: #15803d !important;
     border-color: #bbf7d0 !important;
+  }
+
+  .rdo-actions-bar .rdo-action-btn.btn-success:hover,
+  .rdo-actions-bar .rdo-action-btn.btn-success:focus-visible {
+    background: #dcfce7 !important;
+    color: #14532d !important;
+    border-color: #86efac !important;
+    opacity: 1 !important;
   }
 }
 
