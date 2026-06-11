@@ -11,9 +11,23 @@ const router = express.Router();
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
+const sanitizeFilename = (name) => {
+  const ext = path.extname(String(name || '')).toLowerCase();
+  const base = path.basename(String(name || 'arquivo'), ext)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || 'arquivo';
+  return `${base}${ext}`;
+};
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadsDir),
-  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
+  filename: (req, file, cb) => {
+    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    cb(null, `${unique}-${sanitizeFilename(file.originalname)}`);
+  }
 });
 
 const uploadFoto = multer({
@@ -29,6 +43,16 @@ const uploadFoto = multer({
   }
 });
 
+const uploadFotoSingle = (req, res, next) => {
+  uploadFoto.single('arquivo')(req, res, (err) => {
+    if (!err) return next();
+    if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ erro: 'A foto excede o limite permitido de 10 MB.' });
+    }
+    return res.status(400).json({ erro: err.message || 'Arquivo de foto inválido.' });
+  });
+};
+
 runQuery("ALTER TABLE rdo_fotos ADD COLUMN atividade_avulsa_descricao TEXT").catch(e => {
   if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] atividade_avulsa_descricao:', e.message);
 });
@@ -37,6 +61,21 @@ runQuery('ALTER TABLE rdo_fotos ADD COLUMN ordem INTEGER DEFAULT 0').catch(e => 
 });
 runQuery('ALTER TABLE rdo_materiais ADD COLUMN numero_nf TEXT').catch(e => {
   if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_materiais.numero_nf:', e.message);
+});
+runQuery("ALTER TABLE rdo_materiais ADD COLUMN tipo_movimento TEXT DEFAULT 'recebido'").catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_materiais.tipo_movimento:', e.message);
+});
+runQuery('ALTER TABLE rdo_fotos ADD COLUMN tipo TEXT').catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_fotos.tipo:', e.message);
+});
+runQuery('ALTER TABLE rdo_fotos ADD COLUMN tamanho INTEGER').catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_fotos.tamanho:', e.message);
+});
+runQuery('ALTER TABLE rdo_fotos ADD COLUMN largura INTEGER').catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_fotos.largura:', e.message);
+});
+runQuery('ALTER TABLE rdo_fotos ADD COLUMN altura INTEGER').catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_fotos.altura:', e.message);
 });
 
 const garantirTabelaMaoObraDireta = async () => {
@@ -297,11 +336,12 @@ router.post('/:rdoId/material', auth, async (req, res) => {
   try {
     const { rdoId } = req.params;
     const { nome_material, quantidade, unidade, numero_nf } = req.body;
+    const tipoMovimento = req.body?.tipo_movimento === 'utilizado' ? 'utilizado' : 'recebido';
     if (!nome_material) return res.status(400).json({ erro: 'Nome do material requerido.' });
     const nf = String(numero_nf || '').trim();
     const result = await runQuery(
-      'INSERT INTO rdo_materiais (rdo_id, nome_material, quantidade, unidade, numero_nf) VALUES (?, ?, ?, ?, ?)',
-      [rdoId, nome_material, quantidade || 0, unidade || null, nf || null]
+      'INSERT INTO rdo_materiais (rdo_id, nome_material, quantidade, unidade, numero_nf, tipo_movimento) VALUES (?, ?, ?, ?, ?, ?)',
+      [rdoId, nome_material, quantidade || 0, unidade || null, nf || null, tipoMovimento]
     );
     res.status(201).json({ mensagem: 'Material registrado.', id: result.lastID });
   } catch (err) {
@@ -354,6 +394,9 @@ const garantirTabelaEquipamentos = async () => {
       FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE
     )
   `);
+  try { await runQuery('ALTER TABLE rdo_equipamentos ADD COLUMN horario_utilizacao TEXT'); } catch (_) {}
+  try { await runQuery('ALTER TABLE rdo_equipamentos ADD COLUMN horas_utilizadas REAL'); } catch (_) {}
+  try { await runQuery('ALTER TABLE rdo_equipamentos ADD COLUMN observacao TEXT'); } catch (_) {}
 };
 
 // Listar equipamentos de um RDO
@@ -379,10 +422,13 @@ router.post('/:rdoId/equipamentos', auth, async (req, res) => {
     const { rdoId } = req.params;
     const nome = String(req.body?.nome || '').trim();
     const quantidade = Number(req.body?.quantidade ?? 1);
+    const horarioUtilizacao = String(req.body?.horario_utilizacao || '').trim() || null;
+    const horasUtilizadas = req.body?.horas_utilizadas === '' || req.body?.horas_utilizadas == null ? null : Number(req.body.horas_utilizadas);
+    const observacao = String(req.body?.observacao || '').trim() || null;
     if (!nome) return res.status(400).json({ erro: 'Nome do equipamento é obrigatório.' });
     const result = await runQuery(
-      'INSERT INTO rdo_equipamentos (rdo_id, nome, quantidade) VALUES (?, ?, ?)',
-      [rdoId, nome, isFinite(quantidade) ? quantidade : 1]
+      'INSERT INTO rdo_equipamentos (rdo_id, nome, quantidade, horario_utilizacao, horas_utilizadas, observacao) VALUES (?, ?, ?, ?, ?, ?)',
+      [rdoId, nome, isFinite(quantidade) ? quantidade : 1, horarioUtilizacao, Number.isFinite(horasUtilizadas) ? horasUtilizadas : null, observacao]
     );
     res.status(201).json({ mensagem: 'Equipamento adicionado.', id: result.lastID });
   } catch (err) {
@@ -407,24 +453,32 @@ router.delete('/:rdoId/equipamentos/:equipId', auth, async (req, res) => {
 });
 
 // Upload de fotos vinculadas a atividade do RDO
-router.post('/:rdoId/foto', auth, uploadFoto.single('arquivo'), async (req, res) => {
+router.post('/:rdoId/foto', auth, uploadFotoSingle, async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ erro: 'Nenhum arquivo enviado.' });
     const { rdoId } = req.params;
     const { rdo_atividade_id, descricao, atividade_avulsa_descricao } = req.body;
-    const { originalname, filename } = req.file;
+    const { originalname, filename, mimetype, size } = req.file;
 
     const ordemRow = await getQuery('SELECT COALESCE(MAX(ordem), 0) AS max_ordem FROM rdo_fotos WHERE rdo_id = ?', [rdoId]);
     const ordem = Number(ordemRow?.max_ordem || 0) + 1;
 
     // Salvar no table rdo_fotos
     const result = await runQuery(
-      'INSERT INTO rdo_fotos (rdo_id, rdo_atividade_id, nome_arquivo, caminho_arquivo, descricao, atividade_avulsa_descricao, ordem, criado_por) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [rdoId, rdo_atividade_id || null, originalname, filename, descricao || null, atividade_avulsa_descricao || null, ordem, req.usuario.id]
+      'INSERT INTO rdo_fotos (rdo_id, rdo_atividade_id, nome_arquivo, caminho_arquivo, descricao, atividade_avulsa_descricao, ordem, criado_por, tipo, tamanho) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [rdoId, rdo_atividade_id || null, originalname, filename, descricao || null, atividade_avulsa_descricao || null, ordem, req.usuario.id, mimetype || null, size || null]
     );
 
     // Retornar informação do arquivo para o frontend
-    res.status(201).json({ mensagem: 'Foto enviada.', id: result.lastID, arquivo: { nome_arquivo: originalname, caminho_arquivo: filename }, ordem });
+    res.status(201).json({
+      mensagem: 'Foto enviada.',
+      id: result.lastID,
+      arquivo: { nome_arquivo: originalname, caminho_arquivo: filename },
+      ordem,
+      tipo: mimetype || null,
+      tamanho: size || null,
+      url: `/api/rdo/${rdoId}/foto/${result.lastID}/download`
+    });
   } catch (err) {
     console.error('Erro ao enviar foto', err);
     res.status(500).json({ erro: 'Erro ao enviar foto.' });
@@ -432,6 +486,26 @@ router.post('/:rdoId/foto', auth, uploadFoto.single('arquivo'), async (req, res)
 });
 
 // Atualizar descrição da foto
+router.get('/:rdoId/foto/:fotoId/download', auth, async (req, res) => {
+  try {
+    const { rdoId, fotoId } = req.params;
+    const foto = await getQuery('SELECT * FROM rdo_fotos WHERE id = ? AND rdo_id = ?', [fotoId, rdoId]);
+    if (!foto) return res.status(404).json({ erro: 'Foto não encontrada.' });
+
+    const filePath = path.join(uploadsDir, foto.caminho_arquivo || '');
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ erro: 'Arquivo da foto não encontrado no servidor.' });
+    }
+
+    res.setHeader('Content-Type', foto.tipo || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(foto.nome_arquivo || 'foto')}"`);
+    return res.sendFile(filePath);
+  } catch (err) {
+    console.error('Erro ao baixar foto do RDO', err);
+    return res.status(500).json({ erro: 'Erro ao baixar foto do RDO.' });
+  }
+});
+
 router.patch('/:rdoId/foto/:fotoId', auth, async (req, res) => {
   try {
     const { rdoId, fotoId } = req.params;

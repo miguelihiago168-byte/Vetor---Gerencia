@@ -1,6 +1,6 @@
 const { allQuery, runQuery } = require('../config/database');
 
-const CORRECAO_ORIGEM_EAP = 'Recalculo automatico da EAP';
+const CORRECAO_ORIGEM_EAP = 'Recálculo automático da EAP';
 
 const formatRdoNumber = (rdo) => {
   const raw = rdo?.numero_rdo ?? rdo?.id;
@@ -28,7 +28,7 @@ const buildMotivo = (labels) => {
 const notifyUser = async ({ usuarioId, rdoId, numero }) => {
   if (!usuarioId) return;
   const tipo = 'rdo_correcao_automatica';
-  const mensagem = `Seu ${numero} foi impactado por um recalculo de atividade e necessita revisao.`;
+  const mensagem = `Seu ${numero} foi impactado por um recálculo de atividade e necessita revisão.`;
 
   const update = await runQuery(
     `UPDATE notificacoes
@@ -47,11 +47,11 @@ const notifyUser = async ({ usuarioId, rdoId, numero }) => {
 
 const insertCorrectionComment = async ({ rdoId, usuarioId, motivo }) => {
   const comentario = [
-    'Correcao solicitada automaticamente.',
+    'Correção solicitada automaticamente.',
     '',
     `Motivo: ${motivo}`,
     '',
-    'O RDO retornou para "Em preenchimento" e devera ser revisado antes de novo envio.'
+    'O RDO retornou para "Em preenchimento" e deverá ser revisado antes de novo envio.'
   ].join('\n');
 
   await runQuery(
@@ -186,7 +186,7 @@ const clearRdoCorrection = async ({ rdoId, usuarioId } = {}) => {
   if (usuarioId) {
     await runQuery(
       'INSERT INTO rdo_comentarios (rdo_id, usuario_id, comentario) VALUES (?, ?, ?)',
-      [rdoId, usuarioId, 'Correcao realizada e pendencia encerrada.']
+      [rdoId, usuarioId, 'Correção realizada e pendência encerrada.']
     );
   }
 

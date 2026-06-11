@@ -284,7 +284,7 @@ function Navbar() {
 
       {!isProjectContext && canViewUsuarios && (
         <NavLink to={rotaUsuarios} onClick={(e) => handleMenuNavigation(e, rotaUsuarios)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-          Usuarios
+          Usuários
         </NavLink>
       )}
 
@@ -338,7 +338,7 @@ function Navbar() {
 
       {isProjectContext && canViewUsuarios && (
         <NavLink to={rotaUsuarios} onClick={(e) => handleMenuNavigation(e, rotaUsuarios)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-          Usuarios
+          Usuários
         </NavLink>
       )}
 

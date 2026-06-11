@@ -7,6 +7,11 @@ const { auth } = require('../middleware/auth');
 
 const router = express.Router();
 
+const ensureAnexosRdoSchema = async () => {
+  try { await runQuery('ALTER TABLE anexos ADD COLUMN descricao TEXT'); } catch (_) {}
+  try { await runQuery('ALTER TABLE anexos ADD COLUMN criado_por INTEGER'); } catch (_) {}
+};
+
 const ensureAnexosRncSchema = async () => {
   // Ambientes legados (principalmente tenant DB) podem não ter colunas de RNC.
   try {
@@ -23,6 +28,20 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
+const sanitizeFilename = (name) => {
+  const ext = path.extname(String(name || '')).toLowerCase();
+  const base = path.basename(String(name || 'arquivo'), ext)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || 'arquivo';
+  return `${base}${ext}`;
+};
+
+const allowedRdoAttachmentExt = /\.(jpe?g|png|webp|gif|heic|heif|pdf|doc|docx|xls|xlsx)$/i;
+const allowedRdoAttachmentMime = /^(image\/(jpeg|png|webp|gif|heic|heif)|application\/pdf|application\/msword|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document|application\/vnd\.ms-excel|application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet)$/i;
+
 // Configurar multer para upload
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -30,7 +49,7 @@ const storage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + '-' + file.originalname);
+    cb(null, uniqueSuffix + '-' + sanitizeFilename(file.originalname));
   }
 });
 
@@ -52,36 +71,51 @@ const uploadGeral = multer({
 
 const uploadPdfRdo = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 },
+  limits: { fileSize: 25 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const ext = String(path.extname(file.originalname || '')).toLowerCase();
     const mime = String(file.mimetype || '').toLowerCase();
-    if (ext === '.pdf' || mime.includes('pdf')) return cb(null, true);
-    return cb(new Error('Anexos do RDO aceitam somente arquivos PDF.'));
+    if (allowedRdoAttachmentExt.test(ext) && allowedRdoAttachmentMime.test(mime)) return cb(null, true);
+    return cb(new Error('Tipo de arquivo não permitido para anexos do RDO.'));
   }
 });
 
+const uploadAnexoRdoSingle = (req, res, next) => {
+  uploadPdfRdo.single('arquivo')(req, res, (err) => {
+    if (!err) return next();
+    if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ erro: 'O anexo excede o limite permitido de 25 MB.' });
+    }
+    return res.status(400).json({ erro: err.message || 'Arquivo de anexo inválido.' });
+  });
+};
+
 // Upload de arquivo
-router.post('/upload/:rdoId', auth, uploadPdfRdo.single('arquivo'), async (req, res) => {
+router.post('/upload/:rdoId', auth, uploadAnexoRdoSingle, async (req, res) => {
   try {
+    await ensureAnexosRdoSchema();
     if (!req.file) {
       return res.status(400).json({ erro: 'Nenhum arquivo enviado.' });
     }
 
     const { rdoId } = req.params;
     const { originalname, filename, mimetype, size } = req.file;
+    const descricao = String(req.body?.descricao || '').trim() || null;
 
     const result = await runQuery(`
-      INSERT INTO anexos (rdo_id, tipo, nome_arquivo, caminho_arquivo, tamanho)
-      VALUES (?, ?, ?, ?, ?)
-    `, [rdoId, mimetype, originalname, filename, size]);
+      INSERT INTO anexos (rdo_id, tipo, nome_arquivo, caminho_arquivo, tamanho, descricao, criado_por)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, [rdoId, mimetype, originalname, filename, size, descricao, req.usuario?.id || null]);
 
     res.status(201).json({
       mensagem: 'Arquivo enviado com sucesso.',
       anexo: {
         id: result.lastID,
         nome_arquivo: originalname,
-        tipo: mimetype
+        tipo: mimetype,
+        tamanho: size,
+        descricao,
+        criado_por: req.usuario?.id || null
       }
     });
 
@@ -151,17 +185,15 @@ router.post('/upload-rnc/:rncId', auth, uploadGeral.single('arquivo'), async (re
 // Listar anexos de um RDO
 router.get('/rdo/:rdoId', auth, async (req, res) => {
   try {
+    await ensureAnexosRdoSchema();
     const { rdoId } = req.params;
 
     const anexos = await allQuery(
-      `SELECT *
+      `SELECT a.*, u.nome AS usuario_nome
        FROM anexos
-       WHERE rdo_id = ?
-         AND (
-           LOWER(COALESCE(tipo, '')) LIKE '%pdf%'
-           OR LOWER(COALESCE(nome_arquivo, '')) LIKE '%.pdf'
-         )
-       ORDER BY criado_em DESC`,
+       LEFT JOIN usuarios u ON u.id = a.criado_por
+       WHERE a.rdo_id = ?
+       ORDER BY a.criado_em DESC, a.id DESC`,
       [rdoId]
     );
 
@@ -200,13 +232,25 @@ router.get('/download/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const anexo = await getQuery(
-      'SELECT * FROM anexos WHERE id = ?',
-      [id]
-    );
+    const anexo = await getQuery(`
+      SELECT a.*, r.projeto_id, r.criado_por AS rdo_criado_por
+      FROM anexos a
+      LEFT JOIN rdos r ON r.id = a.rdo_id
+      WHERE a.id = ?
+    `, [id]);
 
     if (!anexo) {
       return res.status(404).json({ erro: 'Arquivo não encontrado.' });
+    }
+
+    if (anexo.rdo_id && anexo.projeto_id && !req.usuario?.is_gestor) {
+      const vinculo = await getQuery(
+        'SELECT 1 FROM projeto_usuarios WHERE projeto_id = ? AND usuario_id = ? LIMIT 1',
+        [anexo.projeto_id, req.usuario?.id]
+      );
+      if (!vinculo && String(anexo.rdo_criado_por || '') !== String(req.usuario?.id || '')) {
+        return res.status(403).json({ erro: 'Sem permissão para baixar este anexo.' });
+      }
     }
 
     const filePath = path.join(uploadsDir, anexo.caminho_arquivo);

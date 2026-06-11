@@ -38,8 +38,8 @@ function EAP({ hideNavbar = false }) {
     const rdos = Array.isArray(payload?.rdos) ? payload.rdos : [];
     const nomes = rdos.map((r) => r.numero_rdo || `RDO-${String(r.id).padStart(3, '0')}`).join(', ');
     await alert({
-      title: 'RDOs precisam de revisao',
-      message: `${total} RDO${total === 1 ? '' : 's'} foram afetados pelo recalculo e precisam de correcao.${nomes ? `\n\n${nomes}` : ''}`,
+      title: 'RDOs precisam de revisão',
+      message: `${total} RDO${total === 1 ? '' : 's'} foram afetados pelo recálculo e precisam de correção.${nomes ? `\n\n${nomes}` : ''}`,
       confirmText: 'Entendi'
     });
     return true;
@@ -515,7 +515,7 @@ function EAP({ hideNavbar = false }) {
                   const mostrouAfetados = await showAffectedRdosAlert(resp.data);
                   success(
                     mostrouAfetados
-                      ? `${resp.data?.affectedRDOs || 0} RDO(s) enviados para correcao.`
+                      ? `${resp.data?.affectedRDOs || 0} RDO(s) enviados para correção.`
                       : (resp.data?.mensagem || 'EAP recalculada.'),
                     5000
                   );

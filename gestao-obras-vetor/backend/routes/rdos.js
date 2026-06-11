@@ -6,6 +6,7 @@ const { registrarAuditoria } = require('../middleware/auditoria');
 const { PERFIS, inferirPerfil } = require('../constants/access');
 const backendPackage = require('../package.json');
 const { ensureRdoCorrectionColumns, clearRdoCorrection } = require('../services/rdoCorrectionService');
+const { generateRdoPdfBuffer } = require('../services/rdoPdfService');
 
 const router = express.Router();
 
@@ -34,12 +35,54 @@ runQuery('ALTER TABLE rdo_fotos ADD COLUMN atividade_avulsa_descricao TEXT').cat
 runQuery('ALTER TABLE rdo_materiais ADD COLUMN numero_nf TEXT').catch(e => {
   if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_materiais.numero_nf:', e.message);
 });
+runQuery("ALTER TABLE rdo_materiais ADD COLUMN tipo_movimento TEXT DEFAULT 'recebido'").catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_materiais.tipo_movimento:', e.message);
+});
+runQuery('ALTER TABLE rdo_fotos ADD COLUMN tipo TEXT').catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_fotos.tipo:', e.message);
+});
+runQuery('ALTER TABLE rdo_fotos ADD COLUMN tamanho INTEGER').catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_fotos.tamanho:', e.message);
+});
+runQuery('ALTER TABLE rdo_fotos ADD COLUMN largura INTEGER').catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_fotos.largura:', e.message);
+});
+runQuery('ALTER TABLE rdo_fotos ADD COLUMN altura INTEGER').catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_fotos.altura:', e.message);
+});
+runQuery('ALTER TABLE rdo_equipamentos ADD COLUMN horario_utilizacao TEXT').catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_equipamentos.horario_utilizacao:', e.message);
+});
+runQuery('ALTER TABLE rdo_equipamentos ADD COLUMN horas_utilizadas REAL').catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_equipamentos.horas_utilizadas:', e.message);
+});
+runQuery('ALTER TABLE rdo_equipamentos ADD COLUMN observacao TEXT').catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_equipamentos.observacao:', e.message);
+});
+runQuery('ALTER TABLE anexos ADD COLUMN descricao TEXT').catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] anexos.descricao:', e.message);
+});
+runQuery('ALTER TABLE anexos ADD COLUMN criado_por INTEGER').catch(e => {
+  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] anexos.criado_por:', e.message);
+});
 
 const ensureRdoOptionalColumns = async () => {
   await ensureRdoCorrectionColumns();
   try { await runQuery('ALTER TABLE rdo_fotos ADD COLUMN ordem INTEGER DEFAULT 0'); } catch (_) {}
   try { await runQuery('ALTER TABLE rdo_fotos ADD COLUMN atividade_avulsa_descricao TEXT'); } catch (_) {}
   try { await runQuery('ALTER TABLE rdo_materiais ADD COLUMN numero_nf TEXT'); } catch (_) {}
+  try { await runQuery("ALTER TABLE rdo_materiais ADD COLUMN tipo_movimento TEXT DEFAULT 'recebido'"); } catch (_) {}
+  try { await runQuery('ALTER TABLE rdo_fotos ADD COLUMN tipo TEXT'); } catch (_) {}
+  try { await runQuery('ALTER TABLE rdo_fotos ADD COLUMN tamanho INTEGER'); } catch (_) {}
+  try { await runQuery('ALTER TABLE rdo_fotos ADD COLUMN largura INTEGER'); } catch (_) {}
+  try { await runQuery('ALTER TABLE rdo_fotos ADD COLUMN altura INTEGER'); } catch (_) {}
+  try { await runQuery('ALTER TABLE rdo_equipamentos ADD COLUMN horario_utilizacao TEXT'); } catch (_) {}
+  try { await runQuery('ALTER TABLE rdo_equipamentos ADD COLUMN horas_utilizadas REAL'); } catch (_) {}
+  try { await runQuery('ALTER TABLE rdo_equipamentos ADD COLUMN observacao TEXT'); } catch (_) {}
+  try { await runQuery('ALTER TABLE anexos ADD COLUMN descricao TEXT'); } catch (_) {}
+  try { await runQuery('ALTER TABLE anexos ADD COLUMN criado_por INTEGER'); } catch (_) {}
+  try { await runQuery('ALTER TABLE rdos ADD COLUMN aprovado_por INTEGER'); } catch (_) {}
+  try { await runQuery('ALTER TABLE rdos ADD COLUMN aprovado_em DATETIME'); } catch (_) {}
   try {
     await runQuery(`
       CREATE TABLE IF NOT EXISTS rdo_logs (
@@ -277,14 +320,28 @@ router.get('/projeto/:projetoId', auth, async (req, res) => {
     await ensureRdoOptionalColumns();
     const { projetoId } = req.params;
 
-    const rdos = await allQuery(`
-      SELECT r.*, u.nome as criado_por_nome, g.nome as aprovado_por_nome
-      FROM rdos r
-      LEFT JOIN usuarios u ON r.criado_por = u.id
-      LEFT JOIN usuarios g ON r.aprovado_por = g.id
-      WHERE r.projeto_id = ?
-      ORDER BY r.criado_em DESC, r.id DESC
-    `, [projetoId]);
+    let rdos;
+    try {
+      rdos = await allQuery(`
+        SELECT r.*, u.nome as criado_por_nome, g.nome as aprovado_por_nome
+        FROM rdos r
+        LEFT JOIN usuarios u ON r.criado_por = u.id
+        LEFT JOIN usuarios g ON r.aprovado_por = g.id
+        WHERE r.projeto_id = ?
+        ORDER BY r.criado_em DESC, r.id DESC
+      `, [projetoId]);
+    } catch (queryError) {
+      if (!/no such column: r\.aprovado_por|no such column: aprovado_por/i.test(String(queryError?.message || ''))) {
+        throw queryError;
+      }
+      rdos = await allQuery(`
+        SELECT r.*, u.nome as criado_por_nome, NULL as aprovado_por_nome
+        FROM rdos r
+        LEFT JOIN usuarios u ON r.criado_por = u.id
+        WHERE r.projeto_id = ?
+        ORDER BY r.criado_em DESC, r.id DESC
+      `, [projetoId]);
+    }
 
     res.json(rdos);
   } catch (error) {
@@ -1038,7 +1095,7 @@ router.put('/:id', auth, async (req, res) => {
       try {
         await clearRdoCorrection({ rdoId: id, usuarioId: req.usuario.id });
       } catch (clearError) {
-        console.warn('Falha ao encerrar pendencia de correcao do RDO:', clearError?.message || clearError);
+        console.warn('Falha ao encerrar pendência de correção do RDO:', clearError?.message || clearError);
       }
     }
 
@@ -1164,7 +1221,7 @@ router.patch('/:id/status', auth, async (req, res) => {
         try {
           await clearRdoCorrection({ rdoId: id, usuarioId: req.usuario.id });
         } catch (clearError) {
-          console.warn('Falha ao encerrar pendencia de correcao do RDO:', clearError?.message || clearError);
+          console.warn('Falha ao encerrar pendência de correção do RDO:', clearError?.message || clearError);
         }
       }
 
@@ -1277,6 +1334,22 @@ router.delete('/:id', auth, async (req, res) => {
 
 // Gerar PDF do RDO (puppeteer — HTML → PDF com layout rico)
 router.get('/:id/pdf', auth, async (req, res) => {
+  try {
+    await ensureRdoOptionalColumns();
+    const pdf = await generateRdoPdfBuffer(req.params.id);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${pdf.filename}"`);
+    res.setHeader('X-PDF-Engine', pdf.engine);
+    if (pdf.fallbackReason) res.setHeader('X-PDF-Fallback-Reason', pdf.fallbackReason.replace(/[\r\n]+/g, ' '));
+    return res.send(Buffer.from(pdf.buffer));
+  } catch (error) {
+    if (error?.statusCode === 404) {
+      return res.status(404).json({ erro: error.message || 'RDO não encontrado.' });
+    }
+    console.error('Erro ao gerar PDF do RDO:', error);
+    return res.status(500).json({ erro: 'Erro ao gerar PDF do RDO.' });
+  }
+
   const puppeteer = require('puppeteer');
   const path = require('path');
   const fs = require('fs');

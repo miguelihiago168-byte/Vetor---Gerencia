@@ -1,0 +1,288 @@
+- generic [ref=e2]:
+  - navigation [ref=e1864]:
+    - generic [ref=e1866]:
+      - link "Vetor Vetor Gestão de Obras" [ref=e1867] [cursor=pointer]:
+        - /url: /projetos
+        - generic [ref=e1868]:
+          - img "Vetor" [ref=e1869]
+          - generic [ref=e1870]: Vetor
+          - generic [ref=e1871]: Gestão de Obras
+      - generic [ref=e1873]:
+        - link "Projetos" [ref=e1874] [cursor=pointer]:
+          - /url: /projetos
+        - link "Dashboard" [ref=e1875] [cursor=pointer]:
+          - /url: /projeto/2
+        - link "RDOs" [ref=e1876] [cursor=pointer]:
+          - /url: /projeto/2/rdos
+        - link "Planejamento" [ref=e1877] [cursor=pointer]:
+          - /url: /projeto/2/planejamento
+        - link "Qualidade" [ref=e1878] [cursor=pointer]:
+          - /url: /projeto/2/rnc
+        - link "Ativos" [ref=e1879] [cursor=pointer]:
+          - /url: /projeto/2/almoxarifado
+        - link "Suprimentos" [ref=e1880] [cursor=pointer]:
+          - /url: /projeto/2/compras
+        - link "Email" [ref=e1881] [cursor=pointer]:
+          - /url: /projeto/2/email-dashboard
+        - link "Mensagens" [ref=e1882] [cursor=pointer]:
+          - /url: /projeto/2/mensagens
+        - link "Usuários" [ref=e1883] [cursor=pointer]:
+          - /url: /projeto/2/usuarios
+      - generic [ref=e1884]:
+        - button "Perfil" [ref=e1886] [cursor=pointer]:
+          - img [ref=e1887]
+          - text: Perfil
+          - img [ref=e1890]
+        - button "Ativar tema claro" [ref=e1892] [cursor=pointer]:
+          - img [ref=e1893]
+  - generic [ref=e1899]:
+    - complementary [ref=e1900]:
+      - generic [ref=e1901]:
+        - heading "Planejamento" [level=2] [ref=e1902]
+        - paragraph [ref=e1903]: Selecione uma ferramenta
+      - navigation [ref=e1904]:
+        - button "EAP Estrutura Analítica do Projeto" [ref=e1905] [cursor=pointer]:
+          - img [ref=e1907]
+          - generic [ref=e1911]:
+            - paragraph [ref=e1912]: EAP
+            - paragraph [ref=e1913]: Estrutura Analítica do Projeto
+          - img [ref=e1914]
+        - button "Curva S Evolução planejado vs realizado" [ref=e1916] [cursor=pointer]:
+          - img [ref=e1918]
+          - generic [ref=e1921]:
+            - paragraph [ref=e1922]: Curva S
+            - paragraph [ref=e1923]: Evolução planejado vs realizado
+        - button "Cronograma Diagrama de Gantt e dependências" [ref=e1924] [cursor=pointer]:
+          - img [ref=e1926]
+          - generic [ref=e1931]:
+            - paragraph [ref=e1932]: Cronograma
+            - paragraph [ref=e1933]: Diagrama de Gantt e dependências
+      - button "Abrir em tela cheia" [ref=e1935] [cursor=pointer]:
+        - img [ref=e1936]
+        - text: Abrir em tela cheia
+    - main [ref=e1938]:
+      - generic [ref=e1939]:
+        - generic [ref=e1940]:
+          - heading "EAP do Projeto" [level=1] [ref=e1942]
+          - generic [ref=e1943]:
+            - button "Baixar Modelo Excel" [ref=e1944] [cursor=pointer]:
+              - img [ref=e1945]
+              - text: Baixar Modelo Excel
+            - button "Importar Excel" [ref=e1948] [cursor=pointer]:
+              - img [ref=e1949]
+              - text: Importar Excel
+            - button "Nova Atividade" [ref=e1952] [cursor=pointer]:
+              - img [ref=e1953]
+              - text: Nova Atividade
+            - button "Recalcular EAP" [ref=e1954] [cursor=pointer]
+        - generic [ref=e1955]:
+          - generic [ref=e1958]:
+            - generic [ref=e1959]:
+              - button [ref=e1960] [cursor=pointer]:
+                - img [ref=e1961]
+              - generic [ref=e1963]:
+                - strong [ref=e1965]: 1.0 Mobilização e Canteiro
+                - generic [ref=e1966]:
+                  - generic [ref=e1967]: "Peso: 100%"
+                  - generic [ref=e1968]:
+                    - text: "Planejado:"
+                    - strong [ref=e1969]: 15/06/2026
+                    - text: até
+                    - strong [ref=e1970]: 26/06/2026
+                  - generic [ref=e1971]: "Executado: 4%"
+                  - generic [ref=e1972]: "Status: Em andamento"
+            - generic [ref=e1973]:
+              - button "Editar" [ref=e1974] [cursor=pointer]:
+                - img [ref=e1975]
+              - button "+" [ref=e1978] [cursor=pointer]
+              - button "Excluir atividade" [ref=e1979] [cursor=pointer]:
+                - img [ref=e1980]
+          - generic [ref=e1988]:
+            - generic [ref=e1989]:
+              - button [ref=e1990] [cursor=pointer]:
+                - img [ref=e1991]
+              - generic [ref=e1993]:
+                - strong [ref=e1995]: 2.0 Topografia e Locação
+                - generic [ref=e1996]:
+                  - generic [ref=e1997]: "Peso: 100%"
+                  - generic [ref=e1998]:
+                    - text: "Planejado:"
+                    - strong [ref=e1999]: 29/06/2026
+                    - text: até
+                    - strong [ref=e2000]: 10/07/2026
+                  - generic [ref=e2001]: "Executado: 0%"
+                  - generic [ref=e2002]: "Status: Não iniciada"
+            - generic [ref=e2003]:
+              - button "Editar" [ref=e2004] [cursor=pointer]:
+                - img [ref=e2005]
+              - button "+" [ref=e2008] [cursor=pointer]
+              - button "Excluir atividade" [ref=e2009] [cursor=pointer]:
+                - img [ref=e2010]
+          - generic [ref=e2017]:
+            - generic [ref=e2018]:
+              - button [ref=e2019] [cursor=pointer]:
+                - img [ref=e2020]
+              - generic [ref=e2022]:
+                - strong [ref=e2024]: 3.0 Civil — Cravação de Estacas
+                - generic [ref=e2025]:
+                  - generic [ref=e2026]: "Peso: 100%"
+                  - generic [ref=e2027]:
+                    - text: "Planejado:"
+                    - strong [ref=e2028]: 13/07/2026
+                    - text: até
+                    - strong [ref=e2029]: 14/08/2026
+                  - generic [ref=e2030]: "Executado: 0%"
+                  - generic [ref=e2031]: "Status: Não iniciada"
+            - generic [ref=e2032]:
+              - button "Editar" [ref=e2033] [cursor=pointer]:
+                - img [ref=e2034]
+              - button "+" [ref=e2037] [cursor=pointer]
+              - button "Excluir atividade" [ref=e2038] [cursor=pointer]:
+                - img [ref=e2039]
+          - generic [ref=e2046]:
+            - generic [ref=e2047]:
+              - button [ref=e2048] [cursor=pointer]:
+                - img [ref=e2049]
+              - generic [ref=e2051]:
+                - strong [ref=e2053]: 4.0 Montagem Mecânica dos Trackers
+                - generic [ref=e2054]:
+                  - generic [ref=e2055]: "Peso: 100%"
+                  - generic [ref=e2056]:
+                    - text: "Planejado:"
+                    - strong [ref=e2057]: 20/07/2026
+                    - text: até
+                    - strong [ref=e2058]: 04/09/2026
+                  - generic [ref=e2059]: "Executado: 0%"
+                  - generic [ref=e2060]: "Status: Não iniciada"
+            - generic [ref=e2061]:
+              - button "Editar" [ref=e2062] [cursor=pointer]:
+                - img [ref=e2063]
+              - button "+" [ref=e2066] [cursor=pointer]
+              - button "Excluir atividade" [ref=e2067] [cursor=pointer]:
+                - img [ref=e2068]
+          - generic [ref=e2075]:
+            - generic [ref=e2076]:
+              - button [ref=e2077] [cursor=pointer]:
+                - img [ref=e2078]
+              - generic [ref=e2080]:
+                - strong [ref=e2082]: 5.0 Instalação dos Módulos FV
+                - generic [ref=e2083]:
+                  - generic [ref=e2084]: "Peso: 100%"
+                  - generic [ref=e2085]:
+                    - text: "Planejado:"
+                    - strong [ref=e2086]: 03/08/2026
+                    - text: até
+                    - strong [ref=e2087]: 25/09/2026
+                  - generic [ref=e2088]: "Executado: 0%"
+                  - generic [ref=e2089]: "Status: Não iniciada"
+            - generic [ref=e2090]:
+              - button "Editar" [ref=e2091] [cursor=pointer]:
+                - img [ref=e2092]
+              - button "+" [ref=e2095] [cursor=pointer]
+              - button "Excluir atividade" [ref=e2096] [cursor=pointer]:
+                - img [ref=e2097]
+          - generic [ref=e2104]:
+            - generic [ref=e2105]:
+              - button [ref=e2106] [cursor=pointer]:
+                - img [ref=e2107]
+              - generic [ref=e2109]:
+                - strong [ref=e2111]: 6.0 Elétrica CC — Strings e Circuitos
+                - generic [ref=e2112]:
+                  - generic [ref=e2113]: "Peso: 100%"
+                  - generic [ref=e2114]:
+                    - text: "Planejado:"
+                    - strong [ref=e2115]: 31/08/2026
+                    - text: até
+                    - strong [ref=e2116]: 09/10/2026
+                  - generic [ref=e2117]: "Executado: 0%"
+                  - generic [ref=e2118]: "Status: Não iniciada"
+            - generic [ref=e2119]:
+              - button "Editar" [ref=e2120] [cursor=pointer]:
+                - img [ref=e2121]
+              - button "+" [ref=e2124] [cursor=pointer]
+              - button "Excluir atividade" [ref=e2125] [cursor=pointer]:
+                - img [ref=e2126]
+          - generic [ref=e2133]:
+            - generic [ref=e2134]:
+              - button [ref=e2135] [cursor=pointer]:
+                - img [ref=e2136]
+              - generic [ref=e2138]:
+                - strong [ref=e2140]: 7.0 Elétrica — Skid, CMP e Inversores
+                - generic [ref=e2141]:
+                  - generic [ref=e2142]: "Peso: 100%"
+                  - generic [ref=e2143]:
+                    - text: "Planejado:"
+                    - strong [ref=e2144]: 28/09/2026
+                    - text: até
+                    - strong [ref=e2145]: 23/10/2026
+                  - generic [ref=e2146]: "Executado: 0%"
+                  - generic [ref=e2147]: "Status: Não iniciada"
+            - generic [ref=e2148]:
+              - button "Editar" [ref=e2149] [cursor=pointer]:
+                - img [ref=e2150]
+              - button "+" [ref=e2153] [cursor=pointer]
+              - button "Excluir atividade" [ref=e2154] [cursor=pointer]:
+                - img [ref=e2155]
+          - generic [ref=e2162]:
+            - generic [ref=e2163]:
+              - button [ref=e2164] [cursor=pointer]:
+                - img [ref=e2165]
+              - generic [ref=e2167]:
+                - strong [ref=e2169]: 8.0 Elétrica CA, Comunicação e Automação
+                - generic [ref=e2170]:
+                  - generic [ref=e2171]: "Peso: 100%"
+                  - generic [ref=e2172]:
+                    - text: "Planejado:"
+                    - strong [ref=e2173]: 12/10/2026
+                    - text: até
+                    - strong [ref=e2174]: 06/11/2026
+                  - generic [ref=e2175]: "Executado: 0%"
+                  - generic [ref=e2176]: "Status: Não iniciada"
+            - generic [ref=e2177]:
+              - button "Editar" [ref=e2178] [cursor=pointer]:
+                - img [ref=e2179]
+              - button "+" [ref=e2182] [cursor=pointer]
+              - button "Excluir atividade" [ref=e2183] [cursor=pointer]:
+                - img [ref=e2184]
+          - generic [ref=e2191]:
+            - generic [ref=e2192]:
+              - button [ref=e2193] [cursor=pointer]:
+                - img [ref=e2194]
+              - generic [ref=e2196]:
+                - strong [ref=e2198]: 9.0 Civil — Portões e Acabamentos
+                - generic [ref=e2199]:
+                  - generic [ref=e2200]: "Peso: 100%"
+                  - generic [ref=e2201]:
+                    - text: "Planejado:"
+                    - strong [ref=e2202]: 21/09/2026
+                    - text: até
+                    - strong [ref=e2203]: 09/10/2026
+                  - generic [ref=e2204]: "Executado: 0%"
+                  - generic [ref=e2205]: "Status: Não iniciada"
+            - generic [ref=e2206]:
+              - button "Editar" [ref=e2207] [cursor=pointer]:
+                - img [ref=e2208]
+              - button "+" [ref=e2211] [cursor=pointer]
+              - button "Excluir atividade" [ref=e2212] [cursor=pointer]:
+                - img [ref=e2213]
+          - generic [ref=e2220]:
+            - generic [ref=e2221]:
+              - button [ref=e2222] [cursor=pointer]:
+                - img [ref=e2223]
+              - generic [ref=e2225]:
+                - strong [ref=e2227]: 10.0 Testes, Comissionamento e Entrega
+                - generic [ref=e2228]:
+                  - generic [ref=e2229]: "Peso: 100%"
+                  - generic [ref=e2230]:
+                    - text: "Planejado:"
+                    - strong [ref=e2231]: 09/11/2026
+                    - text: até
+                    - strong [ref=e2232]: 30/11/2026
+                  - generic [ref=e2233]: "Executado: 0%"
+                  - generic [ref=e2234]: "Status: Não iniciada"
+            - generic [ref=e2235]:
+              - button "Editar" [ref=e2236] [cursor=pointer]:
+                - img [ref=e2237]
+              - button "+" [ref=e2240] [cursor=pointer]
+              - button "Excluir atividade" [ref=e2241] [cursor=pointer]:
+                - img [ref=e2242]

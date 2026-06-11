@@ -1002,7 +1002,30 @@ router.patch('/:id/info', [auth], async (req, res) => {
     const campos = [];
     const valores = [];
     if (nome !== undefined) { campos.push('nome = ?'); valores.push(String(nome).trim().slice(0, 120)); }
-    if (email !== undefined) { campos.push('email = ?'); valores.push(String(email).trim().slice(0, 200) || null); }
+    if (email !== undefined) {
+      const emailNormalizado = String(email || '').trim().toLowerCase().slice(0, 200);
+      if (emailNormalizado && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNormalizado)) {
+        return res.status(400).json({ erro: 'E-mail inválido.' });
+      }
+      if (emailNormalizado) {
+        const existente = await getQuery(
+          `SELECT id
+           FROM usuarios
+           WHERE id != ?
+             AND (lower(email) = lower(?) OR lower(login) = lower(?))
+           LIMIT 1`,
+          [id, emailNormalizado, emailNormalizado]
+        );
+        if (existente) {
+          return res.status(409).json({ erro: 'Este e-mail já está cadastrado para outro usuário.' });
+        }
+        campos.push('email = ?', 'login = ?');
+        valores.push(emailNormalizado, emailNormalizado);
+      } else {
+        campos.push('email = ?');
+        valores.push(null);
+      }
+    }
     if (telefone !== undefined) { campos.push('telefone = ?'); valores.push(String(telefone).trim().slice(0, 30) || null); }
     if (campos.length === 0) return res.status(400).json({ erro: 'Nenhum campo para atualizar.' });
     campos.push('atualizado_em = CURRENT_TIMESTAMP');

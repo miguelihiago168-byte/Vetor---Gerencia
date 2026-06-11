@@ -344,7 +344,7 @@ function RDOs() {
                               {temCorrecaoPendente && (
                                 <span className="rdo-badge-correcao" title={rdo.correcao_motivo || 'Correção pendente'}>
                                   <AlertTriangle size={12} />
-                                  CORRECAO PENDENTE
+                                  CORREÇÃO PENDENTE
                                 </span>
                               )}
                             </div>

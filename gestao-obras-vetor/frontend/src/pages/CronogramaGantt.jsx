@@ -9,7 +9,8 @@ import {
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
-import { Zap, RefreshCw, CalendarDays, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { Zap, RefreshCw, CalendarDays, AlertTriangle, ArrowLeft, X } from 'lucide-react';
+import './CronogramaGantt.css';
 
 const fmtPercent = (value) => `${Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
 const fmtNumber = (value) => Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
@@ -187,8 +188,9 @@ function CronogramaGantt({ hideNavbar = false }) {
           zIndex: 8000,
           padding: '20px'
         }}>
-          <div style={{
-            backgroundColor: '#fff',
+          <div className="cronograma-analise-modal" style={{
+            backgroundColor: 'var(--cronograma-modal-bg)',
+            color: 'var(--cronograma-modal-text)',
             borderRadius: '8px',
             maxWidth: '980px',
             maxHeight: '85vh',
@@ -196,11 +198,16 @@ function CronogramaGantt({ hideNavbar = false }) {
             width: '100%',
             boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
           }}>
-            <div style={{ padding: '18px 20px', background: 'linear-gradient(135deg, #2563eb, #7c3aed)', color: '#fff' }}>
+            <div style={{ padding: '18px 20px', background: 'linear-gradient(135deg, #2563eb, #7c3aed)', color: '#fff', display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start' }}>
+              <div>
               <h2 style={{ margin: 0, fontSize: 22 }}>Análise do Cronograma</h2>
               <p style={{ margin: '6px 0 0', opacity: 0.88 }}>
                 Diagnóstico de atrasos, impacto nas sucessoras e plano de recuperação.
               </p>
+              </div>
+              <button type="button" className="cronograma-analise-close" onClick={() => setAnalise(null)} aria-label="Fechar análise do cronograma">
+                <X size={18} />
+              </button>
             </div>
 
             <div style={{ padding: 20, display: 'grid', gap: 16 }}>
@@ -211,19 +218,19 @@ function CronogramaGantt({ hideNavbar = false }) {
                   ['Críticas atrasadas', analise.resumo?.total_criticas_atrasadas || 0],
                   ['Dependências', analise.resumo?.total_dependencias_confirmadas || 0]
                 ].map(([label, value]) => (
-                  <div key={label} style={{ padding: 12, border: '1px solid #e5e7eb', borderRadius: 8 }}>
-                    <small style={{ color: '#64748b' }}>{label}</small>
-                    <div style={{ fontSize: 24, fontWeight: 800, color: label.includes('Atrasadas') || label.includes('Críticas') ? '#dc2626' : '#0f172a' }}>{value}</div>
+                  <div key={label} style={{ padding: 12, border: '1px solid var(--cronograma-modal-border)', borderRadius: 8 }}>
+                    <small style={{ color: 'var(--cronograma-modal-muted)' }}>{label}</small>
+                    <div style={{ fontSize: 24, fontWeight: 800, color: label.includes('Atrasadas') || label.includes('Críticas') ? '#dc2626' : 'var(--cronograma-modal-strong)' }}>{value}</div>
                   </div>
                 ))}
               </section>
 
-              <section style={{ padding: 16, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+              <section style={{ padding: 16, border: '1px solid var(--cronograma-modal-border)', borderRadius: 8 }}>
                 <h3 style={{ margin: '0 0 10px' }}>Resumo Executivo</h3>
                 {(analise.atividades_atrasadas || []).length === 0 ? (
-                  <p style={{ margin: 0, color: '#64748b' }}>Nenhuma atividade crítica atrasada foi detectada no cronograma atual.</p>
+                  <p style={{ margin: 0, color: 'var(--cronograma-modal-muted)' }}>Nenhuma atividade crítica atrasada foi detectada no cronograma atual.</p>
                 ) : (
-                  <p style={{ margin: 0, color: '#334155' }}>
+                  <p style={{ margin: 0, color: 'var(--cronograma-modal-text)' }}>
                     Foram encontradas <strong>{analise.resumo?.total_atrasadas}</strong> atividade(s) atrasada(s).
                     {(analise.atividades_criticas || []).length > 0 && (
                       <> A prioridade é recuperar as atividades no caminho crítico, pois elas afetam diretamente as sucessoras.</>
@@ -232,21 +239,21 @@ function CronogramaGantt({ hideNavbar = false }) {
                 )}
               </section>
 
-              <section style={{ padding: 16, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+              <section style={{ padding: 16, border: '1px solid var(--cronograma-modal-border)', borderRadius: 8 }}>
                 <h3 style={{ margin: '0 0 12px' }}>Atividades Críticas</h3>
                 {(analise.atividades_atrasadas || []).length === 0 ? (
-                  <p style={{ margin: 0, color: '#64748b' }}>Sem atividades atrasadas para listar.</p>
+                  <p style={{ margin: 0, color: 'var(--cronograma-modal-muted)' }}>Sem atividades atrasadas para listar.</p>
                 ) : (
                   <div style={{ display: 'grid', gap: 12 }}>
                     {(analise.atividades_atrasadas || []).map((atividade) => (
-                      <div key={atividade.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+                      <div key={atividade.id} style={{ border: '1px solid var(--cronograma-modal-border)', borderRadius: 8, padding: 12 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
                           <strong>{atividade.codigo_eap} - {atividade.nome}</strong>
                           <span style={{ ...severityStyle(atividade.severidade), borderRadius: 999, padding: '3px 9px', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>
                             {atividade.severidade}
                           </span>
                         </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8, color: '#475569', fontSize: 13 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8, color: 'var(--cronograma-modal-muted)', fontSize: 13 }}>
                           <span>Fim planejado: <strong>{fmtDate(atividade.data_fim_planejada)}</strong></span>
                           <span>Executado: <strong>{fmtPercent(atividade.percentual_executado)}</strong></span>
                           <span>Restante: <strong>{fmtPercent(atividade.percentual_restante)}</strong></span>
@@ -262,16 +269,16 @@ function CronogramaGantt({ hideNavbar = false }) {
                 )}
               </section>
 
-              <section style={{ padding: 16, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+              <section style={{ padding: 16, border: '1px solid var(--cronograma-modal-border)', borderRadius: 8 }}>
                 <h3 style={{ margin: '0 0 12px' }}>Impacto nas Sucessoras</h3>
                 {(analise.atividades_atrasadas || []).every((a) => !a.sucessoras_impactadas?.length) ? (
-                  <p style={{ margin: 0, color: '#64748b' }}>Nenhuma sucessora impactada foi encontrada para as atividades atrasadas.</p>
+                  <p style={{ margin: 0, color: 'var(--cronograma-modal-muted)' }}>Nenhuma sucessora impactada foi encontrada para as atividades atrasadas.</p>
                 ) : (
                   <div style={{ display: 'grid', gap: 10 }}>
                     {(analise.atividades_atrasadas || []).filter((a) => a.sucessoras_impactadas?.length).map((atividade) => (
                       <div key={atividade.id}>
                         <strong>{atividade.codigo_eap} - {atividade.nome}</strong>
-                        <ul style={{ margin: '8px 0 0 18px', color: '#475569' }}>
+                        <ul style={{ margin: '8px 0 0 18px', color: 'var(--cronograma-modal-muted)' }}>
                           {atividade.sucessoras_impactadas.map((s) => (
                             <li key={s.id}>{s.codigo_eap} - {s.nome} ({s.tipo_vinculo})</li>
                           ))}
@@ -282,10 +289,10 @@ function CronogramaGantt({ hideNavbar = false }) {
                 )}
               </section>
 
-              <section style={{ padding: 16, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+              <section style={{ padding: 16, border: '1px solid var(--cronograma-modal-border)', borderRadius: 8 }}>
                 <h3 style={{ margin: '0 0 12px' }}>Plano de Recuperação</h3>
                 {(analise.atividades_atrasadas || []).length === 0 ? (
-                  <p style={{ margin: 0, color: '#64748b' }}>Nenhum plano necessário com o cronograma atual.</p>
+                  <p style={{ margin: 0, color: 'var(--cronograma-modal-muted)' }}>Nenhum plano necessário com o cronograma atual.</p>
                 ) : (
                   <div style={{ display: 'grid', gap: 10 }}>
                     {(analise.atividades_atrasadas || []).map((atividade) => {
@@ -293,7 +300,7 @@ function CronogramaGantt({ hideNavbar = false }) {
                       return (
                         <div key={atividade.id} style={{ borderLeft: '4px solid #f59e0b', paddingLeft: 12 }}>
                           <strong>{atividade.codigo_eap} - {atividade.nome}</strong>
-                          <p style={{ margin: '6px 0 0', color: '#475569' }}>
+                          <p style={{ margin: '6px 0 0', color: 'var(--cronograma-modal-muted)' }}>
                             Data-alvo: <strong>{fmtDate(plano.data_alvo)}</strong> | Dias úteis disponíveis: <strong>{plano.dias_uteis_restantes || 0}</strong>
                             {plano.producao_diaria_necessaria != null ? (
                               <> | Necessário: <strong>{fmtNumber(plano.producao_diaria_necessaria)} {plano.unidade_medida || ''}/dia útil</strong></>
@@ -308,11 +315,11 @@ function CronogramaGantt({ hideNavbar = false }) {
                 )}
               </section>
 
-              <section style={{ padding: 16, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+              <section style={{ padding: 16, border: '1px solid var(--cronograma-modal-border)', borderRadius: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                   <div>
                     <h3 style={{ margin: 0 }}>Sugestões de Dependências</h3>
-                    <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: 13 }}>
+                    <p style={{ margin: '4px 0 0', color: 'var(--cronograma-modal-muted)', fontSize: 13 }}>
                       {analise.resumo?.total_sugestoes_dependencias || 0} sugestão(ões) detectada(s) pelo algoritmo atual.
                     </p>
                   </div>
@@ -323,12 +330,12 @@ function CronogramaGantt({ hideNavbar = false }) {
                 {mostrarSugestoes && (
                   <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
                     {(analise.sugestoes_dependencias || []).length === 0 ? (
-                      <p style={{ margin: 0, color: '#64748b' }}>Nenhuma sugestão de dependência foi detectada.</p>
+                      <p style={{ margin: 0, color: 'var(--cronograma-modal-muted)' }}>Nenhuma sugestão de dependência foi detectada.</p>
                     ) : (
                       (analise.sugestoes_dependencias || []).map((sugestao) => (
-                        <div key={`${sugestao.id_origem}_${sugestao.id_destino}`} style={{ padding: 10, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+                        <div key={`${sugestao.id_origem}_${sugestao.id_destino}`} style={{ padding: 10, border: '1px solid var(--cronograma-modal-border)', borderRadius: 8 }}>
                           <strong>{sugestao.nome_origem}</strong> {'->'} <strong>{sugestao.nome_destino}</strong>
-                          <div style={{ color: '#64748b', fontSize: 13, marginTop: 4 }}>
+                          <div style={{ color: 'var(--cronograma-modal-muted)', fontSize: 13, marginTop: 4 }}>
                             Tipo sugerido: {sugestao.tipo_vinculo_recomendado} | Score: {fmtNumber(sugestao.score)} | Motivos: {sugestao.motivos}
                           </div>
                         </div>
@@ -339,7 +346,7 @@ function CronogramaGantt({ hideNavbar = false }) {
               </section>
             </div>
 
-            <div style={{ padding: '12px 20px', textAlign: 'right', borderTop: '1px solid #e0e0e0' }}>
+            <div style={{ padding: '12px 20px', textAlign: 'right', borderTop: '1px solid var(--cronograma-modal-border)' }}>
               <button className="btn btn-outline" onClick={() => setAnalise(null)}>Fechar</button>
             </div>
           </div>

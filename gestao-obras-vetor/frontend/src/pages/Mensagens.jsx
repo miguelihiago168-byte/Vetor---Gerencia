@@ -38,7 +38,7 @@ import './Mensagens.css';
 
 const getToken = () => localStorage.getItem('token') || sessionStorage.getItem('token') || '';
 
-const JANELA_EDICAO_EXCLUSAO_MS = 30 * 60 * 1000;
+const JANELA_EDICAO_EXCLUSAO_MS = 10 * 60 * 1000;
 
 const parseBackendTimestamp = (value) => {
   if (!value) return null;

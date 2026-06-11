@@ -25,7 +25,7 @@ const run = (sql, params = []) => new Promise((resolve, reject) => {
 });
 
 async function main() {
-  console.log('Migrando: adicionando campos de correcao automatica em rdos...');
+  console.log('Migrando: adicionando campos de correção automática em rdos...');
   const columns = await all('PRAGMA table_info(rdos)');
   const existing = new Set(columns.map((c) => c.name));
 
@@ -38,12 +38,12 @@ async function main() {
     console.log(`✓ Coluna ${name} adicionada.`);
   }
 
-  console.log('✓ Migracao de correcao automatica de RDO concluida.');
+  console.log('✓ Migração de correção automática de RDO concluída.');
 }
 
 main()
   .catch((err) => {
-    console.error('Erro na migracao de correcao automatica de RDO:', err);
+    console.error('Erro na migração de correção automática de RDO:', err);
     process.exitCode = 1;
   })
   .finally(() => db.close());

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
@@ -23,6 +23,8 @@ const AVULSA_OPTION = '__AVULSA__';
 
 const FOTO_EAP_PREFIX = 'eap:';
 const FOTO_AVULSA_PREFIX = 'avulsa:';
+const ANEXO_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/*';
+const ANEXO_EXT_RE = /\.(pdf|doc|docx|xls|xlsx|jpe?g|png|webp|gif|heic|heif)$/i;
 
 const dias = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
 const weekdayFromLocalDateInput = (val) => {
@@ -811,11 +813,31 @@ function RDOForm2() {
   };
 
   /* ── Equipamentos ───────────────────────────────── */
-  const [draftEquip, setDraftEquip] = useState({ nome: '', quantidade: 1 });
+  const [draftEquip, setDraftEquip] = useState({ nome: '', quantidade: 1, horario_inicio: '', horario_fim: '', observacao: '' });
+
+  const calcularHorasEquipamento = (inicio, fim) => {
+    const toMin = (valor) => {
+      const match = String(valor || '').match(/^(\d{2}):(\d{2})$/);
+      return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+    };
+    const ini = toMin(inicio);
+    const end = toMin(fim);
+    if (ini == null || end == null) return null;
+    const total = end >= ini ? end - ini : (24 * 60 - ini) + end;
+    return Math.round((total / 60) * 100) / 100;
+  };
 
   const addEquip = async () => {
     if (!draftEquip.nome.trim()) return;
-    const item = { nome: draftEquip.nome.trim(), quantidade: Number(draftEquip.quantidade || 1) };
+    const item = {
+      nome: draftEquip.nome.trim(),
+      quantidade: Number(draftEquip.quantidade || 1),
+      horario_inicio: draftEquip.horario_inicio || null,
+      horario_fim: draftEquip.horario_fim || null,
+      horario_utilizacao: draftEquip.horario_inicio && draftEquip.horario_fim ? `${draftEquip.horario_inicio} às ${draftEquip.horario_fim}` : null,
+      horas_utilizadas: calcularHorasEquipamento(draftEquip.horario_inicio, draftEquip.horario_fim),
+      observacao: String(draftEquip.observacao || '').trim() || null
+    };
     if (rdoId) {
       try {
         const resp = await addRdoEquipamento(rdoId, item);
@@ -828,7 +850,7 @@ function RDOForm2() {
       setEquipamentosLista(prev => [...prev, item]);
       setDirty(true);
     }
-    setDraftEquip({ nome: '', quantidade: 1 });
+    setDraftEquip({ nome: '', quantidade: 1, horario_inicio: '', horario_fim: '', observacao: '' });
   };
 
   const removeEquip = async (idx) => {
@@ -1010,9 +1032,8 @@ function RDOForm2() {
   const handleAnexoUpload = async (file) => {
     if (!file) return;
     const nome = String(file.name || '').toLowerCase();
-    const tipo = String(file.type || '').toLowerCase();
-    if (!nome.endsWith('.pdf') && !tipo.includes('pdf')) {
-      setErro('Anexos do RDO aceitam somente arquivos PDF.');
+    if (!ANEXO_EXT_RE.test(nome)) {
+      setErro('Tipo de arquivo não permitido para anexos do RDO.');
       return;
     }
     if (!rdoId) {
@@ -1068,7 +1089,13 @@ function RDOForm2() {
         mao_obra_indireta: formData.mao_obra_detalhada.filter(c => String(c.tipo).toLowerCase() === 'indireta').length,
         mao_obra_terceiros: formData.mao_obra_detalhada.filter(c => String(c.tipo).toLowerCase() === 'terceiros').length,
         mao_obra_detalhada: formData.mao_obra_detalhada,
-        equipamentos: JSON.stringify(equipamentosLista.map(e => ({ nome: e.nome, quantidade: e.quantidade }))),
+        equipamentos: JSON.stringify(equipamentosLista.map(e => ({
+          nome: e.nome,
+          quantidade: e.quantidade,
+          horario_utilizacao: e.horario_utilizacao || null,
+          horas_utilizadas: e.horas_utilizadas ?? null,
+          observacao: e.observacao || null
+        }))),
         ocorrencias: '',
         comentarios: '',
         atividades: formData.atividades.map(a => {
@@ -1168,7 +1195,15 @@ function RDOForm2() {
         }
         // Sincronizar equipamentos na nova tabela
         for (const eq of equipamentosLista) {
-          try { await addRdoEquipamento(finalId, { nome: eq.nome, quantidade: eq.quantidade }); } catch {}
+          try {
+            await addRdoEquipamento(finalId, {
+              nome: eq.nome,
+              quantidade: eq.quantidade,
+              horario_utilizacao: eq.horario_utilizacao || null,
+              horas_utilizadas: eq.horas_utilizadas ?? null,
+              observacao: eq.observacao || null
+            });
+          } catch {}
         }
         let rdoCriadoDetalhado = null;
         if (fotosQueue.length > 0) {
@@ -1238,11 +1273,7 @@ function RDOForm2() {
     return 'baixa';
   };
 
-  const anexosPdf = (anexos || []).filter((a) => {
-    const tipo = String(a?.tipo || '').toLowerCase();
-    const nome = String(a?.nome_arquivo || a?.nome_original || '').toLowerCase();
-    return tipo.includes('pdf') || nome.endsWith('.pdf');
-  });
+  const anexosPdf = anexos || [];
   const canEditRdo = !rdoId || (!!loadedRdoStatus && ['em preenchimento', 'reprovado'].includes(normalizeRdoStatus(loadedRdoStatus)));
 
   /* ══════════════════════════════════════════════════
@@ -1528,6 +1559,29 @@ function RDOForm2() {
               <input className="form-input" type="number" min="1" value={draftEquip.quantidade}
                 onChange={(e) => setDraftEquip({ ...draftEquip, quantidade: e.target.value })} />
             </div>
+            <div className="form-group" style={{ flex: '1', minWidth: '120px' }}>
+              <label className="form-label">Início</label>
+              <input className="form-input" type="time" value={draftEquip.horario_inicio}
+                onChange={(e) => setDraftEquip({ ...draftEquip, horario_inicio: e.target.value })} />
+            </div>
+            <div className="form-group" style={{ flex: '1', minWidth: '120px' }}>
+              <label className="form-label">Fim</label>
+              <input className="form-input" type="time" value={draftEquip.horario_fim}
+                onChange={(e) => setDraftEquip({ ...draftEquip, horario_fim: e.target.value })} />
+            </div>
+            <div className="form-group" style={{ flex: '1', minWidth: '120px' }}>
+              <label className="form-label">Horas usadas</label>
+              <input className="form-input" type="text" readOnly
+                value={(() => {
+                  const horas = calcularHorasEquipamento(draftEquip.horario_inicio, draftEquip.horario_fim);
+                  return horas == null ? '—' : `${horas.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} h`;
+                })()} />
+            </div>
+            <div className="form-group" style={{ flex: '2', minWidth: '180px' }}>
+              <label className="form-label">Observação</label>
+              <input className="form-input" type="text" placeholder="Ex.: Operação de içamento" value={draftEquip.observacao}
+                onChange={(e) => setDraftEquip({ ...draftEquip, observacao: e.target.value })} />
+            </div>
             <div style={{ display: 'flex', alignItems: 'flex-end' }}>
               <button className="btn btn-primary" onClick={addEquip}><Plus size={15} /> Adicionar</button>
             </div>
@@ -1536,12 +1590,15 @@ function RDOForm2() {
             <div className="rdo-empty">Nenhum equipamento adicionado.</div>
           ) : (
             <table className="rdo-table">
-              <thead><tr><th>Equipamento</th><th style={{ width: '120px' }}>Quantidade</th><th className="td-actions"></th></tr></thead>
+              <thead><tr><th>Equipamento</th><th>Quantidade</th><th>Horário</th><th>Horas utilizadas</th><th>Observação</th><th className="td-actions"></th></tr></thead>
               <tbody>
                 {equipamentosLista.map((eq, idx) => (
                   <tr key={idx}>
                     <td><strong>{eq.nome}</strong></td>
                     <td>{eq.quantidade}</td>
+                    <td>{eq.horario_inicio && eq.horario_fim ? `${eq.horario_inicio} às ${eq.horario_fim}` : (eq.horario_utilizacao || '—')}</td>
+                    <td>{eq.horas_utilizadas != null ? `${Number(eq.horas_utilizadas).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} h` : '—'}</td>
+                    <td>{eq.observacao || '—'}</td>
                     <td className="td-actions">
                       <button className="btn btn-danger" style={{ padding: '4px 8px' }} onClick={() => removeEquip(idx)}>
                         <Trash2 size={14} />
@@ -1625,6 +1682,18 @@ function RDOForm2() {
               </div>
             </div>
           )}
+
+          {!isDraftAvulsa && draftAtividade.atividade_eap_id && (() => {
+            const { atividadeSel, quantidadeTotal, execAprovado, restante } = getAtividadeLimites(draftAtividade.atividade_eap_id);
+            if (!atividadeSel) return null;
+            return (
+              <div className="alert alert-info" style={{ marginBottom: '8px', fontSize: '12px' }}>
+                Quantidade prevista: <strong>{formatQtd(quantidadeTotal)} {atividadeSel.unidade_medida || ''}</strong>
+                {' '}• Aprovado: <strong>{formatQtd(execAprovado)} {atividadeSel.unidade_medida || ''}</strong>
+                {' '}• Restante: <strong>{formatQtd(restante)} {atividadeSel.unidade_medida || ''}</strong>
+              </div>
+            );
+          })()}
 
           <div className="rdo-grid-2" style={{ marginBottom: '8px' }}>
             <div className="form-group">
@@ -2056,12 +2125,12 @@ function RDOForm2() {
             </div>
           )}
           <label className="rdo-upload-zone">
-            <input ref={anexoInputRef} type="file" multiple accept="application/pdf,.pdf"
+            <input ref={anexoInputRef} type="file" multiple accept={ANEXO_ACCEPT}
               onChange={(e) => { Array.from(e.target.files || []).forEach(f => handleAnexoUpload(f)); }}
               disabled={isUploadingAnexo} />
             <Upload size={24} style={{ marginBottom: '6px', color: '#94a3b8' }} />
-            <div>{isUploadingAnexo ? 'Enviando...' : 'Clique ou arraste arquivos PDF aqui'}</div>
-            <div style={{ fontSize: '11px', marginTop: '4px' }}>Somente PDF — máx. 10 MB cada</div>
+            <div>{isUploadingAnexo ? 'Enviando...' : 'Clique ou arraste anexos aqui'}</div>
+            <div style={{ fontSize: '11px', marginTop: '4px' }}>PDF, imagens, DOCX e XLSX — máx. 25 MB cada</div>
           </label>
           {!rdoId && anexosQueue.length > 0 && (
             <div style={{ marginTop: '10px' }}>

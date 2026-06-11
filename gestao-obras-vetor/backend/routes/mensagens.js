@@ -31,7 +31,8 @@ const upload = multer({
   limits: { fileSize: 15 * 1024 * 1024 }
 });
 
-const JANELA_EDICAO_EXCLUSAO_MINUTOS = 30;
+const JANELA_EDICAO_EXCLUSAO_MINUTOS = 10;
+const JANELA_EDICAO_EXCLUSAO_SQL = `+${JANELA_EDICAO_EXCLUSAO_MINUTOS} minutes`;
 
 const initializedTenants = new Set();
 
@@ -365,7 +366,7 @@ router.get('/conversas/:conversaId/mensagens', async (req, res) => {
          u.avatar AS remetente_avatar,
          COALESCE(u.presenca_status, 'disponivel') AS remetente_presenca_status,
          CASE
-           WHEN datetime(mi.enviado_em, '+30 minutes') >= CURRENT_TIMESTAMP THEN 1
+           WHEN datetime(mi.enviado_em, '${JANELA_EDICAO_EXCLUSAO_SQL}') >= CURRENT_TIMESTAMP THEN 1
            ELSE 0
          END AS dentro_prazo_edicao,
          CASE
@@ -620,7 +621,7 @@ router.patch(
            AND mi.tenant_id = ?
            AND mi.remetente_usuario_id = ?
            AND mi.deletado_em IS NULL
-           AND datetime(mi.enviado_em, '+30 minutes') >= CURRENT_TIMESTAMP
+           AND datetime(mi.enviado_em, '${JANELA_EDICAO_EXCLUSAO_SQL}') >= CURRENT_TIMESTAMP
          LIMIT 1`,
         [mensagemId, req.tenantId, req.usuario.id]
       );
@@ -682,7 +683,7 @@ router.delete('/mensagens/:mensagemId', async (req, res) => {
          AND mi.tenant_id = ?
          AND mi.remetente_usuario_id = ?
          AND mi.deletado_em IS NULL
-         AND datetime(mi.enviado_em, '+30 minutes') >= CURRENT_TIMESTAMP
+         AND datetime(mi.enviado_em, '${JANELA_EDICAO_EXCLUSAO_SQL}') >= CURRENT_TIMESTAMP
        LIMIT 1`,
       [mensagemId, req.tenantId, req.usuario.id]
     );

@@ -148,7 +148,10 @@ export const addRdoMaterial = (rdoId, data) => api.post(`/rdo/${rdoId}/material`
 export const addRdoOcorrencia = (rdoId, data) => api.post(`/rdo/${rdoId}/ocorrencia`, data);
 export const addRdoAssinatura = (rdoId, data) => api.post(`/rdo/${rdoId}/assinatura`, data);
 // Backend espera o campo 'arquivo' no upload
-export const uploadRdoFoto = (rdoId, formData) => api.post(`/rdo/${rdoId}/foto`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+export const uploadRdoFoto = (rdoId, formData, config = {}) => api.post(`/rdo/${rdoId}/foto`, formData, {
+  ...config,
+  headers: { 'Content-Type': 'multipart/form-data', ...(config.headers || {}) }
+});
 export const updateRdoFoto = (rdoId, fotoId, data) => api.patch(`/rdo/${rdoId}/foto/${fotoId}`, data);
 export const reorderRdoFotos = (rdoId, fotoIds) => api.patch(`/rdo/${rdoId}/fotos/ordem`, { foto_ids: fotoIds });
 // Equipamentos
@@ -162,11 +165,13 @@ export const getRdoColaboradores = (projetoId) => api.get(`/rdo/projeto/${projet
 export const createRdoColaborador = (projetoId, data) => api.post(`/rdo/projeto/${projetoId}/colaboradores`, data);
 
 // Anexos
-export const uploadAnexo = (rdoId, formData) => api.post(`/anexos/upload/${rdoId}`, formData, {
-  headers: { 'Content-Type': 'multipart/form-data' }
+export const uploadAnexo = (rdoId, formData, config = {}) => api.post(`/anexos/upload/${rdoId}`, formData, {
+  ...config,
+  headers: { 'Content-Type': 'multipart/form-data', ...(config.headers || {}) }
 });
 export const getAnexos = (rdoId) => api.get(`/anexos/rdo/${rdoId}`);
 export const deleteAnexo = (id) => api.delete(`/anexos/${id}`);
+export const downloadAnexo = (id) => api.get(`/anexos/download/${id}`, { responseType: 'blob' });
 // Anexos da RNC
 export const uploadAnexoRNC = (rncId, formData) => api.post(`/anexos/upload-rnc/${rncId}`, formData, {
   headers: { 'Content-Type': 'multipart/form-data' }

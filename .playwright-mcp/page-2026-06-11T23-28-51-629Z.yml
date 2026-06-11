@@ -1,0 +1,195 @@
+- generic [ref=e2]:
+  - navigation [ref=e3]:
+    - generic [ref=e5]:
+      - link "Vetor Vetor Gestão de Obras" [ref=e6] [cursor=pointer]:
+        - /url: /projetos
+        - generic [ref=e7]:
+          - img "Vetor" [ref=e8]
+          - generic [ref=e9]: Vetor
+          - generic [ref=e10]: Gestão de Obras
+      - generic [ref=e12]:
+        - link "Projetos" [ref=e13] [cursor=pointer]:
+          - /url: /projetos
+        - link "Dashboard" [ref=e14] [cursor=pointer]:
+          - /url: /projeto/2
+        - link "RDOs" [ref=e15] [cursor=pointer]:
+          - /url: /projeto/2/rdos
+        - link "Planejamento" [ref=e16] [cursor=pointer]:
+          - /url: /projeto/2/planejamento
+        - link "Qualidade" [ref=e17] [cursor=pointer]:
+          - /url: /projeto/2/rnc
+        - link "Ativos" [ref=e18] [cursor=pointer]:
+          - /url: /projeto/2/almoxarifado
+        - link "Suprimentos" [ref=e19] [cursor=pointer]:
+          - /url: /projeto/2/compras
+        - link "Email" [ref=e20] [cursor=pointer]:
+          - /url: /projeto/2/email-dashboard
+        - link "Mensagens" [ref=e21] [cursor=pointer]:
+          - /url: /projeto/2/mensagens
+        - link "Usuários" [ref=e22] [cursor=pointer]:
+          - /url: /projeto/2/usuarios
+      - generic [ref=e23]:
+        - button "Perfil" [ref=e25] [cursor=pointer]:
+          - img [ref=e26]
+          - text: Perfil
+          - img [ref=e29]
+        - button "Ativar tema escuro" [ref=e31] [cursor=pointer]:
+          - img [ref=e32]
+  - generic [ref=e34]:
+    - generic [ref=e35]:
+      - button "Voltar" [ref=e36] [cursor=pointer]:
+        - img [ref=e37]
+        - text: Voltar
+      - generic [ref=e39]:
+        - generic [ref=e40]:
+          - text: Qualidade / Não Conformidades /
+          - strong [ref=e41]: Nova RNC
+        - heading "Abrir Não Conformidade" [level=1] [ref=e42]
+      - generic [ref=e43]:
+        - button "Cancelar" [ref=e44] [cursor=pointer]
+        - button "Registrar RNC" [ref=e45] [cursor=pointer]:
+          - img [ref=e46]
+          - text: Registrar RNC
+    - generic [ref=e50]:
+      - generic [ref=e51]:
+        - img [ref=e53]
+        - generic [ref=e55]: Identificação
+      - generic [ref=e57]:
+        - img [ref=e59]
+        - generic [ref=e61]: Correção
+      - generic [ref=e63]:
+        - img [ref=e65]
+        - generic [ref=e68]: Aprovação
+      - generic [ref=e70]:
+        - img [ref=e72]
+        - generic [ref=e75]: Encerrada
+    - generic [ref=e76]:
+      - generic [ref=e77]:
+        - generic [ref=e78]:
+          - generic [ref=e79]:
+            - img [ref=e81]
+            - generic [ref=e83]:
+              - heading "Identificação da Não Conformidade" [level=3] [ref=e84]
+              - paragraph [ref=e85]: O que aconteceu e onde ocorreu o problema
+          - generic [ref=e86]:
+            - generic [ref=e87]: Título da Não Conformidade *
+            - 'textbox "Ex.: Material fora de especificação, Procedimento não seguido..." [ref=e88]'
+          - generic [ref=e89]:
+            - generic [ref=e90]:
+              - generic [ref=e91]: Projeto
+              - textbox [ref=e92]
+            - generic [ref=e93]:
+              - generic [ref=e94]: Área / Setor afetado
+              - 'textbox "Ex.: Estrutura, Elétrica, Civil" [ref=e95]'
+            - generic [ref=e96]:
+              - generic [ref=e97]: Local / Ponto específico
+              - 'textbox "Ex.: Bloco A, km 4+200" [ref=e98]'
+          - generic [ref=e99]:
+            - generic [ref=e100]: Gravidade *
+            - generic [ref=e101]:
+              - button "Baixa" [ref=e102] [cursor=pointer]
+              - button "Média" [ref=e103] [cursor=pointer]
+              - button "Alta" [ref=e104] [cursor=pointer]
+              - button "Crítica" [ref=e105] [cursor=pointer]
+          - generic [ref=e106]:
+            - generic [ref=e107]: Norma / Referência técnica
+            - 'textbox "Ex.: ABNT NBR 6122, Procedimento PO-014" [ref=e108]'
+        - generic [ref=e109]:
+          - generic [ref=e110]:
+            - img [ref=e112]
+            - generic [ref=e114]:
+              - heading "O que aconteceu?" [level=3] [ref=e115]
+              - paragraph [ref=e116]: Descreva a não conformidade com o máximo de detalhes
+          - generic [ref=e117]:
+            - generic [ref=e118]: Descrição detalhada *
+            - 'textbox "Descreva detalhadamente o que foi identificado: quando, como, quais desvios observados..." [ref=e119]'
+          - generic [ref=e120]:
+            - generic [ref=e121]:
+              - generic [ref=e122]: Origem
+              - combobox [ref=e123]:
+                - option "Execução" [selected]
+                - option "Material"
+                - option "Projeto"
+                - option "Procedimento"
+                - option "Inspeção"
+                - option "Auditoria"
+                - option "Cliente"
+            - generic [ref=e124]:
+              - generic [ref=e125]: Vinculado ao RDO
+              - combobox [ref=e126]:
+                - option "Nenhum" [selected]
+        - generic [ref=e127]:
+          - generic [ref=e128]:
+            - img [ref=e130]
+            - generic [ref=e132]:
+              - heading "O que deve ser corrigido?" [level=3] [ref=e133]
+              - paragraph [ref=e134]: Defina a ação corretiva esperada e o responsável por executá-la
+          - generic [ref=e135]:
+            - generic [ref=e136]: Ação corretiva esperada *
+            - textbox "Descreva claramente o que precisa ser feito para corrigir e evitar a recorrência..." [ref=e137]
+          - generic [ref=e138]:
+            - generic [ref=e139]:
+              - generic [ref=e140]:
+                - img [ref=e141]
+                - text: Responsável pela correção
+              - combobox [ref=e146]:
+                - option "Selecione o responsável" [selected]
+            - generic [ref=e147]:
+              - generic [ref=e148]:
+                - img [ref=e149]
+                - text: Prazo para encerramento
+              - textbox [ref=e151]
+        - generic [ref=e152]:
+          - generic [ref=e153]:
+            - img [ref=e155]
+            - generic [ref=e158]:
+              - heading "Evidências fotográficas" [level=3] [ref=e159]
+              - paragraph [ref=e160]: Registre no mínimo 4 fotos da não conformidade como evidência
+          - generic [ref=e161] [cursor=pointer]:
+            - img [ref=e162]
+            - paragraph [ref=e165]:
+              - strong [ref=e166]: Clique ou arraste as fotos aqui
+            - generic [ref=e167]: JPG, PNG, HEIC — até 10 MB por arquivo (mínimo de 4 fotos)
+        - button "Registrar RNC" [ref=e169] [cursor=pointer]:
+          - img [ref=e170]
+          - text: Registrar RNC
+      - complementary [ref=e174]:
+        - generic [ref=e175]:
+          - heading "Resumo" [level=4] [ref=e176]
+          - generic [ref=e177]:
+            - generic [ref=e178]: Título
+            - strong [ref=e179]:
+              - emphasis [ref=e180]: Não preenchido
+          - generic [ref=e181]:
+            - generic [ref=e182]: Projeto
+            - strong
+        - generic [ref=e183]:
+          - heading "Fluxo de tratativa" [level=4] [ref=e184]
+          - generic [ref=e185]:
+            - generic [ref=e186]:
+              - img [ref=e188]
+              - generic [ref=e190]:
+                - strong [ref=e191]: Registro
+                - paragraph [ref=e192]: Você está aqui
+            - generic [ref=e193]:
+              - img [ref=e195]
+              - generic [ref=e197]:
+                - strong [ref=e198]: Correção
+                - paragraph [ref=e199]: Responsável registra
+            - generic [ref=e200]:
+              - img [ref=e202]
+              - generic [ref=e205]:
+                - strong [ref=e206]: Aprovação
+                - paragraph [ref=e207]: Gestor aprova
+            - generic [ref=e208]:
+              - img [ref=e210]
+              - generic [ref=e213]:
+                - strong [ref=e214]: Encerrada
+                - paragraph [ref=e215]: RNC concluída
+        - generic [ref=e216]:
+          - heading "Dicas de preenchimento" [level=4] [ref=e217]
+          - list [ref=e218]:
+            - listitem [ref=e219]: "Seja específico na descrição: mencione medições e desvios"
+            - listitem [ref=e220]: A ação corretiva deve evitar que o problema se repita
+            - listitem [ref=e221]: Fotos são fundamentais para registro e PDF
+            - listitem [ref=e222]: Defina sempre um responsável para não ficar sem acompanhamento

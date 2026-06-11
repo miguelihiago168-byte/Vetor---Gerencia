@@ -422,3 +422,122 @@
   .rnc-progress-circle      { width: 26px; height: 26px; }
   .rnc-progress-bar         { padding: 10px 12px; }
 }
+
+/* Dark mode */
+body.dark-mode .rnc-progress-bar,
+body.dark-mode .rnc-section-card,
+body.dark-mode .rnc-side-card {
+  background: linear-gradient(180deg, rgba(31, 48, 68, 0.92) 0%, rgba(20, 31, 46, 0.96) 100%);
+  border-color: #2a4060;
+  box-shadow: 0 10px 28px rgba(4, 12, 22, 0.28);
+}
+
+body.dark-mode .rnc-card-correction {
+  background: linear-gradient(180deg, rgba(30, 58, 138, 0.24) 0%, rgba(20, 31, 46, 0.96) 80px);
+  border-color: #315f9d;
+}
+
+body.dark-mode .rnc-section-head h3,
+body.dark-mode .rnc-side-item strong,
+body.dark-mode .rnc-side-flow-step strong {
+  color: #e8edf3;
+}
+
+body.dark-mode .rnc-section-head p,
+body.dark-mode .rnc-side-card h4,
+body.dark-mode .rnc-side-item span,
+body.dark-mode .rnc-side-flow-step p,
+body.dark-mode .rnc-side-tips li {
+  color: #9ab1c9;
+}
+
+body.dark-mode .rnc-side-item {
+  border-bottom-color: #2a4060;
+}
+
+body.dark-mode .rnc-side-item em {
+  color: #607080;
+}
+
+body.dark-mode .rnc-progress-line {
+  background: #2a4060;
+}
+
+body.dark-mode .rnc-progress-line.done {
+  background: #38bdf8;
+}
+
+body.dark-mode .rnc-progress-circle,
+body.dark-mode .rnc-sflow-dot {
+  background: #172635;
+  border-color: #2a4060;
+  color: #7f93ac;
+}
+
+body.dark-mode .rnc-progress-step.active .rnc-progress-circle,
+body.dark-mode .rnc-side-flow-step.active .rnc-sflow-dot {
+  background: #2563eb;
+  border-color: #60a5fa;
+  color: #eff6ff;
+}
+
+body.dark-mode .rnc-progress-step.active span {
+  color: #93c5fd;
+}
+
+body.dark-mode .rnc-progress-step.done span {
+  color: #86efac;
+}
+
+body.dark-mode .rnc-section-card .form-label,
+body.dark-mode .rnc-section-card label {
+  color: #c5d3de;
+}
+
+body.dark-mode .rnc-section-card .form-input,
+body.dark-mode .rnc-section-card .form-select,
+body.dark-mode .rnc-section-card .form-textarea,
+body.dark-mode .rnc-section-card input,
+body.dark-mode .rnc-section-card select,
+body.dark-mode .rnc-section-card textarea {
+  background: #111827;
+  border-color: #2a4060;
+  color: #e8edf3;
+}
+
+body.dark-mode .rnc-section-card .form-input::placeholder,
+body.dark-mode .rnc-section-card .form-textarea::placeholder,
+body.dark-mode .rnc-section-card input::placeholder,
+body.dark-mode .rnc-section-card textarea::placeholder {
+  color: #7188a2;
+}
+
+body.dark-mode .rnc-section-card .form-input:focus,
+body.dark-mode .rnc-section-card .form-select:focus,
+body.dark-mode .rnc-section-card .form-textarea:focus,
+body.dark-mode .rnc-section-card input:focus,
+body.dark-mode .rnc-section-card select:focus,
+body.dark-mode .rnc-section-card textarea:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18);
+}
+
+body.dark-mode .rnc-dropzone {
+  background: rgba(14, 165, 233, 0.08);
+  border-color: #2f73cc;
+  color: #93c5fd;
+}
+
+body.dark-mode .rnc-dropzone:hover,
+body.dark-mode .rnc-dropzone.dragging {
+  background: rgba(14, 165, 233, 0.14);
+  border-color: #60a5fa;
+}
+
+body.dark-mode .rnc-dropzone small {
+  color: #8fa3b9;
+}
+
+body.dark-mode .rnc-photo-thumb {
+  border-color: #2a4060;
+}
