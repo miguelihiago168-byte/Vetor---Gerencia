@@ -25,6 +25,7 @@ const migrationScripts = [
   'migrate_add_rdo_mao_obra_detalhada.js',
   'migrate_add_rdo_quantidade.js',
   'migrate_add_rdo_number_and_history.js',
+  'migrate_rdo_numero_por_projeto.js',
   'migrate_add_rdo_versions.js',
   'migrate_add_rnc_descricao_correcao.js',
   'migrate_add_rnc_extra_fields.js',

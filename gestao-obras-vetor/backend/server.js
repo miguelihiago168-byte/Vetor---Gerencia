@@ -46,6 +46,7 @@ try {
   const { db } = require('./config/database');
   const { ensureMultitenancySchema } = require('./scripts/migrate_multitenancy');
   const { ensureRdoLogsSchema } = require('./scripts/migrate_add_rdo_logs');
+  const { migrateRdoNumeroPorProjeto } = require('./scripts/migrate_rdo_numero_por_projeto');
   const migrateAddRequisicoes = require('./scripts/migrate_add_requisicoes');
   const { migrateAddCotacaoFields } = require('./scripts/migrate_add_cotacao_fields');
 
@@ -71,6 +72,10 @@ try {
 
   ensureRdoLogsSchema().catch((e) => {
     console.warn('Aviso: não foi possível aplicar schema de rdo_logs:', e?.message || e);
+  });
+
+  migrateRdoNumeroPorProjeto().catch((e) => {
+    console.warn('Aviso: nao foi possivel aplicar schema de RDO por projeto:', e?.message || e);
   });
 
   // Garantir colunas de RDO esperadas pelas rotas atuais

@@ -185,7 +185,7 @@ const initDatabase = async () => {
       db.run(`
         CREATE TABLE IF NOT EXISTS rdos (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
-          numero_rdo TEXT UNIQUE,
+          numero_rdo INTEGER,
           projeto_id INTEGER NOT NULL,
           data_relatorio DATE NOT NULL,
           dia_semana TEXT NOT NULL,
@@ -215,7 +215,8 @@ const initDatabase = async () => {
           FOREIGN KEY (projeto_id) REFERENCES projetos(id) ON DELETE CASCADE,
           FOREIGN KEY (criado_por) REFERENCES usuarios(id),
           FOREIGN KEY (aprovado_por) REFERENCES usuarios(id),
-          UNIQUE(projeto_id, data_relatorio)
+          UNIQUE(projeto_id, data_relatorio),
+          UNIQUE(projeto_id, numero_rdo)
         )
       `, (err) => {
         if (err) reject(err);

@@ -117,10 +117,9 @@ function RDODetalhes() {
     return s || 'N/A';
   };
 
-  const numeroRdoRaw = String(rdo?.numero_rdo || rdo?.id || '').trim();
-  const numeroRdoExibicao = /^rdo[-\s]*/i.test(numeroRdoRaw)
-    ? numeroRdoRaw.replace(/^rdo[-\s]*/i, '').trim()
-    : numeroRdoRaw.padStart(2, '0');
+  const numeroRdoRaw = String(rdo?.numero_rdo ?? rdo?.id ?? '').trim();
+  const numeroRdoMatch = numeroRdoRaw.match(/(\d+)$/);
+  const numeroRdoExibicao = String(Number(numeroRdoMatch?.[1] || numeroRdoRaw || rdo?.id || 0) || rdo?.id || '').padStart(3, '0');
 
   const aprovarRDO = async () => {
     try {

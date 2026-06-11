@@ -116,7 +116,7 @@ async function ensureMultitenancySchema() {
   await runQuery('CREATE INDEX IF NOT EXISTS idx_usuario_tenants_tenant ON usuario_tenants(tenant_id)');
   await runQuery('CREATE INDEX IF NOT EXISTS idx_convites_token ON convites(token)');
   await runQuery('CREATE INDEX IF NOT EXISTS idx_convites_tenant ON convites(tenant_id)');
-  await runQuery('CREATE UNIQUE INDEX IF NOT EXISTS idx_rdos_tenant_projeto_numero ON rdos(tenant_id, projeto_id, numero_rdo) WHERE numero_rdo IS NOT NULL');
+  await runQuery('CREATE INDEX IF NOT EXISTS idx_rdos_tenant_projeto_numero_lookup ON rdos(tenant_id, projeto_id, numero_rdo) WHERE numero_rdo IS NOT NULL');
 }
 
 if (require.main === module) {

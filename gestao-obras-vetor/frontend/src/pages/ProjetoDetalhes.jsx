@@ -186,13 +186,19 @@ function ProjetoDetalhes() {
   const curvaSerie      = curvaS?.serie ? curvaS.serie.slice(-15) : [];
   const curvaSPlanejado = Math.round(curvaS?.indicadores?.avanco_planejado || 0);
   const curvaSReal      = Math.round(curvaS?.indicadores?.avanco_real      || 0);
+  const formatNumeroRdo = (rdo) => {
+    const raw = rdo?.numero_rdo ?? rdo?.id ?? rdo?.rdo_id;
+    const match = String(raw || '').match(/(\d+)$/);
+    const numero = match ? Number(match[1]) : Number(raw || 0);
+    return `RDO-${String(numero || rdo?.id || rdo?.rdo_id).padStart(3, '0')}`;
+  };
 
   // Feed de atividade recente
   const feedItems = [];
   if (ultimoRdo) {
     feedItems.push({
       icone: '📋',
-      texto: `RDO ${ultimoRdo.numero_rdo || '#' + ultimoRdo.id} criado`,
+      texto: `${formatNumeroRdo(ultimoRdo)} criado`,
       data:  ultimoRdo.criado_em || (ultimoRdo.data_relatorio + 'T12:00:00'),
       cor:   '#2196F3',
     });
@@ -691,7 +697,7 @@ function ProjetoDetalhes() {
               {(galeria.rdos || []).map((grupo) => (
                 <div key={grupo.rdo_id} style={{ marginBottom: '18px' }}>
                   <div style={{ fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
-                    {grupo.numero_rdo || `RDO-${String(grupo.rdo_id).padStart(3, '0')}`} • {grupo.data_relatorio ? new Date(grupo.data_relatorio + 'T00:00:00').toLocaleDateString('pt-BR') : 'Sem data'} • {grupo.status || 'Sem status'} • {grupo.total_fotos || 0} foto(s)
+                    {formatNumeroRdo(grupo)} • {grupo.data_relatorio ? new Date(grupo.data_relatorio + 'T00:00:00').toLocaleDateString('pt-BR') : 'Sem data'} • {grupo.status || 'Sem status'} • {grupo.total_fotos || 0} foto(s)
                   </div>
                   <div className="grid grid-4" style={{ gap: '12px' }}>
                     {(grupo.fotos || []).map((item) => (

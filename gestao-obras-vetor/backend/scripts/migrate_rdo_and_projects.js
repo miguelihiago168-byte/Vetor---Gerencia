@@ -6,7 +6,7 @@ const migrateRDOAndProjects = async () => {
   try {
     // Adicionar número único para RDO
     await runQuery(`
-      ALTER TABLE rdos ADD COLUMN numero_rdo TEXT UNIQUE;
+      ALTER TABLE rdos ADD COLUMN numero_rdo INTEGER;
     `).catch(() => {
       // Coluna já existe, ignorar erro
     });

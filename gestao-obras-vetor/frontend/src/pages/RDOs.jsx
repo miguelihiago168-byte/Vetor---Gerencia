@@ -73,8 +73,12 @@ function RDOs() {
     return 'rdo-badge rdo-badge-pendente';
   };
 
-  const getRdoNumber = (rdo) =>
-    rdo.numero_rdo ? String(rdo.numero_rdo) : `RDO-${String(rdo.id).padStart(3, '0')}`;
+  const getRdoNumber = (rdo) => {
+    const raw = rdo.numero_rdo ?? rdo.id;
+    const match = String(raw || '').match(/(\d+)$/);
+    const numero = match ? Number(match[1]) : Number(raw || 0);
+    return `RDO-${String(numero || rdo.id).padStart(3, '0')}`;
+  };
 
   const normalizeStatus = (status) =>
     String(status || '')

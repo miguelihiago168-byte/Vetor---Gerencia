@@ -10,7 +10,7 @@ const migrate = async () => {
 
         const fieldMap = {
           // numero_rdo: identificador textual do RDO (ex.: RDO-YYYYMMDD-000001)
-          'numero_rdo': 'TEXT',
+          'numero_rdo': 'INTEGER',
           // historico_status: JSON com histórico de mudanças de status
           'historico_status': 'TEXT'
         };

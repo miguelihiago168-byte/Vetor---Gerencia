@@ -133,7 +133,7 @@ export default function RDODetalhesScreen() {
       <View style={styles.headerCard}>
         <View style={styles.headerRow}>
           <Text style={styles.numero}>
-            RDO #{(rdo.numero_rdo as number) ?? rdoId}
+            RDO-{String((rdo.numero_rdo as number) ?? rdoId).padStart(3, '0')}
           </Text>
           <View style={[styles.badge, { backgroundColor: statusInfo.corFundo }]}>
             <Text style={[styles.badgeTexto, { color: statusInfo.cor }]}>

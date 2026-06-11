@@ -275,7 +275,7 @@ router.post('/:rdoId/comentario', auth, async (req, res) => {
     try {
       const rdo = await getQuery('SELECT criado_por, numero_rdo FROM rdos WHERE id = ?', [rdoId]);
       if (rdo && rdo.criado_por && rdo.criado_por !== req.usuario.id) {
-        const numero = rdo.numero_rdo ? String(rdo.numero_rdo) : `RDO-${String(rdoId).padStart(3,'0')}`;
+        const numero = `RDO-${String(rdo.numero_rdo || rdoId).padStart(3, '0')}`;
         await runQuery(
           'INSERT OR IGNORE INTO notificacoes (usuario_id, tipo, mensagem, referencia_tipo, referencia_id) VALUES (?, ?, ?, ?, ?)',
           [rdo.criado_por, 'rdo_comentario', `Novo comentário no ${numero}.`, 'rdo', Number(rdoId)]

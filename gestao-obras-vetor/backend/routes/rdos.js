@@ -134,38 +134,14 @@ const getRdoFotosOrderBy = async () => {
   return 'rf.criado_em ASC';
 };
 
-// Gerar número sequencial e único no formato RDO-XXX por tenant/projeto
-const gerarNumeroRDO = async (tenantId, projetoId) => {
-  // 1) Buscar todos os IDs já existentes
-  const existentes = await allQuery(
-    'SELECT numero_rdo FROM rdos WHERE numero_rdo IS NOT NULL AND tenant_id = ? AND projeto_id = ?',
-    [tenantId, projetoId]
+// Gerar numero sequencial por projeto. A exibicao formata como RDO-001.
+const gerarNumeroRDO = async (projetoId) => {
+  const row = await getQuery(
+    'SELECT COALESCE(MAX(numero_rdo), 0) + 1 AS proximo_numero FROM rdos WHERE projeto_id = ?',
+    [projetoId]
   );
 
-  // 2) Extrair parte numérica, converter para inteiro e encontrar o maior
-  let maior = 0;
-  if (Array.isArray(existentes)) {
-    for (const row of existentes) {
-      const idStr = String(row.numero_rdo || '');
-      const m = idStr.match(/(\d{1,})$/);
-      const n = m ? parseInt(m[1], 10) : NaN;
-      if (!isNaN(n) && n > maior) maior = n;
-    }
-  }
-
-  // 3) Próximo = maior + 1 (ou 1 se não existir nenhum)
-  let nextNum = maior > 0 ? (maior + 1) : 1;
-
-  // 4) Garantir unicidade: validar se já existe; se existir, incrementar novamente
-  while (true) {
-    const candidate = `RDO-${String(nextNum).padStart(3, '0')}`;
-    const exists = await getQuery(
-      'SELECT id FROM rdos WHERE numero_rdo = ? AND tenant_id = ? AND projeto_id = ?',
-      [candidate, tenantId, projetoId]
-    );
-    if (!exists) return candidate;
-    nextNum++;
-  }
+  return Number(row?.proximo_numero || 1);
 };
 
 // Atualizar status da atividade EAP
@@ -738,7 +714,7 @@ router.post('/', auth, [
     }
 
     // Gerar número único para RDO
-    const numero_rdo = await gerarNumeroRDO(req.tenantId, projeto_id);
+    const numero_rdo = await gerarNumeroRDO(projeto_id);
 
     // Calcular dia da semana em pt-BR a partir da data escolhida
     const dias = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
@@ -1887,7 +1863,7 @@ ${anexosSection}
         ORDER BY ae.codigo_eap
       `, [id]);
 
-      const safeId = String(rdoFallback.numero_rdo || `RDO-${rdoFallback.id}`);
+      const safeId = `RDO-${String(rdoFallback.numero_rdo || rdoFallback.id).padStart(3, '0')}`;
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="${safeId}.pdf"`);
       res.setHeader('X-PDF-Engine', 'pdfkit-fallback');
@@ -2030,7 +2006,7 @@ router.get('/projeto/:projetoId/excel', auth, async (req, res) => {
       const condicoesClima = `Manhã: ${rdo.clima_manha || ''} ${rdo.tempo_manha || ''} (${rdo.praticabilidade_manha || ''}) | Tarde: ${rdo.clima_tarde || ''} ${rdo.tempo_tarde || ''} (${rdo.praticabilidade_tarde || ''})`;
       const observacoes = rdo.comentarios || '';
       worksheet.addRow({
-        numero_rdo: rdo.numero_rdo || `RDO-${rdo.id}`,
+        numero_rdo: `RDO-${String(rdo.numero_rdo || rdo.id).padStart(3, '0')}`,
         data_relatorio: new Date(rdo.data_relatorio).toLocaleDateString('pt-BR'),
         dia_semana: rdo.dia_semana,
         status: rdo.status,

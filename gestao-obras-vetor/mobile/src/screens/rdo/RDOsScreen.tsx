@@ -31,6 +31,9 @@ interface RDO {
   descricao_atividades?: string;
 }
 
+const formatNumeroRdo = (rdo: Pick<RDO, 'id' | 'numero_rdo'>) =>
+  `RDO-${String(rdo.numero_rdo ?? rdo.id).padStart(3, '0')}`;
+
 export default function RDOsScreen() {
   const route = useRoute<Route>();
   const navigation = useNavigation<Nav>();
@@ -87,7 +90,7 @@ export default function RDOsScreen() {
       >
         <View style={styles.cardHeader}>
           <Text style={styles.cardNumero}>
-            RDO #{item.numero_rdo ?? item.id}
+            {formatNumeroRdo(item)}
           </Text>
           <View
             style={[

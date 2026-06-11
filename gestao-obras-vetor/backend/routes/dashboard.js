@@ -189,7 +189,7 @@ router.get('/projeto/:projetoId/galeria-rdos', auth, async (req, res) => {
       totalFotos += fotos.length;
       grupos.push({
         rdo_id: rdo.id,
-        numero_rdo: rdo.numero_rdo || `RDO-${String(rdo.id).padStart(3, '0')}`,
+        numero_rdo: `RDO-${String(rdo.numero_rdo || rdo.id).padStart(3, '0')}`,
         data_relatorio: rdo.data_relatorio,
         status: rdo.status,
         total_fotos: fotos.length,

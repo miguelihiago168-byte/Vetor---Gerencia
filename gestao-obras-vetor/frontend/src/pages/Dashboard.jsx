@@ -270,7 +270,7 @@ function Dashboard() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div>
                         <strong style={{ display: 'block', marginBottom: '4px' }}>
-                          {rdo.numero_rdo || `RDO-${rdo.id}`}
+                          {`RDO-${String(rdo.numero_rdo || rdo.id).padStart(3, '0')}`}
                         </strong>
                         <small style={{ color: 'var(--gray-600)' }}>
                           {rdo.data_relatorio ? new Date(rdo.data_relatorio).toLocaleDateString('pt-BR') : 'Data não definida'}
