@@ -330,7 +330,7 @@ export default function RequisicaoKanban() {
   const { usuario } = useAuth();
   const perfil = usuario?.perfil || '';
   const podeAprovar = ['Gestor Geral'].includes(perfil);
-  const podeComprar = ['ADM', 'Gestor Geral'].includes(perfil);
+  const podeComprar = perfil === 'ADM';
 
   const [projeto, setProjeto] = useState(null);
   const [colunas, setColunas] = useState([]);

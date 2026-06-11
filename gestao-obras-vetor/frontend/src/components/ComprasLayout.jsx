@@ -5,22 +5,22 @@ import { useAuth } from '../context/AuthContext';
 import { getRequisicoesBadges } from '../services/api';
 import {
   ShoppingCart, List, CheckCircle, XCircle, Users,
-  Clock, Tag, ThumbsUp, Package, AlertCircle,
+  Clock, Tag, ThumbsUp, AlertCircle,
 } from 'lucide-react';
 
 // Configuração dos status do fluxo ativo (finalizadas ficam no Histórico)
 const STATUS_FLOW = [
   { slug: 'solicitado',         label: 'Solicitado',           icon: <Tag size={13} />,          statuses: ['Em análise'] },
   { slug: 'em-cotacao',         label: 'Em cotação',           icon: <Clock size={13} />,        statuses: ['Em cotação'] },
-  { slug: 'aguardando-decisao', label: 'Aguard. decisão',      icon: <AlertCircle size={13} />,  statuses: ['Cotações recebidas', 'Aguardando decisão gestor geral'] },
+  { slug: 'cotacoes-recebidas', label: 'Cotações recebidas',   icon: <AlertCircle size={13} />,  statuses: ['Cotações recebidas'] },
   { slug: 'aprovado-compra',    label: 'Aprovado p/ compra',   icon: <ThumbsUp size={13} />,     statuses: ['Compra autorizada'] },
 ];
 
 // Slugs com badge colorido (requer ação) por perfil
 const BADGE_PERFIL = {
   'ADM':            new Set(['em-cotacao', 'aprovado-compra']),
-  'Gestor Geral':   new Set(['solicitado', 'aguardando-decisao']),
-  'Gestor da Obra': new Set(['solicitado', 'aguardando-decisao']),
+  'Gestor Geral':   new Set(['solicitado', 'cotacoes-recebidas']),
+  'Gestor da Obra': new Set(['solicitado', 'cotacoes-recebidas']),
   'Gestor Local':   new Set(['solicitado']),
   'Almoxarife':     new Set(['solicitado']),
 };

@@ -1,11 +1,83 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
+const multer = require('multer');
+const ExcelJS = require('exceljs');
+const XLSX = require('xlsx');
 const { allQuery, runQuery, getQuery } = require('../config/database');
 const { auth, isGestor } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
 const ganttService = require('../services/ganttService');
 
 const router = express.Router();
+const uploadExcelEap = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const name = String(file.originalname || '').toLowerCase();
+    if (name.endsWith('.xlsx') || name.endsWith('.xls')) return cb(null, true);
+    return cb(new Error('Envie um arquivo Excel .xlsx ou .xls.'));
+  }
+});
+
+const EAP_EXCEL_HEADERS = [
+  'Codigo EAP',
+  'Nome da Atividade',
+  'Atividade Pai',
+  'Nivel',
+  'Quantidade',
+  'Unidade',
+  'Data Inicio',
+  'Data Fim',
+  'Peso (%)',
+  'Predecessora'
+];
+
+const EAP_EXCEL_HEADERS_DISPLAY = [
+  'Código EAP',
+  'Nome da Atividade',
+  'Atividade Pai',
+  'Nível',
+  'Quantidade',
+  'Unidade',
+  'Data Início',
+  'Data Fim',
+  'Peso (%)',
+  'Predecessora'
+];
+
+const EAP_UNIDADES_PADRAO = ['un', 'm', 'm²', 'm³', 'kg', 't', 'km', 'ha', 'h', 'dia', 'mês', 'vb'];
+
+const normalizeHeader = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .trim();
+
+const normalizeText = (value) => String(value ?? '').trim();
+
+const parseDecimalBr = (value) => {
+  if (value === null || typeof value === 'undefined' || value === '') return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  const normalized = String(value).trim().replace(/\./g, '').replace(',', '.');
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const parseExcelDateOnly = (value) => {
+  if (!value) return null;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+  }
+  if (typeof value === 'number') {
+    const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+    const date = new Date(excelEpoch.getTime() + value * 86400000);
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
+  }
+  const text = String(value).trim();
+  const br = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (br) return `${br[3]}-${String(br[2]).padStart(2, '0')}-${String(br[1]).padStart(2, '0')}`;
+  return parseDateOnly(text);
+};
 
 const parseDateOnly = (value) => {
   if (!value) return null;
@@ -68,6 +140,7 @@ const ensureEapOptionalColumns = async () => {
   try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN peso_percentual_projeto REAL DEFAULT 0'); } catch (_) {}
   try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN data_conclusao_real DATE'); } catch (_) {}
   try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN status TEXT'); } catch (_) {}
+  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN nivel INTEGER'); } catch (_) {}
 
   // Backfill de tenant para registros legados
   try {
@@ -231,6 +304,341 @@ const getSomaPesosIrmaos = async (projetoId, paiId, excluirId = null) => {
   `, params);
   return Number(row?.total || 0);
 };
+
+const assertProjetoTenant = async (projetoId, tenantId) => {
+  const projeto = await getQuery('SELECT id FROM projetos WHERE id = ? AND tenant_id = ?', [projetoId, tenantId]);
+  if (!projeto) {
+    const err = new Error('Projeto nao encontrado ou nao pertence ao seu tenant.');
+    err.status = 404;
+    throw err;
+  }
+  return projeto;
+};
+
+const normalizarLinhaEapImport = (raw, linha) => {
+  const quantidade = parseDecimalBr(raw.quantidade);
+  const peso = parseDecimalBr(raw.peso);
+  const nivel = parseInt(raw.nivel, 10);
+  return {
+    linha,
+    codigo_eap: normalizeText(raw.codigo_eap),
+    nome: normalizeText(raw.nome),
+    pai_codigo: normalizeText(raw.pai_codigo),
+    nivel: Number.isInteger(nivel) ? nivel : null,
+    quantidade_total: quantidade,
+    unidade_medida: normalizeText(raw.unidade_medida),
+    data_inicio_planejada: parseExcelDateOnly(raw.data_inicio_planejada),
+    data_fim_planejada: parseExcelDateOnly(raw.data_fim_planejada),
+    peso_percentual_projeto: peso,
+    predecessora_codigo: normalizeText(raw.predecessora_codigo)
+  };
+};
+
+const validarLinhasEapImport = (linhas) => {
+  const erros = [];
+  const codigos = new Map();
+
+  linhas.forEach((linha) => {
+    if (!linha.codigo_eap) erros.push({ linha: linha.linha, campo: 'Codigo EAP', mensagem: 'Codigo EAP e obrigatorio.' });
+    if (!linha.nome) erros.push({ linha: linha.linha, campo: 'Nome da Atividade', mensagem: 'Nome da atividade e obrigatorio.' });
+    if (!Number.isInteger(linha.nivel) || linha.nivel <= 0) erros.push({ linha: linha.linha, campo: 'Nivel', mensagem: 'Nivel deve ser um inteiro positivo.' });
+    if (linha.quantidade_total === null || linha.quantidade_total < 0) erros.push({ linha: linha.linha, campo: 'Quantidade', mensagem: 'Quantidade deve ser numerica e maior ou igual a zero.' });
+    if (!linha.unidade_medida || !EAP_UNIDADES_PADRAO.includes(linha.unidade_medida)) erros.push({ linha: linha.linha, campo: 'Unidade', mensagem: `Unidade deve ser uma das opcoes padrao: ${EAP_UNIDADES_PADRAO.join(', ')}.` });
+    if (linha.peso_percentual_projeto === null || linha.peso_percentual_projeto <= 0) erros.push({ linha: linha.linha, campo: 'Peso (%)', mensagem: 'Peso deve ser numerico e positivo.' });
+    if (!linha.data_inicio_planejada) erros.push({ linha: linha.linha, campo: 'Data Inicio', mensagem: 'Data Inicio e obrigatoria.' });
+    if (!linha.data_fim_planejada) erros.push({ linha: linha.linha, campo: 'Data Fim', mensagem: 'Data Fim e obrigatoria.' });
+    if (linha.data_inicio_planejada && linha.data_fim_planejada && linha.data_inicio_planejada > linha.data_fim_planejada) {
+      erros.push({ linha: linha.linha, campo: 'Data Fim', mensagem: 'Data Fim deve ser maior ou igual a Data Inicio.' });
+    }
+
+    if (linha.codigo_eap) {
+      if (codigos.has(linha.codigo_eap)) {
+        erros.push({ linha: linha.linha, campo: 'Codigo EAP', mensagem: `Codigo duplicado. Ja usado na linha ${codigos.get(linha.codigo_eap)}.` });
+      } else {
+        codigos.set(linha.codigo_eap, linha.linha);
+      }
+    }
+  });
+
+  const codigosSet = new Set(linhas.map((linha) => linha.codigo_eap).filter(Boolean));
+  linhas.forEach((linha) => {
+    if (linha.pai_codigo && !codigosSet.has(linha.pai_codigo)) {
+      erros.push({ linha: linha.linha, campo: 'Atividade Pai', mensagem: 'Atividade Pai deve existir na planilha.' });
+    }
+    if (linha.predecessora_codigo && !codigosSet.has(linha.predecessora_codigo)) {
+      erros.push({ linha: linha.linha, campo: 'Predecessora', mensagem: 'Predecessora deve existir na planilha.' });
+    }
+    if (linha.predecessora_codigo && linha.predecessora_codigo === linha.codigo_eap) {
+      erros.push({ linha: linha.linha, campo: 'Predecessora', mensagem: 'Uma atividade nao pode ser predecessora dela mesma.' });
+    }
+    if (linha.pai_codigo && linha.pai_codigo === linha.codigo_eap) {
+      erros.push({ linha: linha.linha, campo: 'Atividade Pai', mensagem: 'Uma atividade nao pode ser pai dela mesma.' });
+    }
+  });
+
+  const paiPorCodigo = new Map(linhas.map((linha) => [linha.codigo_eap, linha.pai_codigo || null]));
+  linhas.forEach((linha) => {
+    const visitados = new Set();
+    let atual = linha.codigo_eap;
+    while (paiPorCodigo.get(atual)) {
+      atual = paiPorCodigo.get(atual);
+      if (visitados.has(atual)) {
+        erros.push({ linha: linha.linha, campo: 'Atividade Pai', mensagem: 'Hierarquia possui ciclo de atividade pai.' });
+        break;
+      }
+      visitados.add(atual);
+    }
+  });
+
+  return erros;
+};
+
+const lerPlanilhaEap = async (buffer) => {
+  const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
+  const sheetName = workbook.SheetNames[0];
+  const worksheet = sheetName ? workbook.Sheets[sheetName] : null;
+  if (!worksheet) {
+    return { linhas: [], erros: [{ linha: 1, campo: 'Arquivo', mensagem: 'Planilha vazia.' }] };
+  }
+
+  const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', raw: true });
+  const headerRow = rows[0] || [];
+  const headers = EAP_EXCEL_HEADERS.map((_, index) => normalizeHeader(headerRow[index]));
+  const expected = EAP_EXCEL_HEADERS.map(normalizeHeader);
+  const erros = [];
+  expected.forEach((header, index) => {
+    if (headers[index] !== header) {
+      erros.push({
+        linha: 1,
+        campo: EAP_EXCEL_HEADERS_DISPLAY[index],
+        mensagem: `Cabecalho esperado: ${EAP_EXCEL_HEADERS_DISPLAY[index]}.`
+      });
+    }
+  });
+  if (erros.length > 0) return { linhas: [], erros };
+
+  const linhas = [];
+  rows.slice(1).forEach((row, index) => {
+    const rowNumber = index + 2;
+    const valores = Array.from({ length: EAP_EXCEL_HEADERS.length }, (_, colIndex) => row[colIndex]);
+    const allEmpty = valores.every((value) => normalizeText(value) === '');
+    if (allEmpty) return;
+    linhas.push(normalizarLinhaEapImport({
+      codigo_eap: valores[0],
+      nome: valores[1],
+      pai_codigo: valores[2],
+      nivel: valores[3],
+      quantidade: valores[4],
+      unidade_medida: valores[5],
+      data_inicio_planejada: valores[6],
+      data_fim_planejada: valores[7],
+      peso: valores[8],
+      predecessora_codigo: valores[9]
+    }, rowNumber));
+  });
+
+  if (linhas.length === 0) {
+    erros.push({ linha: 2, campo: 'Arquivo', mensagem: 'Nenhuma atividade encontrada na planilha.' });
+  }
+
+  return { linhas, erros: [...erros, ...validarLinhasEapImport(linhas)] };
+};
+
+const getImportResumo = (linhas, erros = []) => ({
+  total_linhas: linhas.length,
+  atividades_raiz: linhas.filter((linha) => !linha.pai_codigo).length,
+  atividades_filhas: linhas.filter((linha) => !!linha.pai_codigo).length,
+  predecessoras: linhas.filter((linha) => !!linha.predecessora_codigo).length,
+  erros: erros.length
+});
+
+const hasEapComRdo = async (projetoId) => {
+  const row = await getQuery(`
+    SELECT COUNT(*) AS total
+    FROM rdo_atividades ra
+    INNER JOIN atividades_eap ae ON ae.id = ra.atividade_eap_id
+    WHERE ae.projeto_id = ?
+  `, [projetoId]);
+  return Number(row?.total || 0) > 0;
+};
+
+const wouldCreateParentCycle = async (atividadeId, novoPaiId) => {
+  if (!novoPaiId) return false;
+  let atual = Number(novoPaiId);
+  const visitados = new Set();
+  while (atual) {
+    if (Number(atual) === Number(atividadeId)) return true;
+    if (visitados.has(atual)) return true;
+    visitados.add(atual);
+    const row = await getQuery('SELECT pai_id FROM atividades_eap WHERE id = ?', [atual]);
+    atual = row?.pai_id ? Number(row.pai_id) : null;
+  }
+  return false;
+};
+
+router.get('/unidades', auth, async (_req, res) => {
+  res.json({ unidades: EAP_UNIDADES_PADRAO });
+});
+
+router.get('/modelo-excel', auth, async (_req, res) => {
+  try {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('EAP');
+    worksheet.addRow(EAP_EXCEL_HEADERS_DISPLAY);
+    worksheet.addRow(['1.0', 'Mobilizacao', '', 1, 1, 'vb', '15/06/2026', '26/06/2026', 100, '']);
+    worksheet.addRow(['1.1', 'Mobilizacao da equipe', '1.0', 2, 1, 'un', '15/06/2026', '16/06/2026', 20, '']);
+    worksheet.addRow(['1.2', 'Instalacao do canteiro', '1.0', 2, 250, 'm²', '17/06/2026', '19/06/2026', 25, '1.1']);
+    worksheet.addRow(['2.0', 'Fundacoes', '', 1, 1, 'vb', '20/06/2026', '25/06/2026', 100, '1.2']);
+    worksheet.addRow(['2.1', 'Escavacao', '2.0', 2, 180, 'm³', '20/06/2026', '25/06/2026', 15, '1.2']);
+    worksheet.columns.forEach((column) => { column.width = 22; });
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.dataValidations.add('F2:F1000', {
+      type: 'list',
+      allowBlank: false,
+      formulae: [`"${EAP_UNIDADES_PADRAO.join(',')}"`]
+    });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="modelo-eap-vetor.xlsx"');
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error('Erro ao gerar modelo EAP:', error);
+    res.status(500).json({ erro: 'Erro ao gerar modelo Excel da EAP.' });
+  }
+});
+
+router.post('/projeto/:projetoId/importar/preview', [auth, isGestor], uploadExcelEap.single('arquivo'), async (req, res) => {
+  try {
+    await ensureEapOptionalColumns();
+    await ensureDependenciasSchema();
+    if (!req.file) return res.status(400).json({ erro: 'Envie um arquivo Excel.' });
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(400).json({ erro: 'Tenant nao definido.' });
+    await assertProjetoTenant(req.params.projetoId, tenantId);
+
+    const { linhas, erros } = await lerPlanilhaEap(req.file.buffer);
+    res.json({
+      valido: erros.length === 0,
+      resumo: getImportResumo(linhas, erros),
+      linhas,
+      erros
+    });
+  } catch (error) {
+    console.error('Erro ao validar importacao EAP:', error);
+    res.status(error.status || 500).json({ erro: error.message || 'Erro ao validar planilha da EAP.' });
+  }
+});
+
+router.post('/projeto/:projetoId/importar/confirmar', [auth, isGestor], async (req, res) => {
+  try {
+    await ensureEapOptionalColumns();
+    await ensureDependenciasSchema();
+    const projetoId = Number(req.params.projetoId);
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(400).json({ erro: 'Tenant nao definido.' });
+    await assertProjetoTenant(projetoId, tenantId);
+
+    const linhas = Array.isArray(req.body?.linhas)
+      ? req.body.linhas.map((linha, index) => normalizarLinhaEapImport({
+        codigo_eap: linha.codigo_eap,
+        nome: linha.nome,
+        pai_codigo: linha.pai_codigo,
+        nivel: linha.nivel,
+        quantidade: linha.quantidade_total,
+        unidade_medida: linha.unidade_medida,
+        data_inicio_planejada: linha.data_inicio_planejada,
+        data_fim_planejada: linha.data_fim_planejada,
+        peso: linha.peso_percentual_projeto,
+        predecessora_codigo: linha.predecessora_codigo
+      }, linha.linha || index + 2))
+      : [];
+    const erros = validarLinhasEapImport(linhas);
+    if (linhas.length === 0) erros.push({ linha: 2, campo: 'Arquivo', mensagem: 'Nenhuma atividade encontrada para importar.' });
+    if (erros.length > 0) {
+      return res.status(400).json({ erro: 'A importacao possui erros de validacao.', erros, resumo: getImportResumo(linhas, erros) });
+    }
+
+    if (await hasEapComRdo(projetoId)) {
+      return res.status(409).json({ erro: 'Este projeto ja possui RDO vinculado a EAP atual. A importacao foi bloqueada para preservar o historico.' });
+    }
+
+    const atividadesAtuais = await allQuery('SELECT id FROM atividades_eap WHERE projeto_id = ?', [projetoId]);
+    const idsAtuais = atividadesAtuais.map((row) => row.id);
+    const codigoParaId = new Map();
+
+    await runQuery('BEGIN TRANSACTION');
+    try {
+      await runQuery('DELETE FROM atividades_dependencias WHERE projeto_id = ?', [projetoId]);
+      if (idsAtuais.length > 0) {
+        const placeholders = idsAtuais.map(() => '?').join(',');
+        await runQuery(`DELETE FROM historico_atividades WHERE atividade_eap_id IN (${placeholders})`, idsAtuais).catch(() => {});
+      }
+      await runQuery('DELETE FROM atividades_eap WHERE projeto_id = ?', [projetoId]);
+
+      const ordenadas = [...linhas].sort((a, b) => a.nivel - b.nivel || String(a.codigo_eap).localeCompare(String(b.codigo_eap), 'pt-BR', { numeric: true }));
+      for (const linha of ordenadas) {
+        const paiId = linha.pai_codigo ? codigoParaId.get(linha.pai_codigo) : null;
+        if (linha.pai_codigo && !paiId) {
+          throw new Error(`Atividade pai ${linha.pai_codigo} precisa aparecer antes da filha ${linha.codigo_eap}.`);
+        }
+        const result = await runQuery(`
+          INSERT INTO atividades_eap (
+            tenant_id, projeto_id, codigo_eap, descricao, percentual_previsto,
+            pai_id, ordem, unidade_medida, quantidade_total, criado_por,
+            id_atividade, nome, data_inicio_planejada, data_fim_planejada,
+            peso_percentual_projeto, nivel, status
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          tenantId,
+          projetoId,
+          linha.codigo_eap,
+          linha.nome,
+          linha.peso_percentual_projeto,
+          paiId || null,
+          linha.linha,
+          linha.unidade_medida,
+          linha.quantidade_total,
+          req.usuario.id,
+          `ATV-${projetoId}-${linha.codigo_eap}`,
+          linha.nome,
+          linha.data_inicio_planejada,
+          linha.data_fim_planejada,
+          linha.peso_percentual_projeto,
+          linha.nivel,
+          'Nao iniciada'
+        ]);
+        codigoParaId.set(linha.codigo_eap, result.lastID);
+      }
+
+      for (const linha of linhas) {
+        if (!linha.predecessora_codigo) continue;
+        await syncPredecessoraAtividade({
+          projetoId,
+          tenantId,
+          atividadeId: codigoParaId.get(linha.codigo_eap),
+          predecessoraId: codigoParaId.get(linha.predecessora_codigo),
+          tipoVinculo: 'FS',
+          usuarioId: req.usuario.id
+        });
+      }
+
+      await registrarAuditoria('atividades_eap', null, 'IMPORT_EXCEL', null, { projeto_id: projetoId, total: linhas.length }, req.usuario.id);
+      await runQuery('COMMIT');
+    } catch (error) {
+      await runQuery('ROLLBACK');
+      throw error;
+    }
+
+    res.json({
+      mensagem: 'EAP importada com sucesso.',
+      resumo: getImportResumo(linhas, [])
+    });
+  } catch (error) {
+    console.error('Erro ao confirmar importacao EAP:', error);
+    res.status(error.status || 500).json({ erro: error.message || 'Erro ao confirmar importacao da EAP.' });
+  }
+});
 
 // Listar atividades EAP de um projeto (tenant-aware)
 router.get('/projeto/:projetoId', auth, async (req, res) => {
@@ -447,18 +855,24 @@ router.post('/', auth, [
       if (!paiRow) {
         return res.status(400).json({ erro: 'Atividade pai inválida para este projeto.' });
       }
-      if (paiRow.pai_id) {
-        return res.status(400).json({ erro: 'Somente atividades pai (raiz) podem receber atividades filhas.' });
-      }
     }
+
+    if (unidade_medida && !EAP_UNIDADES_PADRAO.includes(String(unidade_medida).trim())) {
+      return res.status(400).json({ erro: `Unidade de medida invalida. Use uma das opcoes: ${EAP_UNIDADES_PADRAO.join(', ')}.` });
+    }
+
+    const paiNivel = ehFilha
+      ? await getQuery('SELECT nivel FROM atividades_eap WHERE id = ? AND projeto_id = ?', [pai_id, projeto_id])
+      : null;
+    const nivel = ehFilha ? Number(paiNivel?.nivel || 1) + 1 : 1;
 
     const identificador = (id_atividade && String(id_atividade).trim()) || `ATV-${projeto_id}-${codigo_eap}`;
     const nomeAtividade = (nome && String(nome).trim()) || descricaoNormalizada || `Atividade ${codigo_eap}`;
 
     const result = await runQuery(`
       INSERT INTO atividades_eap 
-      (tenant_id, projeto_id, codigo_eap, descricao, percentual_previsto, pai_id, ordem, unidade_medida, quantidade_total, criado_por, id_atividade, nome, data_inicio_planejada, data_fim_planejada, peso_percentual_projeto)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (tenant_id, projeto_id, codigo_eap, descricao, percentual_previsto, pai_id, ordem, unidade_medida, quantidade_total, criado_por, id_atividade, nome, data_inicio_planejada, data_fim_planejada, peso_percentual_projeto, nivel)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       tenantId,
       projeto_id,
@@ -474,7 +888,8 @@ router.post('/', auth, [
       nomeAtividade,
       dataInicio || null,
       dataFim || null,
-      peso
+      peso,
+      nivel
     ]);
 
     if (predecessora_id) {
@@ -530,22 +945,28 @@ router.put('/:id', auth, async (req, res) => {
 
     const novoPaiId = (typeof pai_id !== 'undefined') ? (pai_id || null) : atividadeAnterior.pai_id;
     const ehFilha = !!novoPaiId;
+    let novoPai = null;
 
     if (ehFilha) {
       if (Number(novoPaiId) === Number(id)) {
         return res.status(400).json({ erro: 'Uma atividade não pode ser pai dela mesma.' });
       }
 
-      const novoPai = await getQuery(
-        'SELECT id, pai_id FROM atividades_eap WHERE id = ? AND projeto_id = ?',
+      if (await wouldCreateParentCycle(id, novoPaiId)) {
+        return res.status(400).json({ erro: 'Atividade pai invalida: a hierarquia ficaria circular.' });
+      }
+
+      novoPai = await getQuery(
+        'SELECT id, pai_id, nivel FROM atividades_eap WHERE id = ? AND projeto_id = ?',
         [novoPaiId, atividadeAnterior.projeto_id]
       );
       if (!novoPai) {
         return res.status(400).json({ erro: 'Atividade pai inválida para este projeto.' });
       }
-      if (novoPai.pai_id) {
-        return res.status(400).json({ erro: 'Somente atividades pai (raiz) podem receber atividades filhas.' });
-      }
+    }
+
+    if (unidade_medida && !EAP_UNIDADES_PADRAO.includes(String(unidade_medida).trim())) {
+      return res.status(400).json({ erro: `Unidade de medida invalida. Use uma das opcoes: ${EAP_UNIDADES_PADRAO.join(', ')}.` });
     }
 
     const dataInicioRaw = (typeof data_inicio_planejada !== 'undefined') ? data_inicio_planejada : atividadeAnterior.data_inicio_planejada;
@@ -590,12 +1011,13 @@ router.put('/:id', auth, async (req, res) => {
 
     const novoIdentificador = (id_atividade && String(id_atividade).trim()) || atividadeAnterior.id_atividade || `ATV-${atividadeAnterior.projeto_id}-${codigo_eap || atividadeAnterior.codigo_eap}`;
     const novoNome = (nome && String(nome).trim()) || novaDescricao || atividadeAnterior.descricao;
+    const novoNivel = ehFilha ? Number(novoPai?.nivel || 1) + 1 : 1;
 
     await runQuery(`
       UPDATE atividades_eap 
-      SET codigo_eap = ?, descricao = ?, percentual_previsto = ?, ordem = ?, unidade_medida = ?, quantidade_total = ?, pai_id = ?, id_atividade = ?, nome = ?, data_inicio_planejada = ?, data_fim_planejada = ?, peso_percentual_projeto = ?, atualizado_em = CURRENT_TIMESTAMP
+      SET codigo_eap = ?, descricao = ?, percentual_previsto = ?, ordem = ?, unidade_medida = ?, quantidade_total = ?, pai_id = ?, id_atividade = ?, nome = ?, data_inicio_planejada = ?, data_fim_planejada = ?, peso_percentual_projeto = ?, nivel = ?, atualizado_em = CURRENT_TIMESTAMP
       WHERE id = ?
-    `, [codigo_eap, novaDescricao, peso, ordem, unidade_medida || null, quantidade_total || 0, novoPaiId, novoIdentificador, novoNome, dataInicio || null, dataFim || null, peso, id]);
+    `, [codigo_eap, novaDescricao, peso, ordem, unidade_medida || null, quantidade_total || 0, novoPaiId, novoIdentificador, novoNome, dataInicio || null, dataFim || null, peso, novoNivel, id]);
 
     if (typeof predecessora_id !== 'undefined') {
       if (predecessora_id) {

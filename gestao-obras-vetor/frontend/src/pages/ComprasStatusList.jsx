@@ -6,21 +6,21 @@ import { listarRequisicoesProjeto, listarRequisicoes, concluirRequisicao } from 
 import { useNotification } from '../context/NotificationContext';
 import { Search, FileText, Clock } from 'lucide-react';
 
-// Mapeamento: slug → { label, statuses[] }
-// "aguardando-decisao" consolida Cotações recebidas + Aguardando decisão gestor geral
+// Mapeamento: slug -> { label, statuses[] }
+// "Cotações recebidas" é a etapa oficial de decisão do Gestor Geral.
 const SLUG_MAP = {
   'solicitado':         { label: 'Solicitado',           statuses: ['Em análise'] },
   'em-cotacao':         { label: 'Em cotação',           statuses: ['Em cotação'] },
-  'aguardando-decisao': { label: 'Aguardando decisão',   statuses: ['Cotações recebidas', 'Aguardando decisão gestor geral'] },
+  'cotacoes-recebidas': { label: 'Cotações recebidas',   statuses: ['Cotações recebidas'] },
   'aprovado-compra':    { label: 'Aprovado para compra', statuses: ['Compra autorizada'] },
   'comprado':           { label: 'Comprado',             statuses: ['Finalizada'] },
 };
 
-// Botão de ação contextual por perfil + slug
+// Botao de acao contextual por perfil + slug
 const ACAO_MAP = {
   'solicitado':         { perfis: ['Gestor Geral'], label: 'Analisar' },
   'em-cotacao':         { perfis: ['ADM', 'Gestor Geral'],                                   label: 'Cotar' },
-  'aguardando-decisao': { perfis: ['Gestor Geral'],                                          label: 'Decidir' },
+  'cotacoes-recebidas': { perfis: ['Gestor Geral'],                                          label: 'Decidir' },
   'aprovado-compra':    { perfis: ['ADM', 'Gestor Geral'],                                   label: 'Registrar compra' },
   'comprado':           { perfis: ['ADM', 'Gestor Geral'],                                   label: 'Finalizar entrega' },
 };
@@ -37,13 +37,13 @@ const URG_BADGE = {
 };
 
 const diasDesde = (iso) => {
-  if (!iso) return '—';
+  if (!iso) return '-';
   const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
   if (d === 0) return 'hoje';
   if (d === 1) return 'há 1 dia';
   return `há ${d} dias`;
 };
-const fmtData = (iso) => iso ? new Date(iso).toLocaleDateString('pt-BR') : '—';
+const fmtData = (iso) => iso ? new Date(iso).toLocaleDateString('pt-BR') : '-';
 
 export default function ComprasStatusList() {
   const { projetoId, statusSlug, statusItem } = useParams();
@@ -184,7 +184,7 @@ export default function ComprasStatusList() {
                     </td>
                     {!projetoId && (
                       <td style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {req.projeto_nome || '—'}
+                        {req.projeto_nome || '-'}
                       </td>
                     )}
                     <td style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--text-primary)' }}>
@@ -197,7 +197,7 @@ export default function ComprasStatusList() {
                       {req.total_itens ?? 0}
                     </td>
                     <td style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                      {req.solicitante_nome || '—'}
+                      {req.solicitante_nome || '-'}
                     </td>
                     <td style={{ fontSize: '0.83rem', color: 'var(--text-muted)' }}>
                       {fmtData(req.criado_em)}

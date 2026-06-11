@@ -117,6 +117,12 @@ export const deleteAtividade = (id) => api.delete(`/eap/${id}`);
 export const recalcularAvanco = (id) => api.post(`/eap/${id}/recalcular`);
 export const getHistoricoAtividade = (id) => api.get(`/eap/${id}/historico`);
 export const recalcularEapProjeto = (projetoId) => api.post(`/eap/projeto/${projetoId}/recalcular-tudo`);
+export const getUnidadesEAP = () => api.get('/eap/unidades');
+export const baixarModeloEAP = () => api.get('/eap/modelo-excel', { responseType: 'blob' });
+export const previewImportacaoEAP = (projetoId, formData) =>
+  api.post(`/eap/projeto/${projetoId}/importar/preview`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+export const confirmarImportacaoEAP = (projetoId, linhas) =>
+  api.post(`/eap/projeto/${projetoId}/importar/confirmar`, { linhas });
 
 // RDOs
 export const getRDOs = (projetoId) => api.get(`/rdos/projeto/${projetoId}`);
@@ -225,6 +231,8 @@ export const listarRequisicoesProjeto = (projetoId, params) =>
 export const detalharRequisicao = (id) => api.get(`/requisicoes/${id}`);
 export const analisarItemRequisicao = (reqId, itemId, data) =>
   api.patch(`/requisicoes/${reqId}/itens/${itemId}/analisar`, data);
+export const solicitarCorrecaoItem = (reqId, itemId, data) =>
+  api.patch(`/requisicoes/${reqId}/itens/${itemId}/solicitar-correcao`, data);
 export const inserirCotacaoItem = (reqId, itemId, data) =>
   api.post(`/requisicoes/${reqId}/itens/${itemId}/cotacoes`, data);
 export const selecionarCotacaoItem = (reqId, itemId, cotacaoId) =>

@@ -12,7 +12,7 @@ const URGENCIA_BADGE = { Normal: 'badge badge-gray', Urgente: 'badge badge-yello
 const URGENCIA_COLOR = { Normal: '#64748b', Urgente: '#d97706', Emergencial: '#dc2626' };
 const STATUS_BADGE = {
   'Em análise': 'badge badge-blue', 'Em cotação': 'badge badge-blue',
-  'Aguardando decisão gestor geral': 'badge badge-yellow',
+  'Cotações recebidas': 'badge badge-yellow',
   'Compra autorizada': 'badge badge-green', 'Finalizada': 'badge badge-green',
   'Encerrada sem compra': 'badge badge-red',
 };

@@ -6,6 +6,7 @@ import { fmtTs, fmtData } from '../utils/date';
 import {
   detalharRequisicao, analisarItemRequisicao, inserirCotacaoItem, editarCotacaoItem,
   selecionarCotacaoItem, marcarItemComprado, cancelarItemRequisicao, devolverCotacaoItem,
+  solicitarCorrecaoItem,
   finalizarCotacaoItem, alterarQuantidadeItem, editarRequisicaoHeader, editarItemRequisicao,
   aprovarTodosItens,
 } from '../services/api';
@@ -13,6 +14,7 @@ import {
 const URGENCIA_BADGE  = { Normal: 'badge badge-gray', Urgente: 'badge badge-yellow', Emergencial: 'badge badge-red' };
 const STATUS_ITEM_BADGE = {
   'Aguardando análise':   'badge badge-blue',
+  'Correção solicitada':  'badge badge-yellow',
   'Reprovado':            'badge badge-red',
   'Em cotação':           'badge badge-green',
   'Cotação finalizada':   'badge badge-blue',
@@ -22,7 +24,7 @@ const STATUS_ITEM_BADGE = {
 };
 const STATUS_REQ_BADGE = {
   'Em análise': 'badge badge-blue', 'Em cotação': 'badge badge-blue',
-  'Aguardando decisão gestor geral': 'badge badge-yellow',
+  'Cotações recebidas': 'badge badge-yellow',
   'Compra autorizada': 'badge badge-green', 'Finalizada': 'badge badge-green',
   'Encerrada sem compra': 'badge badge-red',
 };
@@ -47,6 +49,7 @@ export default function RequisicaoDetalhe() {
   const [modalAnalise,  setModalAnalise]  = useState(null);   // { itemId }
   const [modalCotacao,  setModalCotacao]  = useState(null);   // { itemId, editando: bool, cotacoesExistentes: [] }
   const [modalCancelar, setModalCancelar] = useState(null);   // { itemId }
+  const [modalCorrecao, setModalCorrecao] = useState(null);   // { itemId }
   const [modalDevolver, setModalDevolver] = useState(null);   // { itemId }
   const [modalAlterar,  setModalAlterar]  = useState(null);   // { itemId, quantidadeAtual, unidade }
   const [novaQuantidade, setNovaQuantidade] = useState('');
@@ -61,6 +64,7 @@ export default function RequisicaoDetalhe() {
   const [formAnalise,    setFormAnalise]   = useState({ aprovado: null, motivo: '' });
   const [slots, setSlots]                 = useState([{ ...SLOT_VAZIO }, { ...SLOT_VAZIO }, { ...SLOT_VAZIO }]);
   const [motivoCancelar, setMotivoCancelar] = useState('');
+  const [motivoCorrecao, setMotivoCorrecao] = useState('');
   const [motivoDevolver, setMotivoDevolver] = useState('');
   const [toast, setToast] = useState(null); // { msg }
 
@@ -211,6 +215,19 @@ export default function RequisicaoDetalhe() {
     finally { setSalvando(false); }
   };
 
+  const solicitarCorrecao = async () => {
+    if (!motivoCorrecao.trim()) { setErro('Informe a correção necessária.'); return; }
+    setSalvando(true); setErro('');
+    try {
+      await solicitarCorrecaoItem(id, modalCorrecao.itemId, { motivo: motivoCorrecao });
+      setModalCorrecao(null);
+      setMotivoCorrecao('');
+      await carregar();
+      showToast('Correção solicitada ao solicitante.');
+    } catch (err) { setErro(err.response?.data?.erro || 'Erro ao solicitar correção.'); }
+    finally { setSalvando(false); }
+  };
+
   const devolverCotacao = async () => {
     if (!motivoDevolver.trim()) { setErro('Informe o motivo da devolução.'); return; }
     setSalvando(true); setErro('');
@@ -301,7 +318,9 @@ export default function RequisicaoDetalhe() {
   const itensNegados = itens.filter((i) =>  ['Reprovado', 'Cancelado'].includes(i.status_item));
   const temAgAnalise = itensAtivos.some((i) => i.status_item === 'Aguardando análise');
   const podeGestor   = ['Gestor Geral'].includes(perfil);
-  const podeADM      = ['ADM', 'Gestor Geral'].includes(perfil);
+  const podeCotar    = ['ADM', 'Gestor Geral', 'Gestor Local'].includes(perfil);
+  const podeComprar  = perfil === 'ADM';
+  const isSolicitante = Number(req.solicitante_id) === Number(usuario?.id);
   const voltarLink   = projetoId ? `/projeto/${projetoId}/compras` : '/compras';
 
   return (
@@ -358,10 +377,13 @@ export default function RequisicaoDetalhe() {
           idx={idx}
           perfil={perfil}
           podeGestor={podeGestor}
-          podeADM={podeADM}
+          podeCotar={podeCotar}
+          podeComprar={podeComprar}
+          isSolicitante={isSolicitante}
           reqId={id}
           reqStatus={req.status_requisicao}
           onAnalisar={() => { setFormAnalise({ aprovado: null, motivo: '' }); setModalAnalise({ itemId: item.id }); setErro(''); }}
+          onSolicitarCorrecao={() => { setMotivoCorrecao(''); setModalCorrecao({ itemId: item.id }); setErro(''); }}
           onCotacoes={() => abrirModalCotacao(item)}
           onSelecionar={selecionarFornecedor}
           onAutorizar={() => autorizarCompra(item.id)}
@@ -419,6 +441,8 @@ export default function RequisicaoDetalhe() {
                 ITEM_CANCELADO:          'Item cancelado',
                 ITEM_COMPRADO:           'Item comprado',
                 ITEM_EDITADO:            'Item editado',
+                ITEM_CORRIGIDO_SOLICITANTE: 'Item corrigido pelo solicitante',
+                CORRECAO_SOLICITADA:     'Correção solicitada',
                 COTACAO_INSERIDA:        'Cotação inserida',
                 COTACAO_EDITADA:         'Cotação editada',
                 COTACAO_FINALIZADA:      'Cotação finalizada',
@@ -497,6 +521,34 @@ export default function RequisicaoDetalhe() {
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
               <button className="btn btn-outline" onClick={() => setModalAnalise(null)}>Cancelar</button>
               <button className="btn btn-primary" onClick={analisar} disabled={salvando}>{salvando ? 'Salvando...' : 'Confirmar'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Modal Solicitar Correção ═══ */}
+      {modalCorrecao && (
+        <div className="modal-overlay fade-in" role="dialog" aria-modal="true" onClick={() => setModalCorrecao(null)}>
+          <div className="modal-card" style={{ maxWidth: 500 }} onClick={(e) => e.stopPropagation()}>
+            <h2 className="card-header" style={{ marginBottom: '1.25rem' }}>Solicitar Alteração</h2>
+            <p style={{ marginBottom: '1rem', fontSize: '0.9rem', color: 'var(--gray-500)' }}>
+              Informe o que o solicitante precisa corrigir. O item voltará para análise após a correção.
+            </p>
+            <div style={{ marginBottom: '1rem' }}>
+              <label className="form-label">Correção necessária *</label>
+              <textarea
+                className="form-input"
+                rows={4}
+                style={{ resize: 'vertical' }}
+                value={motivoCorrecao}
+                onChange={(e) => setMotivoCorrecao(e.target.value)}
+                placeholder="Ex: detalhar especificação técnica, ajustar quantidade, informar local de aplicação..."
+              />
+            </div>
+            {erro && <p className="alert alert-error" style={{ marginBottom: '1rem' }}>{erro}</p>}
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setModalCorrecao(null)}>Voltar</button>
+              <button className="btn btn-primary" onClick={solicitarCorrecao} disabled={salvando}>{salvando ? 'Enviando...' : 'Solicitar Alteração'}</button>
             </div>
           </div>
         </div>
@@ -759,12 +811,13 @@ export default function RequisicaoDetalhe() {
 /* ──────────────────────────────────────────────────────────────────────────
    Sub-componente: card de item ativo
 ──────────────────────────────────────────────────────────────────────────── */
-function ItemCard({ item, idx, perfil, podeGestor, podeADM, reqId, reqStatus,
-  onAnalisar, onCotacoes, onSelecionar, onAutorizar, onCancelar, onDevolver, onAlterar, onEditar }) {
+function ItemCard({ item, idx, perfil, podeGestor, podeCotar, podeComprar, isSolicitante, reqId, reqStatus,
+  onAnalisar, onSolicitarCorrecao, onCotacoes, onSelecionar, onAutorizar, onCancelar, onDevolver, onAlterar, onEditar }) {
 
   const temCotacoes  = (item.cotacoes?.length || 0) > 0;
   const cotCompletas = (item.cotacoes?.length || 0) >= 3;
   const reqFinalizada = ['Finalizada', 'Encerrada sem compra'].includes(reqStatus);
+  const podeCorrigir = isSolicitante && item.status_item === 'Correção solicitada';
 
   return (
     <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
@@ -790,6 +843,11 @@ function ItemCard({ item, idx, perfil, podeGestor, podeADM, reqId, reqStatus,
 
       {item.especificacao_tecnica && <p style={{ color: 'var(--gray-600)', fontSize: '0.84rem', margin: '0 0 0.4rem' }}><strong>Especificação:</strong> {item.especificacao_tecnica}</p>}
       {item.justificativa         && <p style={{ color: 'var(--gray-600)', fontSize: '0.84rem', margin: '0 0 0.4rem' }}><strong>Justificativa:</strong> {item.justificativa}</p>}
+      {item.status_item === 'Correção solicitada' && item.motivo_reprovacao && (
+        <p style={{ color: 'var(--badge-yellow-color)', background: 'var(--badge-yellow-bg)', border: '1px solid var(--badge-yellow-color)', borderRadius: 8, padding: '0.65rem 0.75rem', fontSize: '0.84rem', margin: '0.75rem 0 0' }}>
+          <strong>Correção solicitada:</strong> {item.motivo_reprovacao}
+        </p>
+      )}
 
       {/* Cotações */}
       {temCotacoes && (
@@ -845,17 +903,27 @@ function ItemCard({ item, idx, perfil, podeGestor, podeADM, reqId, reqStatus,
             Analisar Item
           </button>
         )}
-        {podeADM && !reqFinalizada && ['Em cotação', 'Cotação finalizada'].includes(item.status_item) && (
+        {podeGestor && !reqFinalizada && item.status_item === 'Aguardando análise' && (
+          <button className="btn btn-soft-yellow" style={{ padding: '6px 14px', fontSize: '0.85rem' }} onClick={onSolicitarCorrecao}>
+            Solicitar Alteração
+          </button>
+        )}
+        {podeCorrigir && !reqFinalizada && (
+          <button className="btn btn-soft-yellow" style={{ padding: '6px 14px', fontSize: '0.85rem' }} onClick={onEditar}>
+            Corrigir Item
+          </button>
+        )}
+        {podeCotar && !reqFinalizada && ['Em cotação', 'Cotação finalizada'].includes(item.status_item) && (
           <button className="btn btn-soft-blue" style={{ padding: '6px 14px', fontSize: '0.85rem' }} onClick={onCotacoes}>
             {cotCompletas ? '✎ Editar Cotações' : `+ Cotações (${item.cotacoes?.length || 0}/3)`}
           </button>
         )}
-        {podeADM && !reqFinalizada && item.status_item === 'Aprovado para compra' && (
+        {podeComprar && !reqFinalizada && item.status_item === 'Aprovado para compra' && (
           <button className="btn btn-soft-green" style={{ padding: '6px 14px', fontSize: '0.85rem' }} onClick={onAutorizar}>
             ✓ Autorizar Compra
           </button>
         )}
-        {podeADM && !reqFinalizada && !['Comprado', 'Cancelado'].includes(item.status_item) && perfil !== 'ADM' && (
+        {podeGestor && !reqFinalizada && !['Comprado', 'Cancelado'].includes(item.status_item) && (
           <button className="btn btn-soft-yellow" style={{ padding: '6px 14px', fontSize: '0.85rem' }} onClick={onEditar}>
             ✎ Editar Item
           </button>

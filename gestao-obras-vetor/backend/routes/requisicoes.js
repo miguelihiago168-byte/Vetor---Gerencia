@@ -35,7 +35,6 @@ const STATUS_REQ = {
   EM_ANALISE:              'Em análise',
   EM_COTACAO:              'Em cotação',
   COT_RECEBIDAS:           'Cotações recebidas',
-  AG_DECISAO:              'Aguardando decisão gestor geral',
   AUTORIZADA:              'Compra autorizada',
   FINALIZADA:              'Finalizada',
   ENCERRADA_SEM_COMPRA:    'Encerrada sem compra',
@@ -43,6 +42,7 @@ const STATUS_REQ = {
 
 const STATUS_ITEM = {
   AG_ANALISE:      'Aguardando análise',
+  CORRECAO:        'Correção solicitada',
   REPROVADO:       'Reprovado',
   EM_COTACAO:      'Em cotação',
   COT_FINALIZADA:  'Cotação finalizada',
@@ -134,7 +134,7 @@ const atualizarStatusRequisicao = async (requisicaoId, usuarioId) => {
     novoStatus = STATUS_REQ.COT_RECEBIDAS;
   } else if (algum(STATUS_ITEM.EM_COTACAO)) {
     novoStatus = STATUS_REQ.EM_COTACAO;
-  } else if (todos(STATUS_ITEM.AG_ANALISE)) {
+  } else if (algum(STATUS_ITEM.CORRECAO) || todos(STATUS_ITEM.AG_ANALISE)) {
     novoStatus = STATUS_REQ.EM_ANALISE;
   }
 
@@ -507,7 +507,6 @@ const montarKanbanRequisicoes = async (where, params) => {
     { id: 'solicitado',    label: 'Solicitado',             status: STATUS_REQ.EM_ANALISE },
     { id: 'em_cotacao',    label: 'Em cotação',             status: STATUS_REQ.EM_COTACAO },
     { id: 'cot_recebidas', label: 'Cotações recebidas',     status: STATUS_REQ.COT_RECEBIDAS },
-    { id: 'ag_aprovacao',  label: 'Aguardando aprovação',   status: STATUS_REQ.AG_DECISAO },
     { id: 'liberado',      label: 'Liberado para compra',   status: STATUS_REQ.AUTORIZADA },
     { id: 'comprado',      label: 'Comprado',               status: STATUS_REQ.FINALIZADA },
   ];
@@ -577,7 +576,6 @@ router.get('/kanban', async (req, res) => {
           { id: 'solicitado',    label: 'Solicitado',           count: 0, valor_total: 0, requisicoes: [] },
           { id: 'em_cotacao',    label: 'Em cotação',           count: 0, valor_total: 0, requisicoes: [] },
           { id: 'cot_recebidas', label: 'Cotações recebidas',   count: 0, valor_total: 0, requisicoes: [] },
-          { id: 'ag_aprovacao',  label: 'Aguardando aprovação', count: 0, valor_total: 0, requisicoes: [] },
           { id: 'liberado',      label: 'Liberado para compra', count: 0, valor_total: 0, requisicoes: [] },
           { id: 'comprado',      label: 'Comprado',             count: 0, valor_total: 0, requisicoes: [] },
         ]);
@@ -754,7 +752,7 @@ router.get('/', async (req, res) => {
         'SELECT projeto_id FROM projeto_usuarios WHERE usuario_id = ?',
         [usuario.id]
       );
-      if (projetosUsuario.length === 0) return res.json({ requisicoes: [], resumo: { total: 0, ag_analise: 0, em_cotacao: 0, ag_decisao: 0, prontos: 0 } });
+      if (projetosUsuario.length === 0) return res.json({ requisicoes: [], resumo: { total: 0, ag_analise: 0, em_cotacao: 0, cotacoes_recebidas: 0, prontos: 0 } });
       const ids = projetosUsuario.map((p) => p.projeto_id).join(',');
       where += ` AND r.projeto_id IN (${ids})`;
     }
@@ -787,7 +785,7 @@ router.get('/', async (req, res) => {
       total: rows.length,
       ag_analise: rows.filter(r => r.status_requisicao === 'Em análise').length,
       em_cotacao: rows.filter(r => r.status_requisicao === 'Em cotação').length,
-      ag_decisao: rows.filter(r => r.status_requisicao === 'Aguardando decisão gestor geral').length,
+      cotacoes_recebidas: rows.filter(r => r.status_requisicao === STATUS_REQ.COT_RECEBIDAS).length,
       prontos:    rows.filter(r => r.status_requisicao === 'Compra autorizada').length,
     };
 
@@ -1063,6 +1061,81 @@ router.patch('/:id/itens/:itemId/analisar', async (req, res) => {
   }
 });
 
+// Gestor Geral devolve item ao solicitante para ajuste antes da cotação.
+router.patch('/:id/itens/:itemId/solicitar-correcao', async (req, res) => {
+  try {
+    const usuario = await carregarPerfilUsuario(req.usuario.id);
+    const perfil = inferirPerfil(usuario);
+
+    if (perfil !== 'Gestor Geral') {
+      return res.status(403).json({ erro: 'Apenas Gestor Geral pode solicitar correção do item.' });
+    }
+
+    const motivo = String(req.body.motivo || '').trim();
+    if (!motivo) {
+      return res.status(400).json({ erro: 'Informe o motivo da correção solicitada.' });
+    }
+
+    const item = await getQuery(
+      'SELECT * FROM requisicao_itens WHERE id = ? AND requisicao_id = ?',
+      [req.params.itemId, req.params.id]
+    );
+    if (!item) return res.status(404).json({ erro: 'Item não encontrado nesta requisição.' });
+
+    if (item.status_item !== STATUS_ITEM.AG_ANALISE) {
+      return res.status(409).json({ erro: `Só é possível solicitar correção de item em análise. Status atual: ${item.status_item}` });
+    }
+
+    const req2 = await getQuery(
+      'SELECT projeto_id, solicitante_id, numero_requisicao FROM requisicoes WHERE id = ?',
+      [req.params.id]
+    );
+    if (!req2) return res.status(404).json({ erro: 'Requisição não encontrada.' });
+
+    const ok = await assertProjectAccess(req, res, Number(req2.projeto_id));
+    if (!ok) return;
+
+    await runQuery(
+      `UPDATE requisicao_itens
+         SET status_item = ?, motivo_reprovacao = ?, atualizado_em = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [STATUS_ITEM.CORRECAO, motivo, item.id]
+    );
+
+    await registrarHistorico(
+      Number(req.params.id), item.id, usuario.id,
+      'CORRECAO_SOLICITADA', item.status_item, STATUS_ITEM.CORRECAO,
+      { motivo }
+    );
+
+    await atualizarStatusRequisicao(Number(req.params.id), usuario.id);
+
+    if (req2.solicitante_id && Number(req2.solicitante_id) !== Number(usuario.id)) {
+      try {
+        await runQuery(
+          `INSERT OR IGNORE INTO notificacoes (usuario_id, tipo, mensagem, referencia_tipo, referencia_id)
+           VALUES (?, ?, ?, ?, ?)`,
+          [
+            req2.solicitante_id,
+            'requisicao_correcao',
+            `Correção solicitada na requisição ${req2.numero_requisicao || '#' + req.params.id}: ${item.descricao}`,
+            'requisicao',
+            Number(req.params.id)
+          ]
+        );
+      } catch (e) {
+        console.warn('Falha ao notificar solicitante sobre correção:', e?.message || e);
+      }
+    }
+
+    const itemAtualizado = await getQuery('SELECT * FROM requisicao_itens WHERE id = ?', [item.id]);
+    res.json(itemAtualizado);
+  } catch (err) {
+    console.error('[requisicoes] Erro ao solicitar correção:', err);
+    res.status(500).json({ erro: 'Erro ao solicitar correção do item.' });
+  }
+});
+
 // ─── PATCH /api/requisicoes/:id/aprovar-todos ────────────────────────────
 // Aprova em lote todos os itens "Aguardando análise" da requisição
 router.patch('/:id/aprovar-todos', async (req, res) => {
@@ -1117,8 +1190,8 @@ router.post('/:id/itens/:itemId/cotacoes', async (req, res) => {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
 
-    if (!['ADM', 'Gestor Geral'].includes(perfil)) {
-      return res.status(403).json({ erro: 'Apenas ADM ou Gestor Geral podem cadastrar cotações.' });
+    if (!['ADM', 'Gestor Geral', 'Gestor Local'].includes(perfil)) {
+      return res.status(403).json({ erro: 'Apenas ADM, Gestor Geral ou Gestor Local podem cadastrar cotações.' });
     }
 
     const item = await getQuery(
@@ -1231,7 +1304,7 @@ router.patch('/:id/itens/:itemId/cotacoes/:cotacaoId', async (req, res) => {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
 
-    if (!['ADM', 'Gestor Geral'].includes(perfil)) {
+    if (!['ADM', 'Gestor Geral', 'Gestor Local'].includes(perfil)) {
       return res.status(403).json({ erro: 'Sem permissão para editar cotação.' });
     }
 
@@ -1326,7 +1399,7 @@ router.patch('/:id/itens/:itemId/finalizar-cotacao', async (req, res) => {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
 
-    if (!['ADM', 'Gestor Geral'].includes(perfil)) {
+    if (!['ADM', 'Gestor Geral', 'Gestor Local'].includes(perfil)) {
       return res.status(403).json({ erro: 'Sem permissão para finalizar cotação.' });
     }
 
@@ -1379,7 +1452,7 @@ router.patch('/:id/itens/:itemId/cotacoes/:cotacaoId/selecionar', async (req, re
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
 
-    if (perfil !== 'Gestor Geral' && perfil !== 'ADM') {
+    if (perfil !== 'Gestor Geral') {
       return res.status(403).json({ erro: 'Apenas Gestor Geral pode selecionar o fornecedor.' });
     }
 
@@ -1446,7 +1519,7 @@ router.patch('/:id/itens/:itemId/comprado', async (req, res) => {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
 
-    if (!['ADM', 'Gestor Geral'].includes(perfil)) {
+    if (perfil !== 'ADM') {
       return res.status(403).json({ erro: 'Apenas ADM pode marcar item como comprado.' });
     }
 
@@ -1495,21 +1568,28 @@ router.patch('/:id/itens/:itemId/editar', async (req, res) => {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
 
-    if (perfil !== 'Gestor Geral') {
-      return res.status(403).json({ erro: 'Sem permissão para editar item.' });
-    }
-
     const item = await getQuery(
       'SELECT * FROM requisicao_itens WHERE id = ? AND requisicao_id = ?',
       [req.params.itemId, req.params.id]
     );
     if (!item) return res.status(404).json({ erro: 'Item não encontrado.' });
 
+    const req2 = await getQuery('SELECT projeto_id, solicitante_id FROM requisicoes WHERE id = ?', [req.params.id]);
+    if (!req2) return res.status(404).json({ erro: 'Requisição não encontrada.' });
+
+    const isGestorGeral = perfil === 'Gestor Geral';
+    const isSolicitanteCorrigindo =
+      Number(req2.solicitante_id) === Number(usuario.id) &&
+      item.status_item === STATUS_ITEM.CORRECAO;
+
+    if (!isGestorGeral && !isSolicitanteCorrigindo) {
+      return res.status(403).json({ erro: 'Sem permissão para editar item.' });
+    }
+
     if ([STATUS_ITEM.COMPRADO, STATUS_ITEM.CANCELADO].includes(item.status_item)) {
       return res.status(409).json({ erro: `Não é possível editar um item com status "${item.status_item}".` });
     }
 
-    const req2 = await getQuery('SELECT projeto_id FROM requisicoes WHERE id = ?', [req.params.id]);
     const ok = await assertProjectAccess(req, res, Number(req2.projeto_id));
     if (!ok) return;
 
@@ -1564,6 +1644,8 @@ router.patch('/:id/itens/:itemId/editar', async (req, res) => {
              quantidade_original = ?,
              alterado_por_nome = ?,
              alterado_em = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE alterado_em END,
+             status_item = CASE WHEN ? = 1 THEN ? ELSE status_item END,
+             motivo_reprovacao = CASE WHEN ? = 1 THEN NULL ELSE motivo_reprovacao END,
              atualizado_em = CURRENT_TIMESTAMP
        WHERE id = ?`,
       [
@@ -1578,15 +1660,24 @@ router.patch('/:id/itens/:itemId/editar', async (req, res) => {
         quantidadeOriginal,
         alteradoPorNome,
         novaQtd !== item.quantidade ? 1 : 0,
+        isSolicitanteCorrigindo ? 1 : 0,
+        STATUS_ITEM.AG_ANALISE,
+        isSolicitanteCorrigindo ? 1 : 0,
         item.id,
       ]
     );
 
     await registrarHistorico(
       Number(req.params.id), item.id, usuario.id,
-      'ITEM_EDITADO', null, null,
+      isSolicitanteCorrigindo ? 'ITEM_CORRIGIDO_SOLICITANTE' : 'ITEM_EDITADO',
+      isSolicitanteCorrigindo ? item.status_item : null,
+      isSolicitanteCorrigindo ? STATUS_ITEM.AG_ANALISE : null,
       { alteracoes, editado_por: usuario.nome }
     );
+
+    if (isSolicitanteCorrigindo) {
+      await atualizarStatusRequisicao(Number(req.params.id), usuario.id);
+    }
 
     const itemAtualizado = await getQuery('SELECT * FROM requisicao_itens WHERE id = ?', [item.id]);
     res.json(itemAtualizado);
@@ -1816,8 +1907,8 @@ router.patch('/:id/comprar-todos', async (req, res) => {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
 
-    if (!['ADM', 'Gestor Geral'].includes(perfil)) {
-      return res.status(403).json({ erro: 'Apenas ADM ou Gestor Geral podem confirmar compra em lote.' });
+    if (perfil !== 'ADM') {
+      return res.status(403).json({ erro: 'Apenas ADM pode confirmar compra em lote.' });
     }
 
     const req2 = await getQuery('SELECT projeto_id FROM requisicoes WHERE id = ?', [req.params.id]);

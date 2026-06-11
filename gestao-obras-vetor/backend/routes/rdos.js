@@ -836,7 +836,7 @@ router.post('/', auth, [
             percentual,
             atividadeEap ? atividadeEap.percentual_executado : 0,
             req.usuario.id,
-            data_relatorio
+            dataRelatorioStr
           ]);
         } catch (err) {
           // se histórico falhar, continuar
@@ -885,7 +885,8 @@ router.post('/', auth, [
 
   } catch (error) {
     console.error('Erro ao criar RDO:', error);
-    res.status(500).json({ erro: 'Erro ao criar RDO.' });
+    const detalhe = process.env.NODE_ENV === 'production' ? null : (error.message || String(error));
+    res.status(500).json({ erro: detalhe ? `Erro ao criar RDO: ${detalhe}` : 'Erro ao criar RDO.' });
   }
 });
 

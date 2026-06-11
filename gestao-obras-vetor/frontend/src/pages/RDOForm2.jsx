@@ -478,7 +478,7 @@ function RDOForm2() {
     );
 
     const leaves = atividadesEap.filter(a => {
-      if (a.pai_id == null || atividadesEap.some(x => x.pai_id === a.id)) return false;
+      if (atividadesEap.some(x => x.pai_id === a.id)) return false;
       if (idsJaAdicionados.has(String(a.id))) return false;
       // Excluir atividades 100% concluídas
       const qtdTotal = Number(a.quantidade_total || 0);
@@ -497,7 +497,7 @@ function RDOForm2() {
       groupsMap.get(pid).push(leaf);
     }
     let groups = Array.from(groupsMap.entries()).map(([pid, children]) => {
-      const parent = atividadesEap.find(a => a.id === pid) || null;
+      const parent = pid == null ? null : (atividadesEap.find(a => a.id === pid) || null);
       children.sort((c1, c2) => compareCodigo(c1.codigo_eap, c2.codigo_eap));
       return { parentId: pid, parent, children };
     });

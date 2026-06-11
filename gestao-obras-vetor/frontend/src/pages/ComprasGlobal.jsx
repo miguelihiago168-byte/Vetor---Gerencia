@@ -13,7 +13,7 @@ const ITEM_VAZIO     = { descricao: '', quantidade: '', unidade: 'un', especific
 const STATUS_BADGE = {
   'Em análise':                      'badge badge-blue',
   'Em cotação':                      'badge badge-blue',
-  'Aguardando decisão gestor geral': 'badge badge-yellow',
+  'Cotações recebidas':              'badge badge-yellow',
   'Compra autorizada':               'badge badge-green',
   'Finalizada':                      'badge badge-green',
   'Encerrada sem compra':            'badge badge-red',
@@ -30,7 +30,7 @@ export default function ComprasGlobal() {
   const { usuario } = useAuth();
 
   const [requisicoes, setRequisicoes] = useState([]);
-  const [resumo, setResumo] = useState({ total: 0, ag_analise: 0, em_cotacao: 0, ag_decisao: 0, prontos: 0 });
+  const [resumo, setResumo] = useState({ total: 0, ag_analise: 0, em_cotacao: 0, cotacoes_recebidas: 0, prontos: 0 });
   const [loading, setLoading] = useState(true);
   const [filtros, setFiltros] = useState({ status_requisicao: '', urgencia: '', data_inicio: '', data_fim: '' });
   const [busca, setBusca] = useState('');
@@ -121,7 +121,7 @@ export default function ComprasGlobal() {
           { label: 'Total',               valor: resumo.total,      cls: 'badge badge-gray' },
           { label: 'Aguard. análise',     valor: resumo.ag_analise, cls: 'badge badge-blue' },
           { label: 'Em cotação',          valor: resumo.em_cotacao, cls: 'badge badge-blue' },
-          { label: 'Aguard. gestor',      valor: resumo.ag_decisao, cls: 'badge badge-yellow' },
+          { label: 'Cotações recebidas',  valor: resumo.cotacoes_recebidas, cls: 'badge badge-yellow' },
           { label: 'Prontos p/ compra',   valor: resumo.prontos,    cls: 'badge badge-green' },
         ].map((c) => (
           <div key={c.label} className="card" style={{ flex: '1 1 130px', padding: '1rem' }}>
@@ -138,7 +138,7 @@ export default function ComprasGlobal() {
           <option value="">Todos os status</option>
           <option>Em análise</option>
           <option>Em cotação</option>
-          <option>Aguardando decisão gestor geral</option>
+          <option>Cotações recebidas</option>
           <option>Compra autorizada</option>
           <option>Finalizada</option>
           <option>Encerrada sem compra</option>

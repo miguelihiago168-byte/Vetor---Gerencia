@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getAtividadesEAP, createAtividade, updateAtividade } from '../services/api';
+import { getAtividadesEAP, createAtividade, updateAtividade, getUnidadesEAP } from '../services/api';
 import { useDialog } from '../context/DialogContext';
 import { ArrowLeft, Save, Info, Layers3, GitBranchPlus } from 'lucide-react';
 import './EAPForm.css';
@@ -14,6 +14,7 @@ function EAPForm() {
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState('');
   const [atividades, setAtividades] = useState([]);
+  const [unidades, setUnidades] = useState([]);
   const [formData, setFormData] = useState({
     codigo_eap: '',
     nome: '',
@@ -30,6 +31,7 @@ function EAPForm() {
 
   useEffect(() => {
     carregarAtividades();
+    carregarUnidades();
     if (atividadeId) {
       carregarAtividade();
     } else {
@@ -53,9 +55,11 @@ function EAPForm() {
     const atividadesFilhas = atividades.filter(a => a.pai_id == paiId);
 
     // Extrair os códigos EAP das filhas e converter para números
+    const codigoPai = String(atividadePai.codigo_eap || '').trim();
     const codigosFilhas = atividadesFilhas
-      .map(a => parseFloat(a.codigo_eap))
-      .filter(num => !isNaN(num))
+      .map(a => String(a.codigo_eap || '').replace(`${codigoPai}.`, ''))
+      .map(segmento => Number(segmento.split('.')[0]))
+      .filter(num => Number.isInteger(num))
       .sort((a, b) => a - b);
 
     // Encontrar o próximo número disponível
@@ -69,7 +73,6 @@ function EAPForm() {
     }
 
     // Gerar código EAP baseado no pai
-    const codigoPai = atividadePai.codigo_eap;
     const novoCodigo = `${codigoPai}.${proximoNumero}`;
 
     setFormData(prev => ({ ...prev, codigo_eap: novoCodigo }));
@@ -87,6 +90,15 @@ function EAPForm() {
       }
     } catch (error) {
       console.error('Erro ao carregar atividades:', error);
+    }
+  };
+
+  const carregarUnidades = async () => {
+    try {
+      const response = await getUnidadesEAP();
+      setUnidades(response.data?.unidades || []);
+    } catch (error) {
+      console.error('Erro ao carregar unidades EAP:', error);
     }
   };
 
@@ -190,7 +202,9 @@ function EAPForm() {
     return `${codigo}${nome}`;
   };
 
-  const atividadesPai = ordenarPorCodigoEap(atividades.filter(a => !a.pai_id));
+  const atividadesPai = ordenarPorCodigoEap(
+    atividades.filter(a => String(a.id) !== String(atividadeId))
+  );
   const atividadesPredecessoras = ordenarPorCodigoEap(
     atividades.filter(a => String(a.id) !== String(atividadeId))
   );
@@ -364,14 +378,18 @@ function EAPForm() {
                   <label className="eap-label">
                     Unidade de Medida
                   </label>
-                  <input
-                    type="text"
+                  <select
                     name="unidade_medida"
                     value={formData.unidade_medida}
                     onChange={handleChange}
-                    placeholder="Ex: m², m³, un, etc."
+                    required={!isAtividadePai}
                     className="eap-input"
-                  />
+                  >
+                    <option value="">Selecione a unidade</option>
+                    {unidades.map((unidade) => (
+                      <option key={unidade} value={unidade}>{unidade}</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="eap-field">

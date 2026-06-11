@@ -3,13 +3,13 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LogOut, User, ChevronDown, Menu, X } from 'lucide-react';
 import { useLeaveGuard } from '../context/LeaveGuardContext';
-import { listarPedidosPorProjeto, getRDOs, getRNCs, getNotificacoes, marcarNotificacaoLida, getRequisicoesBadges, getMensagensNaoLidasCount } from '../services/api';
+import { getRDOs, getRNCs, getNotificacoes, marcarNotificacaoLida, getRequisicoesBadges, getMensagensNaoLidasCount } from '../services/api';
 import { useNotification } from '../context/NotificationContext';
 import { useDialog } from '../context/DialogContext';
 import ThemeToggle from './ThemeToggle';
 
 function Navbar() {
-  const { usuario, logout, isGestor, isAdm, perfil } = useAuth();
+  const { usuario, logout, isGestor, perfil } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { isDirty } = useLeaveGuard();
@@ -39,8 +39,6 @@ function Navbar() {
   const projetoId = projetoIdAtual || projetoIdPersistido || null;
   const temProjetoSelecionado = Boolean(projetoId);
 
-  const [pendCompras, setPendCompras] = useState(0);
-  const [pendComprasAdm, setPendComprasAdm] = useState(0);
   const [pendRequisicoes, setPendRequisicoes] = useState(0);
   const [pendRdos, setPendRdos] = useState(0);
   const [pendRnc, setPendRnc] = useState(0);
@@ -80,7 +78,6 @@ function Navbar() {
   useEffect(() => {
     const loadCounts = async () => {
       if (!projetoId) {
-        setPendCompras(0);
         setPendRdos(0);
         setPendRequisicoes(0);
         return;
@@ -89,15 +86,15 @@ function Navbar() {
         // Badges de requisições por perfil
         const BADGE_PERFIL = {
           'ADM':            new Set(['em-cotacao', 'aprovado-compra']),
-          'Gestor Geral':   new Set(['solicitado', 'aguardando-decisao']),
-          'Gestor da Obra': new Set(['solicitado', 'aguardando-decisao']),
+          'Gestor Geral':   new Set(['solicitado', 'cotacoes-recebidas']),
+          'Gestor da Obra': new Set(['solicitado', 'cotacoes-recebidas']),
           'Gestor Local':   new Set(['solicitado']),
           'Almoxarife':     new Set(['solicitado']),
         };
         const STATUS_FLOW = [
           { slug: 'solicitado',         statuses: ['Em análise'] },
           { slug: 'em-cotacao',         statuses: ['Em cotação'] },
-          { slug: 'aguardando-decisao', statuses: ['Cotações recebidas', 'Aguardando decisão gestor geral'] },
+          { slug: 'cotacoes-recebidas', statuses: ['Cotações recebidas'] },
           { slug: 'aprovado-compra',    statuses: ['Compra autorizada'] },
         ];
         try {
@@ -114,17 +111,6 @@ function Navbar() {
           });
           setPendRequisicoes(totalReq);
         } catch { setPendRequisicoes(0); }
-
-        if (!isGestor) { setPendCompras(0); setPendComprasAdm(0); }
-        else {
-        const pedidosRes = await listarPedidosPorProjeto(projetoId);
-        const pedidos = pedidosRes.data || [];
-        const comprasCountGestor = pedidos.filter(p => p.status === 'SOLICITADO').length;
-        setPendCompras(comprasCountGestor);
-
-        const comprasCountAdm = pedidos.filter(p => p.status === 'APROVADO_GESTOR_INICIAL').length;
-        setPendComprasAdm(comprasCountAdm);
-        }
 
         const rdosRes = await getRDOs(projetoId);
         const rdos = rdosRes.data || [];
@@ -299,12 +285,6 @@ function Navbar() {
           Suprimentos
           {pendRequisicoes > 0 && (
             <span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendRequisicoes}</span>
-          )}
-          {isGestor && pendCompras > 0 && (
-            <span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendCompras}</span>
-          )}
-          {isAdm && pendComprasAdm > 0 && (
-            <span className="badge badge-yellow" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendComprasAdm}</span>
           )}
         </NavLink>
       )}
