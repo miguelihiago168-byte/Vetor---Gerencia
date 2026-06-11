@@ -1,0 +1,206 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - navigation [ref=e95]:
+      - generic [ref=e97]:
+        - link "Vetor Vetor Gestão de Obras" [ref=e98] [cursor=pointer]:
+          - /url: /projetos
+          - generic [ref=e99]:
+            - img "Vetor" [ref=e100]
+            - generic [ref=e101]: Vetor
+            - generic [ref=e102]: Gestão de Obras
+        - generic [ref=e104]:
+          - link "Projetos" [ref=e105] [cursor=pointer]:
+            - /url: /projetos
+          - link "Dashboard" [ref=e106] [cursor=pointer]:
+            - /url: /projeto/2
+          - link "RDOs" [ref=e107] [cursor=pointer]:
+            - /url: /projeto/2/rdos
+          - link "Planejamento" [ref=e108] [cursor=pointer]:
+            - /url: /projeto/2/planejamento
+          - link "Qualidade" [ref=e109] [cursor=pointer]:
+            - /url: /projeto/2/rnc
+          - link "Ativos" [ref=e110] [cursor=pointer]:
+            - /url: /projeto/2/almoxarifado
+          - link "Suprimentos" [ref=e111] [cursor=pointer]:
+            - /url: /projeto/2/compras
+          - link "Email" [ref=e112] [cursor=pointer]:
+            - /url: /projeto/2/email-dashboard
+          - link "Mensagens" [ref=e113] [cursor=pointer]:
+            - /url: /projeto/2/mensagens
+          - link "Usuarios" [ref=e114] [cursor=pointer]:
+            - /url: /projeto/2/usuarios
+        - generic [ref=e115]:
+          - button "Perfil" [ref=e117] [cursor=pointer]:
+            - img [ref=e118]
+            - text: Perfil
+            - img [ref=e121]
+          - button "Ativar tema escuro" [ref=e123] [cursor=pointer]:
+            - img [ref=e124]
+    - generic [ref=e126]:
+      - generic [ref=e128]:
+        - generic [ref=e129]:
+          - generic [ref=e130]: Painel do Projeto
+          - heading "UFV MESQUITA 1" [level=1] [ref=e131]
+          - generic [ref=e132]:
+            - generic [ref=e133]: 🏢 VETOR ENGENHARIA
+            - generic [ref=e134]: 🏗️ MRS HIGH VOLTAGE LINE
+            - generic [ref=e135]: 📍 Mesquita - MG
+        - generic [ref=e136]:
+          - generic [ref=e137]: Prazo
+          - generic [ref=e138]: "172"
+          - generic [ref=e139]: dias restantes
+      - generic [ref=e140]:
+        - generic [ref=e141]: 🏗️
+        - text: STATUS DA OBRA
+      - generic [ref=e142]:
+        - generic [ref=e143]:
+          - generic [ref=e144]:
+            - img [ref=e146]
+            - generic [ref=e148]: Prazo da Obra
+          - generic [ref=e149]:
+            - generic [ref=e150]: "Início: 11/06/2026"
+            - generic [ref=e151]: "Término: 30/11/2026"
+          - generic [ref=e153]:
+            - generic [ref=e154]: 0% do prazo consumido
+            - generic [ref=e155]: 172d total
+          - generic [ref=e156]: ✅ Restam 172 dias para o término
+        - generic [ref=e157]:
+          - generic [ref=e158]:
+            - img [ref=e160]
+            - generic [ref=e162]: Saúde da Obra
+          - generic [ref=e163]:
+            - generic [ref=e164]:
+              - generic [ref=e165]: 📅
+              - generic [ref=e166]: Prazo
+            - generic [ref=e168]:
+              - generic [ref=e169]: 🛒
+              - generic [ref=e170]: Compras
+            - generic [ref=e172]:
+              - generic [ref=e173]: ✅
+              - generic [ref=e174]: Qualidade
+            - generic [ref=e176]:
+              - generic [ref=e177]: 🔧
+              - generic [ref=e178]: Ativos
+          - generic [ref=e180]:
+            - generic [ref=e181]: Ok
+            - generic [ref=e183]: Atenção
+            - generic [ref=e185]: Crítico
+      - generic [ref=e187]:
+        - generic [ref=e188]: 📈
+        - text: PROGRESSO
+      - generic [ref=e189]:
+        - generic [ref=e190]:
+          - generic [ref=e191]:
+            - img [ref=e193]
+            - generic [ref=e196]: Relatórios Diários (RDO)
+          - generic [ref=e197]:
+            - generic [ref=e198]:
+              - generic [ref=e199]: "1"
+              - generic [ref=e200]: Total
+            - generic [ref=e201]:
+              - generic [ref=e202]: "0"
+              - generic [ref=e203]: 🟢 Aprovados
+            - generic [ref=e204]:
+              - generic [ref=e205]: "0"
+              - generic [ref=e206]: 🔵 Em análise
+          - generic [ref=e207]: 🟡 1 em preenchimento
+          - generic [ref=e209]:
+            - text: "Último RDO:"
+            - strong [ref=e210]: 11/06/2026
+            - generic [ref=e211]: ()
+        - generic [ref=e212]:
+          - generic [ref=e213]:
+            - img [ref=e215]
+            - generic [ref=e218]: Curva S — Progresso
+            - generic [ref=e219]: SPI 1.00
+          - generic [ref=e220]:
+            - generic [ref=e221]:
+              - generic [ref=e222]: 0%
+              - generic [ref=e223]: Planejado
+            - generic [ref=e224]:
+              - generic [ref=e225]: 0%
+              - generic [ref=e226]: Executado
+          - region [ref=e228]:
+            - img [ref=e229]:
+              - generic [ref=e234]:
+                - generic [ref=e236]: "0"
+                - generic [ref=e238]: "50"
+                - generic [ref=e240]: "100"
+      - generic [ref=e247]:
+        - generic [ref=e248]: ⚙️
+        - text: OPERAÇÃO
+      - generic [ref=e249]:
+        - generic [ref=e250]:
+          - generic [ref=e251]:
+            - img [ref=e253]
+            - generic [ref=e257]: Compras
+          - generic [ref=e258]:
+            - generic [ref=e259]:
+              - generic [ref=e260]: 🔄 Em cotação
+              - generic [ref=e261]: "0"
+            - generic [ref=e262]:
+              - generic [ref=e263]: ⏳ Ag. liberação/compra
+              - generic [ref=e264]: "0"
+            - generic [ref=e265]:
+              - generic [ref=e266]: ✅ Comprado
+              - generic [ref=e267]: "0"
+          - generic [ref=e268]: Nenhuma requisição ativa.
+        - generic [ref=e269]:
+          - generic [ref=e270]:
+            - img [ref=e272]
+            - generic [ref=e274]: Ativos
+          - generic [ref=e275]:
+            - generic [ref=e276]:
+              - generic [ref=e277]: 🔧 Alocados
+              - generic [ref=e278]: "0"
+            - generic [ref=e279]:
+              - generic [ref=e280]: 🛠️ Em manutenção
+              - generic [ref=e281]: "0"
+            - generic [ref=e282]:
+              - generic [ref=e283]: ⏰ Atrasados
+              - generic [ref=e284]: "0"
+        - generic [ref=e285]:
+          - generic [ref=e286]:
+            - img [ref=e288]
+            - generic [ref=e289]: Atividade Recente
+          - generic [ref=e291]:
+            - generic [ref=e293]:
+              - generic [ref=e294]: RDO-001 criado
+              - generic [ref=e295]: "-1d atrás"
+            - generic [ref=e296]: 📋
+      - generic [ref=e297]:
+        - generic [ref=e298]: 🔗
+        - text: ACESSO RÁPIDO
+      - generic [ref=e299]:
+        - generic [ref=e301] [cursor=pointer]:
+          - img [ref=e303]
+          - generic [ref=e305]:
+            - heading "Ativos" [level=3] [ref=e306]
+            - paragraph [ref=e307]: "Alocados: 0 · Manutenção: 0"
+        - generic [ref=e309] [cursor=pointer]:
+          - img [ref=e311]
+          - generic [ref=e315]:
+            - heading "Gerenciar EAP" [level=3] [ref=e316]
+            - paragraph [ref=e317]: Estrutura Analítica do Projeto
+        - generic [ref=e319] [cursor=pointer]:
+          - img [ref=e321]
+          - generic [ref=e324]:
+            - heading "Lista de RDOs" [level=3] [ref=e325]
+            - paragraph [ref=e326]: Relatórios Diários de Obra
+        - generic [ref=e328] [cursor=pointer]:
+          - img [ref=e330]
+          - generic [ref=e332]:
+            - heading "RNC" [level=3] [ref=e333]
+            - paragraph [ref=e334]: Relatórios de Não Conformidade
+      - generic [ref=e335]:
+        - generic [ref=e336]: 📷
+        - text: GALERIA DE FOTOS
+      - generic [ref=e337]:
+        - generic [ref=e338]:
+          - generic [ref=e339]: RDO-001 • 11/06/2026 • Em preenchimento • 1 foto(s)
+          - generic [ref=e341]:
+            - img "Logo_UNINTER.jpg" [ref=e343]
+            - generic [ref=e344]: Logo_UNINTER.jpg
+            - generic [ref=e345]: Sem atividade
+        - generic [ref=e346]: Total de 1 foto(s) distribuídas por RDO.
+  - generic [ref=e347]: "0"

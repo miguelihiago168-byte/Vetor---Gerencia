@@ -18,7 +18,7 @@ function Navbar() {
   // tenta extrair projetoId da rota atual (/projeto/:projetoId/...)
   const projetoMatch = (location.pathname || '').match(/\/projeto\/(\d+)/);
   const projetoIdAtual = projetoMatch ? projetoMatch[1] : null;
-  const [projetoIdPersistido, setProjetoIdPersistido] = useState(() => {
+  const [, setProjetoIdPersistido] = useState(() => {
     try {
       return localStorage.getItem('navbar_last_project_id');
     } catch (_) {
@@ -36,8 +36,9 @@ function Navbar() {
     }
   }, [projetoIdAtual]);
 
-  const projetoId = projetoIdAtual || projetoIdPersistido || null;
-  const temProjetoSelecionado = Boolean(projetoId);
+  const isProjectContext = Boolean(projetoIdAtual);
+  const projetoId = isProjectContext ? projetoIdAtual : null;
+  const isProjetoEntryActive = location.pathname === '/projetos' || /^\/projeto\/\d+\/?$/.test(location.pathname);
 
   const [pendRequisicoes, setPendRequisicoes] = useState(0);
   const [pendRdos, setPendRdos] = useState(0);
@@ -79,6 +80,7 @@ function Navbar() {
     const loadCounts = async () => {
       if (!projetoId) {
         setPendRdos(0);
+        setPendRnc(0);
         setPendRequisicoes(0);
         return;
       }
@@ -211,17 +213,15 @@ function Navbar() {
     mobileDrawerRef.current?.focus();
   }, [isMobileMenuOpen]);
 
-  const rotaRdos = projetoId ? `/projeto/${projetoId}/rdos` : '/rdos';
-  const rotaRnc = projetoId ? `/projeto/${projetoId}/rnc` : '/rnc';
-  const rotaCompras = projetoId ? `/projeto/${projetoId}/compras` : '/compras';
-  const rotaDashboardProjeto = projetoId ? `/projeto/${projetoId}` : '/projetos';
-  const rotaAlmox = projetoId ? `/projeto/${projetoId}/almoxarifado` : '/ativos';
-  const rotaExecucao = projetoId ? `/projeto/${projetoId}/rdos` : '/rdos';
-  const rotaQualidade = projetoId ? `/projeto/${projetoId}/rnc` : '/rnc';
-  const rotaPlanejamento = projetoId ? `/projeto/${projetoId}/planejamento` : '/planejamento';
-  const rotaUsuarios = projetoId ? `/projeto/${projetoId}/usuarios` : '/usuarios';
-  const rotaEmail = projetoId ? `/projeto/${projetoId}/email-dashboard` : '/email-dashboard';
-  const rotaMensagens = projetoId ? `/projeto/${projetoId}/mensagens` : '/mensagens';
+  const rotaDashboard = isProjectContext ? `/projeto/${projetoId}` : '/projetos';
+  const rotaCompras = isProjectContext ? `/projeto/${projetoId}/compras` : '/compras';
+  const rotaUsuarios = isProjectContext ? `/projeto/${projetoId}/usuarios` : '/usuarios';
+  const rotaAlmox = isProjectContext ? `/projeto/${projetoId}/almoxarifado` : '/ativos';
+  const rotaExecucao = isProjectContext ? `/projeto/${projetoId}/rdos` : '/rdos';
+  const rotaQualidade = isProjectContext ? `/projeto/${projetoId}/rnc` : '/rnc';
+  const rotaPlanejamento = isProjectContext ? `/projeto/${projetoId}/planejamento` : '/planejamento';
+  const rotaEmail = isProjectContext ? `/projeto/${projetoId}/email-dashboard` : '/email-dashboard';
+  const rotaMensagens = isProjectContext ? `/projeto/${projetoId}/mensagens` : '/mensagens';
   const rotaPerfil = '/perfil';
   const isGestorGeral = perfil === 'Gestor Geral';
   const isGestorObra = perfil === 'Gestor da Obra' || perfil === 'Gestor Local';
@@ -250,37 +250,71 @@ function Navbar() {
 
   const renderMainLinks = () => (
     <>
-      <NavLink to="/projetos" onClick={(e) => handleMenuNavigation(e, '/projetos')} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-        Projetos
-      </NavLink>
+      {isProjectContext && (
+        <NavLink
+          to="/projetos"
+          onClick={(e) => handleMenuNavigation(e, '/projetos')}
+          className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}
+        >
+          Projetos
+        </NavLink>
+      )}
 
-      {temProjetoSelecionado && !isAlmoxarife && (
-        <NavLink to={rotaDashboardProjeto} end onClick={(e) => handleMenuNavigation(e, rotaDashboardProjeto)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+      {isProjectContext && (
+        <NavLink to={rotaDashboard} end onClick={(e) => handleMenuNavigation(e, rotaDashboard)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
           Dashboard
         </NavLink>
       )}
 
-      {canViewExecucao && (
+      {!isProjectContext && (
+        <NavLink
+          to="/projetos"
+          onClick={(e) => handleMenuNavigation(e, '/projetos')}
+          className={({ isActive }) => `navbar-link${(isActive || isProjetoEntryActive) ? ' active' : ''}`}
+        >
+          Projetos
+        </NavLink>
+      )}
+
+      {!isProjectContext && canViewCompras && (
+        <NavLink to={rotaCompras} onClick={(e) => handleMenuNavigation(e, rotaCompras)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+          Suprimentos
+        </NavLink>
+      )}
+
+      {!isProjectContext && canViewUsuarios && (
+        <NavLink to={rotaUsuarios} onClick={(e) => handleMenuNavigation(e, rotaUsuarios)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+          Usuarios
+        </NavLink>
+      )}
+
+      {isProjectContext && canViewExecucao && (
         <NavLink to={rotaExecucao} onClick={(e) => handleMenuNavigation(e, rotaExecucao)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
           RDOs
           {isGestor && pendRdos > 0 && (<span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendRdos}</span>)}
         </NavLink>
       )}
 
-      {canViewPlanejamento && (
+      {isProjectContext && canViewPlanejamento && (
         <NavLink to={rotaPlanejamento} onClick={(e) => handleMenuNavigation(e, rotaPlanejamento)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
           Planejamento
         </NavLink>
       )}
 
-      {canViewQualidade && (
+      {isProjectContext && canViewQualidade && (
         <NavLink to={rotaQualidade} onClick={(e) => handleMenuNavigation(e, rotaQualidade)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
           Qualidade
           {isGestor && pendRnc > 0 && (<span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendRnc}</span>)}
         </NavLink>
       )}
 
-      {canViewCompras && (
+      {isProjectContext && canViewAtivos && (
+        <NavLink to={rotaAlmox} onClick={(e) => handleMenuNavigation(e, rotaAlmox)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+          Ativos
+        </NavLink>
+      )}
+
+      {isProjectContext && canViewCompras && (
         <NavLink to={rotaCompras} onClick={(e) => handleMenuNavigation(e, rotaCompras)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
           Suprimentos
           {pendRequisicoes > 0 && (
@@ -289,26 +323,25 @@ function Navbar() {
         </NavLink>
       )}
 
-      {canViewAtivos && (
-        <NavLink to={rotaAlmox} onClick={(e) => handleMenuNavigation(e, rotaAlmox)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-          Ativos
+      {isProjectContext && (
+        <NavLink to={rotaEmail} onClick={(e) => handleMenuNavigation(e, rotaEmail)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+          Email
         </NavLink>
       )}
 
-      <NavLink to={rotaEmail} onClick={(e) => handleMenuNavigation(e, rotaEmail)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-        Email
-      </NavLink>
+      {isProjectContext && (
+        <NavLink to={rotaMensagens} onClick={(e) => handleMenuNavigation(e, rotaMensagens)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+          Mensagens
+          {pendMensagens > 0 && (<span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendMensagens}</span>)}
+        </NavLink>
+      )}
 
-      <NavLink to={rotaMensagens} onClick={(e) => handleMenuNavigation(e, rotaMensagens)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-        Mensagens
-        {pendMensagens > 0 && (<span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendMensagens}</span>)}
-      </NavLink>
-
-      {canViewUsuarios && (
+      {isProjectContext && canViewUsuarios && (
         <NavLink to={rotaUsuarios} onClick={(e) => handleMenuNavigation(e, rotaUsuarios)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-          Usuários
+          Usuarios
         </NavLink>
       )}
+
     </>
   );
 

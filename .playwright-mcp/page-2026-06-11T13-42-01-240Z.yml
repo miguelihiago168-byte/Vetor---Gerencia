@@ -1,0 +1,22 @@
+- navigation [ref=e3]:
+  - generic [ref=e5]:
+    - link "Vetor Vetor Gestão de Obras" [ref=e6] [cursor=pointer]:
+      - /url: /projetos
+      - generic [ref=e7]:
+        - img "Vetor" [ref=e8]
+        - generic [ref=e9]: Vetor
+        - generic [ref=e10]: Gestão de Obras
+    - generic [ref=e12]:
+      - link "Projetos" [ref=e13] [cursor=pointer]:
+        - /url: /projetos
+      - link "Suprimentos" [ref=e14] [cursor=pointer]:
+        - /url: /compras
+      - link "Usuarios" [ref=e15] [cursor=pointer]:
+        - /url: /usuarios
+    - generic [ref=e16]:
+      - button "Perfil" [ref=e18] [cursor=pointer]:
+        - img [ref=e19]
+        - text: Perfil
+        - img [ref=e22]
+      - button "Ativar tema escuro" [ref=e24] [cursor=pointer]:
+        - img [ref=e25]

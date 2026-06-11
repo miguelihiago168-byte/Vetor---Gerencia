@@ -5,6 +5,7 @@ const { auth, isGestor } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
 const { PERFIS, inferirPerfil } = require('../constants/access');
 const backendPackage = require('../package.json');
+const { ensureRdoCorrectionColumns, clearRdoCorrection } = require('../services/rdoCorrectionService');
 
 const router = express.Router();
 
@@ -35,6 +36,7 @@ runQuery('ALTER TABLE rdo_materiais ADD COLUMN numero_nf TEXT').catch(e => {
 });
 
 const ensureRdoOptionalColumns = async () => {
+  await ensureRdoCorrectionColumns();
   try { await runQuery('ALTER TABLE rdo_fotos ADD COLUMN ordem INTEGER DEFAULT 0'); } catch (_) {}
   try { await runQuery('ALTER TABLE rdo_fotos ADD COLUMN atividade_avulsa_descricao TEXT'); } catch (_) {}
   try { await runQuery('ALTER TABLE rdo_materiais ADD COLUMN numero_nf TEXT'); } catch (_) {}
@@ -272,6 +274,7 @@ const recalcularPercentualPai = async (atividadeId) => {
 // Listar RDOs de um projeto
 router.get('/projeto/:projetoId', auth, async (req, res) => {
   try {
+    await ensureRdoOptionalColumns();
     const { projetoId } = req.params;
 
     const rdos = await allQuery(`
@@ -1031,6 +1034,14 @@ router.put('/:id', auth, async (req, res) => {
       console.error('Erro ao registrar log de atualização:', logError);
     }
 
+    if (Number(rdoAtual.correcao_solicitada || 0) === 1) {
+      try {
+        await clearRdoCorrection({ rdoId: id, usuarioId: req.usuario.id });
+      } catch (clearError) {
+        console.warn('Falha ao encerrar pendencia de correcao do RDO:', clearError?.message || clearError);
+      }
+    }
+
     // Recalcular avanço EAP imediatamente após salvar o RDO
     if (atividades) {
       try {
@@ -1052,6 +1063,7 @@ router.put('/:id', auth, async (req, res) => {
 // Alterar status do RDO
 router.patch('/:id/status', auth, async (req, res) => {
   try {
+    await ensureRdoOptionalColumns();
     const { id } = req.params;
     const { status } = req.body;
 
@@ -1146,6 +1158,14 @@ router.patch('/:id/status', auth, async (req, res) => {
           UPDATE rdos SET status = ?, aprovado_por = ?, aprovado_em = ?, atualizado_em = CURRENT_TIMESTAMP
           WHERE id = ?
         `, [status, aprovadoPor, aprovadoEm, id]);
+      }
+
+      if (status === 'Em análise' && Number(rdoAtual.correcao_solicitada || 0) === 1) {
+        try {
+          await clearRdoCorrection({ rdoId: id, usuarioId: req.usuario.id });
+        } catch (clearError) {
+          console.warn('Falha ao encerrar pendencia de correcao do RDO:', clearError?.message || clearError);
+        }
       }
 
     // Recalcular EAP sempre que o status mudar (aprovado, reprovado ou reversão)

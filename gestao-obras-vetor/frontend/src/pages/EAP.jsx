@@ -18,7 +18,7 @@ function EAP({ hideNavbar = false }) {
   const { projetoId } = useParams();
   const navigate = useNavigate();
   const { isGestor } = useAuth();
-  const { confirm } = useDialog();
+  const { confirm, alert } = useDialog();
   const { success, error } = useNotification();
   const [atividades, setAtividades] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,6 +31,19 @@ function EAP({ hideNavbar = false }) {
   useEffect(() => {
     carregarAtividades();
   }, [projetoId]);
+
+  const showAffectedRdosAlert = async (payload) => {
+    const total = Number(payload?.affectedRDOs || 0);
+    if (!total) return false;
+    const rdos = Array.isArray(payload?.rdos) ? payload.rdos : [];
+    const nomes = rdos.map((r) => r.numero_rdo || `RDO-${String(r.id).padStart(3, '0')}`).join(', ');
+    await alert({
+      title: 'RDOs precisam de revisao',
+      message: `${total} RDO${total === 1 ? '' : 's'} foram afetados pelo recalculo e precisam de correcao.${nomes ? `\n\n${nomes}` : ''}`,
+      confirmText: 'Entendi'
+    });
+    return true;
+  };
 
   const carregarAtividades = async () => {
     try {
@@ -499,7 +512,13 @@ function EAP({ hideNavbar = false }) {
                 if (!ok) return;
                 try {
                   const resp = await recalcularEapProjeto(projetoId);
-                  success(resp.data?.mensagem || 'EAP recalculada.', 5000);
+                  const mostrouAfetados = await showAffectedRdosAlert(resp.data);
+                  success(
+                    mostrouAfetados
+                      ? `${resp.data?.affectedRDOs || 0} RDO(s) enviados para correcao.`
+                      : (resp.data?.mensagem || 'EAP recalculada.'),
+                    5000
+                  );
                   carregarAtividades();
                 } catch (err) {
                   error('Erro ao recalcular EAP: ' + (err.response?.data?.erro || err.message), 7000);

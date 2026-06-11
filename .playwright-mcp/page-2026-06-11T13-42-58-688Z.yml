@@ -1,0 +1,72 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - navigation [ref=e348]:
+      - generic [ref=e350]:
+        - link "Vetor Vetor Gestão de Obras" [ref=e351] [cursor=pointer]:
+          - /url: /projetos
+          - generic [ref=e352]:
+            - img "Vetor" [ref=e353]
+            - generic [ref=e354]: Vetor
+            - generic [ref=e355]: Gestão de Obras
+        - generic [ref=e357]:
+          - link "Projetos" [ref=e358] [cursor=pointer]:
+            - /url: /projetos
+          - link "Dashboard" [ref=e359] [cursor=pointer]:
+            - /url: /projeto/2
+          - link "RDOs" [ref=e360] [cursor=pointer]:
+            - /url: /projeto/2/rdos
+          - link "Planejamento" [ref=e361] [cursor=pointer]:
+            - /url: /projeto/2/planejamento
+          - link "Qualidade" [ref=e362] [cursor=pointer]:
+            - /url: /projeto/2/rnc
+          - link "Ativos" [ref=e363] [cursor=pointer]:
+            - /url: /projeto/2/almoxarifado
+          - link "Suprimentos" [ref=e364] [cursor=pointer]:
+            - /url: /projeto/2/compras
+          - link "Email" [ref=e365] [cursor=pointer]:
+            - /url: /projeto/2/email-dashboard
+          - link "Mensagens" [ref=e366] [cursor=pointer]:
+            - /url: /projeto/2/mensagens
+          - link "Usuarios" [ref=e367] [cursor=pointer]:
+            - /url: /projeto/2/usuarios
+        - generic [ref=e368]:
+          - button "Perfil" [ref=e370] [cursor=pointer]:
+            - img [ref=e371]
+            - text: Perfil
+            - img [ref=e374]
+          - button "Ativar tema escuro" [ref=e376] [cursor=pointer]:
+            - img [ref=e377]
+    - generic [ref=e379]:
+      - generic [ref=e380]:
+        - generic [ref=e381]:
+          - heading "Relatórios Diários de Obra" [level=1] [ref=e382]
+          - paragraph [ref=e383]: 1 relatório neste projeto
+        - button "Novo RDO" [ref=e385] [cursor=pointer]:
+          - img [ref=e386]
+          - text: Novo RDO
+      - generic [ref=e388]:
+        - generic [ref=e390]: 11 de junho de 2026
+        - generic "Editar RDO" [ref=e393] [cursor=pointer]:
+          - generic [ref=e395]:
+            - generic [ref=e396]:
+              - paragraph [ref=e397]: RDO-001
+              - generic [ref=e398]: Em preenchimento
+              - 'generic "Atividade recalculada: 1.1 - Mobilização de equipe e equipamentos" [ref=e399]':
+                - img [ref=e400]
+                - text: CORRECAO PENDENTE
+            - paragraph [ref=e402]: "Atividade recalculada: 1.1 - Mobilização de equipe e equipamentos"
+            - paragraph [ref=e403]: 11/06/2026
+            - generic [ref=e404]:
+              - generic [ref=e405]:
+                - generic [ref=e406]: 👥
+                - text: 1 pessoa
+              - generic [ref=e407]:
+                - generic [ref=e408]: ⏱
+                - text: 9h
+          - generic [ref=e409]:
+            - button "PDF" [ref=e410]:
+              - img [ref=e411]
+              - text: PDF
+            - button "Mais ações" [ref=e415]:
+              - img [ref=e416]
+  - generic [ref=e347]: "0"

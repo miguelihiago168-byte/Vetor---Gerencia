@@ -7,6 +7,7 @@ const { allQuery, runQuery, getQuery } = require('../config/database');
 const { auth, isGestor } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
 const ganttService = require('../services/ganttService');
+const { markAffectedRDOs } = require('../services/rdoCorrectionService');
 
 const router = express.Router();
 const uploadExcelEap = multer({
@@ -1046,6 +1047,8 @@ router.put('/:id', auth, async (req, res) => {
 
     await registrarAuditoria('atividades_eap', id, 'UPDATE', atividadeAnterior, req.body, req.usuario.id);
 
+    let correctionResult = { affectedRDOs: 0, rdos: [] };
+
     // Recalcular avanço da atividade com base nos RDOs existentes
     try {
       // Percentual executado agregado por quantidade (se houver)
@@ -1077,7 +1080,7 @@ router.put('/:id', auth, async (req, res) => {
 
       // Atualizar o último RDO (mais recente por data_relatorio) com novo percentual da atividade
       const lastRa = await getQuery(`
-        SELECT ra.id as rdo_atividade_id, ra.quantidade_executada, r.id as rdo_id, r.data_relatorio
+        SELECT ra.id as rdo_atividade_id, ra.quantidade_executada, ra.percentual_executado, r.id as rdo_id, r.data_relatorio
         FROM rdo_atividades ra
         INNER JOIN rdos r ON ra.rdo_id = r.id
         WHERE ra.atividade_eap_id = ?
@@ -1093,6 +1096,7 @@ router.put('/:id', auth, async (req, res) => {
           // fallback para o agregado calculado
           novoPercRdo = novoPerc;
         }
+        const mudouRdoAtividade = Math.abs(Number(lastRa.percentual_executado || 0) - Number(novoPercRdo || 0)) > 0.0001;
         await runQuery('UPDATE rdo_atividades SET percentual_executado = ? WHERE id = ?', [novoPercRdo, lastRa.rdo_atividade_id]);
 
         // Registrar histórico de ajuste
@@ -1103,13 +1107,20 @@ router.put('/:id', auth, async (req, res) => {
             VALUES (?, ?, ?, ?, ?, ?, ?)
           `, [id, lastRa.rdo_id, atividadeAnterior?.percentual_executado || 0, novoPercRdo, novoPerc, req.usuario.id, new Date().toISOString()]);
         } catch (e) { /* ignore */ }
+
+        if (mudouRdoAtividade) {
+          correctionResult = await markAffectedRDOs({
+            atividadeIds: [id],
+            usuario: req.usuario
+          });
+        }
       }
 
     } catch (err) {
       console.warn('Falha ao recalcular após atualização de EAP:', err);
     }
 
-    res.json({ mensagem: 'Atividade atualizada com sucesso.' });
+    res.json({ mensagem: 'Atividade atualizada com sucesso.', success: true, ...correctionResult });
 
   } catch (error) {
     console.error('Erro ao atualizar atividade:', error);
@@ -1192,6 +1203,7 @@ const recalcularPercentualPaiLocal = async (atividadeId) => {
 router.post('/:id/recalcular', auth, async (req, res) => {
   try {
     const { id } = req.params;
+    const atividadeAtual = await getQuery('SELECT percentual_executado FROM atividades_eap WHERE id = ?', [id]);
 
     // Somar percentuais executados nos RDOs aprovados
     const resultado = await getQuery(`
@@ -1211,10 +1223,19 @@ router.post('/:id/recalcular', auth, async (req, res) => {
     await atualizarStatusAtividade(id);
 
     await registrarAuditoria('atividades_eap', id, 'RECALCULAR', null, { percentual_executado: percentualExecutado }, req.usuario.id);
+    const mudouPercentual = Math.abs(Number(atividadeAtual?.percentual_executado || 0) - Number(percentualExecutado || 0)) > 0.0001;
+    const correctionResult = mudouPercentual
+      ? await markAffectedRDOs({
+          atividadeIds: [id],
+          usuario: req.usuario
+        })
+      : { affectedRDOs: 0, rdos: [] };
 
     res.json({ 
+      success: true,
       mensagem: 'Avanço físico recalculado com sucesso.',
-      percentual_executado: percentualExecutado
+      percentual_executado: percentualExecutado,
+      ...correctionResult
     });
 
   } catch (error) {
@@ -1266,7 +1287,8 @@ router.post('/projeto/:projetoId/recalcular-tudo', [auth, isGestor], async (req,
   try {
     const { projetoId } = req.params;
 
-    const atividades = await allQuery('SELECT id, quantidade_total FROM atividades_eap WHERE projeto_id = ?', [projetoId]);
+    const atividades = await allQuery('SELECT id, quantidade_total, percentual_executado FROM atividades_eap WHERE projeto_id = ?', [projetoId]);
+    const atividadesImpactadas = [];
     for (const a of atividades) {
       const quantidadeTotal = a.quantidade_total || 0;
       let novoPerc = 0;
@@ -1288,6 +1310,10 @@ router.post('/projeto/:projetoId/recalcular-tudo', [auth, isGestor], async (req,
         novoPerc = Math.min(parseFloat(r?.total_exec_perc || 0), 100);
       }
 
+      if (Math.abs(Number(a.percentual_executado || 0) - Number(novoPerc || 0)) > 0.0001) {
+        atividadesImpactadas.push(a.id);
+      }
+
       await runQuery('UPDATE atividades_eap SET percentual_executado = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?', [novoPerc, a.id]);
       await atualizarStatusAtividade(a.id);
 
@@ -1296,7 +1322,12 @@ router.post('/projeto/:projetoId/recalcular-tudo', [auth, isGestor], async (req,
     }
 
     await registrarAuditoria('atividades_eap', null, 'RECALCULAR_TODAS', { projeto_id: projetoId }, null, req.usuario.id);
-    res.json({ mensagem: 'EAP recalculada para todas as atividades do projeto.' });
+    const correctionResult = await markAffectedRDOs({
+      atividadeIds: atividadesImpactadas,
+      usuario: req.usuario
+    });
+
+    res.json({ success: true, mensagem: 'EAP recalculada para todas as atividades do projeto.', ...correctionResult });
   } catch (error) {
     console.error('Erro ao recalcular EAP do projeto:', error);
     res.status(500).json({ erro: 'Erro ao recalcular EAP do projeto.' });

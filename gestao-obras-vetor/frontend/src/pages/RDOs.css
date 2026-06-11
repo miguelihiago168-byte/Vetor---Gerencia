@@ -46,6 +46,15 @@
   border-color: #cbd5e1;
 }
 
+.rdo-card-correcao {
+  border-color: #fecaca;
+  background: #fffafa;
+}
+
+.rdo-card-correcao:hover {
+  border-color: #fca5a5;
+}
+
 .rdo-card-body {
   display: flex;
   align-items: center;
@@ -72,6 +81,13 @@
   color: #94a3b8;
   font-weight: 400;
   margin: 0;
+}
+
+.rdo-card-warning {
+  margin: -1px 0 5px;
+  font-size: 12px;
+  color: #b91c1c;
+  line-height: 1.35;
 }
 
 /* ── Metric pills (list card) ── */
@@ -117,6 +133,21 @@
 .rdo-badge-reprovado { background: #fee2e2; color: #b91c1c; }
 .rdo-badge-analise   { background: #fef9c3; color: #92400e; }
 .rdo-badge-pendente  { background: #fef3c7; color: #92400e; }
+
+.rdo-badge-correcao {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
 
 /* ── Actions ── */
 .rdo-actions {

@@ -10,7 +10,7 @@ function EAPForm() {
   const { projetoId, atividadeId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { confirm } = useDialog();
+  const { confirm, alert } = useDialog();
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState('');
   const [atividades, setAtividades] = useState([]);
@@ -158,7 +158,17 @@ function EAPForm() {
       };
 
       if (atividadeId) {
-        await updateAtividade(atividadeId, dataToSend);
+        const resp = await updateAtividade(atividadeId, dataToSend);
+        const total = Number(resp.data?.affectedRDOs || 0);
+        if (total > 0) {
+          const rdos = Array.isArray(resp.data?.rdos) ? resp.data.rdos : [];
+          const nomes = rdos.map((r) => r.numero_rdo || `RDO-${String(r.id).padStart(3, '0')}`).join(', ');
+          await alert({
+            title: 'RDOs precisam de revisao',
+            message: `${total} RDO${total === 1 ? '' : 's'} foram afetados pelo recalculo e precisam de correcao.${nomes ? `\n\n${nomes}` : ''}`,
+            confirmText: 'Entendi'
+          });
+        }
       } else {
         await createAtividade(dataToSend);
       }

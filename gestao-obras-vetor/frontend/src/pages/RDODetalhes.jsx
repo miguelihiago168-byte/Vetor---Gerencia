@@ -4,7 +4,7 @@ import Navbar from '../components/Navbar';
 import { getRDO, updateRDO, getAtividadesEAP, addRdoMaoObra, listRdoMaoObra, addRdoComentario, addRdoMaterial, addRdoOcorrencia, uploadRdoFoto, getAnexos, updateStatusRDO, getRdoFerramentasDisponiveis, getRdoFerramentas, addRdoFerramenta, getRdoPDF } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
-import { FileText, Download, ArrowLeft, MapPin, Building2, User, Calendar, Save } from 'lucide-react';
+import { FileText, Download, ArrowLeft, MapPin, Building2, User, Calendar, Save, AlertTriangle } from 'lucide-react';
 import { KPICards } from '../components/RDOTimeline';
 import './RDO.css';
 
@@ -296,6 +296,18 @@ function RDODetalhes() {
 
         {erro && <div className="alert alert-error" style={{ marginBottom: '16px' }}>{erro}</div>}
         {sucesso && <div className="alert alert-success" style={{ marginBottom: '16px' }}>{sucesso}</div>}
+        {Number(rdo.correcao_solicitada || 0) === 1 && (
+          <div className="rdo-correction-alert">
+            <div className="rdo-correction-alert-icon">
+              <AlertTriangle size={18} />
+            </div>
+            <div>
+              <strong>Este RDO foi impactado por um recalculo de atividade.</strong>
+              <p>{rdo.correcao_motivo || 'Revise as informacoes antes de reenviar.'}</p>
+              <span>Revise as informacoes antes de reenviar para aprovacao.</span>
+            </div>
+          </div>
+        )}
 
         {/* KPI Cards */}
         <KPICards

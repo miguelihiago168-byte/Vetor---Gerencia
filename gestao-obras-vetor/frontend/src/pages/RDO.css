@@ -109,6 +109,51 @@
 .rdo-obra-status-badge.amarelo  { background: rgba(245,158,11,0.2);  color: #fbbf24; }
 .rdo-obra-status-badge.vermelho { background: rgba(239,68,68,0.2);   color: #f87171; }
 
+.rdo-correction-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid #fecaca;
+  border-left: 4px solid #dc2626;
+  border-radius: 10px;
+  background: #fffafa;
+  color: #7f1d1d;
+}
+
+.rdo-correction-alert-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #fee2e2;
+  color: #b91c1c;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.rdo-correction-alert strong {
+  display: block;
+  font-size: 14px;
+  color: #7f1d1d;
+  margin-bottom: 4px;
+}
+
+.rdo-correction-alert p {
+  margin: 0 0 4px;
+  color: #991b1b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.rdo-correction-alert span {
+  display: block;
+  color: #b91c1c;
+  font-size: 12px;
+}
+
 /* ── Seções do formulário ──────────────────────────────────── */
 .rdo-section {
   background: #fff;

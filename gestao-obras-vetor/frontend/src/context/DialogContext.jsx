@@ -75,7 +75,7 @@ export function DialogProvider({ children }) {
         }}>
           <div className="modal-card" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ marginTop: 0, marginBottom: 10 }}>{dialog.title}</h3>
-            {dialog.message ? <p style={{ marginTop: 0, color: 'var(--gray-600)' }}>{dialog.message}</p> : null}
+            {dialog.message ? <p style={{ marginTop: 0, color: 'var(--gray-600)', whiteSpace: 'pre-line' }}>{dialog.message}</p> : null}
 
             {dialog.type === 'prompt' && (
               <input

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { getRDOs, getRdoPDF, addRdoComentario, updateStatusRDO } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { FileText, Plus, Eye, MoreHorizontal, CheckCircle, XCircle, RotateCcw } from 'lucide-react';
+import { FileText, Plus, Eye, MoreHorizontal, CheckCircle, XCircle, RotateCcw, AlertTriangle } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import { useDialog } from '../context/DialogContext';
 import { useUserPreferences } from '../context/UserPreferencesContext';
@@ -319,11 +319,12 @@ function RDOs() {
                     const isAprovado = statusNorm === 'aprovado';
                     const isEmAnalise = statusNorm === 'em analise';
                     const isVisualizacao = isAprovado || isEmAnalise;
+                    const temCorrecaoPendente = Number(rdo.correcao_solicitada || 0) === 1;
 
                     return (
                       <div
                         key={rdo.id}
-                        className="rdo-card"
+                        className={`rdo-card${temCorrecaoPendente ? ' rdo-card-correcao' : ''}`}
                         onClick={() => {
                           if (isVisualizacao) {
                             if (!isGestor) info('RDO em modo de visualização.', 4500);
@@ -340,7 +341,16 @@ function RDOs() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                               <p className="rdo-card-title">{getRdoNumber(rdo)}</p>
                               <span className={getBadgeClass(rdo.status)}>{statusLabel(rdo.status)}</span>
+                              {temCorrecaoPendente && (
+                                <span className="rdo-badge-correcao" title={rdo.correcao_motivo || 'Correção pendente'}>
+                                  <AlertTriangle size={12} />
+                                  CORRECAO PENDENTE
+                                </span>
+                              )}
                             </div>
+                            {temCorrecaoPendente && rdo.correcao_motivo && (
+                              <p className="rdo-card-warning">{rdo.correcao_motivo}</p>
+                            )}
                             <p className="rdo-card-meta">{formatLocalDate(rdo.data_relatorio)}</p>
                             {/* Pills de métricas rápidas */}
                             {(() => {
