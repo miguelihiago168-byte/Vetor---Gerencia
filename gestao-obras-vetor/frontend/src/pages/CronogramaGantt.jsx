@@ -2,18 +2,29 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import GanttSidebar from '../components/GanttSidebar';
-import DependencyRecommendations from '../components/DependencyRecommendations';
-import ConfirmDependencyModal from '../components/ConfirmDependencyModal';
 import {
   getAtividadesEAP,
-  sugerirDependenciasEAP,
-  confirmarDependencia,
-  aplicarCronogramaGantt,
+  analisarCronograma,
   obterDadosGantt
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 import { Zap, RefreshCw, CalendarDays, AlertTriangle, ArrowLeft } from 'lucide-react';
+
+const fmtPercent = (value) => `${Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
+const fmtNumber = (value) => Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+const fmtDate = (value) => {
+  if (!value) return '-';
+  const [year, month, day] = String(value).slice(0, 10).split('-').map(Number);
+  if (!year || !month || !day) return value;
+  return new Date(year, month - 1, day).toLocaleDateString('pt-BR');
+};
+
+const severityStyle = (severity) => {
+  if (severity === 'critico') return { background: '#fee2e2', color: '#991b1b', border: '1px solid #fecaca' };
+  if (severity === 'alto') return { background: '#ffedd5', color: '#9a3412', border: '1px solid #fed7aa' };
+  return { background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' };
+};
 
 function CronogramaGantt({ hideNavbar = false }) {
   const { projetoId } = useParams();
@@ -25,9 +36,8 @@ function CronogramaGantt({ hideNavbar = false }) {
   const [carregando, setCarregando] = useState(false);
   const [atividades, setAtividades] = useState([]);
   const [dadosGantt, setDadosGantt] = useState(null);
-  const [sugestoesModal, setSugestoesModal] = useState(null);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [previewCronograma, setPreviewCronograma] = useState(null);
+  const [analise, setAnalise] = useState(null);
+  const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
 
   useEffect(() => {
     carregarTudo();
@@ -64,69 +74,20 @@ function CronogramaGantt({ hideNavbar = false }) {
     };
   }, [dadosGantt]);
 
-  const handleGerarCronograma = async () => {
+  const handleAnalisarCronograma = async () => {
     if (!isGestor) {
-      error('Apenas gestores podem gerar sugestões automáticas.', 5000);
+      error('Apenas gestores podem analisar o cronograma.', 5000);
       return;
     }
 
     try {
       setCarregando(true);
-      const response = await sugerirDependenciasEAP(projetoId, true);
-      setSugestoesModal(response.data);
-      success('Sugestões geradas com sucesso.', 4000);
+      const response = await analisarCronograma(projetoId);
+      setAnalise(response.data);
+      setMostrarSugestoes(false);
+      success('Análise do cronograma gerada com sucesso.', 4000);
     } catch (err) {
-      error('Erro ao gerar sugestões: ' + (err.response?.data?.erro || err.message), 7000);
-    } finally {
-      setCarregando(false);
-    }
-  };
-
-  const handleConfirmarSelecionadas = async (selecionadas) => {
-    if (!selecionadas || selecionadas.length === 0) {
-      error('Nenhuma dependência selecionada.', 4000);
-      return;
-    }
-
-    try {
-      setCarregando(true);
-      const primeiro = selecionadas[0];
-      const sugestao = (sugestoesModal?.sugestoes || []).find(s => `${s.id_origem}_${s.id_destino}` === primeiro);
-      if (!sugestao) {
-        error('Não foi possível localizar a sugestão selecionada.', 5000);
-        return;
-      }
-
-      const recarregado = await sugerirDependenciasEAP(projetoId, true);
-      const dep = (recarregado.data?.sugestoes || []).find(
-        s => s.id_origem === sugestao.id_origem && s.id_destino === sugestao.id_destino
-      );
-
-      if (!dep?.id) {
-        error('Não foi possível confirmar a dependência.', 5000);
-        return;
-      }
-
-      const confirmResponse = await confirmarDependencia(dep.id, true);
-      setPreviewCronograma(confirmResponse.data?.preview || null);
-      setShowConfirmModal(true);
-    } catch (err) {
-      error('Erro ao confirmar dependência: ' + (err.response?.data?.erro || err.message), 7000);
-    } finally {
-      setCarregando(false);
-    }
-  };
-
-  const handleAplicarCronograma = async () => {
-    try {
-      setCarregando(true);
-      await aplicarCronogramaGantt(projetoId);
-      success('Cronograma aplicado com sucesso.', 5000);
-      setShowConfirmModal(false);
-      setSugestoesModal(null);
-      await carregarTudo();
-    } catch (err) {
-      error('Erro ao aplicar cronograma: ' + (err.response?.data?.erro || err.message), 7000);
+      error('Erro ao analisar cronograma: ' + (err.response?.data?.erro || err.message), 7000);
     } finally {
       setCarregando(false);
     }
@@ -162,8 +123,8 @@ function CronogramaGantt({ hideNavbar = false }) {
               <RefreshCw size={16} /> Atualizar
             </button>
             {isGestor && (
-              <button className="btn btn-warning" onClick={handleGerarCronograma} disabled={carregando}>
-                <Zap size={16} /> {carregando ? 'Processando...' : 'Gerar Sugestões'}
+              <button className="btn btn-warning" onClick={handleAnalisarCronograma} disabled={carregando}>
+                <Zap size={16} /> {carregando ? 'Processando...' : 'Analisar Cronograma'}
               </button>
             )}
           </div>
@@ -212,7 +173,7 @@ function CronogramaGantt({ hideNavbar = false }) {
         </div>
       </div>
 
-      {sugestoesModal && (
+      {analise && (
         <div style={{
           position: 'fixed',
           top: 0,
@@ -229,33 +190,161 @@ function CronogramaGantt({ hideNavbar = false }) {
           <div style={{
             backgroundColor: '#fff',
             borderRadius: '8px',
-            maxWidth: '700px',
+            maxWidth: '980px',
             maxHeight: '85vh',
             overflow: 'auto',
             width: '100%',
             boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
           }}>
-            <DependencyRecommendations
-              sugestoes={sugestoesModal.sugestoes || []}
-              carregando={carregando}
-              onConfirmarTodas={handleConfirmarSelecionadas}
-              onAceitar={() => {}}
-              onRejeitar={() => {}}
-            />
-            <div style={{ padding: '12px', textAlign: 'right', borderTop: '1px solid #e0e0e0' }}>
-              <button className="btn btn-outline" onClick={() => setSugestoesModal(null)}>Fechar</button>
+            <div style={{ padding: '18px 20px', background: 'linear-gradient(135deg, #2563eb, #7c3aed)', color: '#fff' }}>
+              <h2 style={{ margin: 0, fontSize: 22 }}>Análise do Cronograma</h2>
+              <p style={{ margin: '6px 0 0', opacity: 0.88 }}>
+                Diagnóstico de atrasos, impacto nas sucessoras e plano de recuperação.
+              </p>
+            </div>
+
+            <div style={{ padding: 20, display: 'grid', gap: 16 }}>
+              <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
+                {[
+                  ['Atividades', analise.resumo?.total_atividades || 0],
+                  ['Atrasadas', analise.resumo?.total_atrasadas || 0],
+                  ['Críticas atrasadas', analise.resumo?.total_criticas_atrasadas || 0],
+                  ['Dependências', analise.resumo?.total_dependencias_confirmadas || 0]
+                ].map(([label, value]) => (
+                  <div key={label} style={{ padding: 12, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+                    <small style={{ color: '#64748b' }}>{label}</small>
+                    <div style={{ fontSize: 24, fontWeight: 800, color: label.includes('Atrasadas') || label.includes('Críticas') ? '#dc2626' : '#0f172a' }}>{value}</div>
+                  </div>
+                ))}
+              </section>
+
+              <section style={{ padding: 16, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+                <h3 style={{ margin: '0 0 10px' }}>Resumo Executivo</h3>
+                {(analise.atividades_atrasadas || []).length === 0 ? (
+                  <p style={{ margin: 0, color: '#64748b' }}>Nenhuma atividade crítica atrasada foi detectada no cronograma atual.</p>
+                ) : (
+                  <p style={{ margin: 0, color: '#334155' }}>
+                    Foram encontradas <strong>{analise.resumo?.total_atrasadas}</strong> atividade(s) atrasada(s).
+                    {(analise.atividades_criticas || []).length > 0 && (
+                      <> A prioridade é recuperar as atividades no caminho crítico, pois elas afetam diretamente as sucessoras.</>
+                    )}
+                  </p>
+                )}
+              </section>
+
+              <section style={{ padding: 16, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+                <h3 style={{ margin: '0 0 12px' }}>Atividades Críticas</h3>
+                {(analise.atividades_atrasadas || []).length === 0 ? (
+                  <p style={{ margin: 0, color: '#64748b' }}>Sem atividades atrasadas para listar.</p>
+                ) : (
+                  <div style={{ display: 'grid', gap: 12 }}>
+                    {(analise.atividades_atrasadas || []).map((atividade) => (
+                      <div key={atividade.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+                          <strong>{atividade.codigo_eap} - {atividade.nome}</strong>
+                          <span style={{ ...severityStyle(atividade.severidade), borderRadius: 999, padding: '3px 9px', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>
+                            {atividade.severidade}
+                          </span>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8, color: '#475569', fontSize: 13 }}>
+                          <span>Fim planejado: <strong>{fmtDate(atividade.data_fim_planejada)}</strong></span>
+                          <span>Executado: <strong>{fmtPercent(atividade.percentual_executado)}</strong></span>
+                          <span>Restante: <strong>{fmtPercent(atividade.percentual_restante)}</strong></span>
+                          <span>Dias de atraso: <strong>{atividade.dias_atraso}</strong></span>
+                          {atividade.quantidade_restante != null && (
+                            <span>Qtd. restante: <strong>{fmtNumber(atividade.quantidade_restante)} {atividade.unidade_medida || ''}</strong></span>
+                          )}
+                          <span>Caminho crítico: <strong>{atividade.no_caminho_critico ? 'Sim' : 'Não'}</strong></span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section style={{ padding: 16, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+                <h3 style={{ margin: '0 0 12px' }}>Impacto nas Sucessoras</h3>
+                {(analise.atividades_atrasadas || []).every((a) => !a.sucessoras_impactadas?.length) ? (
+                  <p style={{ margin: 0, color: '#64748b' }}>Nenhuma sucessora impactada foi encontrada para as atividades atrasadas.</p>
+                ) : (
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    {(analise.atividades_atrasadas || []).filter((a) => a.sucessoras_impactadas?.length).map((atividade) => (
+                      <div key={atividade.id}>
+                        <strong>{atividade.codigo_eap} - {atividade.nome}</strong>
+                        <ul style={{ margin: '8px 0 0 18px', color: '#475569' }}>
+                          {atividade.sucessoras_impactadas.map((s) => (
+                            <li key={s.id}>{s.codigo_eap} - {s.nome} ({s.tipo_vinculo})</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section style={{ padding: 16, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+                <h3 style={{ margin: '0 0 12px' }}>Plano de Recuperação</h3>
+                {(analise.atividades_atrasadas || []).length === 0 ? (
+                  <p style={{ margin: 0, color: '#64748b' }}>Nenhum plano necessário com o cronograma atual.</p>
+                ) : (
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    {(analise.atividades_atrasadas || []).map((atividade) => {
+                      const plano = atividade.plano_recuperacao || {};
+                      return (
+                        <div key={atividade.id} style={{ borderLeft: '4px solid #f59e0b', paddingLeft: 12 }}>
+                          <strong>{atividade.codigo_eap} - {atividade.nome}</strong>
+                          <p style={{ margin: '6px 0 0', color: '#475569' }}>
+                            Data-alvo: <strong>{fmtDate(plano.data_alvo)}</strong> | Dias úteis disponíveis: <strong>{plano.dias_uteis_restantes || 0}</strong>
+                            {plano.producao_diaria_necessaria != null ? (
+                              <> | Necessário: <strong>{fmtNumber(plano.producao_diaria_necessaria)} {plano.unidade_medida || ''}/dia útil</strong></>
+                            ) : (
+                              <> | Avanço necessário: <strong>{fmtPercent(plano.avanco_diario_necessario)}/dia útil</strong></>
+                            )}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+
+              <section style={{ padding: 16, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div>
+                    <h3 style={{ margin: 0 }}>Sugestões de Dependências</h3>
+                    <p style={{ margin: '4px 0 0', color: '#64748b', fontSize: 13 }}>
+                      {analise.resumo?.total_sugestoes_dependencias || 0} sugestão(ões) detectada(s) pelo algoritmo atual.
+                    </p>
+                  </div>
+                  <button className="btn btn-secondary" onClick={() => setMostrarSugestoes(v => !v)}>
+                    {mostrarSugestoes ? 'Ocultar sugestões' : 'Ver sugestões de dependências'}
+                  </button>
+                </div>
+                {mostrarSugestoes && (
+                  <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
+                    {(analise.sugestoes_dependencias || []).length === 0 ? (
+                      <p style={{ margin: 0, color: '#64748b' }}>Nenhuma sugestão de dependência foi detectada.</p>
+                    ) : (
+                      (analise.sugestoes_dependencias || []).map((sugestao) => (
+                        <div key={`${sugestao.id_origem}_${sugestao.id_destino}`} style={{ padding: 10, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+                          <strong>{sugestao.nome_origem}</strong> {'->'} <strong>{sugestao.nome_destino}</strong>
+                          <div style={{ color: '#64748b', fontSize: 13, marginTop: 4 }}>
+                            Tipo sugerido: {sugestao.tipo_vinculo_recomendado} | Score: {fmtNumber(sugestao.score)} | Motivos: {sugestao.motivos}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </section>
+            </div>
+
+            <div style={{ padding: '12px 20px', textAlign: 'right', borderTop: '1px solid #e0e0e0' }}>
+              <button className="btn btn-outline" onClick={() => setAnalise(null)}>Fechar</button>
             </div>
           </div>
         </div>
       )}
-
-      <ConfirmDependencyModal
-        isOpen={showConfirmModal}
-        onClose={() => setShowConfirmModal(false)}
-        onConfirm={handleAplicarCronograma}
-        preview={previewCronograma}
-        carregando={carregando}
-      />
     </>
   );
 }

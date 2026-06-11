@@ -350,6 +350,8 @@ export const listaDependenciasSugeridas = (projetoId) =>
   api.get(`/eap/projeto/${projetoId}/dependencias-sugeridas`);
 export const aplicarCronogramaGantt = (projetoId) =>
   api.post('/eap/dependencias/aplicar-cronograma', { projetoId });
+export const analisarCronograma = (projetoId) =>
+  api.get(`/eap/projeto/${projetoId}/analise-cronograma`);
 export const obterDadosGantt = (projetoId, params) =>
   api.get(`/eap/projeto/${projetoId}/gantt-data`, { params });
 

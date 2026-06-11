@@ -17,6 +17,40 @@ const parseDateOnly = (value) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 };
 
+const parseDateAtNoon = (value) => {
+  const dateOnly = parseDateOnly(value);
+  if (!dateOnly) return null;
+  const [year, month, day] = dateOnly.split('-').map(Number);
+  return new Date(year, month - 1, day, 12, 0, 0, 0);
+};
+
+const toDateOnly = (date) => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
+const countDiasUteis = (inicio, fim) => {
+  const start = parseDateAtNoon(inicio);
+  const end = parseDateAtNoon(fim);
+  if (!start || !end || end < start) return 0;
+
+  let total = 0;
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    const day = cursor.getDay();
+    if (day !== 0 && day !== 6) total += 1;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return total;
+};
+
+const diffDiasCalendario = (inicio, fim) => {
+  const start = parseDateAtNoon(inicio);
+  const end = parseDateAtNoon(fim);
+  if (!start || !end) return 0;
+  return Math.floor((end.getTime() - start.getTime()) / 86400000);
+};
+
 const ensureFaixaPercentual = (valor) => {
   const parsed = parseFloat(valor);
   if (Number.isNaN(parsed) || parsed < 0 || parsed > 100) return null;
@@ -844,6 +878,231 @@ router.post('/projeto/:projetoId/recalcular-tudo', [auth, isGestor], async (req,
   } catch (error) {
     console.error('Erro ao recalcular EAP do projeto:', error);
     res.status(500).json({ erro: 'Erro ao recalcular EAP do projeto.' });
+  }
+});
+
+/**
+ * @route   GET /eap/projeto/:projetoId/analise-cronograma
+ * @access  Private (auth, isGestor)
+ * @desc    Analisa atrasos, impacto, recuperacao e sugestoes do cronograma sem alterar dados
+ */
+router.get('/projeto/:projetoId/analise-cronograma', [auth, isGestor], async (req, res) => {
+  try {
+    await ensureEapOptionalColumns();
+    await ensureDependenciasSchema();
+
+    const { projetoId } = req.params;
+    const tenantId = req.tenantId;
+
+    const projeto = await getQuery(
+      'SELECT id, nome FROM projetos WHERE id = ? AND tenant_id = ?',
+      [projetoId, tenantId]
+    );
+    if (!projeto) {
+      return res.status(404).json({ erro: 'Projeto não encontrado.' });
+    }
+
+    const atividades = await allQuery(`
+      SELECT
+        id, nome, codigo_eap, descricao, pai_id,
+        data_inicio_planejada, data_fim_planejada,
+        percentual_executado, peso_percentual_projeto,
+        quantidade_total, unidade_medida, status
+      FROM atividades_eap
+      WHERE projeto_id = ?
+      ORDER BY codigo_eap
+    `, [projetoId]);
+
+    const atividadesComDuracao = atividades.map((at) => ({
+      ...at,
+      duracao: ganttService.calcularDuracao(at.data_inicio_planejada, at.data_fim_planejada)
+    }));
+
+    const dependencias = await allQuery(`
+      SELECT *
+      FROM atividades_dependencias
+      WHERE projeto_id = ?
+    `, [projetoId]);
+
+    const dependenciasConfirmadas = dependencias.filter((dep) => Number(dep.confirmada_usuario) === 1);
+    const atividadesPorId = new Map(atividadesComDuracao.map((at) => [Number(at.id), at]));
+
+    const caminhoCriticoInfo = ganttService.calcularCaminoCritico(atividadesComDuracao, dependenciasConfirmadas);
+    const caminhoCriticoSet = new Set((caminhoCriticoInfo.caminhoCritico || []).map(Number));
+    const atrasadasIds = ganttService.detectarAtividadesAtrasadas(atividadesComDuracao, {
+      folgas: caminhoCriticoInfo.folgas || {},
+      caminhoCritico: caminhoCriticoInfo.caminhoCritico || [],
+      dependencias: dependenciasConfirmadas,
+      exigirImpactoNoPrazo: true,
+      apenasCaminhoCritico: false
+    }).map(Number);
+
+    const hoje = toDateOnly(new Date());
+    const fimProjeto = atividadesComDuracao
+      .map((at) => parseDateOnly(at.data_fim_planejada))
+      .filter(Boolean)
+      .sort()
+      .reverse()[0] || hoje;
+
+    const sucessorasDiretasPorOrigem = new Map();
+    const predecessorasPorDestino = new Map();
+    for (const dep of dependenciasConfirmadas) {
+      const origem = Number(dep.atividade_origem_id);
+      const destino = Number(dep.atividade_destino_id);
+      if (!sucessorasDiretasPorOrigem.has(origem)) sucessorasDiretasPorOrigem.set(origem, []);
+      sucessorasDiretasPorOrigem.get(origem).push({ ...dep, atividade: atividadesPorId.get(destino) || null });
+
+      if (!predecessorasPorDestino.has(destino)) predecessorasPorDestino.set(destino, []);
+      predecessorasPorDestino.get(destino).push({ ...dep, atividade: atividadesPorId.get(origem) || null });
+    }
+
+    const coletarSucessorasImpactadas = (atividadeId) => {
+      const visitadas = new Set();
+      const fila = sucessorasDiretasPorOrigem.get(Number(atividadeId)) || [];
+      const resultado = [];
+
+      while (fila.length) {
+        const item = fila.shift();
+        const sucessora = item.atividade;
+        if (!sucessora || visitadas.has(Number(sucessora.id))) continue;
+        visitadas.add(Number(sucessora.id));
+        resultado.push({
+          id: sucessora.id,
+          codigo_eap: sucessora.codigo_eap,
+          nome: sucessora.nome || sucessora.codigo_eap,
+          data_inicio_planejada: parseDateOnly(sucessora.data_inicio_planejada),
+          data_fim_planejada: parseDateOnly(sucessora.data_fim_planejada),
+          percentual_executado: Number(sucessora.percentual_executado || 0),
+          tipo_vinculo: item.tipo_vinculo || 'FS',
+          no_caminho_critico: caminhoCriticoSet.has(Number(sucessora.id))
+        });
+
+        const proximas = sucessorasDiretasPorOrigem.get(Number(sucessora.id)) || [];
+        fila.push(...proximas);
+      }
+
+      return resultado;
+    };
+
+    const predecessorasPendentes = atividadesComDuracao
+      .map((atividade) => {
+        const pendentes = (predecessorasPorDestino.get(Number(atividade.id)) || [])
+          .map((dep) => dep.atividade)
+          .filter((pred) => pred && Number(pred.percentual_executado || 0) < 100)
+          .map((pred) => ({
+            id: pred.id,
+            codigo_eap: pred.codigo_eap,
+            nome: pred.nome || pred.codigo_eap,
+            percentual_executado: Number(pred.percentual_executado || 0),
+            data_fim_planejada: parseDateOnly(pred.data_fim_planejada)
+          }));
+
+        if (!pendentes.length) return null;
+        return {
+          atividade: {
+            id: atividade.id,
+            codigo_eap: atividade.codigo_eap,
+            nome: atividade.nome || atividade.codigo_eap,
+            data_inicio_planejada: parseDateOnly(atividade.data_inicio_planejada),
+            percentual_executado: Number(atividade.percentual_executado || 0)
+          },
+          pendentes
+        };
+      })
+      .filter(Boolean);
+
+    const atividadesAtrasadas = atrasadasIds
+      .map((id) => atividadesPorId.get(id))
+      .filter(Boolean)
+      .map((atividade) => {
+        const percentualExecutado = Math.min(100, Math.max(0, Number(atividade.percentual_executado || 0)));
+        const quantidadeTotal = Number(atividade.quantidade_total || 0);
+        const quantidadeExecutadaEstimada = quantidadeTotal > 0
+          ? Math.round(((quantidadeTotal * percentualExecutado) / 100) * 100) / 100
+          : null;
+        const quantidadeRestante = quantidadeTotal > 0
+          ? Math.max(0, Math.round((quantidadeTotal - quantidadeExecutadaEstimada) * 100) / 100)
+          : null;
+
+        const sucessorasImpactadas = coletarSucessorasImpactadas(atividade.id);
+        const datasAlvo = sucessorasImpactadas.map((s) => s.data_fim_planejada).filter(Boolean);
+        const dataAlvo = (datasAlvo.length ? datasAlvo.sort().reverse()[0] : fimProjeto) || fimProjeto;
+        const diasUteisRestantes = countDiasUteis(hoje, dataAlvo);
+        const percentualRestante = Math.max(0, Math.round((100 - percentualExecutado) * 100) / 100);
+        const producaoDiariaNecessaria = quantidadeRestante != null && diasUteisRestantes > 0
+          ? Math.round((quantidadeRestante / diasUteisRestantes) * 100) / 100
+          : null;
+        const avancoDiarioNecessario = diasUteisRestantes > 0
+          ? Math.round((percentualRestante / diasUteisRestantes) * 100) / 100
+          : null;
+        const noCaminhoCritico = caminhoCriticoSet.has(Number(atividade.id));
+        const diasAtraso = Math.max(0, diffDiasCalendario(atividade.data_fim_planejada, hoje));
+        const severidade = noCaminhoCritico && sucessorasImpactadas.length > 0
+          ? 'critico'
+          : (noCaminhoCritico || sucessorasImpactadas.length > 0 || diasAtraso >= 7 ? 'alto' : 'medio');
+
+        return {
+          id: atividade.id,
+          codigo_eap: atividade.codigo_eap,
+          nome: atividade.nome || atividade.codigo_eap,
+          data_inicio_planejada: parseDateOnly(atividade.data_inicio_planejada),
+          data_fim_planejada: parseDateOnly(atividade.data_fim_planejada),
+          percentual_executado: percentualExecutado,
+          percentual_restante: percentualRestante,
+          quantidade_total: quantidadeTotal || null,
+          unidade_medida: atividade.unidade_medida || null,
+          quantidade_executada_estimada: quantidadeExecutadaEstimada,
+          quantidade_restante: quantidadeRestante,
+          peso_percentual_projeto: Number(atividade.peso_percentual_projeto || 0),
+          status: atividade.status,
+          no_caminho_critico: noCaminhoCritico,
+          dias_atraso: diasAtraso,
+          severidade,
+          sucessoras_impactadas: sucessorasImpactadas,
+          plano_recuperacao: {
+            data_alvo: dataAlvo,
+            dias_uteis_restantes: diasUteisRestantes,
+            producao_diaria_necessaria: producaoDiariaNecessaria,
+            unidade_medida: atividade.unidade_medida || null,
+            avanco_diario_necessario: avancoDiarioNecessario,
+            viavel_no_prazo: diasUteisRestantes > 0
+          }
+        };
+      });
+
+    const sugestoesResultado = ganttService.sugerirDependenciasLote(
+      atividadesComDuracao,
+      dependencias,
+      true
+    );
+
+    const criticasAtrasadas = atividadesAtrasadas.filter((at) => at.severidade === 'critico');
+
+    res.json({
+      projeto,
+      gerado_em: new Date().toISOString(),
+      data_referencia: hoje,
+      resumo: {
+        total_atividades: atividadesComDuracao.length,
+        total_atrasadas: atividadesAtrasadas.length,
+        total_criticas_atrasadas: criticasAtrasadas.length,
+        total_dependencias_confirmadas: dependenciasConfirmadas.length,
+        total_sugestoes_dependencias: sugestoesResultado.totalSugestoes || 0,
+        data_fim_planejada_projeto: fimProjeto
+      },
+      atividades_atrasadas: atividadesAtrasadas,
+      atividades_criticas: criticasAtrasadas,
+      predecessoras_pendentes: predecessorasPendentes,
+      sugestoes_dependencias: sugestoesResultado.sugestoes || [],
+      caminho_critico: {
+        atividades_ids: caminhoCriticoInfo.caminhoCritico || [],
+        data_conclusao: caminhoCriticoInfo.dataConclusao || null,
+        folgas: caminhoCriticoInfo.folgas || {}
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao analisar cronograma:', error);
+    res.status(500).json({ erro: 'Erro ao analisar cronograma.' });
   }
 });
 
