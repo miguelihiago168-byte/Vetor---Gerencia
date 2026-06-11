@@ -25,6 +25,8 @@ const FOTO_EAP_PREFIX = 'eap:';
 const FOTO_AVULSA_PREFIX = 'avulsa:';
 const ANEXO_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp,.gif,.heic,.heif,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/*';
 const ANEXO_EXT_RE = /\.(pdf|doc|docx|xls|xlsx|jpe?g|png|webp|gif|heic|heif)$/i;
+const FOTO_MAX_SIDE = 1920;
+const FOTO_QUALITY = 0.82;
 
 const dias = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
 const weekdayFromLocalDateInput = (val) => {
@@ -65,6 +67,40 @@ const Section = ({ id, num, title, badge, children, isOpen, onToggle }) => (
     </div>
   </div>
 );
+
+const prepararFotoRdo = async (file) => {
+  if (!file || !String(file.type || '').startsWith('image/')) return file;
+  if (/image\/(gif|heic|heif)/i.test(file.type) || /\.(gif|heic|heif)$/i.test(file.name || '')) return file;
+
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, FOTO_MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+    if (scale >= 1 && file.size <= 8 * 1024 * 1024) {
+      bitmap.close?.();
+      return file;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const ctx = canvas.getContext('2d', { alpha: false });
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close?.();
+
+    const blob = await new Promise((resolve) => {
+      canvas.toBlob(resolve, 'image/jpeg', FOTO_QUALITY);
+    });
+    if (!blob || blob.size >= file.size) return file;
+
+    const nomeBase = String(file.name || 'foto').replace(/\.[^.]+$/, '');
+    return new File([blob], `${nomeBase}.jpg`, {
+      type: 'image/jpeg',
+      lastModified: Date.now()
+    });
+  } catch (_) {
+    return file;
+  }
+};
 
 function RDOForm2() {
   const { projetoId, rdoId } = useParams();
@@ -933,10 +969,11 @@ function RDOForm2() {
     if (!fotoPendente.file) return;
     const { file, atividadeId, descricao } = fotoPendente;
     const atividadeSelecionada = fotoAtividadeOptions.find((opt) => opt.value === atividadeId) || null;
+    const arquivoFoto = await prepararFotoRdo(file);
     if (rdoId) {
       setIsUploadingFoto(true);
       const fd = new FormData();
-      fd.append('arquivo', file);
+      fd.append('arquivo', arquivoFoto);
       if (atividadeSelecionada?.tipo === 'eap' && atividadeSelecionada?.rdo_atividade_id) {
         fd.append('rdo_atividade_id', atividadeSelecionada.rdo_atividade_id);
       }
@@ -948,9 +985,9 @@ function RDOForm2() {
         const resp = await uploadRdoFoto(rdoId, fd);
         setRdoFotos(prev => [...prev, {
           id: resp.data?.id,
-          nome_arquivo: resp.data?.arquivo?.nome_arquivo || file.name,
+          nome_arquivo: resp.data?.arquivo?.nome_arquivo || arquivoFoto.name || file.name,
           caminho_arquivo: resp.data?.arquivo?.caminho_arquivo,
-          descricao: descricao || file.name,
+          descricao: descricao || arquivoFoto.name || file.name,
           atividade_eap_id: atividadeSelecionada?.tipo === 'eap' ? atividadeSelecionada.atividade_eap_id : null,
           atividade_avulsa_descricao: atividadeSelecionada?.tipo === 'avulsa' ? atividadeSelecionada.atividade_avulsa_descricao : null,
           ordem: resp.data?.ordem,
@@ -963,7 +1000,7 @@ function RDOForm2() {
       }
     } else {
       setFotosQueue(prev => [...prev, {
-        file,
+        file: arquivoFoto,
         atividadeId,
         descricao,
         atividadeTipo: atividadeSelecionada?.tipo || null,
@@ -1214,6 +1251,7 @@ function RDOForm2() {
         }
 
         // Upload fotos da fila
+        const fotosFalharam = [];
         for (const foto of fotosQueue) {
           try {
             const fd = new FormData();
@@ -1229,9 +1267,14 @@ function RDOForm2() {
             }
             if (foto.descricao) fd.append('descricao', foto.descricao);
             await uploadRdoFoto(finalId, fd);
-          } catch {}
+          } catch (uploadFotoError) {
+            fotosFalharam.push(`${foto.file?.name || 'foto'} (${uploadFotoError?.response?.data?.erro || uploadFotoError.message})`);
+          }
         }
         setFotosQueue([]);
+        if (fotosFalharam.length) {
+          setErro(`RDO salvo, mas ${fotosFalharam.length} foto(s) não foram enviadas: ${fotosFalharam.join('; ')}`);
+        }
         // Upload anexos da fila
         for (const file of anexosQueue) {
           try {

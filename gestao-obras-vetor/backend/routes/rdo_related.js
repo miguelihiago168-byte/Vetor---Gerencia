@@ -34,10 +34,11 @@ const uploadFoto = multer({
   storage,
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowedExt = /\.(jpe?g|png|webp|gif)$/i;
+    const allowedExt = /\.(jpe?g|jfif|png|webp|gif|heic|heif|bmp|tiff?)$/i;
     const allowedMime = /^image\//i;
     const extOk = allowedExt.test(String(file.originalname || '').toLowerCase());
-    const mimeOk = allowedMime.test(String(file.mimetype || '').toLowerCase());
+    const mime = String(file.mimetype || '').toLowerCase();
+    const mimeOk = allowedMime.test(mime) || !mime || mime === 'application/octet-stream';
     if (extOk && mimeOk) return cb(null, true);
     return cb(new Error('Apenas imagens são permitidas na galeria de fotos do RDO.'));
   }
@@ -51,6 +52,49 @@ const uploadFotoSingle = (req, res, next) => {
     }
     return res.status(400).json({ erro: err.message || 'Arquivo de foto inválido.' });
   });
+};
+
+const ensureRdoFotosSchema = async () => {
+  await runQuery(`
+    CREATE TABLE IF NOT EXISTS rdo_fotos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      rdo_id INTEGER NOT NULL,
+      rdo_atividade_id INTEGER,
+      nome_arquivo TEXT NOT NULL,
+      caminho_arquivo TEXT NOT NULL,
+      descricao TEXT,
+      criado_por INTEGER,
+      criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+      atividade_avulsa_descricao TEXT,
+      ordem INTEGER DEFAULT 0,
+      tipo TEXT,
+      tamanho INTEGER,
+      largura INTEGER,
+      altura INTEGER,
+      FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE
+    )
+  `);
+
+  const columns = [
+    'rdo_atividade_id INTEGER',
+    'descricao TEXT',
+    'criado_por INTEGER',
+    'criado_em DATETIME DEFAULT CURRENT_TIMESTAMP',
+    'atividade_avulsa_descricao TEXT',
+    'ordem INTEGER DEFAULT 0',
+    'tipo TEXT',
+    'tamanho INTEGER',
+    'largura INTEGER',
+    'altura INTEGER'
+  ];
+
+  for (const column of columns) {
+    try {
+      await runQuery(`ALTER TABLE rdo_fotos ADD COLUMN ${column}`);
+    } catch (error) {
+      if (!String(error?.message || '').includes('duplicate column')) throw error;
+    }
+  }
 };
 
 runQuery("ALTER TABLE rdo_fotos ADD COLUMN atividade_avulsa_descricao TEXT").catch(e => {
@@ -456,9 +500,18 @@ router.delete('/:rdoId/equipamentos/:equipId', auth, async (req, res) => {
 router.post('/:rdoId/foto', auth, uploadFotoSingle, async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ erro: 'Nenhum arquivo enviado.' });
+    await ensureRdoFotosSchema();
     const { rdoId } = req.params;
     const { rdo_atividade_id, descricao, atividade_avulsa_descricao } = req.body;
     const { originalname, filename, mimetype, size } = req.file;
+    let rdoAtividadeId = rdo_atividade_id || null;
+    if (rdoAtividadeId) {
+      const atividade = await getQuery(
+        'SELECT id FROM rdo_atividades WHERE id = ? AND rdo_id = ? LIMIT 1',
+        [rdoAtividadeId, rdoId]
+      );
+      if (!atividade) rdoAtividadeId = null;
+    }
 
     const ordemRow = await getQuery('SELECT COALESCE(MAX(ordem), 0) AS max_ordem FROM rdo_fotos WHERE rdo_id = ?', [rdoId]);
     const ordem = Number(ordemRow?.max_ordem || 0) + 1;
@@ -466,7 +519,7 @@ router.post('/:rdoId/foto', auth, uploadFotoSingle, async (req, res) => {
     // Salvar no table rdo_fotos
     const result = await runQuery(
       'INSERT INTO rdo_fotos (rdo_id, rdo_atividade_id, nome_arquivo, caminho_arquivo, descricao, atividade_avulsa_descricao, ordem, criado_por, tipo, tamanho) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [rdoId, rdo_atividade_id || null, originalname, filename, descricao || null, atividade_avulsa_descricao || null, ordem, req.usuario.id, mimetype || null, size || null]
+      [rdoId, rdoAtividadeId, originalname, filename, descricao || null, atividade_avulsa_descricao || null, ordem, req.usuario.id, mimetype || null, size || null]
     );
 
     // Retornar informação do arquivo para o frontend
@@ -480,7 +533,19 @@ router.post('/:rdoId/foto', auth, uploadFotoSingle, async (req, res) => {
       url: `/api/rdo/${rdoId}/foto/${result.lastID}/download`
     });
   } catch (err) {
+    if (req.file?.filename) {
+      try {
+        const savedPath = path.join(uploadsDir, req.file.filename);
+        if (fs.existsSync(savedPath)) fs.unlinkSync(savedPath);
+      } catch (_) {}
+    }
     console.error('Erro ao enviar foto', err);
+    const message = String(err?.message || '');
+    if (/no such table|no such column|SQLITE_ERROR/i.test(message)) {
+      return res.status(500).json({
+        erro: 'Erro ao enviar foto. O banco de dados precisa ser atualizado para suportar fotos do RDO.'
+      });
+    }
     res.status(500).json({ erro: 'Erro ao enviar foto.' });
   }
 });
