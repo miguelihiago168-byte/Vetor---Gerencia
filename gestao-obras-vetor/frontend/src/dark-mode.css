@@ -181,6 +181,73 @@ body.dark-mode .rdo-table td select {
 
 body.dark-mode .rdo-add-row { background: #1f3044; }
 
+body.dark-mode .rdo-file-picker {
+  background: #111827;
+  border-color: #2a4060;
+}
+
+body.dark-mode .rdo-file-picker:hover {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.14);
+}
+
+body.dark-mode .rdo-file-picker-name {
+  color: #d8e3ec;
+}
+
+body.dark-mode .rdo-upload-zone-polished {
+  background: #172635;
+  border-color: #2a4060;
+}
+
+body.dark-mode .rdo-upload-zone-polished:hover {
+  background: rgba(14, 165, 233, 0.08);
+  border-color: #38bdf8;
+}
+
+body.dark-mode .rdo-upload-zone-icon {
+  background: rgba(14, 165, 233, 0.16);
+  color: #7dd3fc;
+}
+
+body.dark-mode .rdo-upload-zone-title {
+  color: #e8edf3;
+}
+
+body.dark-mode .rdo-upload-zone-hint {
+  color: #8fa3b9;
+}
+
+body.dark-mode .rdo-activities-table th {
+  background: #1f3044;
+  border-color: #2a4060;
+}
+
+body.dark-mode .rdo-activities-table .rdo-activity-main-row td {
+  background: #172635 !important;
+  border-color: #2a4060 !important;
+}
+
+body.dark-mode .rdo-activities-table .rdo-activity-main-row:hover td {
+  background: #1f3044 !important;
+}
+
+body.dark-mode .rdo-activities-table .rdo-activity-main-row.is-selected td {
+  background: rgba(37, 99, 235, 0.16) !important;
+  border-color: #315f9d !important;
+}
+
+body.dark-mode .rdo-activity-title,
+body.dark-mode .rdo-activity-value {
+  color: #e8edf3;
+}
+
+body.dark-mode .rdo-activity-note,
+body.dark-mode .rdo-activity-muted,
+body.dark-mode .rdo-activity-edit-hint {
+  color: #8fa3b9;
+}
+
 body.dark-mode .rdo-foto-card { background: #1f3044; border-color: #2a4060; }
 body.dark-mode .rdo-foto-card-info { background: #1b2836; color: #8fa3b9; }
 

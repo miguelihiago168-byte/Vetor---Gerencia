@@ -1903,8 +1903,12 @@ function RDOForm2() {
           <div className="rdo-add-row">
             <div className="form-group" style={{ flex: '2' }}>
               <label className="form-label">Arquivo</label>
-              <input ref={fotoInputRef} type="file" accept="image/*" className="form-input"
-                onChange={(e) => setFotoPendente(prev => ({ ...prev, file: e.target.files?.[0] || null }))} />
+              <label className="rdo-file-picker">
+                <input ref={fotoInputRef} type="file" accept="image/*"
+                  onChange={(e) => setFotoPendente(prev => ({ ...prev, file: e.target.files?.[0] || null }))} />
+                <span className="rdo-file-picker-btn"><Upload size={15} /> Escolher foto</span>
+                <span className="rdo-file-picker-name">{fotoPendente.file?.name || 'Nenhum arquivo selecionado'}</span>
+              </label>
             </div>
             <div className="form-group">
               <label className="form-label">Atividade (opcional)</label>
@@ -2167,13 +2171,13 @@ function RDOForm2() {
               {anexosQueue.length} arquivo(s) na fila — serão enviados ao salvar o RDO.
             </div>
           )}
-          <label className="rdo-upload-zone">
+          <label className="rdo-upload-zone rdo-upload-zone-polished">
             <input ref={anexoInputRef} type="file" multiple accept={ANEXO_ACCEPT}
               onChange={(e) => { Array.from(e.target.files || []).forEach(f => handleAnexoUpload(f)); }}
               disabled={isUploadingAnexo} />
-            <Upload size={24} style={{ marginBottom: '6px', color: '#94a3b8' }} />
-            <div>{isUploadingAnexo ? 'Enviando...' : 'Clique ou arraste anexos aqui'}</div>
-            <div style={{ fontSize: '11px', marginTop: '4px' }}>PDF, imagens, DOCX e XLSX — máx. 25 MB cada</div>
+            <span className="rdo-upload-zone-icon"><Upload size={22} /></span>
+            <span className="rdo-upload-zone-title">{isUploadingAnexo ? 'Enviando...' : 'Clique para selecionar anexos'}</span>
+            <span className="rdo-upload-zone-hint">PDF, imagens, DOCX e XLSX — máx. 25 MB cada</span>
           </label>
           {!rdoId && anexosQueue.length > 0 && (
             <div style={{ marginTop: '10px' }}>

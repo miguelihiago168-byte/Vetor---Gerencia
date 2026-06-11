@@ -433,6 +433,96 @@
   margin-bottom: 0;
 }
 
+.rdo-file-picker {
+  display: flex;
+  align-items: center;
+  min-height: 42px;
+  width: 100%;
+  border: 1px solid #dbe4ef;
+  border-radius: 10px;
+  background: #ffffff;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.rdo-file-picker:hover {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.08);
+}
+
+.rdo-file-picker input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.rdo-file-picker-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  align-self: stretch;
+  padding: 0 14px;
+  background: linear-gradient(135deg, #0ea5e9, #2563eb);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.rdo-file-picker-name {
+  min-width: 0;
+  flex: 1;
+  padding: 0 12px;
+  color: #475569;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rdo-upload-zone-polished {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 22px;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.rdo-upload-zone-polished input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.rdo-upload-zone-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #e0f2fe;
+  color: #0284c7;
+}
+
+.rdo-upload-zone-title {
+  color: #1e293b;
+  font-weight: 700;
+}
+
+.rdo-upload-zone-hint {
+  color: #64748b;
+  font-size: 12px;
+}
+
 /* ── Galeria de fotos ──────────────────────────────────────── */
 .rdo-foto-grid {
   display: grid;

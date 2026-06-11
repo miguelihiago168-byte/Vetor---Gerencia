@@ -382,7 +382,7 @@ function renderHtml(data) {
     .comment-text { color: #111827; white-space: normal; word-break: break-word; }
     .attachment-link { color: #0b5f86; text-decoration: underline; font-weight: 700; }
     .attachments-section { break-before: page; page-break-before: always; }
-    .signature-page { break-before: page; page-break-before: always; min-height: 245mm; display: flex; align-items: flex-end; }
+    .signature-page { margin-top: 18mm; padding-top: 18mm; break-inside: avoid; page-break-inside: avoid; }
     .signatures { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 36px; }
     .signature-line { border-top: 1px solid #111827; padding-top: 6px; text-align: center; color: #334155; }
     .avoid-break { break-inside: avoid; page-break-inside: avoid; }
