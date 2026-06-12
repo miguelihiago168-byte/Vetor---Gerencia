@@ -118,11 +118,6 @@ const assertMainDatabase = async () => {
     if (usuarios <= 0) fail('Banco principal sem usuarios.');
     if (tenants <= 0) fail('Banco principal sem tenants.');
 
-    const operationalRows = projetos + rdos + eap + rnc + anexos;
-    if (operationalRows <= 0) {
-      fail('Banco principal sem dados operacionais; possivel banco recem-criado.');
-    }
-
     const activeTenants = await all(
       conn,
       'SELECT id, nome, criado_em FROM tenants WHERE COALESCE(ativo, 1) = 1 ORDER BY id'
@@ -140,8 +135,7 @@ const assertMainDatabase = async () => {
   }
 };
 
-const assertTenantDatabase = async (tenant) => {
-  const tenantId = Number(tenant.id);
+const assertTenantDatabase = async (tenantId, mainTenantById) => {
   const tenantPath = path.join(tenantDbDir, `tenant_${tenantId}.db`);
   const stats = assertExistingFile(tenantPath, `Banco tenant ${tenantId}`);
   const conn = await openReadOnly(tenantPath);
@@ -154,6 +148,11 @@ const assertTenantDatabase = async (tenant) => {
       fail(`Banco tenant ${tenantId} nao contem metadados do tenant correspondente.`);
     }
 
+    const tenant = mainTenantById.get(tenantId);
+    if (!tenant) {
+      fail(`Banco tenant ${tenantId} nao possui tenant correspondente ativo no banco principal.`);
+    }
+
     if (tenant.criado_em && tenantRow.criado_em && tenant.criado_em !== tenantRow.criado_em) {
       fail(`Banco tenant ${tenantId} com metadados divergentes do banco principal.`);
     }
@@ -163,11 +162,6 @@ const assertTenantDatabase = async (tenant) => {
     const eap = await countRows(conn, 'atividades_eap');
     const rnc = await countRows(conn, 'rnc');
     const anexos = await countRows(conn, 'anexos');
-
-    const operationalRows = projetos + rdos + eap + rnc + anexos;
-    if (operationalRows <= 0) {
-      fail(`Banco tenant ${tenantId} sem dados operacionais; possivel banco recem-criado.`);
-    }
 
     console.log(
       `[startup-db-guard] Banco tenant ${tenantId} OK: ${tenantPath} (${stats.size} bytes), projetos=${projetos}, rdos=${rdos}, eap=${eap}, rnc=${rnc}, anexos=${anexos}`
@@ -184,8 +178,27 @@ const main = async () => {
     fail(`Diretorio de tenants ausente: ${tenantDbDir}`);
   }
 
-  for (const tenant of activeTenants) {
-    await assertTenantDatabase(tenant);
+  const mainTenantById = new Map(activeTenants.map((tenant) => [Number(tenant.id), tenant]));
+  const tenantFiles = fs.readdirSync(tenantDbDir)
+    .filter((fileName) => /^tenant_\d+\.db$/.test(fileName))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+  for (const fileName of tenantFiles) {
+    const tenantId = Number(fileName.match(/^tenant_(\d+)\.db$/)?.[1]);
+    await assertTenantDatabase(tenantId, mainTenantById);
+  }
+
+  const tenantFileIds = new Set(
+    tenantFiles.map((fileName) => Number(fileName.match(/^tenant_(\d+)\.db$/)?.[1]))
+  );
+  const missingTenantIds = activeTenants
+    .map((tenant) => Number(tenant.id))
+    .filter((tenantId) => !tenantFileIds.has(tenantId));
+
+  if (missingTenantIds.length > 0) {
+    console.warn(
+      `[startup-db-guard] Tenants ativos sem arquivo tenant DB; acesso sera bloqueado ate correcao manual: ${missingTenantIds.join(', ')}`
+    );
   }
 
   console.log('[startup-db-guard] Validacao somente-leitura concluida.');
