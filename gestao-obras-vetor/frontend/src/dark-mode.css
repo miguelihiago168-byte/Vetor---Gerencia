@@ -250,6 +250,16 @@ body.dark-mode .rdo-activity-edit-hint {
 
 body.dark-mode .rdo-foto-card { background: #1f3044; border-color: #2a4060; }
 body.dark-mode .rdo-foto-card-info { background: #1b2836; color: #8fa3b9; }
+body.dark-mode .rdo-photo-card-edit {
+  background: #172635 !important;
+  border-color: #2a4060 !important;
+}
+body.dark-mode .rdo-photo-card-preview {
+  background: #111827 !important;
+}
+body.dark-mode .rdo-photo-card-edit button[title="Clique para editar descrição"] div {
+  color: #e8edf3 !important;
+}
 
 body.dark-mode .rdo-ocorrencia-item              { background: #1f3044; border-color: #2a4060; }
 body.dark-mode .rdo-ocorrencia-item .ocorr-titulo { color: #d8e3ec; }

@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getRDO, updateRDO, getAtividadesEAP, addRdoMaoObra, listRdoMaoObra, addRdoComentario, addRdoMaterial, addRdoOcorrencia, uploadRdoFoto, getAnexos, updateStatusRDO, getRdoFerramentasDisponiveis, getRdoFerramentas, addRdoFerramenta, getRdoPDF } from '../services/api';
+import { getRDO, updateRDO, getAtividadesEAP, addRdoMaoObra, listRdoMaoObra, addRdoComentario, addRdoMaterial, addRdoOcorrencia, uploadRdoFoto, getAnexos, updateStatusRDO, getRdoFerramentasDisponiveis, getRdoFerramentas, addRdoFerramenta } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
 import { FileText, Download, ArrowLeft, MapPin, Building2, User, Calendar, Save, AlertTriangle } from 'lucide-react';
@@ -88,15 +88,13 @@ function RDODetalhes() {
   // Página de visualização: sem ações de edição/adicionar/upload
 
   const handleDownloadPDF = async () => {
-    try {
-      const resp = await getRdoPDF(rdoId);
-      const blob = new Blob([resp.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const newTab = window.open(url, '_blank');
-      if (!newTab) window.location.href = url;
-      setTimeout(() => window.URL.revokeObjectURL(url), 60000);
-    } catch (error) {
-      await alert({ title: 'Erro', message: 'Falha ao gerar PDF: ' + (error.response?.data?.erro || error.message) });
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+    const url = token
+      ? `/api/rdos/${rdoId}/pdf?token=${encodeURIComponent(token)}`
+      : `/api/rdos/${rdoId}/pdf`;
+    const newTab = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!newTab) {
+      await alert({ title: 'PDF bloqueado', message: 'O navegador bloqueou a nova guia. Permita pop-ups para abrir o PDF sem sair do sistema.' });
     }
   };
 

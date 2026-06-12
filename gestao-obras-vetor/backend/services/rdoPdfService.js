@@ -371,11 +371,11 @@ function renderHtml(data) {
     .summary div { border: 1px solid #cbd5e1; padding: 7px; text-align: center; }
     .summary strong { display: block; font-size: 13pt; color: #0b5f86; }
     .photo-section { break-before: page; page-break-before: always; }
-    .photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .photo-card { border: 1px solid #cbd5e1; min-height: 310px; display: flex; flex-direction: column; }
-    .photo-card img { width: 100%; height: 215px; object-fit: contain; background: #f8fafc; border-bottom: 1px solid #e5e7eb; }
-    .photo-missing { height: 215px; display: flex; align-items: center; justify-content: center; background: #f8fafc; color: #991b1b; border-bottom: 1px solid #e5e7eb; }
-    .photo-caption { padding: 7px; display: flex; flex-direction: column; gap: 2px; font-size: 8pt; color: #334155; }
+    .photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; }
+    .photo-card { border: 1px solid #cbd5e1; display: flex; flex-direction: column; align-self: start; }
+    .photo-card img { width: 100%; height: 180px; object-fit: cover; background: #f8fafc; border-bottom: 1px solid #e5e7eb; }
+    .photo-missing { height: 180px; display: flex; align-items: center; justify-content: center; background: #f8fafc; color: #991b1b; border-bottom: 1px solid #e5e7eb; }
+    .photo-caption { padding: 6px 7px; display: flex; flex-direction: column; gap: 1px; font-size: 7.6pt; color: #334155; }
     .comments-section { margin-top: 10px; }
     .comment-card { border: 1px solid #cbd5e1; border-left: 4px solid #0b5f86; padding: 8px 10px; margin-bottom: 7px; background: #f8fafc; break-inside: avoid; page-break-inside: avoid; }
     .comment-meta { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 5px; color: #475569; font-size: 7.8pt; font-weight: 700; }

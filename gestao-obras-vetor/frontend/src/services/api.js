@@ -153,6 +153,7 @@ export const uploadRdoFoto = (rdoId, formData, config = {}) => api.post(`/rdo/${
   headers: { 'Content-Type': 'multipart/form-data', ...(config.headers || {}) }
 });
 export const updateRdoFoto = (rdoId, fotoId, data) => api.patch(`/rdo/${rdoId}/foto/${fotoId}`, data);
+export const deleteRdoFoto = (rdoId, fotoId) => api.delete(`/rdo/${rdoId}/foto/${fotoId}`);
 export const reorderRdoFotos = (rdoId, fotoIds) => api.patch(`/rdo/${rdoId}/fotos/ordem`, { foto_ids: fotoIds });
 // Equipamentos
 export const getRdoEquipamentos = (rdoId) => api.get(`/rdo/${rdoId}/equipamentos`);

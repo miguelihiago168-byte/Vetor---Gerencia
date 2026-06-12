@@ -9,7 +9,7 @@ import {
   getProjeto,
   getAtividadesEAP, getRDO, createRDO, updateRDO,
   addRdoClima, addRdoComentario, addRdoOcorrencia, addRdoMaterial,
-  uploadRdoFoto, updateRdoFoto, reorderRdoFotos, updateStatusRDO, getExecucaoAcumulada,
+  uploadRdoFoto, updateRdoFoto, deleteRdoFoto, reorderRdoFotos, updateStatusRDO, getExecucaoAcumulada,
   getRdoColaboradores, createRdoColaborador,
   getRdoEquipamentos, addRdoEquipamento, deleteRdoEquipamento,
   getAnexos, uploadAnexo, deleteAnexo
@@ -1039,6 +1039,29 @@ function RDOForm2() {
     }
   };
 
+  const removerFotoPersistida = async (foto) => {
+    if (!rdoId || !foto?.id) return;
+    const ok = await confirm({
+      title: 'Remover foto',
+      message: 'Deseja remover esta foto do RDO?',
+      confirmText: 'Remover',
+      cancelText: 'Cancelar'
+    });
+    if (!ok) return;
+
+    try {
+      await deleteRdoFoto(rdoId, foto.id);
+      setRdoFotos(prev => prev.filter(f => f.id !== foto.id));
+      notifySuccess('Foto removida.', 3000);
+    } catch (e) {
+      setErro('Erro ao remover foto: ' + (e?.response?.data?.erro || e.message));
+    }
+  };
+
+  const removerFotoFila = (index) => {
+    setFotosQueue(prev => prev.filter((_, idx) => idx !== index));
+  };
+
   const persistirOrdemFotos = async (listaFotos) => {
     if (!rdoId) return;
     const ids = listaFotos.map((f) => Number(f.id)).filter(Boolean);
@@ -1950,14 +1973,23 @@ function RDOForm2() {
                     {rdoFotos.map((f, idx) => (
                       <div
                         key={f.id}
+                        className="rdo-photo-card-edit"
                         draggable
                         onDragStart={() => onDragFotoStart(idx)}
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={() => onDropFoto(idx)}
-                        style={{ border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden', background: '#fff', cursor: 'move' }}
+                        style={{ border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden', background: '#fff', cursor: 'move', position: 'relative' }}
                       >
+                        <button
+                          type="button"
+                          className="rdo-photo-delete-btn"
+                          title="Remover foto"
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); removerFotoPersistida(f); }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
                         <a href={`/uploads/${f.caminho_arquivo}`} target="_blank" rel="noreferrer" style={{ display: 'block', textDecoration: 'none' }}>
-                          <div style={{ position: 'relative', width: '100%', paddingTop: '70%', background: '#f8fafc' }}>
+                          <div className="rdo-photo-card-preview" style={{ position: 'relative', width: '100%', paddingTop: '70%', background: '#f8fafc' }}>
                             <img
                               src={`/uploads/${f.caminho_arquivo}`}
                               alt={f.nome_arquivo || 'foto'}
@@ -2008,7 +2040,7 @@ function RDOForm2() {
 
               {fotosQueue.length > 0 && (
                 <table className="rdo-table" style={{ marginTop: '10px' }}>
-                  <thead><tr><th>Arquivo</th><th>Descrição</th><th>Atividade</th><th>Status</th></tr></thead>
+                  <thead><tr><th>Arquivo</th><th>Descrição</th><th>Atividade</th><th>Status</th><th className="td-actions"></th></tr></thead>
                   <tbody>
                     {fotosQueue.map((f, i) => (
                       <tr key={`q-${i}`} style={{ background: '#fefce8' }}>
@@ -2016,6 +2048,11 @@ function RDOForm2() {
                         <td>{f.descricao || '—'}</td>
                         <td style={{ color: '#64748b', fontSize: '12px' }}>{f.atividade_label || '—'}</td>
                         <td style={{ color: '#94a3b8', fontSize: '12px' }}>Pendente</td>
+                        <td className="td-actions">
+                          <button className="btn btn-danger" style={{ padding: '4px 8px' }} onClick={() => removerFotoFila(i)}>
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>

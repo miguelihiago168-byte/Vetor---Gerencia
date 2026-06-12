@@ -1116,3 +1116,26 @@
 .rdo-chevron.open {
   transform: rotate(180deg);
 }
+
+.rdo-photo-delete-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  border-radius: 999px;
+  background: rgba(127, 29, 29, 0.88);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.22);
+}
+
+.rdo-photo-delete-btn:hover {
+  background: #dc2626;
+  border-color: #fca5a5;
+}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getRDOs, getRdoPDF, addRdoComentario, updateStatusRDO } from '../services/api';
+import { getRDOs, addRdoComentario, updateStatusRDO } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { FileText, Plus, Eye, MoreHorizontal, CheckCircle, XCircle, RotateCcw, AlertTriangle } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
@@ -188,19 +188,13 @@ function RDOs() {
 
   const handleDownloadPDF = async (rdoId, e) => {
     if (e) e.stopPropagation();
-    try {
-      const resp = await getRdoPDF(rdoId);
-      const blob = new Blob([resp.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `RDO-${String(rdoId).padStart(2, '0')}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      await alert({ title: 'Erro', message: 'Falha ao gerar PDF: ' + (error.response?.data?.erro || error.message) });
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+    const url = token
+      ? `/api/rdos/${rdoId}/pdf?token=${encodeURIComponent(token)}`
+      : `/api/rdos/${rdoId}/pdf`;
+    const newTab = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!newTab) {
+      await alert({ title: 'PDF bloqueado', message: 'O navegador bloqueou a nova guia. Permita pop-ups para abrir o PDF sem sair do sistema.' });
     }
   };
 

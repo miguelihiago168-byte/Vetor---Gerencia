@@ -587,6 +587,26 @@ router.patch('/:rdoId/foto/:fotoId', auth, async (req, res) => {
   }
 });
 
+router.delete('/:rdoId/foto/:fotoId', auth, async (req, res) => {
+  try {
+    const { rdoId, fotoId } = req.params;
+    const foto = await getQuery('SELECT id, caminho_arquivo FROM rdo_fotos WHERE id = ? AND rdo_id = ?', [fotoId, rdoId]);
+    if (!foto) return res.status(404).json({ erro: 'Foto não encontrada.' });
+
+    await runQuery('DELETE FROM rdo_fotos WHERE id = ? AND rdo_id = ?', [fotoId, rdoId]);
+
+    const filePath = path.join(uploadsDir, foto.caminho_arquivo || '');
+    if (foto.caminho_arquivo && fs.existsSync(filePath)) {
+      try { fs.unlinkSync(filePath); } catch (_) {}
+    }
+
+    return res.json({ mensagem: 'Foto removida.' });
+  } catch (err) {
+    console.error('Erro ao remover foto do RDO', err);
+    return res.status(500).json({ erro: 'Erro ao remover foto do RDO.' });
+  }
+});
+
 // Reordenar fotos do RDO (ordem persistida)
 router.patch('/:rdoId/fotos/ordem', auth, async (req, res) => {
   try {
