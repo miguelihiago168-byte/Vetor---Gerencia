@@ -56,7 +56,9 @@ Fase 3 executada:
 - `docker-compose.yml` define `NODE_ENV=production` explicitamente para o backend.
 - `backend/entrypoint.sh` deixou de executar `initDatabase.js` e `migrate_multitenancy.js` em producao.
 - Em producao, `backend/entrypoint.sh` executa `scripts/validateStartupDatabase.js` antes do servidor.
-- `scripts/validateStartupDatabase.js` abre SQLite em modo somente leitura e valida banco principal, tenants ativos, tabelas obrigatorias, metadados e dados operacionais.
+- `scripts/validateStartupDatabase.js` abre SQLite em modo somente leitura e valida banco principal, tenants ativos, tabelas obrigatorias, metadados e contagens operacionais.
+- `scripts/validateStartupDatabase.js` permite zero projetos/RDOs/EAP/RNC/anexos, pois o ambiente de testes pode ser recriado do zero; o bloqueio de banco vazio considera ausencia de arquivo, schema, usuarios ou tenants.
+- `scripts/validateStartupDatabase.js` valida arquivos tenant existentes e apenas alerta quando um tenant ativo ainda nao possui `tenant_<id>.db`; o acesso desse tenant segue bloqueado por `ensureTenantDatabase()` ate correcao manual.
 - `backend/config/database.js` nao cria diretorios nem banco principal em producao.
 - `backend/config/database.js` nao copia o banco principal para criar tenant DB em producao.
 - `backend/config/database.js` nao apaga/recria tenant DB divergente em producao.
