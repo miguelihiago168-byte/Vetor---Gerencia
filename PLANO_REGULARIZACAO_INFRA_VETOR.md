@@ -1,6 +1,6 @@
 # Plano de regularizacao da infraestrutura Vetor
 
-Status: Fase 4 concluida. Fases 5 em diante aguardam autorizacao explicita.
+Status: Fase 5 concluida no ambiente de testes. Fases 6 em diante aguardam autorizacao explicita.
 
 ## Causa raiz
 
@@ -40,6 +40,18 @@ Na Fase 1, o backup foi salvo fora do diretorio montado pelo container:
 
 ## Alteracoes realizadas
 
+Fase 1 executada:
+
+- Lidos os diagnosticos e arquivos de infraestrutura solicitados.
+- Confirmado que o backup deveria cobrir os caminhos atualmente montados:
+  - `/home/ubuntu/app_data/gestao-obras-vetor/database`
+  - `/home/ubuntu/app_data/gestao-obras-vetor/uploads`
+- Criado backup com timestamp fora de `/home/ubuntu/app_data`.
+- Gerados manifesto, checksums SHA-256, listagens dos archives e resumo de contagens dos bancos de origem.
+- Validado que os archives podem ser abertos/listados.
+
+Nenhuma correcao de infraestrutura foi aplicada nesta fase.
+
 Fase 2 executada:
 
 - `docker-compose.yml` nao usa mais fallback silencioso para `APP_DATA_DIR`.
@@ -77,17 +89,24 @@ Fase 4 executada:
 - Nenhuma migration de schema real foi criada nesta fase.
 - Nenhuma migration foi executada em producao.
 
-Fase 1 executada:
+Fase 5 executada no servidor de testes:
 
-- Lidos os diagnosticos e arquivos de infraestrutura solicitados.
-- Confirmado que o backup deveria cobrir os caminhos atualmente montados:
-  - `/home/ubuntu/app_data/gestao-obras-vetor/database`
-  - `/home/ubuntu/app_data/gestao-obras-vetor/uploads`
-- Criado backup com timestamp fora de `/home/ubuntu/app_data`.
-- Gerados manifesto, checksums SHA-256, listagens dos archives e resumo de contagens dos bancos de origem.
-- Validado que os archives podem ser abertos/listados.
-
-Nenhuma correcao de infraestrutura foi aplicada nesta fase.
+- Confirmado deploy ativo no commit `932f0025ee96762945b5536dbddfdd56aa5a9531`.
+- Confirmado `NODE_ENV=production` no backend.
+- Confirmado `APP_DATA_DIR=/home/ubuntu/app_data/gestao-obras-vetor` no container e no `.env`.
+- Criado backup pre-limpeza dos diretorios oficiais de `database` e `uploads`.
+- Preservado estado anterior em diretorio separado antes da limpeza.
+- Recriado estado limpo minimo no ambiente de testes:
+  - banco principal `gestao_obras.db`;
+  - banco tenant `tenants/tenant_1.db`;
+  - diretorio `uploads`;
+  - diretorio `backups`;
+  - tenant padrao ativo;
+  - usuario administrador unico.
+- Removidos bancos e tenants antigos do ambiente de testes, apos backup.
+- Reiniciados apenas os containers com `docker compose stop` e `docker compose up -d --build`.
+- Validado que backend e frontend subiram.
+- Health check `/api/health` validado com sucesso.
 
 ## Backup
 
@@ -149,9 +168,32 @@ Contagens dos bancos de origem no momento do backup:
 
 Este backup e apenas rollback tecnico do estado atual de testes. Ele nao e solucao definitiva.
 
+Backup pre-limpeza da Fase 5 no servidor de testes:
+
+```text
+backup_dir=/root/vetor-phase5-backups/phase5_preclean_20260613_005947_+0200
+database_archive=/root/vetor-phase5-backups/phase5_preclean_20260613_005947_+0200/database_20260613_005947_+0200.tar.gz
+uploads_archive=/root/vetor-phase5-backups/phase5_preclean_20260613_005947_+0200/uploads_20260613_005947_+0200.tar.gz
+preserved_dir=/home/ubuntu/app_data/gestao-obras-vetor/phase5_preserved_20260613_010058_+0200
+```
+
+Checksums SHA-256 da Fase 5:
+
+```text
+b9aeef4743a939a8a91761c16b9860ff4e1177ca2f2b65cb66f63666303a98ac  database_20260613_005947_+0200.tar.gz
+fb9464e3d25e89ce01d3aad499732bfbe696db91984bff602feedb3a3d20a086  uploads_20260613_005947_+0200.tar.gz
+```
+
+Estado final ativo apos a Fase 5:
+
+| Banco | Usuarios | Tenants | Usuario tenants | Projetos | Vinculos | RDOs | EAP | RNC | Anexos |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `gestao_obras.db` | 1 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
+| `tenant_1.db` | 1 | 1 | 1 | 0 | 0 | 0 | 0 | 0 | 0 |
+
 ## Migrations criadas
 
-Nenhuma migration de schema real foi criada ou executada ate a Fase 4.
+Nenhuma migration de schema real foi criada ou executada ate a Fase 5.
 
 A Fase 4 criou apenas a infraestrutura de versionamento e execucao controlada:
 
@@ -182,6 +224,8 @@ O script da Fase 2 valida:
 
 Foi usado apenas um script temporario local para executar o backup remoto via SSH. O script temporario foi removido da maquina local apos a execucao.
 
+Na Fase 5 foram usados apenas scripts temporarios locais para executar backup, reset controlado e verificacoes remotas via SSH. Os scripts temporarios foram removidos da maquina local apos a execucao.
+
 ## Testes
 
 Testes/verificacoes executados na Fase 1:
@@ -196,6 +240,20 @@ Testes/verificacoes executados na Fase 1:
 
 Nao foram executados testes automatizados da aplicacao nesta fase, pois a Fase 1 e exclusivamente backup do estado atual.
 
+Testes/verificacoes executados na Fase 5:
+
+- SSH no servidor de testes `161.97.136.203`.
+- Consulta de `docker compose ps`.
+- Consulta de variaveis efetivas do backend.
+- Backup dos diretorios oficiais `database` e `uploads`.
+- Validacao de integridade dos archives com `gzip -t`.
+- Validacao de listagem dos archives com `tar -tzf`.
+- Checksum SHA-256 dos archives.
+- Consulta SQLite em modo somente leitura antes e depois da limpeza.
+- Criacao controlada de estado minimo no ambiente de testes.
+- Restart controlado com `docker compose stop` e `docker compose up -d --build`.
+- Health check HTTP em `/api/health`.
+
 ## Deploy
 
 Nenhum deploy foi executado.
@@ -206,7 +264,27 @@ Nenhum arquivo `.env` foi alterado.
 
 O workflow de deploy foi alterado para exportar `APP_DATA_DIR` explicitamente antes de executar `docker compose`.
 
+Na Fase 5, no ambiente de testes, os containers foram reiniciados de forma controlada com:
+
+```text
+docker compose stop
+docker compose up -d --build
+```
+
+Nao foi usado `docker compose down`.
+
+Nao foi usado `docker compose down -v`.
+
 ## Validacao
+
+Validacao de Fase 1 concluida:
+
+- Backup criado fora do diretorio montado.
+- Manifesto criado.
+- Checksums criados.
+- Archives listaveis.
+- Banco principal e banco tenant atual incluidos no backup.
+- Uploads atuais incluidos no backup.
 
 Validacao de Fase 2 concluida:
 
@@ -233,20 +311,25 @@ Validacao de Fase 4 concluida:
 - `node scripts/runMigrations.js --help`
 - Teste de producao confirmou que `NODE_ENV=production node scripts/runMigrations.js` falha sem `MIGRATIONS_ALLOW_PRODUCTION=true`.
 
-Validacao de Fase 1 concluida:
+Validacao de Fase 5 concluida:
 
-- Backup criado fora do diretorio montado.
-- Manifesto criado.
-- Checksums criados.
-- Archives listaveis.
-- Banco principal e banco tenant atual incluidos no backup.
-- Uploads atuais incluidos no backup.
+- `docker compose ps` confirmou backend e frontend em execucao apos restart controlado.
+- `NODE_ENV=production` confirmado no container backend.
+- `APP_DATA_DIR=/home/ubuntu/app_data/gestao-obras-vetor` confirmado no container backend.
+- Banco principal ativo confirmado em `/home/ubuntu/app_data/gestao-obras-vetor/database/gestao_obras.db`.
+- Banco tenant ativo confirmado em `/home/ubuntu/app_data/gestao-obras-vetor/database/tenants/tenant_1.db`.
+- Uploads ativos confirmados em `/home/ubuntu/app_data/gestao-obras-vetor/uploads`.
+- Backups confirmados em `/home/ubuntu/backups/gestao-obras-vetor`.
+- Health check `/api/health` retornou sucesso.
+- Usuario administrador unico confirmado apos restart.
+- Tenant unico confirmado apos restart.
 
 ## Riscos restantes
 
 - O banco atualmente montado continua vazio para dados operacionais.
 - O backup atualizado em `server-setup.sh` ainda e simples e sera substituido por rotina real na Fase 8.
 - Algumas rotas ainda possuem codigo legado de schema lazy, mas as mutacoes de schema por `runQuery` ficam bloqueadas em producao.
+- Logs ainda mostram tentativas de rotas legado criarem colunas/tabelas em runtime; isso deve ser removido na fase dedicada a eliminar auto-migrations de rotas.
 - Ainda falta migrar o schema legado para migrations reais dentro do novo pipeline.
 
 ## Plano de rollback
@@ -259,6 +342,15 @@ Rollback tecnico disponivel para o estado atual de testes:
 4. Preservar novamente o estado que estiver em producao antes de sobrescrever qualquer arquivo.
 
 Nenhuma restauracao foi executada na Fase 1.
+
+Rollback tecnico da Fase 5:
+
+1. Usar o backup pre-limpeza da Fase 5 apenas se for necessario voltar ao estado imediatamente anterior ao reset de testes.
+2. Validar checksums antes de qualquer restauracao.
+3. Restaurar somente em janela autorizada.
+4. Preservar novamente o estado que estiver ativo antes de sobrescrever qualquer arquivo.
+
+Nenhuma restauracao foi executada na Fase 5.
 
 ## Branches e commits
 
@@ -305,3 +397,15 @@ codex/phase4-migration-pipeline
 ```
 
 Commit da Fase 4 sera registrado apos versionamento.
+
+Branch de trabalho da Fase 5:
+
+```text
+codex/phase5-test-reset
+```
+
+Commit da Fase 5:
+
+```text
+7b4aa10ec327913770998446c9b7f1f80601060a docs: record phase 5 test reset
+```
