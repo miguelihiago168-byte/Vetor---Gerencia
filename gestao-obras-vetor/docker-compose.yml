@@ -9,9 +9,10 @@ services:
       - backend/.env
     environment:
       - TZ=America/Sao_Paulo
+      - APP_DATA_DIR=${APP_DATA_DIR:?APP_DATA_DIR deve ser definido antes de executar docker compose}
     volumes:
-      - ${APP_DATA_DIR:-/home/ubuntu/app_data/gestao-obras-vetor}/uploads:/app/uploads
-      - ${APP_DATA_DIR:-/home/ubuntu/app_data/gestao-obras-vetor}/database:/app/database
+      - ${APP_DATA_DIR:?APP_DATA_DIR deve ser definido antes de executar docker compose}/uploads:/app/uploads
+      - ${APP_DATA_DIR:?APP_DATA_DIR deve ser definido antes de executar docker compose}/database:/app/database
     expose:
       - "3001"
     restart: unless-stopped

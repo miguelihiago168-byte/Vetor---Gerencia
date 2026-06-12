@@ -30,6 +30,7 @@ jobs:
             set -euo pipefail
 
             cd "${{ secrets.APP_DIR }}"
+            export APP_DATA_DIR="/home/ubuntu/app_data/gestao-obras-vetor"
 
             CURRENT_BRANCH="$(git branch --show-current)"
             if [ "$CURRENT_BRANCH" != "main" ]; then
@@ -45,6 +46,25 @@ jobs:
 
             git fetch origin main
             git reset --hard origin/main
+
+            if [ -f docker-compose.yml ]; then
+              COMPOSE_DIR="$PWD"
+            elif [ -f gestao-obras-vetor/docker-compose.yml ]; then
+              COMPOSE_DIR="$PWD/gestao-obras-vetor"
+            else
+              echo "docker-compose.yml nao encontrado no APP_DIR nem em gestao-obras-vetor/."
+              exit 1
+            fi
+
+            cd "$COMPOSE_DIR"
+
+            if [ ! -f scripts/validate_data_dir.sh ]; then
+              echo "Script de validacao de APP_DATA_DIR ausente."
+              exit 1
+            fi
+
+            sh scripts/validate_data_dir.sh "$APP_DATA_DIR"
+            docker compose config >/dev/null
 
             docker compose up -d --build
             docker compose ps
