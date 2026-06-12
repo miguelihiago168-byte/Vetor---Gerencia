@@ -1,6 +1,6 @@
 # Plano de regularizacao da infraestrutura Vetor
 
-Status: Fase 3 concluida. Fases 4 em diante aguardam autorizacao explicita.
+Status: Fase 4 concluida. Fases 5 em diante aguardam autorizacao explicita.
 
 ## Causa raiz
 
@@ -62,6 +62,18 @@ Fase 3 executada:
 - `backend/config/database.js` nao apaga/recria tenant DB divergente em producao.
 - `backend/server.js` desativa migrations automaticas de startup em producao.
 - `runQuery` bloqueia `CREATE`, `ALTER` e `DROP` automaticos quando `DISABLE_STARTUP_SCHEMA_MUTATIONS=true` em producao.
+
+Fase 4 executada:
+
+- Criado pipeline de migrations versionadas em `backend/scripts/runMigrations.js`.
+- Criado diretorio `backend/scripts/migrations/` para migrations numeradas e deterministicas.
+- Criada documentacao em `backend/scripts/migrations/README.md`.
+- Adicionados scripts npm `migrate`, `migrate:dry-run` e `migrate:status`.
+- O runner suporta `--main-only`, `--tenants-only`, `--dry-run` e `--status`.
+- O runner abre banco em modo somente leitura quando usado com `--dry-run` ou `--status`.
+- Execucao real em producao exige `MIGRATIONS_ALLOW_PRODUCTION=true`.
+- Nenhuma migration de schema real foi criada nesta fase.
+- Nenhuma migration foi executada em producao.
 
 Fase 1 executada:
 
@@ -137,7 +149,12 @@ Este backup e apenas rollback tecnico do estado atual de testes. Ele nao e soluc
 
 ## Migrations criadas
 
-Nenhuma migration foi criada ou executada na Fase 1.
+Nenhuma migration de schema real foi criada ou executada ate a Fase 4.
+
+A Fase 4 criou apenas a infraestrutura de versionamento e execucao controlada:
+
+- `gestao-obras-vetor/backend/scripts/runMigrations.js`
+- `gestao-obras-vetor/backend/scripts/migrations/README.md`
 
 ## Scripts criados
 
@@ -149,7 +166,12 @@ Fase 3 criou:
 
 - `gestao-obras-vetor/backend/scripts/validateStartupDatabase.js`
 
-Esse script valida:
+Fase 4 criou:
+
+- `gestao-obras-vetor/backend/scripts/runMigrations.js`
+- `gestao-obras-vetor/backend/scripts/migrations/README.md`
+
+O script da Fase 2 valida:
 
 - `APP_DATA_DIR` definido;
 - valor oficial `/home/ubuntu/app_data/gestao-obras-vetor`;
@@ -201,6 +223,14 @@ Validacao de Fase 3 concluida:
 - `node backend/scripts/validateStartupDatabase.js` executado localmente em modo somente leitura.
 - Teste de bloqueio confirmou que `CREATE TABLE` e recusado em producao com `DISABLE_STARTUP_SCHEMA_MUTATIONS=true`.
 
+Validacao de Fase 4 concluida:
+
+- `node --check backend/scripts/runMigrations.js`
+- `npm run migrate:dry-run` via `cmd /c npm`, apenas leitura.
+- `npm run migrate:status` via `cmd /c npm`, apenas leitura.
+- `node scripts/runMigrations.js --help`
+- Teste de producao confirmou que `NODE_ENV=production node scripts/runMigrations.js` falha sem `MIGRATIONS_ALLOW_PRODUCTION=true`.
+
 Validacao de Fase 1 concluida:
 
 - Backup criado fora do diretorio montado.
@@ -214,8 +244,8 @@ Validacao de Fase 1 concluida:
 
 - O banco atualmente montado continua vazio para dados operacionais.
 - O backup atualizado em `server-setup.sh` ainda e simples e sera substituido por rotina real na Fase 8.
-- Nao existe ainda pipeline de migrations versionado.
 - Algumas rotas ainda possuem codigo legado de schema lazy, mas as mutacoes de schema por `runQuery` ficam bloqueadas em producao.
+- Ainda falta migrar o schema legado para migrations reais dentro do novo pipeline.
 
 ## Plano de rollback
 
@@ -260,4 +290,16 @@ Branch de trabalho da Fase 3:
 codex/phase3-startup-guard
 ```
 
-Commit da Fase 3 sera registrado apos versionamento.
+Commit da Fase 3:
+
+```text
+c88c9ee2bb1b459fe23eebbd2e02da119280cb3f fix: guard production database startup
+```
+
+Branch de trabalho da Fase 4:
+
+```text
+codex/phase4-migration-pipeline
+```
+
+Commit da Fase 4 sera registrado apos versionamento.
