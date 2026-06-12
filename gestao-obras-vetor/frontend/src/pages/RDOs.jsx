@@ -192,10 +192,12 @@ function RDOs() {
     const url = token
       ? `/api/rdos/${rdoId}/pdf?token=${encodeURIComponent(token)}`
       : `/api/rdos/${rdoId}/pdf`;
-    const newTab = window.open(url, '_blank', 'noopener,noreferrer');
-    if (!newTab) {
-      await alert({ title: 'PDF bloqueado', message: 'O navegador bloqueou a nova guia. Permita pop-ups para abrir o PDF sem sair do sistema.' });
-    }
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `RDO-${String(rdoId).padStart(3, '0')}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   };
 
   const { prefs, setPreference } = useUserPreferences();

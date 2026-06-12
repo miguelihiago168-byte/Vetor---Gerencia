@@ -969,6 +969,10 @@ function RDOForm2() {
     if (!fotoPendente.file) return;
     const { file, atividadeId, descricao } = fotoPendente;
     const atividadeSelecionada = fotoAtividadeOptions.find((opt) => opt.value === atividadeId) || null;
+    if (!atividadeSelecionada) {
+      setErro('Vincule a foto a uma atividade antes de enviar.');
+      return;
+    }
     const arquivoFoto = await prepararFotoRdo(file);
     if (rdoId) {
       setIsUploadingFoto(true);
@@ -1133,6 +1137,10 @@ function RDOForm2() {
       setSucesso('');
       setIsSaving(true);
 
+      if ((fotosQueue || []).some((foto) => !foto.atividadeTipo)) {
+        throw new Error('Todas as fotos devem estar vinculadas a uma atividade antes de salvar o RDO.');
+      }
+
       const body = {
         projeto_id: Number(projetoId),
         data_relatorio: formData.data_relatorio,
@@ -1277,6 +1285,9 @@ function RDOForm2() {
         const fotosFalharam = [];
         for (const foto of fotosQueue) {
           try {
+            if (!foto.atividadeTipo) {
+              throw new Error('Foto sem atividade vinculada.');
+            }
             const fd = new FormData();
             fd.append('arquivo', foto.file);
             if (foto.atividadeTipo === 'eap' && foto.atividade_eap_id && rdoCriadoDetalhado?.atividades) {
@@ -1934,10 +1945,10 @@ function RDOForm2() {
               </label>
             </div>
             <div className="form-group">
-              <label className="form-label">Atividade (opcional)</label>
+              <label className="form-label">Atividade *</label>
               <select className="form-select" value={fotoPendente.atividadeId}
                 onChange={(e) => setFotoPendente(prev => ({ ...prev, atividadeId: e.target.value }))}>
-                <option value="">Nenhuma</option>
+                <option value="">Selecione uma atividade...</option>
                 {fotoAtividadeOptions.map((opcao) => (
                   <option key={opcao.value} value={opcao.value}>{opcao.label}</option>
                 ))}
@@ -1950,7 +1961,7 @@ function RDOForm2() {
                 onChange={(e) => setFotoPendente(prev => ({ ...prev, descricao: e.target.value }))} />
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <button className="btn btn-primary" onClick={handleFotoUpload} disabled={!fotoPendente.file || isUploadingFoto}>
+              <button className="btn btn-primary" onClick={handleFotoUpload} disabled={!fotoPendente.file || !fotoPendente.atividadeId || isUploadingFoto}>
                 <Upload size={15} /> {isUploadingFoto ? 'Enviando...' : 'Enviar'}
               </button>
             </div>

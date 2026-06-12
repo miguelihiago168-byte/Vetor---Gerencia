@@ -44,6 +44,12 @@ const fmtSize = (bytes) => {
   return `${(size / (1024 * 1024)).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB`;
 };
 
+const isImageAttachment = (item) => {
+  const tipo = String(item?.tipo || '').toLowerCase();
+  const nome = String(item?.nome_arquivo || '').toLowerCase();
+  return tipo.startsWith('image/') || /\.(png|jpe?g|webp|gif|heic|heif)$/i.test(nome);
+};
+
 const displayRdoNumber = (rdo) => {
   const raw = String(rdo?.numero_rdo || '');
   const match = raw.match(/(\d+)$/);
@@ -231,6 +237,7 @@ async function loadRdoPdfData(id) {
     WHERE a.rdo_id = ?
     ORDER BY a.criado_em ASC, a.id ASC
   `, [id]);
+  const anexosDocumentais = anexos.filter((item) => !isImageAttachment(item));
 
   const materiais = await safeAll('SELECT * FROM rdo_materiais WHERE rdo_id = ?ORDER BY criado_em ASC, id ASC', [id]);
   const equipamentos = await safeAll('SELECT * FROM rdo_equipamentos WHERE rdo_id = ?ORDER BY id ASC', [id]);
@@ -286,9 +293,8 @@ async function loadRdoPdfData(id) {
     atividadesPdf,
     maoObra,
     fotos,
-    anexos,
+    anexos: anexosDocumentais,
     materiaisRecebidos: materiais.filter((item) => String(item.tipo_movimento || 'recebido') !== 'utilizado'),
-    materiaisUtilizados: materiais.filter((item) => String(item.tipo_movimento || 'recebido') === 'utilizado'),
     equipamentos,
     clima,
     ocorrencias,
@@ -297,7 +303,7 @@ async function loadRdoPdfData(id) {
 }
 
 function renderHtml(data) {
-  const { rdo, responsavelNome, atividadesPdf, maoObra, fotos, anexos, materiaisRecebidos, materiaisUtilizados, equipamentos, clima, ocorrencias, comentarios } = data;
+  const { rdo, responsavelNome, atividadesPdf, maoObra, fotos, anexos, materiaisRecebidos, equipamentos, clima, ocorrencias, comentarios } = data;
   const displayId = displayRdoNumber(rdo);
   const logo = getLogoDataUri();
   const dataRelatorio = fmtDate(rdo.data_relatorio);
@@ -370,7 +376,7 @@ function renderHtml(data) {
     .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
     .summary div { border: 1px solid #cbd5e1; padding: 7px; text-align: center; }
     .summary strong { display: block; font-size: 13pt; color: #0b5f86; }
-    .photo-section { break-before: page; page-break-before: always; }
+    .photo-section { break-before: auto; page-break-before: auto; }
     .photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; }
     .photo-card { border: 1px solid #cbd5e1; display: flex; flex-direction: column; align-self: start; }
     .photo-card img { width: 100%; height: 180px; object-fit: cover; background: #f8fafc; border-bottom: 1px solid #e5e7eb; }
@@ -381,8 +387,9 @@ function renderHtml(data) {
     .comment-meta { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 5px; color: #475569; font-size: 7.8pt; font-weight: 700; }
     .comment-text { color: #111827; white-space: normal; word-break: break-word; }
     .attachment-link { color: #0b5f86; text-decoration: underline; font-weight: 700; }
-    .attachments-section { break-before: page; page-break-before: always; }
-    .signature-footer { margin-top: 12mm; padding-top: 8mm; break-inside: avoid; page-break-inside: avoid; }
+    .attachments-section { break-before: auto; page-break-before: auto; }
+    .signature-section { display: flex; flex-direction: column; justify-content: flex-end; margin-bottom: 0; break-inside: avoid; page-break-inside: avoid; }
+    .signature-footer { padding-top: 8mm; break-inside: avoid; page-break-inside: avoid; }
     .signatures { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 36px; }
     .signature-line { border-top: 1px solid #111827; padding-top: 6px; text-align: center; color: #334155; }
     .avoid-break { break-inside: avoid; page-break-inside: avoid; }
@@ -495,22 +502,13 @@ function renderHtml(data) {
       </table>
     </section>
 
-    <div class="materials-grid">
-      <section class="section">
-        <div class="section-title">Materiais Recebidos</div>
-        <table>
-          <thead><tr><th>Material</th><th>Qtd.</th><th>Un.</th><th>NF</th></tr></thead>
-          <tbody>${tableRows(materiaisRecebidos, (item) => `<tr><td>${escapeHtml(item.nome_material || '-')}</td><td class="text-right">${fmtNumber(item.quantidade)}</td><td>${escapeHtml(item.unidade || '-')}</td><td>${escapeHtml(item.numero_nf || '-')}</td></tr>`, 'Nenhum material recebido.', 4)}</tbody>
-        </table>
-      </section>
-      <section class="section">
-        <div class="section-title">Materiais Utilizados</div>
-        <table>
-          <thead><tr><th>Material</th><th>Qtd.</th><th>Un.</th><th>NF</th></tr></thead>
-          <tbody>${tableRows(materiaisUtilizados, (item) => `<tr><td>${escapeHtml(item.nome_material || '-')}</td><td class="text-right">${fmtNumber(item.quantidade)}</td><td>${escapeHtml(item.unidade || '-')}</td><td>${escapeHtml(item.numero_nf || '-')}</td></tr>`, 'Nenhum material utilizado.', 4)}</tbody>
-        </table>
-      </section>
-    </div>
+    <section class="section">
+      <div class="section-title">Materiais Recebidos</div>
+      <table>
+        <thead><tr><th>Material</th><th>Qtd.</th><th>Un.</th><th>NF</th></tr></thead>
+        <tbody>${tableRows(materiaisRecebidos, (item) => `<tr><td>${escapeHtml(item.nome_material || '-')}</td><td class="text-right">${fmtNumber(item.quantidade)}</td><td>${escapeHtml(item.unidade || '-')}</td><td>${escapeHtml(item.numero_nf || '-')}</td></tr>`, 'Nenhum material recebido.', 4)}</tbody>
+      </table>
+    </section>
 
     <section class="section">
       <div class="section-title">Ocorrências</div>
@@ -568,10 +566,13 @@ function renderHtml(data) {
           </tr>
         `, 'Nenhum anexo persistido para este RDO.', 6)}</tbody>
       </table>
-      <div class="signature-footer avoid-break">
+    </section>
+
+    <section class="section signature-section avoid-break">
+      <div class="signature-footer">
         <div class="signatures">
-        <div class="signature-line">Responsável pelo preenchimento</div>
-        <div class="signature-line">Aprovação / Fiscalização</div>
+          <div class="signature-line">Responsável pelo preenchimento</div>
+          <div class="signature-line">Aprovação / Fiscalização</div>
         </div>
       </div>
     </section>
@@ -623,6 +624,25 @@ async function renderWithPuppeteer(html, rdo, displayId) {
           setTimeout(done, 5000);
         });
       }));
+    });
+    await page.evaluate(() => {
+      const signatureSection = document.querySelector('.signature-section');
+      if (!signatureSection) return;
+
+      signatureSection.style.paddingTop = '0';
+
+      const pxPerMm = 96 / 25.4;
+      const printablePageHeight = (297 - 12 - 14) * pxPerMm;
+      const bottomGap = 5 * pxPerMm;
+      const maxPadding = 42 * pxPerMm;
+      const rect = signatureSection.getBoundingClientRect();
+      const sectionBottom = window.scrollY + rect.top + rect.height;
+      const usedOnPage = sectionBottom % printablePageHeight;
+      const remainingOnPage = printablePageHeight - usedOnPage;
+
+      if (remainingOnPage > bottomGap && remainingOnPage < printablePageHeight - bottomGap) {
+        signatureSection.style.paddingTop = `${Math.min(remainingOnPage - bottomGap, maxPadding)}px`;
+      }
     });
 
     const headerStatusStyle = statusInlineStyle(rdo.status || '-');

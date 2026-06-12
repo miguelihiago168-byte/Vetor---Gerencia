@@ -7,12 +7,13 @@ import {
 } from '../services/api';
 import {
   FileText, AlertTriangle, Image as ImageIcon, Activity,
-  TrendingUp, ShoppingCart, Wrench, BarChart2, Calendar, List, Layers
+  TrendingUp, ShoppingCart, Wrench, BarChart2, Calendar, List, Layers, Download
 } from 'lucide-react';
 import { formatMoneyBR } from '../utils/currency';
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
 } from 'recharts';
+import './ProjetoDetalhes.css';
 
 const formatBRL = formatMoneyBR;
 const MS_DIA = 1000 * 60 * 60 * 24;
@@ -192,6 +193,13 @@ function ProjetoDetalhes() {
     const numero = match ? Number(match[1]) : Number(raw || 0);
     return `RDO-${String(numero || rdo?.id || rdo?.rdo_id).padStart(3, '0')}`;
   };
+  const getFotoUrl = (foto) => `/uploads/${foto.caminho_arquivo}`;
+  const getFotoDownloadName = (foto) => foto.nome_arquivo || foto.caminho_arquivo?.split(/[\\/]/).pop() || 'foto-rdo';
+  const getFotoAtividadeLabel = (foto) => (
+    foto.atividade_descricao
+      ? `${foto.atividade_codigo ? `${foto.atividade_codigo} - ` : ''}${foto.atividade_descricao}`
+      : (foto.atividade_avulsa_descricao ? `Avulsa - ${foto.atividade_avulsa_descricao}` : 'Sem atividade')
+  );
 
   // Feed de atividade recente
   const feedItems = [];
@@ -686,38 +694,47 @@ function ProjetoDetalhes() {
 
         {/* ── GALERIA DE FOTOS ──────────────────────────────────────────── */}
         <div style={sectionLabel}><span>📷</span> GALERIA DE FOTOS</div>
-        <div style={cardBase}>
+        <div style={cardBase} className="project-photo-gallery-card">
           {(galeria.rdos || []).length === 0 ? (
-            <div style={{ padding: '24px', color: '#94a3b8', fontSize: '14px', textAlign: 'center' }}>
-              <ImageIcon size={36} color="#cbd5e1" style={{ marginBottom: '10px', display: 'block', margin: '0 auto 10px' }} />
+            <div className="project-photo-gallery-empty">
+              <ImageIcon size={36} />
               Nenhuma foto enviada nos RDOs deste projeto.
             </div>
           ) : (
             <>
               {(galeria.rdos || []).map((grupo) => (
-                <div key={grupo.rdo_id} style={{ marginBottom: '18px' }}>
-                  <div style={{ fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
+                <div key={grupo.rdo_id} className="project-photo-group">
+                  <div className="project-photo-group-header">
                     {formatNumeroRdo(grupo)} • {grupo.data_relatorio ? new Date(grupo.data_relatorio + 'T00:00:00').toLocaleDateString('pt-BR') : 'Sem data'} • {grupo.status || 'Sem status'} • {grupo.total_fotos || 0} foto(s)
                   </div>
-                  <div className="grid grid-4" style={{ gap: '12px' }}>
+                  <div className="project-photo-grid">
                     {(grupo.fotos || []).map((item) => (
-                      <div key={`${grupo.rdo_id}-${item.id}`} className="card" style={{ padding: '8px' }}>
-                        <div style={{ width: '100%', aspectRatio: '1/1', overflow: 'hidden', borderRadius: '6px', background: '#f1f5f9' }}>
-                          <img src={`/uploads/${item.caminho_arquivo}`} alt={item.nome_arquivo || 'foto'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        </div>
-                        <div style={{ fontSize: '11px', color: '#334155', marginTop: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <article key={`${grupo.rdo_id}-${item.id}`} className="project-photo-card">
+                        <a className="project-photo-thumb" href={getFotoUrl(item)} target="_blank" rel="noopener noreferrer" title="Abrir foto">
+                          <img src={getFotoUrl(item)} alt={item.nome_arquivo || 'foto'} />
+                        </a>
+                        <div className="project-photo-name" title={item.descricao || item.nome_arquivo}>
                           {item.descricao || item.nome_arquivo}
                         </div>
-                        <div style={{ fontSize: '10px', color: '#94a3b8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <div className="project-photo-activity" title={getFotoAtividadeLabel(item)}>
                           {item.atividade_descricao ? `${item.atividade_codigo ? `${item.atividade_codigo} — ` : ''}${item.atividade_descricao}` : (item.atividade_avulsa_descricao ? `Avulsa — ${item.atividade_avulsa_descricao}` : 'Sem atividade')}
                         </div>
-                      </div>
+                        <a
+                          className="project-photo-download"
+                          href={getFotoUrl(item)}
+                          download={getFotoDownloadName(item)}
+                          title="Baixar foto"
+                          aria-label={`Baixar ${getFotoDownloadName(item)}`}
+                        >
+                          <Download size={15} />
+                        </a>
+                      </article>
                     ))}
                   </div>
                 </div>
               ))}
               {Number(galeria.total_fotos || 0) > 0 && (
-                <div style={{ textAlign: 'center', marginTop: '8px', fontSize: '13px', color: '#64748b' }}>
+                <div className="project-photo-total">
                   Total de {galeria.total_fotos} foto(s) distribuídas por RDO.
                 </div>
               )}

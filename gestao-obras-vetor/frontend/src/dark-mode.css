@@ -172,6 +172,21 @@ body.dark-mode .rdo-table td {
 
 body.dark-mode .rdo-table tr:hover td { background: #1f3044; }
 
+body.dark-mode .rdo-table .rdo-activity-main-row td {
+  background: #172635 !important;
+  border-color: #2a4060 !important;
+  color: #c5d3de !important;
+}
+
+body.dark-mode .rdo-table .rdo-activity-main-row:hover td {
+  background: #1f3044 !important;
+}
+
+body.dark-mode .rdo-table .rdo-activity-main-row.is-selected td {
+  background: rgba(37, 99, 235, 0.16) !important;
+  border-color: #315f9d !important;
+}
+
 body.dark-mode .rdo-table td input,
 body.dark-mode .rdo-table td select {
   background: #243650;

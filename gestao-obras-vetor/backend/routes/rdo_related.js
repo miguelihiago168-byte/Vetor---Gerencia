@@ -504,6 +504,7 @@ router.post('/:rdoId/foto', auth, uploadFotoSingle, async (req, res) => {
     const { rdoId } = req.params;
     const { rdo_atividade_id, descricao, atividade_avulsa_descricao } = req.body;
     const { originalname, filename, mimetype, size } = req.file;
+    const atividadeAvulsaDescricao = String(atividade_avulsa_descricao || '').trim();
     let rdoAtividadeId = rdo_atividade_id || null;
     if (rdoAtividadeId) {
       const atividade = await getQuery(
@@ -512,6 +513,13 @@ router.post('/:rdoId/foto', auth, uploadFotoSingle, async (req, res) => {
       );
       if (!atividade) rdoAtividadeId = null;
     }
+    if (!rdoAtividadeId && !atividadeAvulsaDescricao) {
+      try {
+        const savedPath = path.join(uploadsDir, filename);
+        if (fs.existsSync(savedPath)) fs.unlinkSync(savedPath);
+      } catch (_) {}
+      return res.status(400).json({ erro: 'Vincule a foto a uma atividade antes de enviar.' });
+    }
 
     const ordemRow = await getQuery('SELECT COALESCE(MAX(ordem), 0) AS max_ordem FROM rdo_fotos WHERE rdo_id = ?', [rdoId]);
     const ordem = Number(ordemRow?.max_ordem || 0) + 1;
@@ -519,7 +527,7 @@ router.post('/:rdoId/foto', auth, uploadFotoSingle, async (req, res) => {
     // Salvar no table rdo_fotos
     const result = await runQuery(
       'INSERT INTO rdo_fotos (rdo_id, rdo_atividade_id, nome_arquivo, caminho_arquivo, descricao, atividade_avulsa_descricao, ordem, criado_por, tipo, tamanho) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [rdoId, rdoAtividadeId, originalname, filename, descricao || null, atividade_avulsa_descricao || null, ordem, req.usuario.id, mimetype || null, size || null]
+      [rdoId, rdoAtividadeId, originalname, filename, descricao || null, atividadeAvulsaDescricao || null, ordem, req.usuario.id, mimetype || null, size || null]
     );
 
     // Retornar informação do arquivo para o frontend
