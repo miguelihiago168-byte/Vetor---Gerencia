@@ -9,6 +9,7 @@ services:
       - backend/.env
     environment:
       - TZ=America/Sao_Paulo
+      - NODE_ENV=production
       - APP_DATA_DIR=${APP_DATA_DIR:?APP_DATA_DIR deve ser definido antes de executar docker compose}
     volumes:
       - ${APP_DATA_DIR:?APP_DATA_DIR deve ser definido antes de executar docker compose}/uploads:/app/uploads

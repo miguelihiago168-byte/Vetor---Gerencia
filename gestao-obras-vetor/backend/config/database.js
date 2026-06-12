@@ -6,9 +6,27 @@ const { AsyncLocalStorage } = require('async_hooks');
 const dbPath = path.join(__dirname, '..', 'database', 'gestao_obras.db');
 const dbDir = path.dirname(dbPath);
 const tenantDbDir = path.join(dbDir, 'tenants');
+const isProduction = process.env.NODE_ENV === 'production';
 
-if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
-if (!fs.existsSync(tenantDbDir)) fs.mkdirSync(tenantDbDir, { recursive: true });
+const assertReadableFile = (targetPath, label) => {
+  if (!fs.existsSync(targetPath)) {
+    throw new Error(`${label} ausente em producao: ${targetPath}`);
+  }
+
+  const stats = fs.statSync(targetPath);
+  if (!stats.isFile() || stats.size <= 0) {
+    throw new Error(`${label} invalido em producao: ${targetPath}`);
+  }
+};
+
+if (isProduction) {
+  if (!fs.existsSync(dbDir)) throw new Error(`Diretorio de banco ausente em producao: ${dbDir}`);
+  if (!fs.existsSync(tenantDbDir)) throw new Error(`Diretorio de tenants ausente em producao: ${tenantDbDir}`);
+  assertReadableFile(dbPath, 'Banco principal');
+} else {
+  if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
+  if (!fs.existsSync(tenantDbDir)) fs.mkdirSync(tenantDbDir, { recursive: true });
+}
 
 const requestDbContext = new AsyncLocalStorage();
 const tenantDbMap = new Map();
@@ -28,7 +46,14 @@ const mainDb = new sqlite3.Database(dbPath, (err) => {
   }
 });
 
+const isSchemaMutation = (sql) => /^\s*(CREATE|ALTER|DROP)\b/i.test(String(sql || ''));
+
 const withDbRun = (conn, sql, params = []) => new Promise((resolve, reject) => {
+  if (isProduction && process.env.DISABLE_STARTUP_SCHEMA_MUTATIONS === 'true' && isSchemaMutation(sql)) {
+    reject(new Error('Mutacao automatica de schema bloqueada em producao.'));
+    return;
+  }
+
   conn.run(sql, params, function(err) {
     if (err) reject(err);
     else resolve(this);
@@ -119,6 +144,9 @@ const ensureTenantDatabase = async (tenantId) => {
         const fileRecord = await withDbGet(testConn, 'SELECT criado_em FROM tenants WHERE id = ?', [numericTenantId]).catch(() => null);
         await new Promise((r) => testConn.close(() => r()));
         if (!fileRecord || fileRecord.criado_em !== mainTenant.criado_em) {
+          if (isProduction) {
+            throw new Error(`Banco tenant ${numericTenantId} divergente do banco principal em producao.`);
+          }
           // Arquivo stale: metadados do tenant não batem com banco principal → recriar
           if (tenantDbMap.has(numericTenantId)) {
             try { const old = tenantDbMap.get(numericTenantId); await new Promise((r) => old.close(() => r())); } catch (_) {}
@@ -127,10 +155,16 @@ const ensureTenantDatabase = async (tenantId) => {
           fs.unlinkSync(tenantPath);
         }
       }
-    } catch (_) { /* em caso de erro na verificação, usa o arquivo existente */ }
+    } catch (err) {
+      if (isProduction) throw err;
+      /* em caso de erro na verificação, usa o arquivo existente */
+    }
   }
 
   if (!fs.existsSync(tenantPath)) {
+    if (isProduction) {
+      throw new Error(`Banco tenant ${numericTenantId} ausente em producao: ${tenantPath}`);
+    }
     fs.copyFileSync(dbPath, tenantPath);
     const conn = await createConnection(tenantPath);
     try {

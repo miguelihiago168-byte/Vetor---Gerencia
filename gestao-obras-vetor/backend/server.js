@@ -9,6 +9,10 @@ const { carregarPerfilUsuario } = require('./middleware/rbac');
 const { ensureTenantDatabase, runWithTenantContext, getQuery } = require('./config/database');
 const { setMensageriaBroadcaster } = require('./services/mensageriaRealtime');
 
+if (process.env.NODE_ENV === 'production') {
+  process.env.DISABLE_STARTUP_SCHEMA_MUTATIONS = 'true';
+}
+
 const app = express();
 
 // Middlewares
@@ -42,7 +46,9 @@ const almoxarifadoRoutes = require('./routes/almoxarifado');
 const emailRoutes = require('./routes/email');
 const mensagensRoutes = require('./routes/mensagens');
 // Garantir esquema de notificações e índice único para evitar duplicidades
-try {
+if (process.env.NODE_ENV === 'production') {
+  console.log('[startup-db-guard] Migrations automaticas de startup desativadas em producao.');
+} else try {
   const { db } = require('./config/database');
   const { ensureMultitenancySchema } = require('./scripts/migrate_multitenancy');
   const { ensureRdoLogsSchema } = require('./scripts/migrate_add_rdo_logs');
