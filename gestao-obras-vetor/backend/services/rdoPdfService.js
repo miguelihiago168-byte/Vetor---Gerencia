@@ -382,7 +382,7 @@ function renderHtml(data) {
     .comment-text { color: #111827; white-space: normal; word-break: break-word; }
     .attachment-link { color: #0b5f86; text-decoration: underline; font-weight: 700; }
     .attachments-section { break-before: page; page-break-before: always; }
-    .signature-page { margin-top: 18mm; padding-top: 18mm; break-inside: avoid; page-break-inside: avoid; }
+    .signature-footer { margin-top: 12mm; padding-top: 8mm; break-inside: avoid; page-break-inside: avoid; }
     .signatures { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 36px; }
     .signature-line { border-top: 1px solid #111827; padding-top: 6px; text-align: center; color: #334155; }
     .avoid-break { break-inside: avoid; page-break-inside: avoid; }
@@ -568,13 +568,11 @@ function renderHtml(data) {
           </tr>
         `, 'Nenhum anexo persistido para este RDO.', 6)}</tbody>
       </table>
-
-    </section>
-
-    <section class="signature-page avoid-break">
-      <div class="signatures">
+      <div class="signature-footer avoid-break">
+        <div class="signatures">
         <div class="signature-line">Responsável pelo preenchimento</div>
         <div class="signature-line">Aprovação / Fiscalização</div>
+        </div>
       </div>
     </section>
   </main>
