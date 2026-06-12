@@ -1,6 +1,6 @@
 # Plano de regularizacao da infraestrutura Vetor
 
-Status: Fase 2 concluida. Fases 3 em diante aguardam autorizacao explicita.
+Status: Fase 3 concluida. Fases 4 em diante aguardam autorizacao explicita.
 
 ## Causa raiz
 
@@ -50,6 +50,18 @@ Fase 2 executada:
 - Criado `gestao-obras-vetor/scripts/validate_data_dir.sh` para falhar se `APP_DATA_DIR` estiver ausente, diferente do caminho oficial, sem permissao ou sem banco principal.
 - `gestao-obras-vetor/scripts/server-setup.sh` deixou de apontar backup para `/home/ubuntu/app/gestao-obras-vetor/backend/database` e passou a usar `/home/ubuntu/app_data/gestao-obras-vetor/database`.
 - `gestao-obras-vetor/scripts/server-setup.sh` passou a documentar o caminho real atual do app em `/root/Vetor---Gerencia/gestao-obras-vetor`.
+
+Fase 3 executada:
+
+- `docker-compose.yml` define `NODE_ENV=production` explicitamente para o backend.
+- `backend/entrypoint.sh` deixou de executar `initDatabase.js` e `migrate_multitenancy.js` em producao.
+- Em producao, `backend/entrypoint.sh` executa `scripts/validateStartupDatabase.js` antes do servidor.
+- `scripts/validateStartupDatabase.js` abre SQLite em modo somente leitura e valida banco principal, tenants ativos, tabelas obrigatorias, metadados e dados operacionais.
+- `backend/config/database.js` nao cria diretorios nem banco principal em producao.
+- `backend/config/database.js` nao copia o banco principal para criar tenant DB em producao.
+- `backend/config/database.js` nao apaga/recria tenant DB divergente em producao.
+- `backend/server.js` desativa migrations automaticas de startup em producao.
+- `runQuery` bloqueia `CREATE`, `ALTER` e `DROP` automaticos quando `DISABLE_STARTUP_SCHEMA_MUTATIONS=true` em producao.
 
 Fase 1 executada:
 
@@ -133,6 +145,10 @@ Fase 2 criou:
 
 - `gestao-obras-vetor/scripts/validate_data_dir.sh`
 
+Fase 3 criou:
+
+- `gestao-obras-vetor/backend/scripts/validateStartupDatabase.js`
+
 Esse script valida:
 
 - `APP_DATA_DIR` definido;
@@ -176,6 +192,15 @@ Validacao de Fase 2 concluida:
 - Leitura automatizada confirmou que `.github/workflows/deploy.yml` e `docker-compose.yml` nao contem tabs.
 - `docker compose config` nao foi executado localmente porque Docker nao esta disponivel neste ambiente.
 
+Validacao de Fase 3 concluida:
+
+- `node --check backend/scripts/validateStartupDatabase.js`
+- `node --check backend/config/database.js`
+- `node --check backend/server.js`
+- `bash -n backend/entrypoint.sh`
+- `node backend/scripts/validateStartupDatabase.js` executado localmente em modo somente leitura.
+- Teste de bloqueio confirmou que `CREATE TABLE` e recusado em producao com `DISABLE_STARTUP_SCHEMA_MUTATIONS=true`.
+
 Validacao de Fase 1 concluida:
 
 - Backup criado fora do diretorio montado.
@@ -187,11 +212,10 @@ Validacao de Fase 1 concluida:
 
 ## Riscos restantes
 
-- O startup de producao ainda cria/inicializa banco automaticamente.
 - O banco atualmente montado continua vazio para dados operacionais.
 - O backup atualizado em `server-setup.sh` ainda e simples e sera substituido por rotina real na Fase 8.
-- Nao existe ainda protecao contra banco vazio acidental.
 - Nao existe ainda pipeline de migrations versionado.
+- Algumas rotas ainda possuem codigo legado de schema lazy, mas as mutacoes de schema por `runQuery` ficam bloqueadas em producao.
 
 ## Plano de rollback
 
@@ -224,4 +248,16 @@ Branch de trabalho da Fase 2:
 codex/phase2-data-path
 ```
 
-Commit da Fase 2 sera registrado apos versionamento.
+Commit da Fase 2:
+
+```text
+6ceaf43ae2b6113ef57cae057f1eef4febc7b4c8 fix: require explicit app data directory
+```
+
+Branch de trabalho da Fase 3:
+
+```text
+codex/phase3-startup-guard
+```
+
+Commit da Fase 3 sera registrado apos versionamento.

@@ -2,10 +2,15 @@
 set -e
 
 echo ">>> Inicializando banco de dados..."
-node scripts/initDatabase.js
+if [ "${NODE_ENV:-development}" = "production" ]; then
+  echo ">>> Validando banco de producao em modo somente leitura..."
+  node scripts/validateStartupDatabase.js
+else
+  node scripts/initDatabase.js
 
-echo ">>> Aplicando migração de multitenancy..."
-node scripts/migrate_multitenancy.js
+  echo ">>> Aplicando migracao de multitenancy..."
+  node scripts/migrate_multitenancy.js
+fi
 
 echo ">>> Iniciando servidor..."
 exec node server.js
