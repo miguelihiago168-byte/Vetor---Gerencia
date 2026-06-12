@@ -11,6 +11,9 @@
     "setup": "node scripts/setupDatabase.js",
     "setup:dummy": "node scripts/setupDatabase.js --with-dummy-data",
     "init-db": "node scripts/initDatabase.js",
+    "migrate": "node scripts/runMigrations.js",
+    "migrate:dry-run": "node scripts/runMigrations.js --dry-run",
+    "migrate:status": "node scripts/runMigrations.js --status",
     "migrate-curva-s": "node scripts/migrate_add_curva_s_fields.js"
   },
   "keywords": [
