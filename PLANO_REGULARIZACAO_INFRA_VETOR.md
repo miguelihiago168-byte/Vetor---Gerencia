@@ -1,6 +1,6 @@
 # Plano de regularizacao da infraestrutura Vetor
 
-Status: Fase 1 concluida. Fases 2 em diante aguardam autorizacao explicita.
+Status: Fase 2 concluida. Fases 3 em diante aguardam autorizacao explicita.
 
 ## Causa raiz
 
@@ -39,6 +39,17 @@ Na Fase 1, o backup foi salvo fora do diretorio montado pelo container:
 ```
 
 ## Alteracoes realizadas
+
+Fase 2 executada:
+
+- `docker-compose.yml` nao usa mais fallback silencioso para `APP_DATA_DIR`.
+- `docker-compose.yml` passa `APP_DATA_DIR` explicitamente ao container do backend.
+- Workflow ativo `.github/workflows/deploy.yml` define `APP_DATA_DIR=/home/ubuntu/app_data/gestao-obras-vetor`.
+- Workflow ativo valida o diretorio oficial antes de `docker compose up`.
+- Workflow ativo localiza o diretorio do compose quando `APP_DIR` aponta para a raiz do repo ou para `gestao-obras-vetor`.
+- Criado `gestao-obras-vetor/scripts/validate_data_dir.sh` para falhar se `APP_DATA_DIR` estiver ausente, diferente do caminho oficial, sem permissao ou sem banco principal.
+- `gestao-obras-vetor/scripts/server-setup.sh` deixou de apontar backup para `/home/ubuntu/app/gestao-obras-vetor/backend/database` e passou a usar `/home/ubuntu/app_data/gestao-obras-vetor/database`.
+- `gestao-obras-vetor/scripts/server-setup.sh` passou a documentar o caminho real atual do app em `/root/Vetor---Gerencia/gestao-obras-vetor`.
 
 Fase 1 executada:
 
@@ -118,7 +129,16 @@ Nenhuma migration foi criada ou executada na Fase 1.
 
 ## Scripts criados
 
-Nenhum script persistente do projeto foi criado na Fase 1.
+Fase 2 criou:
+
+- `gestao-obras-vetor/scripts/validate_data_dir.sh`
+
+Esse script valida:
+
+- `APP_DATA_DIR` definido;
+- valor oficial `/home/ubuntu/app_data/gestao-obras-vetor`;
+- existencia e permissao dos diretorios `database` e `uploads`;
+- existencia do banco principal `database/gestao_obras.db`.
 
 Foi usado apenas um script temporario local para executar o backup remoto via SSH. O script temporario foi removido da maquina local apos a execucao.
 
@@ -142,9 +162,19 @@ Nenhum deploy foi executado.
 
 Nenhum container foi reiniciado.
 
-Nenhum arquivo `.env` ou `APP_DATA_DIR` foi alterado.
+Nenhum arquivo `.env` foi alterado.
+
+O workflow de deploy foi alterado para exportar `APP_DATA_DIR` explicitamente antes de executar `docker compose`.
 
 ## Validacao
+
+Validacao de Fase 2 concluida:
+
+- `sh scripts/validate_data_dir.sh` local falha quando o caminho oficial nao existe no ambiente local.
+- `bash -n scripts/validate_data_dir.sh` validou a sintaxe do script.
+- `rg` confirmou que `docker-compose.yml` nao contem mais fallback `APP_DATA_DIR:-...`.
+- Leitura automatizada confirmou que `.github/workflows/deploy.yml` e `docker-compose.yml` nao contem tabs.
+- `docker compose config` nao foi executado localmente porque Docker nao esta disponivel neste ambiente.
 
 Validacao de Fase 1 concluida:
 
@@ -158,9 +188,8 @@ Validacao de Fase 1 concluida:
 ## Riscos restantes
 
 - O startup de producao ainda cria/inicializa banco automaticamente.
-- `APP_DATA_DIR` ainda nao esta definido explicitamente no deploy.
 - O banco atualmente montado continua vazio para dados operacionais.
-- A rotina antiga de backup ainda aponta para caminho obsoleto.
+- O backup atualizado em `server-setup.sh` ainda e simples e sera substituido por rotina real na Fase 8.
 - Nao existe ainda protecao contra banco vazio acidental.
 - Nao existe ainda pipeline de migrations versionado.
 
@@ -180,7 +209,19 @@ Nenhuma restauracao foi executada na Fase 1.
 Branch de trabalho da Fase 1:
 
 ```text
-fix/database-path
+codex/phase1-backup
 ```
 
-Commit da Fase 1 sera registrado apos versionamento deste documento.
+Commit da Fase 1:
+
+```text
+5c4be454d932e9617ab322f29b5604b38466ba7d docs: record phase 1 infrastructure backup
+```
+
+Branch de trabalho da Fase 2:
+
+```text
+codex/phase2-data-path
+```
+
+Commit da Fase 2 sera registrado apos versionamento.
