@@ -433,6 +433,27 @@ Validacoes executadas:
 
 Arquivos de banco, uploads, backups, `.env` e secrets nao foram versionados.
 
+### Correcao do pipeline de deploy apos incidente 502
+
+Incidente observado no deploy da Fase 4:
+
+- O backend entrou em loop de restart porque o startup guard detectou migrations pendentes.
+- A causa nao era erro de codigo nem banco ausente: `000001_users_runtime_schema` e `000002_runtime_route_schema` estavam pendentes no banco principal e no `tenant_1.db`.
+- A correcao manual segura foi executar backup, aplicar migrations pelo runner centralizado, validar `db:check`, `integrity_check`, `foreign_key_check` e reiniciar apenas o backend.
+
+Correcao aplicada ao pipeline:
+
+- O workflow de deploy passa a construir a imagem antes do startup.
+- O workflow para apenas o servico `backend` antes do backup e das migrations, sem `down` e sem remover volumes.
+- Antes de subir containers, o workflow valida `APP_DATA_DIR`, diretorio de banco e `gestao_obras.db`.
+- O workflow cria backup do banco principal, bancos tenant e uploads via `npm run db:backup`.
+- O workflow executa `npm run db:check`.
+- Se houver pendencias, aplica `npm run db:migrate` com `MIGRATIONS_ALLOW_PRODUCTION=true`.
+- O workflow valida novamente `npm run db:check`.
+- O workflow executa `npm run db:integrity`, que roda `PRAGMA integrity_check` e `PRAGMA foreign_key_check` no banco principal e nos bancos tenant.
+- Somente depois dessas etapas o workflow sobe os containers e executa health check.
+- O startup guard foi preservado e continua bloqueando backend se houver migration pendente.
+
 ## Branches e commits
 
 Branch de trabalho da Fase 1:

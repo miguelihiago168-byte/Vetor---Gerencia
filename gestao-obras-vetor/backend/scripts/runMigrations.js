@@ -10,7 +10,7 @@ const includeMain = !args.has('--tenants-only');
 const isProduction = process.env.NODE_ENV === 'production';
 
 const backendDir = path.join(__dirname, '..');
-const databaseDir = path.join(backendDir, 'database');
+const databaseDir = process.env.DB_DIR || path.join(backendDir, 'database');
 const mainDbPath = path.join(databaseDir, 'gestao_obras.db');
 const tenantDbDir = path.join(databaseDir, 'tenants');
 const migrationsDir = path.join(__dirname, 'migrations');
