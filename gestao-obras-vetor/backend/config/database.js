@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { AsyncLocalStorage } = require('async_hooks');
 
-const dbPath = path.join(__dirname, '..', 'database', 'gestao_obras.db');
+const dbPath = path.join(process.env.DB_DIR || path.join(__dirname, '..', 'database'), 'gestao_obras.db');
 const dbDir = path.dirname(dbPath);
 const tenantDbDir = path.join(dbDir, 'tenants');
 const isProduction = process.env.NODE_ENV === 'production';
@@ -144,36 +144,16 @@ const ensureTenantDatabase = async (tenantId) => {
         const fileRecord = await withDbGet(testConn, 'SELECT criado_em FROM tenants WHERE id = ?', [numericTenantId]).catch(() => null);
         await new Promise((r) => testConn.close(() => r()));
         if (!fileRecord || fileRecord.criado_em !== mainTenant.criado_em) {
-          if (isProduction) {
-            throw new Error(`Banco tenant ${numericTenantId} divergente do banco principal em producao.`);
-          }
-          // Arquivo stale: metadados do tenant não batem com banco principal → recriar
-          if (tenantDbMap.has(numericTenantId)) {
-            try { const old = tenantDbMap.get(numericTenantId); await new Promise((r) => old.close(() => r())); } catch (_) {}
-            tenantDbMap.delete(numericTenantId);
-          }
-          fs.unlinkSync(tenantPath);
+          throw new Error(`Banco tenant ${numericTenantId} divergente do banco principal.`);
         }
       }
     } catch (err) {
-      if (isProduction) throw err;
-      /* em caso de erro na verificação, usa o arquivo existente */
+      throw err;
     }
   }
 
   if (!fs.existsSync(tenantPath)) {
-    if (isProduction) {
-      throw new Error(`Banco tenant ${numericTenantId} ausente em producao: ${tenantPath}`);
-    }
-    fs.copyFileSync(dbPath, tenantPath);
-    const conn = await createConnection(tenantPath);
-    try {
-      await withDbRun(conn, 'PRAGMA foreign_keys = OFF');
-      await pruneTenantData(conn, numericTenantId);
-      await withDbRun(conn, 'PRAGMA foreign_keys = ON');
-    } finally {
-      await new Promise((resolve) => conn.close(() => resolve()));
-    }
+    throw new Error(`Banco tenant ${numericTenantId} ausente: ${tenantPath}`);
   }
 
   return tenantPath;
@@ -224,6 +204,7 @@ const allQuery = async (sql, params = []) => {
 
 const runQueryMain = (sql, params = []) => withDbRun(mainDb, sql, params);
 const getQueryMain = (sql, params = []) => withDbGet(mainDb, sql, params);
+const allQueryMain = (sql, params = []) => withDbAll(mainDb, sql, params);
 
 module.exports = {
   db: mainDb,
@@ -232,6 +213,7 @@ module.exports = {
   allQuery,
   runQueryMain,
   getQueryMain,
+  allQueryMain,
   runWithTenantContext,
   ensureTenantDatabase
 };

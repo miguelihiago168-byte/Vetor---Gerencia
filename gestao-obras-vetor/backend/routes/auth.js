@@ -2,8 +2,6 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
-const fs = require('fs');
-const path = require('path');
 const { body, validationResult } = require('express-validator');
 const { getQuery, allQuery, runQuery } = require('../config/database');
 const { inferirPerfil } = require('../constants/access');
@@ -11,6 +9,7 @@ const { ensureAccessSchema } = require('../middleware/rbac');
 const { auth, isAdm } = require('../middleware/auth');
 const { hasForbiddenPasswordSequence } = require('../services/passwordPolicy');
 const { ensureSchemaReady, sendSchemaOutdated } = require('../utils/schemaGuard');
+const { assertTenantReady, provisionTrialTenant } = require('../services/tenantProvisioning');
 
 const router = express.Router();
 const GLOBAL_SIGNUP_CODE = process.env.GLOBAL_SIGNUP_CODE || '052298';
@@ -147,10 +146,6 @@ const purgeTenantData = async (tenantId) => {
   try { await runQuery('DELETE FROM usuario_tenants WHERE tenant_id = ?', [numericTenantId]); } catch (_) {}
   try { await runQuery('DELETE FROM tenants WHERE id = ?', [numericTenantId]); } catch (_) {}
 
-  const tenantDbPath = path.join(__dirname, '..', 'database', 'tenants', `tenant_${numericTenantId}.db`);
-  try {
-    if (fs.existsSync(tenantDbPath)) fs.unlinkSync(tenantDbPath);
-  } catch (_) {}
 };
 
 const cleanupExpiredTrials = async () => {
@@ -273,6 +268,8 @@ router.post('/login', [
       });
     }
 
+    await assertTenantReady(tenantIdAtivo);
+
     let obrasVinculadas = [];
     try {
       const projetos = await allQuery('SELECT projeto_id FROM projeto_usuarios WHERE usuario_id = ?', [usuario.id]);
@@ -336,6 +333,18 @@ router.post('/login', [
 
   } catch (error) {
     console.error('Erro no login:', error);
+    if (error?.code && String(error.code).startsWith('TENANT_')) {
+      return res.status(503).json({
+        codigo: error.code,
+        erro: 'Tenant invalido ou indisponivel. Acione o suporte para regularizar o banco tenant.'
+      });
+    }
+    if (String(error?.message || '').includes('Banco tenant')) {
+      return res.status(503).json({
+        codigo: 'TENANT_INVALID',
+        erro: 'Tenant invalido ou indisponivel. Acione o suporte para regularizar o banco tenant.'
+      });
+    }
     if (sendSchemaOutdated(res, error, 'Schema de autenticacao desatualizado. Execute as migrations pendentes.')) return;
     res.status(500).json({ erro: 'Erro ao realizar login.' });
   }
@@ -389,29 +398,32 @@ router.post('/register', [
     const tenantNome = String(empresa || '').trim();
     const tenantSlug = generateSlug(tenantNome);
 
-    const tenantInsert = await runQuery(
-      'INSERT INTO tenants (nome, slug, ativo, trial_expires_at, trial_ativo) VALUES (?, ?, 1, ?, 1)',
-      [tenantNome, tenantSlug, trialExpiresAt]
-    );
-    const tenantId = Number(tenantInsert.lastID);
-
     const senhaHash = await bcrypt.hash(String(senha), 10);
-    const userInsert = await runQuery(
-      `INSERT INTO usuarios (login, senha, nome, email, perfil, funcao, setor, is_gestor, is_adm, tenant_id, ativo, primeiro_acesso_pendente)
-       VALUES (?, ?, ?, ?, 'Gestor Geral', 'Gestor Geral', 'Administrativo', 1, 0, ?, 1, 1)`,
-      [usuarioLimpo, senhaHash, String(nome || '').trim(), emailNormalizado, tenantId]
-    );
-
-    await runQuery('INSERT INTO usuario_tenants (usuario_id, tenant_id, ativo) VALUES (?, ?, 1)', [Number(userInsert.lastID), tenantId]);
+    const provisioned = await provisionTrialTenant({
+      tenantName: tenantNome,
+      tenantSlug,
+      trialExpiresAt,
+      login: usuarioLimpo,
+      passwordHash: senhaHash,
+      name: String(nome || '').trim(),
+      email: emailNormalizado
+    });
 
     return res.status(201).json({
       mensagem: 'Conta de teste criada com sucesso.',
       usuario: usuarioLimpo,
+      tenant_id: provisioned.tenantId,
       trial_expires_at: trialExpiresAt,
       dias_teste: 30
     });
   } catch (error) {
     console.error('Erro no cadastro público:', error);
+    if (error?.code === 'TENANT_DATABASE_ALREADY_EXISTS') {
+      return res.status(409).json({
+        codigo: 'TENANT_DATABASE_ALREADY_EXISTS',
+        erro: 'Banco tenant ja existe. A criacao foi interrompida para evitar sobrescrita.'
+      });
+    }
     return res.status(500).json({ erro: 'Erro ao criar conta de teste.' });
   }
 });
