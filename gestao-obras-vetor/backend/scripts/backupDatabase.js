@@ -2,8 +2,8 @@ const fs = require('fs');
 const path = require('path');
 
 const backendDir = path.join(__dirname, '..');
-const databaseDir = path.join(backendDir, 'database');
-const uploadsDir = path.join(backendDir, 'uploads');
+const databaseDir = process.env.DB_DIR || path.join(backendDir, 'database');
+const uploadsDir = process.env.UPLOADS_DIR || path.join(backendDir, 'uploads');
 const backupsRoot = process.env.BACKUP_DIR || path.join(backendDir, 'backups');
 
 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');

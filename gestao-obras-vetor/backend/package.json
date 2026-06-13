@@ -17,6 +17,7 @@
     "db:init": "node scripts/initDatabase.js",
     "db:migrate": "node scripts/runMigrations.js",
     "db:check": "node scripts/runMigrations.js --status",
+    "db:integrity": "node scripts/checkDatabaseIntegrity.js",
     "db:backup": "node scripts/backupDatabase.js",
     "migrate-curva-s": "node scripts/migrate_add_curva_s_fields.js"
   },

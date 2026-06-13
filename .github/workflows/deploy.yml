@@ -66,12 +66,86 @@ jobs:
             sh scripts/validate_data_dir.sh "$APP_DATA_DIR"
             docker compose config >/dev/null
 
-            docker compose up -d --build
+            if [ ! -d "$APP_DATA_DIR/database" ]; then
+              echo "Diretorio de banco ausente: $APP_DATA_DIR/database"
+              exit 1
+            fi
+
+            if [ ! -f "$APP_DATA_DIR/database/gestao_obras.db" ]; then
+              echo "Banco principal ausente: $APP_DATA_DIR/database/gestao_obras.db"
+              exit 1
+            fi
+
+            DEPLOY_COMMIT="$(git rev-parse --short HEAD)"
+            echo "Commit a implantar: $DEPLOY_COMMIT"
+
+            echo "Construindo imagens antes das migrations..."
+            docker compose build
+
+            echo "Parando apenas o backend antes de backup e migrations..."
+            docker compose stop backend || true
+
+            BACKUP_DIR="/home/ubuntu/backups/gestao-obras-vetor/deploy-${DEPLOY_COMMIT}-$(date -u +%Y%m%dT%H%M%SZ)"
+            echo "Criando backup pre-deploy em $BACKUP_DIR"
+            mkdir -p "$BACKUP_DIR"
+
+            docker run --rm \
+              -e BACKUP_DIR="/app/backups/current" \
+              -v "$APP_DATA_DIR/database:/app/database:ro" \
+              -v "$APP_DATA_DIR/uploads:/app/uploads:ro" \
+              -v "$BACKUP_DIR:/app/backups/current" \
+              gestao-obras-vetor-backend npm run db:backup
+
+            echo "Validando migrations pendentes antes do startup..."
+            set +e
+            docker run --rm \
+              -e NODE_ENV=production \
+              -e APP_DATA_DIR="$APP_DATA_DIR" \
+              -v "$APP_DATA_DIR/database:/app/database" \
+              -v "$APP_DATA_DIR/uploads:/app/uploads" \
+              gestao-obras-vetor-backend npm run db:check
+            CHECK_STATUS=$?
+            set -e
+
+            if [ "$CHECK_STATUS" -eq 2 ]; then
+              echo "Migrations pendentes detectadas. Aplicando pelo runner centralizado..."
+              docker run --rm \
+                -e NODE_ENV=production \
+                -e MIGRATIONS_ALLOW_PRODUCTION=true \
+                -e APP_DATA_DIR="$APP_DATA_DIR" \
+                -v "$APP_DATA_DIR/database:/app/database" \
+                -v "$APP_DATA_DIR/uploads:/app/uploads" \
+                gestao-obras-vetor-backend npm run db:migrate
+            elif [ "$CHECK_STATUS" -ne 0 ]; then
+              echo "Falha ao validar migrations antes do deploy. Abortando."
+              exit "$CHECK_STATUS"
+            else
+              echo "Nenhuma migration pendente."
+            fi
+
+            echo "Validando migrations apos etapa de migracao..."
+            docker run --rm \
+              -e NODE_ENV=production \
+              -e APP_DATA_DIR="$APP_DATA_DIR" \
+              -v "$APP_DATA_DIR/database:/app/database" \
+              -v "$APP_DATA_DIR/uploads:/app/uploads" \
+              gestao-obras-vetor-backend npm run db:check
+
+            echo "Executando integrity_check e foreign_key_check..."
+            docker run --rm \
+              -e NODE_ENV=production \
+              -e APP_DATA_DIR="$APP_DATA_DIR" \
+              -v "$APP_DATA_DIR/database:/app/database:ro" \
+              -v "$APP_DATA_DIR/uploads:/app/uploads:ro" \
+              gestao-obras-vetor-backend npm run db:integrity
+
+            echo "Subindo containers apos backup e migrations..."
+            docker compose up -d
             docker compose ps
 
             for i in $(seq 1 30); do
               if curl -fsS "${{ secrets.HEALTH_URL }}"; then
-                echo "Deploy concluido e sistema online."
+                echo "Deploy concluido e sistema online. Commit implantado: $DEPLOY_COMMIT"
                 exit 0
               fi
 
