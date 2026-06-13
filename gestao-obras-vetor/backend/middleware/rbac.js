@@ -1,4 +1,4 @@
-const { getQuery, allQuery, runQuery } = require('../config/database');
+const { getQuery, allQuery } = require('../config/database');
 const { PERFIS, inferirPerfil } = require('../constants/access');
 
 const PERMISSIONS = {
@@ -58,14 +58,32 @@ const perfisAcessoGlobalProjeto = new Set([
   PERFIS.ADM
 ]);
 
+const REQUIRED_ACCESS_COLUMNS = [
+  'perfil',
+  'setor',
+  'setor_outro',
+  'funcao',
+  'perfil_almoxarifado',
+  'is_adm',
+  'primeiro_acesso_pendente'
+];
+
+const createSchemaOutdatedError = (missingColumns) => {
+  const err = new Error(`Schema de usuarios desatualizado. Migration pendente: 000001_users_runtime_schema. Colunas ausentes: ${missingColumns.join(', ')}`);
+  err.code = 'DATABASE_SCHEMA_OUTDATED';
+  err.migration = '000001_users_runtime_schema';
+  err.missingColumns = missingColumns;
+  return err;
+};
+
 const ensureAccessSchema = async () => {
-  try { await runQuery('ALTER TABLE usuarios ADD COLUMN perfil TEXT'); } catch (_) {}
-  try { await runQuery('ALTER TABLE usuarios ADD COLUMN setor TEXT'); } catch (_) {}
-  try { await runQuery('ALTER TABLE usuarios ADD COLUMN setor_outro TEXT'); } catch (_) {}
-  try { await runQuery('ALTER TABLE usuarios ADD COLUMN funcao TEXT'); } catch (_) {}
-  try { await runQuery('ALTER TABLE usuarios ADD COLUMN perfil_almoxarifado TEXT'); } catch (_) {}
-  try { await runQuery('ALTER TABLE usuarios ADD COLUMN is_adm INTEGER DEFAULT 0'); } catch (_) {}
-  try { await runQuery('ALTER TABLE usuarios ADD COLUMN primeiro_acesso_pendente INTEGER DEFAULT 0'); } catch (_) {}
+  const columns = await allQuery('PRAGMA table_info(usuarios)');
+  const existing = new Set((columns || []).map((column) => String(column.name)));
+  const missing = REQUIRED_ACCESS_COLUMNS.filter((column) => !existing.has(column));
+
+  if (missing.length > 0) {
+    throw createSchemaOutdatedError(missing.map((column) => `usuarios.${column}`));
+  }
 
   // Evita UPDATEs globais por requisição (podem causar SQLITE_BUSY em cargas concorrentes).
   // A inferência de perfil já trata fallback por flags/funcao em tempo de execução.
