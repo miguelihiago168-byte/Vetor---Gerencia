@@ -7,6 +7,7 @@ const { PERFIS, inferirPerfil } = require('../constants/access');
 const backendPackage = require('../package.json');
 const { ensureRdoCorrectionColumns, clearRdoCorrection } = require('../services/rdoCorrectionService');
 const { generateRdoPdfBuffer } = require('../services/rdoPdfService');
+const { ensureSchemaReady } = require('../utils/schemaGuard');
 
 const router = express.Router();
 
@@ -22,152 +23,23 @@ const getPdfVersionLabel = () => {
   return `Versão ${appVersion} (${appEnv})`;
 };
 
-// Auto-migration: adicionar coluna atividades_avulsas se não existir
-runQuery("ALTER TABLE rdos ADD COLUMN atividades_avulsas TEXT").catch(e => {
-  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] atividades_avulsas:', e.message);
-});
-runQuery('ALTER TABLE rdo_fotos ADD COLUMN ordem INTEGER DEFAULT 0').catch(e => {
-  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_fotos.ordem:', e.message);
-});
-runQuery('ALTER TABLE rdo_fotos ADD COLUMN atividade_avulsa_descricao TEXT').catch(e => {
-  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_fotos.atividade_avulsa_descricao:', e.message);
-});
-runQuery('ALTER TABLE rdo_materiais ADD COLUMN numero_nf TEXT').catch(e => {
-  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_materiais.numero_nf:', e.message);
-});
-runQuery("ALTER TABLE rdo_materiais ADD COLUMN tipo_movimento TEXT DEFAULT 'recebido'").catch(e => {
-  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_materiais.tipo_movimento:', e.message);
-});
-runQuery('ALTER TABLE rdo_fotos ADD COLUMN tipo TEXT').catch(e => {
-  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_fotos.tipo:', e.message);
-});
-runQuery('ALTER TABLE rdo_fotos ADD COLUMN tamanho INTEGER').catch(e => {
-  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_fotos.tamanho:', e.message);
-});
-runQuery('ALTER TABLE rdo_fotos ADD COLUMN largura INTEGER').catch(e => {
-  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_fotos.largura:', e.message);
-});
-runQuery('ALTER TABLE rdo_fotos ADD COLUMN altura INTEGER').catch(e => {
-  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_fotos.altura:', e.message);
-});
-runQuery('ALTER TABLE rdo_equipamentos ADD COLUMN horario_utilizacao TEXT').catch(e => {
-  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_equipamentos.horario_utilizacao:', e.message);
-});
-runQuery('ALTER TABLE rdo_equipamentos ADD COLUMN horas_utilizadas REAL').catch(e => {
-  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_equipamentos.horas_utilizadas:', e.message);
-});
-runQuery('ALTER TABLE rdo_equipamentos ADD COLUMN observacao TEXT').catch(e => {
-  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_equipamentos.observacao:', e.message);
-});
-runQuery('ALTER TABLE anexos ADD COLUMN descricao TEXT').catch(e => {
-  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] anexos.descricao:', e.message);
-});
-runQuery('ALTER TABLE anexos ADD COLUMN criado_por INTEGER').catch(e => {
-  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] anexos.criado_por:', e.message);
-});
-
 const ensureRdoOptionalColumns = async () => {
   await ensureRdoCorrectionColumns();
-  try { await runQuery('ALTER TABLE rdo_fotos ADD COLUMN ordem INTEGER DEFAULT 0'); } catch (_) {}
-  try { await runQuery('ALTER TABLE rdo_fotos ADD COLUMN atividade_avulsa_descricao TEXT'); } catch (_) {}
-  try { await runQuery('ALTER TABLE rdo_materiais ADD COLUMN numero_nf TEXT'); } catch (_) {}
-  try { await runQuery("ALTER TABLE rdo_materiais ADD COLUMN tipo_movimento TEXT DEFAULT 'recebido'"); } catch (_) {}
-  try { await runQuery('ALTER TABLE rdo_fotos ADD COLUMN tipo TEXT'); } catch (_) {}
-  try { await runQuery('ALTER TABLE rdo_fotos ADD COLUMN tamanho INTEGER'); } catch (_) {}
-  try { await runQuery('ALTER TABLE rdo_fotos ADD COLUMN largura INTEGER'); } catch (_) {}
-  try { await runQuery('ALTER TABLE rdo_fotos ADD COLUMN altura INTEGER'); } catch (_) {}
-  try { await runQuery('ALTER TABLE rdo_equipamentos ADD COLUMN horario_utilizacao TEXT'); } catch (_) {}
-  try { await runQuery('ALTER TABLE rdo_equipamentos ADD COLUMN horas_utilizadas REAL'); } catch (_) {}
-  try { await runQuery('ALTER TABLE rdo_equipamentos ADD COLUMN observacao TEXT'); } catch (_) {}
-  try { await runQuery('ALTER TABLE anexos ADD COLUMN descricao TEXT'); } catch (_) {}
-  try { await runQuery('ALTER TABLE anexos ADD COLUMN criado_por INTEGER'); } catch (_) {}
-  try { await runQuery('ALTER TABLE rdos ADD COLUMN aprovado_por INTEGER'); } catch (_) {}
-  try { await runQuery('ALTER TABLE rdos ADD COLUMN aprovado_em DATETIME'); } catch (_) {}
-  try {
-    await runQuery(`
-      CREATE TABLE IF NOT EXISTS rdo_logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        rdo_id INTEGER NOT NULL,
-        usuario_id INTEGER,
-        acao TEXT NOT NULL CHECK (acao IN ('VIEW', 'UPDATE')),
-        criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE,
-        FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL
-      )
-    `);
-  } catch (_) {}
-  try {
-    await runQuery(`
-      CREATE TABLE IF NOT EXISTS rdo_comentarios (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        rdo_id INTEGER NOT NULL,
-        usuario_id INTEGER NOT NULL,
-        comentario TEXT NOT NULL,
-        criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE,
-        FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
-      )
-    `);
-  } catch (_) {}
-  try {
-    await runQuery(`
-      CREATE TABLE IF NOT EXISTS rdo_materiais (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        rdo_id INTEGER NOT NULL,
-        nome_material TEXT NOT NULL,
-        quantidade REAL,
-        unidade TEXT,
-        criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE
-      )
-    `);
-  } catch (_) {}
-  try {
-    await runQuery(`
-      CREATE TABLE IF NOT EXISTS rdo_ocorrencias (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        rdo_id INTEGER NOT NULL,
-        titulo TEXT,
-        descricao TEXT NOT NULL,
-        gravidade TEXT,
-        criado_por INTEGER,
-        criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE,
-        FOREIGN KEY (criado_por) REFERENCES usuarios(id)
-      )
-    `);
-  } catch (_) {}
-  try {
-    await runQuery(`
-      CREATE TABLE IF NOT EXISTS rdo_assinaturas (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        rdo_id INTEGER NOT NULL,
-        usuario_id INTEGER NOT NULL,
-        tipo TEXT NOT NULL,
-        arquivo_assinatura TEXT,
-        assinado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE,
-        FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
-      )
-    `);
-  } catch (_) {}
-  try {
-    await runQuery(`
-      CREATE TABLE IF NOT EXISTS rdo_clima (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        rdo_id INTEGER NOT NULL,
-        periodo TEXT NOT NULL,
-        condicao_tempo TEXT,
-        condicao_trabalho TEXT,
-        pluviometria_mm REAL DEFAULT 0,
-        criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE
-      )
-    `);
-  } catch (_) {}
-  try { await runQuery('CREATE INDEX IF NOT EXISTS idx_rdo_logs_rdo_id ON rdo_logs(rdo_id)'); } catch (_) {}
-  try { await runQuery('CREATE INDEX IF NOT EXISTS idx_rdo_logs_usuario_id ON rdo_logs(usuario_id)'); } catch (_) {}
-  try { await runQuery('CREATE INDEX IF NOT EXISTS idx_rdo_logs_acao ON rdo_logs(acao)'); } catch (_) {}
+  await ensureSchemaReady({ getQuery, allQuery }, {
+    tables: ['rdo_logs', 'rdo_comentarios', 'rdo_materiais', 'rdo_ocorrencias', 'rdo_assinaturas', 'rdo_clima', 'rdo_fotos', 'rdo_equipamentos'],
+    columns: {
+      rdos: ['atividades_avulsas', 'aprovado_por', 'aprovado_em'],
+      rdo_fotos: ['ordem', 'atividade_avulsa_descricao', 'tipo', 'tamanho', 'largura', 'altura'],
+      rdo_materiais: ['nome_material', 'quantidade', 'unidade', 'numero_nf', 'tipo_movimento'],
+      rdo_equipamentos: ['horario_utilizacao', 'horas_utilizadas', 'observacao'],
+      anexos: ['descricao', 'criado_por'],
+      rdo_logs: ['rdo_id', 'usuario_id', 'acao', 'criado_em'],
+      rdo_comentarios: ['rdo_id', 'usuario_id', 'comentario', 'criado_em'],
+      rdo_ocorrencias: ['rdo_id', 'titulo', 'descricao', 'gravidade', 'criado_por', 'criado_em'],
+      rdo_assinaturas: ['rdo_id', 'usuario_id', 'tipo', 'arquivo_assinatura', 'assinado_em'],
+      rdo_clima: ['rdo_id', 'periodo', 'condicao_tempo', 'condicao_trabalho', 'pluviometria_mm']
+    }
+  });
 };
 
 const getRdoFotosOrderBy = async () => {

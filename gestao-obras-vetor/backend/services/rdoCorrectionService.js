@@ -1,4 +1,5 @@
-const { allQuery, runQuery } = require('../config/database');
+const { allQuery, getQuery, runQuery } = require('../config/database');
+const { ensureSchemaReady } = require('../utils/schemaGuard');
 
 const CORRECAO_ORIGEM_EAP = 'Recálculo automático da EAP';
 
@@ -61,22 +62,18 @@ const insertCorrectionComment = async ({ rdoId, usuarioId, motivo }) => {
 };
 
 const ensureRdoCorrectionColumns = async () => {
-  const columns = [
-    ['correcao_solicitada', 'correcao_solicitada INTEGER DEFAULT 0'],
-    ['correcao_motivo', 'correcao_motivo TEXT'],
-    ['correcao_origem', 'correcao_origem TEXT'],
-    ['correcao_solicitada_em', 'correcao_solicitada_em DATETIME'],
-    ['correcao_solicitada_por', 'correcao_solicitada_por TEXT'],
-    ['status_anterior_correcao', 'status_anterior_correcao TEXT']
-  ];
-
-  for (const [, definition] of columns) {
-    try {
-      await runQuery(`ALTER TABLE rdos ADD COLUMN ${definition}`);
-    } catch (err) {
-      if (!String(err?.message || '').includes('duplicate column')) throw err;
+  await ensureSchemaReady({ getQuery, allQuery }, {
+    columns: {
+      rdos: [
+        'correcao_solicitada',
+        'correcao_motivo',
+        'correcao_origem',
+        'correcao_solicitada_em',
+        'correcao_solicitada_por',
+        'status_anterior_correcao'
+      ]
     }
-  }
+  });
 };
 
 const markAffectedRDOs = async ({ atividadeIds = [], usuario, origem = CORRECAO_ORIGEM_EAP } = {}) => {

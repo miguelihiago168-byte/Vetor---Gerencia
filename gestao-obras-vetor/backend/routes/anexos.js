@@ -4,22 +4,20 @@ const path = require('path');
 const fs = require('fs');
 const { runQuery, allQuery, getQuery } = require('../config/database');
 const { auth } = require('../middleware/auth');
+const { ensureSchemaReady, sendSchemaOutdated } = require('../utils/schemaGuard');
 
 const router = express.Router();
 
 const ensureAnexosRdoSchema = async () => {
-  try { await runQuery('ALTER TABLE anexos ADD COLUMN descricao TEXT'); } catch (_) {}
-  try { await runQuery('ALTER TABLE anexos ADD COLUMN criado_por INTEGER'); } catch (_) {}
+  await ensureSchemaReady({ getQuery, allQuery }, {
+    columns: { anexos: ['descricao', 'criado_por'] }
+  });
 };
 
 const ensureAnexosRncSchema = async () => {
-  // Ambientes legados (principalmente tenant DB) podem não ter colunas de RNC.
-  try {
-    await runQuery('ALTER TABLE anexos ADD COLUMN rnc_id INTEGER');
-  } catch (_) { /* coluna já existe */ }
-  try {
-    await runQuery("ALTER TABLE anexos ADD COLUMN categoria TEXT DEFAULT 'registro'");
-  } catch (_) { /* coluna já existe */ }
+  await ensureSchemaReady({ getQuery, allQuery }, {
+    columns: { anexos: ['rnc_id', 'categoria'] }
+  });
 };
 
 // Criar diretório de uploads se não existir
@@ -121,6 +119,7 @@ router.post('/upload/:rdoId', auth, uploadAnexoRdoSingle, async (req, res) => {
 
   } catch (error) {
     console.error('Erro ao fazer upload:', error);
+    if (sendSchemaOutdated(res, error, 'Schema de anexos desatualizado. Execute as migrations pendentes.')) return;
     res.status(500).json({ erro: 'Erro ao fazer upload do arquivo.' });
   }
 });
@@ -178,6 +177,7 @@ router.post('/upload-rnc/:rncId', auth, uploadGeral.single('arquivo'), async (re
 
   } catch (error) {
     console.error('Erro ao fazer upload (RNC):', error);
+    if (sendSchemaOutdated(res, error, 'Schema de anexos de RNC desatualizado. Execute as migrations pendentes.')) return;
     res.status(500).json({ erro: 'Erro ao fazer upload do arquivo (RNC).' });
   }
 });
@@ -201,6 +201,7 @@ router.get('/rdo/:rdoId', auth, async (req, res) => {
 
   } catch (error) {
     console.error('Erro ao listar anexos:', error);
+    if (sendSchemaOutdated(res, error, 'Schema de anexos desatualizado. Execute as migrations pendentes.')) return;
     res.status(500).json({ erro: 'Erro ao listar anexos.' });
   }
 });
@@ -223,6 +224,7 @@ router.get('/rnc/:rncId', auth, async (req, res) => {
     res.json(anexos);
   } catch (error) {
     console.error('Erro ao listar anexos (RNC):', error);
+    if (sendSchemaOutdated(res, error, 'Schema de anexos de RNC desatualizado. Execute as migrations pendentes.')) return;
     res.status(500).json({ erro: 'Erro ao listar anexos da RNC.' });
   }
 });

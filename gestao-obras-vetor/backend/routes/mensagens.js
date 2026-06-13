@@ -8,6 +8,7 @@ const { auth } = require('../middleware/auth');
 const { hasProjectAccess } = require('../middleware/rbac');
 const { emitMensageriaEvent } = require('../services/mensageriaRealtime');
 const emailService = require('../services/emailService');
+const { ensureSchemaReady, sendSchemaOutdated } = require('../utils/schemaGuard');
 
 const router = express.Router();
 
@@ -40,77 +41,16 @@ const ensureMensageriaSchema = async (tenantId) => {
   const tenantKey = Number(tenantId);
   if (!tenantKey || initializedTenants.has(tenantKey)) return;
 
-  await runQuery(`
-    CREATE TABLE IF NOT EXISTS mensagem_conversas (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      tenant_id INTEGER NOT NULL,
-      tipo TEXT NOT NULL DEFAULT 'direta',
-      chave_unica TEXT NOT NULL,
-      projeto_a_id INTEGER NOT NULL,
-      projeto_b_id INTEGER NOT NULL,
-      usuario_a_id INTEGER NOT NULL,
-      usuario_b_id INTEGER NOT NULL,
-      criada_por INTEGER NOT NULL,
-      criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-      atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(tenant_id, chave_unica)
-    )
-  `);
-
-  await runQuery(`
-    CREATE TABLE IF NOT EXISTS mensagem_itens (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      tenant_id INTEGER NOT NULL,
-      conversa_id INTEGER NOT NULL,
-      remetente_usuario_id INTEGER NOT NULL,
-      conteudo TEXT NOT NULL,
-      resposta_para_id INTEGER,
-      enviado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-      editado_em DATETIME,
-      deletado_em DATETIME,
-      deletado_por_usuario_id INTEGER,
-      respondido_em DATETIME,
-      FOREIGN KEY (conversa_id) REFERENCES mensagem_conversas(id)
-    )
-  `);
-
-  await runQuery(`
-    CREATE TABLE IF NOT EXISTS mensagem_recibos (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      tenant_id INTEGER NOT NULL,
-      mensagem_id INTEGER NOT NULL,
-      usuario_id INTEGER NOT NULL,
-      entregue_em DATETIME,
-      lido_em DATETIME,
-      respondido_em DATETIME,
-      criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(mensagem_id, usuario_id),
-      FOREIGN KEY (mensagem_id) REFERENCES mensagem_itens(id)
-    )
-  `);
-
-  await runQuery(`
-    CREATE TABLE IF NOT EXISTS mensagem_anexos (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      tenant_id INTEGER NOT NULL,
-      mensagem_id INTEGER NOT NULL,
-      nome_original TEXT NOT NULL,
-      caminho TEXT NOT NULL,
-      mime_type TEXT,
-      tamanho INTEGER,
-      criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (mensagem_id) REFERENCES mensagem_itens(id)
-    )
-  `);
-
-  await runQuery('CREATE INDEX IF NOT EXISTS idx_mensagem_conversas_tenant_usera ON mensagem_conversas(tenant_id, usuario_a_id)');
-  await runQuery('CREATE INDEX IF NOT EXISTS idx_mensagem_conversas_tenant_userb ON mensagem_conversas(tenant_id, usuario_b_id)');
-  await runQuery('CREATE INDEX IF NOT EXISTS idx_mensagem_itens_conversa_data ON mensagem_itens(conversa_id, enviado_em DESC)');
-  await runQuery('CREATE INDEX IF NOT EXISTS idx_mensagem_recibos_usuario_lido ON mensagem_recibos(usuario_id, lido_em)');
-
-  try { await runQuery('ALTER TABLE usuarios ADD COLUMN avatar TEXT'); } catch (_) {}
-  try { await runQuery("ALTER TABLE usuarios ADD COLUMN presenca_status TEXT DEFAULT 'disponivel'"); } catch (_) {}
-  try { await runQuery('ALTER TABLE usuarios ADD COLUMN presenca_atualizado_em DATETIME'); } catch (_) {}
+  await ensureSchemaReady({ getQuery, allQuery }, {
+    tables: ['mensagem_conversas', 'mensagem_itens', 'mensagem_recibos', 'mensagem_anexos'],
+    columns: {
+      mensagem_conversas: ['tenant_id', 'tipo', 'chave_unica', 'projeto_a_id', 'projeto_b_id', 'usuario_a_id', 'usuario_b_id', 'criada_por', 'criado_em', 'atualizado_em'],
+      mensagem_itens: ['tenant_id', 'conversa_id', 'remetente_usuario_id', 'conteudo', 'resposta_para_id', 'enviado_em', 'editado_em', 'deletado_em', 'deletado_por_usuario_id', 'respondido_em'],
+      mensagem_recibos: ['tenant_id', 'mensagem_id', 'usuario_id', 'entregue_em', 'lido_em', 'respondido_em', 'criado_em'],
+      mensagem_anexos: ['tenant_id', 'mensagem_id', 'nome_original', 'caminho', 'mime_type', 'tamanho', 'criado_em'],
+      usuarios: ['avatar', 'presenca_status', 'presenca_atualizado_em']
+    }
+  });
 
   initializedTenants.add(tenantKey);
 };
@@ -133,6 +73,7 @@ const requireMensagemSchema = async (req, res, next) => {
     next();
   } catch (error) {
     console.error('Erro ao garantir schema de mensageria:', error);
+    if (sendSchemaOutdated(res, error, 'Schema de mensageria desatualizado. Execute as migrations pendentes.')) return;
     res.status(500).json({ erro: 'Erro ao preparar mensageria.' });
   }
 };

@@ -9,8 +9,23 @@ const { db } = require('../config/database');
 const emailService = require('../services/emailService');
 const { ImapFlow } = require('imapflow');
 const { simpleParser } = require('mailparser');
+const { ensureSchemaReady, sendSchemaOutdated } = require('../utils/schemaGuard');
 
 const router = express.Router();
+
+const getDb = (sql, params = []) => new Promise((resolve, reject) => {
+  db.get(sql, params, (err, row) => {
+    if (err) reject(err);
+    else resolve(row);
+  });
+});
+
+const allDb = (sql, params = []) => new Promise((resolve, reject) => {
+  db.all(sql, params, (err, rows) => {
+    if (err) reject(err);
+    else resolve(rows || []);
+  });
+});
 
 const EMAIL_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
 const EMAIL_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
@@ -193,114 +208,33 @@ const runMulter = (middleware) => (req, res, next) => {
 };
 
 const ensureEmailTables = async () => {
-  const tables = [
-    `CREATE TABLE IF NOT EXISTS email_config (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      tenant_id INTEGER,
-      provider TEXT NOT NULL DEFAULT 'custom',
-      smtp_host TEXT NOT NULL DEFAULT '',
-      smtp_port INTEGER NOT NULL DEFAULT 587,
-      smtp_user TEXT NOT NULL DEFAULT '',
-      smtp_pass_encrypted TEXT NOT NULL DEFAULT '',
-      from_name TEXT NOT NULL DEFAULT '',
-      from_email TEXT NOT NULL DEFAULT '',
-      is_active INTEGER DEFAULT 1,
-      created_by_user_id INTEGER,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(tenant_id)
-    )`,
-    `CREATE TABLE IF NOT EXISTS email_templates (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      tenant_id INTEGER,
-      name TEXT NOT NULL,
-      subject TEXT NOT NULL,
-      body_html TEXT NOT NULL,
-      description TEXT,
-      created_by_user_id INTEGER,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`,
-    `CREATE TABLE IF NOT EXISTS email_history (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      tenant_id INTEGER,
-      sender_user_id INTEGER,
-      recipient_email TEXT NOT NULL,
-      subject TEXT,
-      body_html TEXT,
-      template_used TEXT,
-      status TEXT DEFAULT 'PENDENTE',
-      error_message TEXT,
-      sent_at DATETIME,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`,
-    `ALTER TABLE email_history ADD COLUMN favorito INTEGER NOT NULL DEFAULT 0`,
-    `ALTER TABLE email_history ADD COLUMN excluido INTEGER NOT NULL DEFAULT 0`,
-    // Colunas IMAP na tabela de config
-    `ALTER TABLE email_config ADD COLUMN imap_host TEXT NOT NULL DEFAULT ''`,
-    `ALTER TABLE email_config ADD COLUMN imap_port INTEGER NOT NULL DEFAULT 993`,
-    `ALTER TABLE email_config ADD COLUMN imap_user TEXT NOT NULL DEFAULT ''`,
-    `ALTER TABLE email_config ADD COLUMN imap_pass_encrypted TEXT NOT NULL DEFAULT ''`,
-    `ALTER TABLE email_config ADD COLUMN imap_tls INTEGER NOT NULL DEFAULT 1`,
-    // Tabela de emails recebidos
-    `CREATE TABLE IF NOT EXISTS received_emails (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      tenant_id INTEGER,
-      imap_uid INTEGER,
-      from_email TEXT,
-      from_name TEXT,
-      to_email TEXT,
-      subject TEXT,
-      body_html TEXT,
-      body_text TEXT,
-      received_at DATETIME,
-      is_read INTEGER DEFAULT 0,
-      favorito INTEGER DEFAULT 0,
-      excluido INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS idx_received_emails_uid ON received_emails(tenant_id, imap_uid)`
-  ];
-
-  for (const sql of tables) {
-    await new Promise((resolve, reject) => {
-      db.run(sql, [], (err) => {
-        // Ignorar erro de "duplicate column" (migration já aplicada)
-        if (err && !err.message.includes('duplicate column')) reject(err);
-        else resolve();
-      });
-    });
-  }
+  await ensureSchemaReady({ getQuery: getDb, allQuery: allDb }, {
+    tables: ['email_config', 'email_templates', 'email_history', 'received_emails'],
+    columns: {
+      email_config: ['tenant_id', 'provider', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass_encrypted', 'from_name', 'from_email', 'is_active', 'created_by_user_id', 'imap_host', 'imap_port', 'imap_user', 'imap_pass_encrypted', 'imap_tls'],
+      email_templates: ['tenant_id', 'name', 'subject', 'body_html', 'description', 'created_by_user_id'],
+      email_history: ['tenant_id', 'sender_user_id', 'recipient_email', 'subject', 'body_html', 'template_used', 'status', 'error_message', 'sent_at', 'favorito', 'excluido'],
+      received_emails: ['tenant_id', 'imap_uid', 'from_email', 'from_name', 'to_email', 'subject', 'body_html', 'body_text', 'received_at', 'is_read', 'favorito', 'excluido']
+    }
+  });
 };
 
 const ensureSignatureColumn = async () => {
-  const columns = await new Promise((resolve, reject) => {
-    db.all('PRAGMA table_info(usuarios)', [], (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows || []);
-    });
+  await ensureSchemaReady({ getQuery: getDb, allQuery: allDb }, {
+    columns: { usuarios: ['email_signature_html', 'email_signature_auto'] }
   });
-
-  const hasSignature = columns.some((col) => String(col.name) === 'email_signature_html');
-  if (!hasSignature) {
-    await new Promise((resolve, reject) => {
-      db.run('ALTER TABLE usuarios ADD COLUMN email_signature_html TEXT', [], (err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-  }
-
-  const hasAutoAppend = columns.some((col) => String(col.name) === 'email_signature_auto');
-  if (!hasAutoAppend) {
-    await new Promise((resolve, reject) => {
-      db.run('ALTER TABLE usuarios ADD COLUMN email_signature_auto INTEGER DEFAULT 1', [], (err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-  }
 };
+
+router.use(async (_req, res, next) => {
+  try {
+    await ensureEmailTables();
+    next();
+  } catch (error) {
+    console.error('Erro ao validar schema de email:', error);
+    if (sendSchemaOutdated(res, error, 'Schema de email desatualizado. Execute as migrations pendentes.')) return;
+    res.status(500).json({ error: 'Erro ao preparar modulo de email.' });
+  }
+});
 
 /**
  * GET /api/email/config
@@ -1186,6 +1120,5 @@ router.delete('/templates/:id', auth, async (req, res) => {
 });
 
 // Garantir tabelas de email na inicialização
-ensureEmailTables().catch((err) => console.error('Erro ao criar tabelas de email:', err));
 
 module.exports = router;

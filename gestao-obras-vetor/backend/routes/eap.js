@@ -8,6 +8,7 @@ const { auth, isGestor } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
 const ganttService = require('../services/ganttService');
 const { markAffectedRDOs } = require('../services/rdoCorrectionService');
+const { ensureSchemaReady } = require('../utils/schemaGuard');
 
 const router = express.Router();
 const uploadExcelEap = multer({
@@ -131,65 +132,46 @@ const ensureFaixaPercentual = (valor) => {
 };
 
 const ensureEapOptionalColumns = async () => {
-  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN tenant_id INTEGER'); } catch (_) {}
-  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN unidade_medida TEXT'); } catch (_) {}
-  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN quantidade_total REAL DEFAULT 0'); } catch (_) {}
-  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN id_atividade TEXT'); } catch (_) {}
-  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN nome TEXT'); } catch (_) {}
-  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN data_inicio_planejada DATE'); } catch (_) {}
-  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN data_fim_planejada DATE'); } catch (_) {}
-  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN peso_percentual_projeto REAL DEFAULT 0'); } catch (_) {}
-  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN data_conclusao_real DATE'); } catch (_) {}
-  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN status TEXT'); } catch (_) {}
-  try { await runQuery('ALTER TABLE atividades_eap ADD COLUMN nivel INTEGER'); } catch (_) {}
-
-  // Backfill de tenant para registros legados
-  try {
-    await runQuery(`
-      UPDATE atividades_eap
-      SET tenant_id = (
-        SELECT p.tenant_id FROM projetos p WHERE p.id = atividades_eap.projeto_id
-      )
-      WHERE tenant_id IS NULL OR tenant_id = 0
-    `);
-  } catch (_) {}
+  await ensureSchemaReady({ getQuery, allQuery }, {
+    columns: {
+      atividades_eap: [
+        'tenant_id',
+        'unidade_medida',
+        'quantidade_total',
+        'id_atividade',
+        'nome',
+        'data_inicio_planejada',
+        'data_fim_planejada',
+        'peso_percentual_projeto',
+        'data_conclusao_real',
+        'status',
+        'nivel'
+      ]
+    }
+  });
 };
 
 const ensureDependenciasSchema = async () => {
-  await runQuery(`
-    CREATE TABLE IF NOT EXISTS atividades_dependencias (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      projeto_id INTEGER NOT NULL,
-      tenant_id INTEGER,
-      atividade_origem_id INTEGER NOT NULL,
-      atividade_destino_id INTEGER NOT NULL,
-      tipo_vinculo TEXT DEFAULT 'FS',
-      sugerida_por_sistema INTEGER DEFAULT 1,
-      confirmada_usuario INTEGER DEFAULT 0,
-      score_sugestao REAL,
-      motivo_sugestao TEXT,
-      criada_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-      atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-      confirmada_em DATETIME,
-      confirmada_por INTEGER,
-      UNIQUE(atividade_origem_id, atividade_destino_id)
-    )
-  `);
-
-  try { await runQuery('ALTER TABLE atividades_dependencias ADD COLUMN tenant_id INTEGER'); } catch (_) {}
-  try { await runQuery("ALTER TABLE atividades_dependencias ADD COLUMN tipo_vinculo TEXT DEFAULT 'FS'"); } catch (_) {}
-  try { await runQuery('ALTER TABLE atividades_dependencias ADD COLUMN sugerida_por_sistema INTEGER DEFAULT 1'); } catch (_) {}
-  try { await runQuery('ALTER TABLE atividades_dependencias ADD COLUMN confirmada_usuario INTEGER DEFAULT 0'); } catch (_) {}
-  try { await runQuery('ALTER TABLE atividades_dependencias ADD COLUMN score_sugestao REAL'); } catch (_) {}
-  try { await runQuery('ALTER TABLE atividades_dependencias ADD COLUMN motivo_sugestao TEXT'); } catch (_) {}
-  try { await runQuery('ALTER TABLE atividades_dependencias ADD COLUMN criada_em DATETIME DEFAULT CURRENT_TIMESTAMP'); } catch (_) {}
-  try { await runQuery('ALTER TABLE atividades_dependencias ADD COLUMN atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP'); } catch (_) {}
-  try { await runQuery('ALTER TABLE atividades_dependencias ADD COLUMN confirmada_em DATETIME'); } catch (_) {}
-  try { await runQuery('ALTER TABLE atividades_dependencias ADD COLUMN confirmada_por INTEGER'); } catch (_) {}
-
-  await runQuery('CREATE INDEX IF NOT EXISTS idx_dependencias_projeto ON atividades_dependencias(projeto_id, confirmada_usuario)');
-  await runQuery('CREATE INDEX IF NOT EXISTS idx_dependencias_origem ON atividades_dependencias(atividade_origem_id)');
-  await runQuery('CREATE INDEX IF NOT EXISTS idx_dependencias_destino ON atividades_dependencias(atividade_destino_id)');
+  await ensureSchemaReady({ getQuery, allQuery }, {
+    tables: ['atividades_dependencias'],
+    columns: {
+      atividades_dependencias: [
+        'projeto_id',
+        'tenant_id',
+        'atividade_origem_id',
+        'atividade_destino_id',
+        'tipo_vinculo',
+        'sugerida_por_sistema',
+        'confirmada_usuario',
+        'score_sugestao',
+        'motivo_sugestao',
+        'criada_em',
+        'atualizado_em',
+        'confirmada_em',
+        'confirmada_por'
+      ]
+    }
+  });
 };
 
 const syncPredecessoraAtividade = async ({

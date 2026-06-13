@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { runQuery, allQuery, getQuery } = require('../config/database');
 const { auth, isGestor } = require('../middleware/auth');
+const { ensureSchemaReady } = require('../utils/schemaGuard');
 
 const router = express.Router();
 
@@ -55,98 +56,21 @@ const uploadFotoSingle = (req, res, next) => {
 };
 
 const ensureRdoFotosSchema = async () => {
-  await runQuery(`
-    CREATE TABLE IF NOT EXISTS rdo_fotos (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      rdo_id INTEGER NOT NULL,
-      rdo_atividade_id INTEGER,
-      nome_arquivo TEXT NOT NULL,
-      caminho_arquivo TEXT NOT NULL,
-      descricao TEXT,
-      criado_por INTEGER,
-      criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-      atividade_avulsa_descricao TEXT,
-      ordem INTEGER DEFAULT 0,
-      tipo TEXT,
-      tamanho INTEGER,
-      largura INTEGER,
-      altura INTEGER,
-      FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE
-    )
-  `);
-
-  const columns = [
-    'rdo_atividade_id INTEGER',
-    'descricao TEXT',
-    'criado_por INTEGER',
-    'criado_em DATETIME DEFAULT CURRENT_TIMESTAMP',
-    'atividade_avulsa_descricao TEXT',
-    'ordem INTEGER DEFAULT 0',
-    'tipo TEXT',
-    'tamanho INTEGER',
-    'largura INTEGER',
-    'altura INTEGER'
-  ];
-
-  for (const column of columns) {
-    try {
-      await runQuery(`ALTER TABLE rdo_fotos ADD COLUMN ${column}`);
-    } catch (error) {
-      if (!String(error?.message || '').includes('duplicate column')) throw error;
+  await ensureSchemaReady({ getQuery, allQuery }, {
+    tables: ['rdo_fotos'],
+    columns: {
+      rdo_fotos: ['rdo_id', 'rdo_atividade_id', 'nome_arquivo', 'caminho_arquivo', 'descricao', 'criado_por', 'criado_em', 'atividade_avulsa_descricao', 'ordem', 'tipo', 'tamanho', 'largura', 'altura']
     }
-  }
+  });
 };
 
-runQuery("ALTER TABLE rdo_fotos ADD COLUMN atividade_avulsa_descricao TEXT").catch(e => {
-  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] atividade_avulsa_descricao:', e.message);
-});
-runQuery('ALTER TABLE rdo_fotos ADD COLUMN ordem INTEGER DEFAULT 0').catch(e => {
-  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_fotos.ordem:', e.message);
-});
-runQuery('ALTER TABLE rdo_materiais ADD COLUMN numero_nf TEXT').catch(e => {
-  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_materiais.numero_nf:', e.message);
-});
-runQuery("ALTER TABLE rdo_materiais ADD COLUMN tipo_movimento TEXT DEFAULT 'recebido'").catch(e => {
-  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_materiais.tipo_movimento:', e.message);
-});
-runQuery('ALTER TABLE rdo_fotos ADD COLUMN tipo TEXT').catch(e => {
-  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_fotos.tipo:', e.message);
-});
-runQuery('ALTER TABLE rdo_fotos ADD COLUMN tamanho INTEGER').catch(e => {
-  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_fotos.tamanho:', e.message);
-});
-runQuery('ALTER TABLE rdo_fotos ADD COLUMN largura INTEGER').catch(e => {
-  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_fotos.largura:', e.message);
-});
-runQuery('ALTER TABLE rdo_fotos ADD COLUMN altura INTEGER').catch(e => {
-  if (!String(e.message || '').includes('duplicate column')) console.warn('[migrate] rdo_fotos.altura:', e.message);
-});
-
 const garantirTabelaMaoObraDireta = async () => {
-  await runQuery(`
-    CREATE TABLE IF NOT EXISTS mao_obra_direta (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      identificador TEXT,
-      projeto_id INTEGER,
-      nome TEXT NOT NULL,
-      funcao TEXT NOT NULL,
-      ativo INTEGER DEFAULT 1,
-      criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-      atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-      criado_por INTEGER,
-      baixado_em DATETIME,
-      baixado_por INTEGER,
-      FOREIGN KEY (projeto_id) REFERENCES projetos(id),
-      FOREIGN KEY (criado_por) REFERENCES usuarios(id),
-      FOREIGN KEY (baixado_por) REFERENCES usuarios(id)
-    )
-  `);
-
-  const colunas = await allQuery('PRAGMA table_info(mao_obra_direta)');
-  const temProjetoId = (colunas || []).some((col) => String(col.name) === 'projeto_id');
-  if (!temProjetoId) {
-    await runQuery('ALTER TABLE mao_obra_direta ADD COLUMN projeto_id INTEGER');
-  }
+  await ensureSchemaReady({ getQuery, allQuery }, {
+    tables: ['mao_obra_direta'],
+    columns: {
+      mao_obra_direta: ['identificador', 'projeto_id', 'nome', 'funcao', 'ativo', 'criado_em', 'atualizado_em', 'criado_por', 'baixado_em', 'baixado_por']
+    }
+  });
 };
 
 const gerarIdentificadorMaoObraDireta = async () => {
@@ -428,19 +352,12 @@ router.post('/:rdoId/assinatura', auth, async (req, res) => {
 
 // Garantir tabela rdo_equipamentos
 const garantirTabelaEquipamentos = async () => {
-  await runQuery(`
-    CREATE TABLE IF NOT EXISTS rdo_equipamentos (
-      id        INTEGER PRIMARY KEY AUTOINCREMENT,
-      rdo_id    INTEGER NOT NULL,
-      nome      TEXT    NOT NULL,
-      quantidade REAL   NOT NULL DEFAULT 1,
-      criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE
-    )
-  `);
-  try { await runQuery('ALTER TABLE rdo_equipamentos ADD COLUMN horario_utilizacao TEXT'); } catch (_) {}
-  try { await runQuery('ALTER TABLE rdo_equipamentos ADD COLUMN horas_utilizadas REAL'); } catch (_) {}
-  try { await runQuery('ALTER TABLE rdo_equipamentos ADD COLUMN observacao TEXT'); } catch (_) {}
+  await ensureSchemaReady({ getQuery, allQuery }, {
+    tables: ['rdo_equipamentos'],
+    columns: {
+      rdo_equipamentos: ['rdo_id', 'nome', 'quantidade', 'horario_utilizacao', 'horas_utilizadas', 'observacao']
+    }
+  });
 };
 
 // Listar equipamentos de um RDO

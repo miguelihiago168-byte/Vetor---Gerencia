@@ -7,6 +7,7 @@ const { registrarAuditoria } = require('../middleware/auditoria');
 const { PERMISSIONS, hasPermission, assertProjectAccess } = require('../middleware/rbac');
 const { PERFIS, inferirPerfil } = require('../constants/access');
 const { ensureFinanceiroSchema, sincronizarDespesaPedido } = require('../services/financeiro');
+const { ensureSchemaReady, sendSchemaOutdated } = require('../utils/schemaGuard');
 
 const router = express.Router();
 
@@ -14,18 +15,12 @@ let schemaReadyPromise = null;
 const ensureSchema = async () => {
   if (!schemaReadyPromise) {
     schemaReadyPromise = (async () => {
-      await runQuery(`
-        CREATE TABLE IF NOT EXISTS pedidos_compra_historico (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          pedido_id INTEGER NOT NULL,
-          usuario_id INTEGER NOT NULL,
-          tipo_alteracao TEXT NOT NULL,
-          detalhes TEXT,
-          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (pedido_id) REFERENCES pedidos_compra(id) ON DELETE CASCADE,
-          FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
-        )
-      `);
+      await ensureSchemaReady({ getQuery, allQuery }, {
+        tables: ['pedidos_compra_historico'],
+        columns: {
+          pedidos_compra_historico: ['pedido_id', 'usuario_id', 'tipo_alteracao', 'detalhes', 'criado_em']
+        }
+      });
     })().catch((error) => {
       schemaReadyPromise = null;
       throw error;
@@ -166,6 +161,7 @@ router.use(async (req, res, next) => {
     next();
   } catch (error) {
     console.error('Erro ao preparar schema de compras:', error);
+    if (sendSchemaOutdated(res, error, 'Schema de compras desatualizado. Execute as migrations pendentes.')) return;
     res.status(500).json({ erro: 'Erro interno ao preparar módulo de compras.' });
   }
 });
