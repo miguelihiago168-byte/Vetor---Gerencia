@@ -25,9 +25,9 @@ jobs:
           port: ${{ secrets.VPS_PORT }}
           timeout: 60s
           command_timeout: 15m
-          script_stop: true
+          script_stop: false
           script: |
-            set -euo pipefail
+            set -Eeuo pipefail
 
             cd "${{ secrets.APP_DIR }}"
             export APP_DATA_DIR="/home/ubuntu/app_data/gestao-obras-vetor"
@@ -58,6 +58,19 @@ jobs:
 
             cd "$COMPOSE_DIR"
 
+            BACKEND_STOPPED=0
+            restore_backend_on_failure() {
+              status=$?
+              if [ "$status" -ne 0 ] && [ "$BACKEND_STOPPED" = "1" ]; then
+                echo "Deploy falhou apos parar o backend. Tentando religar o backend existente sem alterar dados..."
+                docker compose start backend || true
+                docker compose ps || true
+                docker compose logs --tail=100 backend || true
+              fi
+              exit "$status"
+            }
+            trap restore_backend_on_failure EXIT
+
             if [ ! -f scripts/validate_data_dir.sh ]; then
               echo "Script de validacao de APP_DATA_DIR ausente."
               exit 1
@@ -84,6 +97,7 @@ jobs:
 
             echo "Parando apenas o backend antes de backup e migrations..."
             docker compose stop backend || true
+            BACKEND_STOPPED=1
 
             BACKUP_DIR="/home/ubuntu/backups/gestao-obras-vetor/deploy-${DEPLOY_COMMIT}-$(date -u +%Y%m%dT%H%M%SZ)"
             echo "Criando backup pre-deploy em $BACKUP_DIR"
@@ -97,15 +111,18 @@ jobs:
               gestao-obras-vetor-backend npm run db:backup
 
             echo "Validando migrations pendentes antes do startup..."
-            set +e
-            docker run --rm \
-              -e NODE_ENV=production \
-              -e APP_DATA_DIR="$APP_DATA_DIR" \
-              -v "$APP_DATA_DIR/database:/app/database" \
-              -v "$APP_DATA_DIR/uploads:/app/uploads" \
-              gestao-obras-vetor-backend npm run db:check
-            CHECK_STATUS=$?
-            set -e
+            CHECK_STATUS=0
+            if docker run --rm \
+                -e NODE_ENV=production \
+                -e APP_DATA_DIR="$APP_DATA_DIR" \
+                -v "$APP_DATA_DIR/database:/app/database" \
+                -v "$APP_DATA_DIR/uploads:/app/uploads" \
+                gestao-obras-vetor-backend npm run db:check; then
+              CHECK_STATUS=0
+            else
+              CHECK_STATUS=$?
+            fi
+            echo "db:check pre-startup finalizou com status $CHECK_STATUS"
 
             if [ "$CHECK_STATUS" -eq 2 ]; then
               echo "Migrations pendentes detectadas. Aplicando pelo runner centralizado..."
@@ -141,6 +158,7 @@ jobs:
 
             echo "Subindo containers apos backup e migrations..."
             docker compose up -d
+            BACKEND_STOPPED=0
             docker compose ps
 
             for i in $(seq 1 30); do
