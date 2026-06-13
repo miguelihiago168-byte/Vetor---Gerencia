@@ -11,12 +11,6 @@ const { ensureSchemaReady } = require('../utils/schemaGuard');
 
 const router = express.Router();
 
-const getPublicBaseUrl = (req) => {
-  const envBase = process.env.PUBLIC_FILE_BASE_URL || process.env.APP_BASE_URL;
-  if (envBase) return String(envBase).replace(/\/$/, '');
-  return `${req.protocol}://${req.get('host')}`;
-};
-
 const getPdfVersionLabel = () => {
   const appVersion = process.env.APP_VERSION || process.env.RELEASE_VERSION || backendPackage.version || 'desconhecida';
   const appEnv = process.env.APP_ENV || process.env.NODE_ENV || 'local';
@@ -1352,8 +1346,6 @@ router.get('/:id/pdf', auth, async (req, res) => {
        AND tipo NOT LIKE 'image%'
        ORDER BY criado_em ASC`, [id], []
     );
-    const publicBaseUrl = getPublicBaseUrl(req);
-
     let equipamentosLista = [];
     try {
       equipamentosLista = await allQuery(
@@ -1409,8 +1401,29 @@ router.get('/:id/pdf', auth, async (req, res) => {
     };
 
     // URL pública das fotos (Puppeteer acessa o próprio servidor)
-    const fotoUrl = (filename) =>
-      `http://127.0.0.1:${process.env.PORT || 3001}/uploads/${encodeURIComponent(filename)}`;
+    const normalizeUploadPath = (rawPath) => String(rawPath || '')
+      .replace(/\\/g, '/')
+      .replace(/^\/+/, '')
+      .replace(/^uploads\//i, '');
+
+    const fotoUrl = (filename) => {
+      try {
+        const normalized = normalizeUploadPath(filename);
+        const filePath = path.resolve(uploadsDir, normalized);
+        if (!filePath.startsWith(path.resolve(uploadsDir) + path.sep) || !fs.existsSync(filePath)) return '';
+        const ext = path.extname(filePath).toLowerCase();
+        const mime = ext === '.png'
+          ? 'image/png'
+          : ext === '.webp'
+            ? 'image/webp'
+            : ext === '.gif'
+              ? 'image/gif'
+              : 'image/jpeg';
+        return `data:${mime};base64,${fs.readFileSync(filePath).toString('base64')}`;
+      } catch (_) {
+        return '';
+      }
+    };
 
     // ── HTML template ─────────────────────────────────────────────────────
     const rows = (items, fn) => items.map(fn).join('');
@@ -1591,8 +1604,7 @@ router.get('/:id/pdf', auth, async (req, res) => {
         <h2>Anexos</h2>
         <ol class="anexo-list">
           ${rows(anexos, (a) => {
-            const href = `${publicBaseUrl}/uploads/${encodeURIComponent(a.caminho_arquivo || '')}`;
-            return `<li><a href="${href}" target="_blank" rel="noopener noreferrer"><strong>${a.nome_arquivo}</strong></a> — ${a.tipo || '—'}${a.tamanho ? ` (${Math.round(a.tamanho / 1024)} KB)` : ''}</li>`;
+            return `<li><strong>${a.nome_arquivo}</strong> — ${a.tipo || '—'}${a.tamanho ? ` (${Math.round(a.tamanho / 1024)} KB)` : ''}</li>`;
           })}
         </ol>
       </section>` : '';

@@ -12,7 +12,7 @@ import {
   uploadRdoFoto, updateRdoFoto, deleteRdoFoto, reorderRdoFotos, updateStatusRDO, getExecucaoAcumulada,
   getRdoColaboradores, createRdoColaborador,
   getRdoEquipamentos, addRdoEquipamento, deleteRdoEquipamento,
-  getAnexos, uploadAnexo, deleteAnexo
+  getAnexos, uploadAnexo, deleteAnexo, getUploadUrl
 } from '../services/api';
 import { ChevronDown, Plus, Trash2, Upload, FileText, Pencil } from 'lucide-react';
 import './RDO.css';
@@ -1999,10 +1999,10 @@ function RDOForm2() {
                         >
                           <Trash2 size={14} />
                         </button>
-                        <a href={`/uploads/${f.caminho_arquivo}`} target="_blank" rel="noreferrer" style={{ display: 'block', textDecoration: 'none' }}>
+                        <a href={getUploadUrl(f.caminho_arquivo)} target="_blank" rel="noreferrer" style={{ display: 'block', textDecoration: 'none' }}>
                           <div className="rdo-photo-card-preview" style={{ position: 'relative', width: '100%', paddingTop: '70%', background: '#f8fafc' }}>
                             <img
-                              src={`/uploads/${f.caminho_arquivo}`}
+                              src={getUploadUrl(f.caminho_arquivo)}
                               alt={f.nome_arquivo || 'foto'}
                               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
                             />

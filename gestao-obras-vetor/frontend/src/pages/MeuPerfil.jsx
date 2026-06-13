@@ -5,7 +5,7 @@ import { useNavigate, Navigate } from 'react-router-dom';
 import { ArrowLeft, KeyRound, User, Mail, Phone, Pencil, Check, X, Camera } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { hasForbiddenPasswordSequence } from '../utils/passwordPolicy';
-import { patchUsuarioInfo, patchUsuarioAvatar, patchUsuarioPresenca } from '../services/api';
+import { patchUsuarioInfo, patchUsuarioAvatar, patchUsuarioPresenca, getUploadUrl } from '../services/api';
 import './MeuPerfil.css';
 
 const PRESENCA_OPTIONS = [
@@ -196,7 +196,7 @@ function MeuPerfil() {
             <div className="perfil-user-card">
               <div className="perfil-avatar perfil-avatar-clickable" onClick={() => avatarInputRef.current?.click()} title="Clique para trocar a foto">
                 {usuario?.avatar
-                  ? <img src={`/uploads/${usuario.avatar}`} alt="avatar" className="perfil-avatar-image" />
+                  ? <img src={getUploadUrl(usuario.avatar)} alt="avatar" className="perfil-avatar-image" />
                   : <span className="perfil-avatar-iniciais">{getInitials(nomeExibicao)}</span>
                 }
                 <div className="perfil-avatar-camera-badge">

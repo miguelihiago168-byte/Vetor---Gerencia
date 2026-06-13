@@ -490,11 +490,13 @@ router.post('/upload-image', auth, runMulter(uploadInlineImage.single('image')),
       return res.status(400).json({ error: 'Nenhuma imagem enviada.' });
     }
 
-    const imageUrl = `/uploads/email-images/${tenantId}/${req.file.filename}`;
+    const imageData = fs.readFileSync(req.file.path).toString('base64');
+    const imageUrl = `data:${req.file.mimetype};base64,${imageData}`;
     return res.status(201).json({
       message: 'Imagem enviada com sucesso',
       data: {
         url: imageUrl,
+        stored_path: `email-images/${tenantId}/${req.file.filename}`,
         filename: req.file.originalname,
         size: req.file.size,
         mimetype: req.file.mimetype

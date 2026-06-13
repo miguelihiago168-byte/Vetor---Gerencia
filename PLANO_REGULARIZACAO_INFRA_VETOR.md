@@ -472,6 +472,10 @@ Alteracoes implementadas:
 - `ensureTenantDatabase()` deixou de copiar o banco principal, remover arquivo tenant divergente ou criar banco tenant automaticamente.
 - A rota de cancelamento deixou de apagar fisicamente o arquivo `tenant_<id>.db`.
 - Anexos e fotos novos de RDO/RNC passaram a ser gravados em subdiretorio por tenant.
+- O servidor deixou de publicar `/uploads` com `express.static`.
+- Criada rota autenticada `/api/uploads/*`, com validacao de path traversal e bloqueio de acesso cruzado para caminhos `tenant_<id>/`.
+- Frontend, mensagens, perfil, RDO, RNC e galeria passaram a consumir uploads por URL autenticada com token.
+- PDFs de RDO/RNC deixaram de depender de URL publica para imagens e usam dados locais embutidos quando necessario.
 - Criado teste automatizado `npm run test:tenant` com dois tenants descartaveis em banco temporario.
 
 Resultados do teste automatizado:
@@ -484,9 +488,9 @@ Resultados do teste automatizado:
 
 Riscos restantes registrados para fase posterior:
 
-- `backend/server.js` ainda expoe `/uploads` com `express.static`; os novos uploads ja sao separados por tenant, mas a remocao completa do caminho publico exige migrar frontend, PDFs, imagens de perfil, mensagens, email e compras para endpoints autenticados.
 - Mensagens e Socket.IO ja usam contexto de tenant em varias rotas, mas ainda precisam de teste automatizado especifico de salas/eventos cruzados.
-- Alguns fluxos legados de PDF e exportacao ainda montam URLs diretas de `/uploads` e devem ser migrados antes de bloquear totalmente o acesso publico.
+- Arquivos legados sem prefixo `tenant_<id>/` agora exigem autenticacao, mas ainda precisam de migracao fisica para subdiretorios por tenant para isolamento por caminho em todos os historicos.
+- `frontend/src/pages/RDOForm.jsx.backup` ainda contem referencias antigas em arquivo de backup nao utilizado no build; remover esse arquivo deve ser avaliado em limpeza separada.
 
 Nenhum deploy foi executado nesta fase.
 

@@ -63,6 +63,7 @@ O helper valida tenant ativo, banco existente, migrations pendentes, integridade
 - `/api/auth/login`: bloqueia login quando o banco tenant esta ausente, divergente ou desatualizado.
 - `/api/anexos`: novos uploads passam a usar `uploads/tenant_<id>/`.
 - `/api/rdo/*/foto`: novas fotos passam a usar `uploads/tenant_<id>/`.
+- `/api/uploads/*`: nova rota autenticada para servir arquivos sem exposicao publica direta.
 - `/api/auth/cancelar-conta`: nao remove mais fisicamente o arquivo tenant.
 
 ## Teste com Tenant X e Tenant Y
@@ -89,6 +90,9 @@ Cenario executado:
 - Registro publico nao deixa tenant ativo sem banco valido.
 - `ensureTenantDatabase()` nao copia nem recria banco tenant automaticamente.
 - Novos anexos/fotos de RDO e RNC ficam separados por diretorio tenant.
+- `/uploads` publico foi removido do servidor.
+- Links diretos do frontend foram migrados para `/api/uploads` com token.
+- RDO/RNC PDF passaram a usar imagem embutida quando precisam ler upload local.
 
 ## Falhas encontradas e corrigidas
 
@@ -100,10 +104,10 @@ Cenario executado:
 
 ## Riscos restantes
 
-- `/uploads` ainda e servido publicamente por `backend/server.js`; os novos caminhos por tenant reduzem mistura operacional, mas a remocao completa exige substituir links diretos no frontend e nos geradores de PDF por endpoints autenticados.
 - Mensagens, notificacoes e Socket.IO precisam de teste automatizado dedicado para garantir ausencia de evento cruzado entre tenants.
 - Compras, almoxarifado, email e avatar ainda devem passar por varredura especifica de uploads por tenant.
-- Fluxos de exportacao/PDF ainda montam URLs diretas de upload e devem ser migrados antes do bloqueio total de `/uploads`.
+- Arquivos historicos sem prefixo `tenant_<id>/` ainda dependem de compatibilidade autenticada e devem ser migrados fisicamente para pastas tenant.
+- `frontend/src/pages/RDOForm.jsx.backup` contem referencias antigas de backup e deve ser removido ou atualizado em limpeza propria.
 
 ## Versionamento
 

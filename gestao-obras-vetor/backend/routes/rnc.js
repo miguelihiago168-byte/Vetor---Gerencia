@@ -8,6 +8,7 @@ const { registrarAuditoria } = require('../middleware/auditoria');
 const { ensureSchemaReady, sendSchemaOutdated } = require('../utils/schemaGuard');
 
 const router = express.Router();
+const uploadsRoot = path.join(__dirname, '..', 'uploads');
 
 const normalizeUploadPath = (rawPath) => {
   if (rawPath == null) return '';
@@ -22,6 +23,26 @@ const normalizeUploadPath = (rawPath) => {
 const safeEncodePath = (rawPath) => {
   try {
     return encodeURI(normalizeUploadPath(rawPath));
+  } catch (_) {
+    return '';
+  }
+};
+
+const uploadImageDataUri = (rawPath) => {
+  try {
+    const normalized = normalizeUploadPath(rawPath);
+    if (!normalized) return '';
+    const fullPath = path.resolve(uploadsRoot, normalized);
+    if (!fullPath.startsWith(path.resolve(uploadsRoot) + path.sep) || !fs.existsSync(fullPath)) return '';
+    const ext = path.extname(fullPath).toLowerCase();
+    const mime = ext === '.png'
+      ? 'image/png'
+      : ext === '.webp'
+        ? 'image/webp'
+        : ext === '.gif'
+          ? 'image/gif'
+          : 'image/jpeg';
+    return `data:${mime};base64,${fs.readFileSync(fullPath).toString('base64')}`;
   } catch (_) {
     return '';
   }
@@ -156,10 +177,8 @@ router.get('/:id/pdf', auth, async (req, res) => {
     `, [id]);
     if (!rnc) return res.status(404).json({ erro: 'RNC não encontrada.' });
 
-    const port = process.env.PORT || 3001;
     const fotoUrl = (caminho) => {
-      const norm = normalizeUploadPath(caminho);
-      return norm ? `http://127.0.0.1:${port}/uploads/${encodeURIComponent(norm)}` : '';
+      return uploadImageDataUri(caminho);
     };
 
     const anexos = await allQuery('SELECT * FROM anexos WHERE rnc_id = ? ORDER BY criado_em ASC', [id]);

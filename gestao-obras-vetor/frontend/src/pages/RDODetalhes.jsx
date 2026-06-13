@@ -1,7 +1,7 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getRDO, updateRDO, getAtividadesEAP, addRdoMaoObra, listRdoMaoObra, addRdoComentario, addRdoMaterial, addRdoOcorrencia, uploadRdoFoto, getAnexos, updateStatusRDO, getRdoFerramentasDisponiveis, getRdoFerramentas, addRdoFerramenta } from '../services/api';
+import { getRDO, updateRDO, getAtividadesEAP, addRdoMaoObra, listRdoMaoObra, addRdoComentario, addRdoMaterial, addRdoOcorrencia, uploadRdoFoto, getAnexos, updateStatusRDO, getRdoFerramentasDisponiveis, getRdoFerramentas, addRdoFerramenta, getUploadUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
 import { FileText, Download, ArrowLeft, MapPin, Building2, User, Calendar, Save, AlertTriangle } from 'lucide-react';
@@ -450,14 +450,14 @@ function RDODetalhes() {
               {(rdo.fotos || []).map((foto) => (
                 <a
                   key={foto.id}
-                  href={`/uploads/${foto.caminho_arquivo}`}
+                  href={getUploadUrl(foto.caminho_arquivo)}
                   target="_blank"
                   rel="noreferrer"
                   style={{ display: 'block', textDecoration: 'none', borderRadius: '8px', overflow: 'hidden', border: '1px solid #E5E7EB', background: '#fff' }}
                 >
                   <div style={{ position: 'relative', width: '100%', paddingTop: '75%', background: '#F3F4F6', overflow: 'hidden' }}>
                     <img
-                      src={`/uploads/${foto.caminho_arquivo}`}
+                      src={getUploadUrl(foto.caminho_arquivo)}
                       alt={foto.descricao || 'Foto'}
                       style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
                     />
@@ -566,7 +566,7 @@ function RDODetalhes() {
                   return (
                     <a
                       key={anexo.id}
-                      href={`/uploads/${caminho}`}
+                      href={getUploadUrl(caminho)}
                       target="_blank"
                       rel="noreferrer"
                       style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 16px', borderBottom: '1px solid #F3F4F6', textDecoration: 'none', color: 'inherit' }}

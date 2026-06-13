@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import {
   getRNCs, updateStatusRNC, getAnexosRNC, uploadAnexoRNC,
-  submitCorrecaoRNC, enviarRncParaAprovacao, getRNCPDF
+  submitCorrecaoRNC, enviarRncParaAprovacao, getRNCPDF, getUploadUrl
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -26,7 +26,7 @@ const normalizeUploadPath = (raw) => {
 };
 const uploadFileUrl = (a) => {
   const p = normalizeUploadPath(a?.caminho_arquivo);
-  return p ? `/uploads/${encodeURI(p)}` : '#';
+  return p ? getUploadUrl(p) : '#';
 };
 const getToken = () => localStorage.getItem('token') || sessionStorage.getItem('token') || '';
 const isImage = (a) => {

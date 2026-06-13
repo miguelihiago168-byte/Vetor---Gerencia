@@ -292,7 +292,7 @@ router.post('/:id/cotacoes', [auth, requirePedidoPermission(PERMISSIONS.PURCHASE
       return res.status(400).json({ erro: 'Fornecedor e valor_unitario são obrigatórios.' });
     }
 
-    const pdfPath = req.file ? (`/uploads/${req.file.filename}`) : null;
+    const pdfPath = req.file ? req.file.filename : null;
     await runQuery(`
       INSERT INTO cotacoes (pedido_id, fornecedor, valor_unitario, marca, modelo, prazo_entrega, condicoes_pagamento, garantia, frete, observacoes, pdf_path)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import {
   getProjeto, getRDOStats, getRDOs, getDashboardGaleriaRdos,
-  getDashboardAlmoxarifado, getCurvaS, kanbanRequisicoes, getRNCs
+  getDashboardAlmoxarifado, getCurvaS, kanbanRequisicoes, getRNCs, getUploadUrl
 } from '../services/api';
 import {
   FileText, AlertTriangle, Image as ImageIcon, Activity,
@@ -193,7 +193,7 @@ function ProjetoDetalhes() {
     const numero = match ? Number(match[1]) : Number(raw || 0);
     return `RDO-${String(numero || rdo?.id || rdo?.rdo_id).padStart(3, '0')}`;
   };
-  const getFotoUrl = (foto) => `/uploads/${foto.caminho_arquivo}`;
+  const getFotoUrl = (foto) => getUploadUrl(foto.caminho_arquivo);
   const getFotoDownloadName = (foto) => foto.nome_arquivo || foto.caminho_arquivo?.split(/[\\/]/).pop() || 'foto-rdo';
   const getFotoAtividadeLabel = (foto) => (
     foto.atividade_descricao

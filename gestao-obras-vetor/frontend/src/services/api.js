@@ -7,6 +7,25 @@ const api = axios.create({
   }
 });
 
+export const getStoredToken = () => localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+
+export const getUploadUrl = (storedPath) => {
+  const cleanPath = String(storedPath || '')
+    .replace(/\\/g, '/')
+    .replace(/^\/+/, '')
+    .replace(/^uploads\//i, '');
+
+  if (!cleanPath) return '#';
+
+  const encodedPath = cleanPath
+    .split('/')
+    .filter(Boolean)
+    .map((part) => encodeURIComponent(part))
+    .join('/');
+  const token = getStoredToken();
+  return `/api/uploads/${encodedPath}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+};
+
 const shouldForceLogout = (error) => {
   if (error.response?.status !== 401) return false;
 
@@ -42,7 +61,7 @@ const shouldForceLogout = (error) => {
 // Interceptor para adicionar token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('token') || sessionStorage.getItem('token');
+    const token = getStoredToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
