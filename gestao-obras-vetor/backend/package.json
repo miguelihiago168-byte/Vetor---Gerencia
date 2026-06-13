@@ -19,6 +19,7 @@
     "db:check": "node scripts/runMigrations.js --status",
     "db:integrity": "node scripts/checkDatabaseIntegrity.js",
     "db:backup": "node scripts/backupDatabase.js",
+    "test:tenant": "node tests/tenantProvisioning.test.js",
     "migrate-curva-s": "node scripts/migrate_add_curva_s_fields.js"
   },
   "keywords": [

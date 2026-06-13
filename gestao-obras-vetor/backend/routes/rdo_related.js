@@ -12,6 +12,28 @@ const router = express.Router();
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
+const tenantUploadRelativeDir = (tenantId) => `tenant_${Number(tenantId)}`;
+
+const ensureTenantUploadDir = (tenantId) => {
+  const numericTenantId = Number(tenantId);
+  if (!Number.isInteger(numericTenantId) || numericTenantId <= 0) {
+    throw new Error('Tenant invalido para upload.');
+  }
+  const dir = path.join(uploadsDir, tenantUploadRelativeDir(numericTenantId));
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+};
+
+const resolveUploadPath = (storedPath) => {
+  const normalized = path.normalize(String(storedPath || '')).replace(/^(\.\.[/\\])+/, '');
+  const fullPath = path.resolve(uploadsDir, normalized);
+  const root = path.resolve(uploadsDir);
+  if (!fullPath.startsWith(root + path.sep)) {
+    throw new Error('Caminho de arquivo invalido.');
+  }
+  return fullPath;
+};
+
 const sanitizeFilename = (name) => {
   const ext = path.extname(String(name || '')).toLowerCase();
   const base = path.basename(String(name || 'arquivo'), ext)
@@ -24,7 +46,13 @@ const sanitizeFilename = (name) => {
 };
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadsDir),
+  destination: (req, file, cb) => {
+    try {
+      cb(null, ensureTenantUploadDir(req.tenantId));
+    } catch (err) {
+      cb(err);
+    }
+  },
   filename: (req, file, cb) => {
     const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
     cb(null, `${unique}-${sanitizeFilename(file.originalname)}`);
@@ -421,6 +449,7 @@ router.post('/:rdoId/foto', auth, uploadFotoSingle, async (req, res) => {
     const { rdoId } = req.params;
     const { rdo_atividade_id, descricao, atividade_avulsa_descricao } = req.body;
     const { originalname, filename, mimetype, size } = req.file;
+    const caminhoArquivo = path.posix.join(tenantUploadRelativeDir(req.tenantId), filename);
     const atividadeAvulsaDescricao = String(atividade_avulsa_descricao || '').trim();
     let rdoAtividadeId = rdo_atividade_id || null;
     if (rdoAtividadeId) {
@@ -444,14 +473,14 @@ router.post('/:rdoId/foto', auth, uploadFotoSingle, async (req, res) => {
     // Salvar no table rdo_fotos
     const result = await runQuery(
       'INSERT INTO rdo_fotos (rdo_id, rdo_atividade_id, nome_arquivo, caminho_arquivo, descricao, atividade_avulsa_descricao, ordem, criado_por, tipo, tamanho) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [rdoId, rdoAtividadeId, originalname, filename, descricao || null, atividadeAvulsaDescricao || null, ordem, req.usuario.id, mimetype || null, size || null]
+      [rdoId, rdoAtividadeId, originalname, caminhoArquivo, descricao || null, atividadeAvulsaDescricao || null, ordem, req.usuario.id, mimetype || null, size || null]
     );
 
     // Retornar informação do arquivo para o frontend
     res.status(201).json({
       mensagem: 'Foto enviada.',
       id: result.lastID,
-      arquivo: { nome_arquivo: originalname, caminho_arquivo: filename },
+      arquivo: { nome_arquivo: originalname, caminho_arquivo: caminhoArquivo },
       ordem,
       tipo: mimetype || null,
       tamanho: size || null,
@@ -482,7 +511,7 @@ router.get('/:rdoId/foto/:fotoId/download', auth, async (req, res) => {
     const foto = await getQuery('SELECT * FROM rdo_fotos WHERE id = ? AND rdo_id = ?', [fotoId, rdoId]);
     if (!foto) return res.status(404).json({ erro: 'Foto não encontrada.' });
 
-    const filePath = path.join(uploadsDir, foto.caminho_arquivo || '');
+    const filePath = resolveUploadPath(foto.caminho_arquivo || '');
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ erro: 'Arquivo da foto não encontrado no servidor.' });
     }
@@ -520,7 +549,7 @@ router.delete('/:rdoId/foto/:fotoId', auth, async (req, res) => {
 
     await runQuery('DELETE FROM rdo_fotos WHERE id = ? AND rdo_id = ?', [fotoId, rdoId]);
 
-    const filePath = path.join(uploadsDir, foto.caminho_arquivo || '');
+    const filePath = resolveUploadPath(foto.caminho_arquivo || '');
     if (foto.caminho_arquivo && fs.existsSync(filePath)) {
       try { fs.unlinkSync(filePath); } catch (_) {}
     }

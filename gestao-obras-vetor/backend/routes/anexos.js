@@ -26,6 +26,29 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
+const tenantUploadRelativeDir = (tenantId) => `tenant_${Number(tenantId)}`;
+
+const ensureTenantUploadDir = (tenantId) => {
+  const numericTenantId = Number(tenantId);
+  if (!Number.isInteger(numericTenantId) || numericTenantId <= 0) {
+    throw new Error('Tenant invalido para upload.');
+  }
+
+  const dir = path.join(uploadsDir, tenantUploadRelativeDir(numericTenantId));
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+};
+
+const resolveUploadPath = (storedPath) => {
+  const normalized = path.normalize(String(storedPath || '')).replace(/^(\.\.[/\\])+/, '');
+  const fullPath = path.resolve(uploadsDir, normalized);
+  const root = path.resolve(uploadsDir);
+  if (!fullPath.startsWith(root + path.sep)) {
+    throw new Error('Caminho de arquivo invalido.');
+  }
+  return fullPath;
+};
+
 const sanitizeFilename = (name) => {
   const ext = path.extname(String(name || '')).toLowerCase();
   const base = path.basename(String(name || 'arquivo'), ext)
@@ -43,7 +66,11 @@ const allowedRdoAttachmentMime = /^(image\/(jpeg|png|webp|gif|heic|heif)|applica
 // Configurar multer para upload
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, uploadsDir);
+    try {
+      cb(null, ensureTenantUploadDir(req.tenantId));
+    } catch (err) {
+      cb(err);
+    }
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -98,12 +125,13 @@ router.post('/upload/:rdoId', auth, uploadAnexoRdoSingle, async (req, res) => {
 
     const { rdoId } = req.params;
     const { originalname, filename, mimetype, size } = req.file;
+    const caminhoArquivo = path.posix.join(tenantUploadRelativeDir(req.tenantId), filename);
     const descricao = String(req.body?.descricao || '').trim() || null;
 
     const result = await runQuery(`
       INSERT INTO anexos (rdo_id, tipo, nome_arquivo, caminho_arquivo, tamanho, descricao, criado_por)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `, [rdoId, mimetype, originalname, filename, size, descricao, req.usuario?.id || null]);
+    `, [rdoId, mimetype, originalname, caminhoArquivo, size, descricao, req.usuario?.id || null]);
 
     res.status(201).json({
       mensagem: 'Arquivo enviado com sucesso.',
@@ -158,12 +186,13 @@ router.post('/upload-rnc/:rncId', auth, uploadGeral.single('arquivo'), async (re
     }
 
     const { originalname, filename, mimetype, size } = req.file;
+    const caminhoArquivo = path.posix.join(tenantUploadRelativeDir(req.tenantId), filename);
     const categoria = req.body.categoria === 'correcao' ? 'correcao' : 'registro';
 
     const result = await runQuery(`
       INSERT INTO anexos (rdo_id, rnc_id, tipo, nome_arquivo, caminho_arquivo, tamanho, categoria)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `, [rdoIdForInsert, rncId, mimetype, originalname, filename, size, categoria]);
+    `, [rdoIdForInsert, rncId, mimetype, originalname, caminhoArquivo, size, categoria]);
 
     res.status(201).json({
       mensagem: 'Arquivo enviado com sucesso.',
@@ -255,7 +284,7 @@ router.get('/download/:id', auth, async (req, res) => {
       }
     }
 
-    const filePath = path.join(uploadsDir, anexo.caminho_arquivo);
+    const filePath = resolveUploadPath(anexo.caminho_arquivo);
 
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ erro: 'Arquivo não encontrado no servidor.' });
@@ -283,7 +312,7 @@ router.delete('/:id', auth, async (req, res) => {
       return res.status(404).json({ erro: 'Arquivo não encontrado.' });
     }
 
-    const filePath = path.join(uploadsDir, anexo.caminho_arquivo);
+    const filePath = resolveUploadPath(anexo.caminho_arquivo);
 
     // Deletar arquivo físico
     if (fs.existsSync(filePath)) {

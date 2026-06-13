@@ -454,6 +454,42 @@ Correcao aplicada ao pipeline:
 - Somente depois dessas etapas o workflow sobe os containers e executa health check.
 - O startup guard foi preservado e continua bloqueando backend se houver migration pendente.
 
+### Fase 6 - Regularizacao multitenant
+
+Objetivo da fase:
+
+- Impedir criacao de tenant ativo sem banco tenant valido.
+- Impedir copia, sobrescrita ou recriacao silenciosa de `tenant_<id>.db`.
+- Centralizar o provisionamento inicial de tenant.
+- Validar tenant ativo, banco existente, migrations aplicadas, integridade e chaves estrangeiras antes do login.
+- Separar novos uploads de RDO/RNC por diretorio `uploads/tenant_<id>/`.
+
+Alteracoes implementadas:
+
+- Criado `backend/services/tenantProvisioning.js` para provisionar tenants de teste com fluxo transacional e rollback controlado.
+- O registro publico (`/api/auth/register`) passou a criar tenant inativo, criar banco tenant a partir de schema limpo, aplicar migrations centralizadas, validar integridade e ativar o tenant somente ao final.
+- O login passou a validar o tenant por helper central antes de emitir token.
+- `ensureTenantDatabase()` deixou de copiar o banco principal, remover arquivo tenant divergente ou criar banco tenant automaticamente.
+- A rota de cancelamento deixou de apagar fisicamente o arquivo `tenant_<id>.db`.
+- Anexos e fotos novos de RDO/RNC passaram a ser gravados em subdiretorio por tenant.
+- Criado teste automatizado `npm run test:tenant` com dois tenants descartaveis em banco temporario.
+
+Resultados do teste automatizado:
+
+- Tenant X e Tenant Y foram criados com bancos separados.
+- Ambos os bancos tenant foram validados com schema/migrations.
+- Projeto criado no Tenant X nao ficou visivel no Tenant Y.
+- Tentativa de recriar banco tenant existente falhou com `TENANT_DATABASE_ALREADY_EXISTS`.
+- O teste roda fora de producao usando `DB_DIR` temporario.
+
+Riscos restantes registrados para fase posterior:
+
+- `backend/server.js` ainda expoe `/uploads` com `express.static`; os novos uploads ja sao separados por tenant, mas a remocao completa do caminho publico exige migrar frontend, PDFs, imagens de perfil, mensagens, email e compras para endpoints autenticados.
+- Mensagens e Socket.IO ja usam contexto de tenant em varias rotas, mas ainda precisam de teste automatizado especifico de salas/eventos cruzados.
+- Alguns fluxos legados de PDF e exportacao ainda montam URLs diretas de `/uploads` e devem ser migrados antes de bloquear totalmente o acesso publico.
+
+Nenhum deploy foi executado nesta fase.
+
 ## Branches e commits
 
 Branch de trabalho da Fase 1:
