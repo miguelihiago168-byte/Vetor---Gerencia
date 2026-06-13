@@ -781,7 +781,7 @@ router.post('/mensagens/:mensagemId/anexos', upload.single('arquivo'), async (re
       return res.status(404).json({ erro: 'Mensagem não encontrada.' });
     }
 
-    const caminhoPublico = `/uploads/mensagens/${path.basename(req.file.path)}`;
+    const caminhoPublico = `mensagens/${path.basename(req.file.path)}`;
 
     const insert = await runQuery(
       `INSERT INTO mensagem_anexos

@@ -29,7 +29,8 @@ import {
   listarConversas,
   listarMensagensConversa,
   marcarConversaComoLida,
-  removerMensagem
+  removerMensagem,
+  getUploadUrl
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
@@ -85,7 +86,7 @@ const getInitials = (name) => {
   return `${partes[0][0] || ''}${partes[partes.length - 1][0] || ''}`.toUpperCase();
 };
 
-const getAvatarUrl = (avatar) => (avatar ? `/uploads/${avatar}` : null);
+const getAvatarUrl = (avatar) => (avatar ? getUploadUrl(avatar) : null);
 
 const normalizarPresenca = (value) => {
   const v = String(value || '').toLowerCase();
@@ -617,7 +618,7 @@ export default function Mensagens() {
                       {!mensagemApagada && Array.isArray(msg.anexos) && msg.anexos.length > 0 && (
                         <div className="mensagem-anexos">
                           {msg.anexos.map((a) => (
-                            <a key={a.id} href={a.caminho} target="_blank" rel="noreferrer">
+                            <a key={a.id} href={getUploadUrl(a.caminho)} target="_blank" rel="noreferrer">
                               <Paperclip size={14} /> {a.nome_original}
                             </a>
                           ))}

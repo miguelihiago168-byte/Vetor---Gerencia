@@ -21,10 +21,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Servir arquivos enviados (uploads)
+// Uploads sao servidos apenas por rota autenticada em /api/uploads.
 const uploadsPath = path.join(__dirname, 'uploads');
 try { if (!require('fs').existsSync(uploadsPath)) require('fs').mkdirSync(uploadsPath, { recursive: true }); } catch (e) {}
-app.use('/uploads', express.static(uploadsPath));
 
 // Rotas
 const authRoutes = require('./routes/auth');
@@ -46,6 +45,7 @@ const notificacoesRoutes = require('./routes/notificacoes');
 const almoxarifadoRoutes = require('./routes/almoxarifado');
 const emailRoutes = require('./routes/email');
 const mensagensRoutes = require('./routes/mensagens');
+const uploadsRoutes = require('./routes/uploads');
 // Startup nao executa migrations automaticas. Use npm run migrate/status antes de subir a aplicacao.
 console.log('[startup-db-guard] Migrations automaticas de startup desativadas.');
 
@@ -68,6 +68,7 @@ app.use('/api/notificacoes', notificacoesRoutes);
 app.use('/api/almoxarifado', almoxarifadoRoutes);
 app.use('/api/email', emailRoutes);
 app.use('/api/mensagens', mensagensRoutes);
+app.use('/api/uploads', uploadsRoutes);
 
 const createRealtimeServer = (server) => {
   const io = new Server(server, {
