@@ -4,6 +4,7 @@ const http = require('http');
 const cors = require('cors');
 const path = require('path');
 const jwt = require('jsonwebtoken');
+const { spawnSync } = require('child_process');
 const { Server } = require('socket.io');
 const { carregarPerfilUsuario } = require('./middleware/rbac');
 const { ensureTenantDatabase, runWithTenantContext, getQuery } = require('./config/database');
@@ -45,141 +46,8 @@ const notificacoesRoutes = require('./routes/notificacoes');
 const almoxarifadoRoutes = require('./routes/almoxarifado');
 const emailRoutes = require('./routes/email');
 const mensagensRoutes = require('./routes/mensagens');
-// Garantir esquema de notificações e índice único para evitar duplicidades
-if (process.env.NODE_ENV === 'production') {
-  console.log('[startup-db-guard] Migrations automaticas de startup desativadas em producao.');
-} else try {
-  const { db } = require('./config/database');
-  const { ensureMultitenancySchema } = require('./scripts/migrate_multitenancy');
-  const { ensureRdoLogsSchema } = require('./scripts/migrate_add_rdo_logs');
-  const { migrateRdoNumeroPorProjeto } = require('./scripts/migrate_rdo_numero_por_projeto');
-  const migrateAddRequisicoes = require('./scripts/migrate_add_requisicoes');
-  const { migrateAddCotacaoFields } = require('./scripts/migrate_add_cotacao_fields');
-
-  const runDb = (sql) => new Promise((resolve, reject) => {
-    db.run(sql, (err) => {
-      if (err) reject(err);
-      else resolve();
-    });
-  });
-
-  const ensureColumn = async (table, columnName, columnSql) => {
-    try {
-      await runDb(`ALTER TABLE ${table} ADD COLUMN ${columnSql}`);
-    } catch (err) {
-      const msg = String(err?.message || '').toLowerCase();
-      if (!msg.includes('duplicate column')) throw err;
-    }
-  };
-
-  ensureMultitenancySchema().catch((e) => {
-    console.warn('Aviso: não foi possível aplicar schema de multitenancy:', e?.message || e);
-  });
-
-  ensureRdoLogsSchema().catch((e) => {
-    console.warn('Aviso: não foi possível aplicar schema de rdo_logs:', e?.message || e);
-  });
-
-  migrateRdoNumeroPorProjeto().catch((e) => {
-    console.warn('Aviso: nao foi possivel aplicar schema de RDO por projeto:', e?.message || e);
-  });
-
-  // Garantir colunas de RDO esperadas pelas rotas atuais
-  ensureColumn('rdos', 'mao_obra_detalhada', 'mao_obra_detalhada TEXT').catch((e) => {
-    console.warn('Aviso: não foi possível garantir coluna rdos.mao_obra_detalhada:', e?.message || e);
-  });
-  ensureColumn('rdos', 'atividades_avulsas', 'atividades_avulsas TEXT').catch((e) => {
-    console.warn('Aviso: não foi possível garantir coluna rdos.atividades_avulsas:', e?.message || e);
-  });
-
-  // Garantir colunas extras de RNC usadas pela API
-  ensureColumn('rnc', 'descricao_correcao', 'descricao_correcao TEXT').catch((e) => {
-    console.warn('Aviso: não foi possível garantir coluna rnc.descricao_correcao:', e?.message || e);
-  });
-  ensureColumn('rnc', 'descricao_correcao_em', 'descricao_correcao_em DATETIME').catch((e) => {
-    console.warn('Aviso: não foi possível garantir coluna rnc.descricao_correcao_em:', e?.message || e);
-  });
-  ensureColumn('rnc', 'data_prevista_encerramento', 'data_prevista_encerramento DATE').catch((e) => {
-    console.warn('Aviso: não foi possível garantir coluna rnc.data_prevista_encerramento:', e?.message || e);
-  });
-  ensureColumn('rnc', 'origem', 'origem TEXT').catch((e) => {
-    console.warn('Aviso: não foi possível garantir coluna rnc.origem:', e?.message || e);
-  });
-  ensureColumn('rnc', 'area_afetada', 'area_afetada TEXT').catch((e) => {
-    console.warn('Aviso: não foi possível garantir coluna rnc.area_afetada:', e?.message || e);
-  });
-  ensureColumn('rnc', 'norma_referencia', 'norma_referencia TEXT').catch((e) => {
-    console.warn('Aviso: não foi possível garantir coluna rnc.norma_referencia:', e?.message || e);
-  });
-  ensureColumn('rnc', 'registros_fotograficos', 'registros_fotograficos TEXT').catch((e) => {
-    console.warn('Aviso: não foi possível garantir coluna rnc.registros_fotograficos:', e?.message || e);
-  });
-
-  // Adicionar categoria aos anexos de RNC (registro | correcao)
-  ensureColumn('anexos', 'categoria', "categoria TEXT DEFAULT 'registro'").catch((e) => {
-    console.warn('Aviso: não foi possível garantir coluna anexos.categoria:', e?.message || e);
-  });
-
-  // Adicionar telefone ao perfil do usuário
-  ensureColumn('usuarios', 'telefone', 'telefone TEXT').catch((e) => {
-    console.warn('Aviso: não foi possível garantir coluna usuarios.telefone:', e?.message || e);
-  });
-
-  // Adicionar avatar ao perfil do usuário
-  ensureColumn('usuarios', 'avatar', 'avatar TEXT').catch((e) => {
-    console.warn('Aviso: não foi possível garantir coluna usuarios.avatar:', e?.message || e);
-  });
-
-  // Garantir tabelas do módulo de requisições/compras multi-itens
-  migrateAddRequisicoes().catch((e) => {
-    console.warn('Aviso: não foi possível aplicar schema de requisições:', e?.message || e);
-  });
-
-  // Garantir schema de cotações com fornecedor_id nullable (nome livre)
-  migrateAddCotacaoFields().catch((e) => {
-    console.warn('Aviso: não foi possível aplicar schema de cotações:', e?.message || e);
-  });
-
-  // Garantir colunas novas em requisicao_cotacoes para compatibilidade das consultas
-  ensureColumn('requisicao_cotacoes', 'fornecedor_nome', 'fornecedor_nome TEXT').catch((e) => {
-    console.warn('Aviso: não foi possível garantir coluna requisicao_cotacoes.fornecedor_nome:', e?.message || e);
-  });
-  ensureColumn('requisicao_cotacoes', 'cnpj', 'cnpj TEXT').catch((e) => {
-    console.warn('Aviso: não foi possível garantir coluna requisicao_cotacoes.cnpj:', e?.message || e);
-  });
-  ensureColumn('requisicao_cotacoes', 'telefone', 'telefone TEXT').catch((e) => {
-    console.warn('Aviso: não foi possível garantir coluna requisicao_cotacoes.telefone:', e?.message || e);
-  });
-  ensureColumn('requisicao_cotacoes', 'email', 'email TEXT').catch((e) => {
-    console.warn('Aviso: não foi possível garantir coluna requisicao_cotacoes.email:', e?.message || e);
-  });
-  ensureColumn('requisicao_cotacoes', 'frete', 'frete REAL DEFAULT 0').catch((e) => {
-    console.warn('Aviso: não foi possível garantir coluna requisicao_cotacoes.frete:', e?.message || e);
-  });
-
-  db.run(`
-    CREATE TABLE IF NOT EXISTS notificacoes (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      usuario_id INTEGER NOT NULL,
-      tipo TEXT NOT NULL,
-      mensagem TEXT NOT NULL,
-      referencia_tipo TEXT,
-      referencia_id INTEGER,
-      lido INTEGER DEFAULT 0,
-      criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  db.run(`
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_notif_unique
-    ON notificacoes (usuario_id, tipo, referencia_tipo, referencia_id)
-  `);
-  // Migration: campos de auditoria de alteração de quantidade em requisicao_itens
-  db.run('ALTER TABLE requisicao_itens ADD COLUMN quantidade_original REAL', () => {});
-  db.run('ALTER TABLE requisicao_itens ADD COLUMN alterado_em DATETIME', () => {});
-  db.run('ALTER TABLE requisicao_itens ADD COLUMN alterado_por_nome TEXT', () => {});
-} catch (e) {
-  console.warn('Aviso: não foi possível garantir índice único de notificações:', e?.message || e);
-}
+// Startup nao executa migrations automaticas. Use npm run migrate/status antes de subir a aplicacao.
+console.log('[startup-db-guard] Migrations automaticas de startup desativadas.');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/usuarios', usuariosRoutes);
@@ -330,6 +198,28 @@ app.use((req, res) => {
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
+const validateProductionMigrations = () => {
+  if (process.env.NODE_ENV !== 'production') return;
+
+  const result = spawnSync(
+    process.execPath,
+    [path.join(__dirname, 'scripts', 'runMigrations.js'), '--status'],
+    {
+      cwd: __dirname,
+      env: process.env,
+      encoding: 'utf8'
+    }
+  );
+
+  if (result.stdout) process.stdout.write(result.stdout);
+  if (result.stderr) process.stderr.write(result.stderr);
+
+  if (result.status !== 0) {
+    console.error('[startup-db-guard] Migrations pendentes ou schema invalido. Execute npm run db:migrate antes de iniciar.');
+    process.exit(1);
+  }
+};
+
 // Função de inicialização com tentativas em caso de EADDRINUSE
 const startServer = (maxAttempts = 10) => {
   let attempt = 0;
@@ -343,16 +233,6 @@ const startServer = (maxAttempts = 10) => {
       console.log(`\nServidor inicializado na porta ${PORT}`);
       console.log(`Acesse http://localhost:${PORT}/api/health`);
       console.log(`Socket.IO ativo em ws://localhost:${PORT}`);
-      console.log('Credenciais padrão: Login: 000001 Senha: 123456');
-
-      // Recalcular EAP ao iniciar para corrigir eventuais inconsistências
-      const path = require('path');
-      try {
-        const { recalcularTodasAtividades } = require('./scripts/recalcular_eap_startup');
-        recalcularTodasAtividades().catch(e => console.warn('Aviso: falha no recálculo EAP inicial:', e?.message));
-      } catch (e) {
-        // se o módulo não existir, ignora silenciosamente
-      }
     });
 
     server.on('error', (err) => {
@@ -386,6 +266,7 @@ const startServer = (maxAttempts = 10) => {
 };
 
 // Inicia com até 10 tentativas (padrão)
+validateProductionMigrations();
 startServer(10);
 
 // Global handlers para evitar que exceções não tratadas deixem o processo em estado inconsistente

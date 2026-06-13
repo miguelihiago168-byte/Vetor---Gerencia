@@ -382,6 +382,57 @@ Limitacao registrada:
 
 - O login real por senha do usuario reportado nao foi validado localmente porque a senha desse usuario nao esta disponivel no ambiente local; nao foi feita redefinicao de senha, criacao de usuario ou remocao de usuario.
 
+## Fase 4 - Migrations centralizadas: remocao de mutacoes runtime
+
+Continuidade executada na branch `fix/remove-runtime-schema-mutations`.
+
+Inventario confirmado antes da limpeza:
+
+- `routes/auth.js`: `ALTER TABLE` em `tenants` e colunas de reset de senha em `usuarios`.
+- `routes/anexos.js` e `routes/rnc.js`: `ALTER TABLE anexos` para RDO/RNC.
+- `routes/almoxarifado.js`: criacao/alteracao de tabelas de almoxarifado, `rdo_ferramentas` e `mao_obra_direta`.
+- `routes/eap.js`: colunas opcionais de `atividades_eap`, tabela `atividades_dependencias` e indices.
+- `routes/email.js`: tabelas de e-mail, IMAP, historico e assinatura de usuario.
+- `routes/mensagens.js`: tabelas de mensageria e colunas de presenca/avatar.
+- `routes/pedidos_compra.js` e `services/financeiro.js`: historico de pedidos e tabelas financeiras.
+- `routes/rdos.js`, `routes/rdo_related.js` e `services/rdoCorrectionService.js`: tabelas/colunas auxiliares de RDO, fotos, clima, materiais, equipamentos, assinaturas, logs e correcao.
+- `server.js`: bloco legado de auto-migrations no startup, log de credencial padrao e recalculo EAP automatico no startup.
+
+Migration centralizada criada:
+
+- `000002_runtime_route_schema`: consolida schema legado usado por RDO, EAP, anexos, RNC, almoxarifado, financeiro, e-mail, mensagens, notificacoes e compras.
+- A migration e idempotente, roda dentro do runner versionado e foi validada no banco principal e no `tenant_1.db` local.
+- O runner continua aplicando migrations em banco principal e tenants, com `--status` em modo somente leitura.
+
+Limpeza aplicada:
+
+- Rotas e services deixam de executar `CREATE TABLE`, `ALTER TABLE`, `CREATE INDEX`, `DROP TABLE` ou `DROP INDEX` em runtime.
+- As rotas passam a validar schema por metadados (`sqlite_master` e `PRAGMA table_info`) via `utils/schemaGuard.js`.
+- Quando schema estiver pendente, o erro tecnico padronizado e `DATABASE_SCHEMA_OUTDATED`, apontando a migration pendente.
+- `server.js` nao executa mais migrations automaticas no startup.
+- Em `NODE_ENV=production`, o startup roda `runMigrations.js --status` em modo somente leitura e bloqueia a inicializacao se houver migration pendente.
+- Removido log de senha padrao `000001/123456`.
+- Removido recalculo automatico de EAP no startup.
+
+Comandos mantidos/separados:
+
+- `npm run db:init`
+- `npm run db:migrate`
+- `npm run db:check`
+- `npm run db:backup`
+
+Validacoes executadas:
+
+- `node --check` nos arquivos alterados.
+- `npm run migrate`
+- `npm run migrate` repetido para validar idempotencia.
+- `npm run db:check`
+- Varredura `rg` confirmou ausencia de DDL runtime em `backend/routes`, `backend/middleware`, `backend/services` e `backend/server.js`.
+- Backend local em `NODE_ENV=production` subiu na porta `3019` e `/api/health` retornou 200.
+- Logs do startup local mostraram apenas status de migrations pendentes igual a zero, sem auto-migration.
+
+Arquivos de banco, uploads, backups, `.env` e secrets nao foram versionados.
+
 ## Branches e commits
 
 Branch de trabalho da Fase 1:

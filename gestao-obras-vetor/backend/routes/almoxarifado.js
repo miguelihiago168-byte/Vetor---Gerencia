@@ -3,6 +3,7 @@ const { auth } = require('../middleware/auth');
 const { allQuery, getQuery, runQuery } = require('../config/database');
 const { registrarAuditoria } = require('../middleware/auditoria');
 const { PERFIS, inferirPerfil } = require('../constants/access');
+const { ensureSchemaReady, sendSchemaOutdated } = require('../utils/schemaGuard');
 
 const router = express.Router();
 
@@ -60,6 +61,7 @@ const requireReadPermission = async (req, res, next) => {
     next();
   } catch (error) {
     console.error('Erro ao validar acesso de leitura no almoxarifado:', error);
+    if (sendSchemaOutdated(res, error, 'Schema de almoxarifado desatualizado. Execute as migrations pendentes.')) return;
     res.status(500).json({ erro: 'Falha ao inicializar módulo de almoxarifado.' });
   }
 };
@@ -75,6 +77,7 @@ const requireWritePermission = async (req, res, next) => {
     next();
   } catch (error) {
     console.error('Erro ao validar acesso de escrita no almoxarifado:', error);
+    if (sendSchemaOutdated(res, error, 'Schema de almoxarifado desatualizado. Execute as migrations pendentes.')) return;
     res.status(500).json({ erro: 'Falha ao inicializar módulo de almoxarifado.' });
   }
 };
@@ -139,336 +142,27 @@ const registrarMovimentacao = async ({
 };
 
 const ensureSchema = async () => {
-  try {
-    try {
-      await runQuery(`ALTER TABLE usuarios ADD COLUMN perfil_almoxarifado TEXT`);
-    } catch (_) {}
-
-      await runQuery(`
-        CREATE TABLE IF NOT EXISTS almox_ferramentas (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          projeto_id INTEGER,
-          codigo TEXT UNIQUE,
-          nome TEXT NOT NULL,
-          categoria TEXT NOT NULL DEFAULT 'Outros',
-          nf_compra TEXT NOT NULL DEFAULT '',
-          marca TEXT,
-          modelo TEXT,
-          descricao TEXT,
-          unidade TEXT DEFAULT 'UN',
-          quantidade_total INTEGER NOT NULL DEFAULT 0,
-          quantidade_disponivel INTEGER NOT NULL DEFAULT 0,
-          valor_reposicao REAL NOT NULL DEFAULT 0,
-          ativo INTEGER NOT NULL DEFAULT 1,
-          criado_por INTEGER NOT NULL,
-          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (projeto_id) REFERENCES projetos(id),
-          FOREIGN KEY (criado_por) REFERENCES usuarios(id)
-        )
-      `);
-
-      try {
-        await runQuery(`ALTER TABLE almox_ferramentas ADD COLUMN projeto_id INTEGER`);
-      } catch (_) {}
-
-      try {
-        await runQuery(`ALTER TABLE almox_ferramentas ADD COLUMN categoria TEXT NOT NULL DEFAULT 'Outros'`);
-      } catch (_) {}
-
-      try {
-        await runQuery(`ALTER TABLE almox_ferramentas ADD COLUMN nf_compra TEXT NOT NULL DEFAULT ''`);
-      } catch (_) {}
-
-      try {
-        await runQuery(`ALTER TABLE almox_ferramentas ADD COLUMN marca TEXT`);
-      } catch (_) {}
-
-      try {
-        await runQuery(`ALTER TABLE almox_ferramentas ADD COLUMN modelo TEXT`);
-      } catch (_) {}
-
-      await runQuery(`
-        UPDATE almox_ferramentas
-        SET categoria = 'Outros'
-        WHERE categoria IS NULL OR TRIM(categoria) = ''
-      `);
-
-      await runQuery(`
-        UPDATE almox_ferramentas
-        SET nf_compra = 'NÃO INFORMADA'
-        WHERE nf_compra IS NULL OR TRIM(nf_compra) = ''
-      `);
-
-      try {
-        await runQuery(`
-          UPDATE almox_ferramentas
-          SET projeto_id = (
-            SELECT a.projeto_id
-            FROM almox_alocacoes a
-            WHERE a.ferramenta_id = almox_ferramentas.id
-            ORDER BY a.id DESC
-            LIMIT 1
-          )
-          WHERE projeto_id IS NULL
-        `);
-      } catch (_) {}
-
-      try {
-        await runQuery(`
-          UPDATE almox_ferramentas
-          SET projeto_id = (
-            SELECT COALESCE(m.projeto_destino_id, m.projeto_origem_id)
-            FROM almox_movimentacoes m
-            WHERE m.ferramenta_id = almox_ferramentas.id
-              AND COALESCE(m.projeto_destino_id, m.projeto_origem_id) IS NOT NULL
-            ORDER BY m.id DESC
-            LIMIT 1
-          )
-          WHERE projeto_id IS NULL
-        `);
-      } catch (_) {}
-
-      await runQuery(`
-        CREATE TABLE IF NOT EXISTS almox_alocacoes (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          ferramenta_id INTEGER NOT NULL,
-          projeto_id INTEGER NOT NULL,
-          colaborador_id INTEGER,
-          colaborador_nome TEXT,
-          quantidade INTEGER NOT NULL,
-          quantidade_devolvida INTEGER NOT NULL DEFAULT 0,
-          data_retirada DATETIME DEFAULT CURRENT_TIMESTAMP,
-          previsao_devolucao DATE NOT NULL,
-          data_devolucao DATETIME,
-          status TEXT NOT NULL DEFAULT 'ALOCADA',
-          observacao TEXT,
-          criado_por INTEGER NOT NULL,
-          encerrado_por INTEGER,
-          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (ferramenta_id) REFERENCES almox_ferramentas(id),
-          FOREIGN KEY (projeto_id) REFERENCES projetos(id),
-          FOREIGN KEY (colaborador_id) REFERENCES usuarios(id),
-          FOREIGN KEY (criado_por) REFERENCES usuarios(id),
-          FOREIGN KEY (encerrado_por) REFERENCES usuarios(id)
-        )
-      `);
-
-      try {
-        await runQuery(`ALTER TABLE almox_alocacoes ADD COLUMN colaborador_nome TEXT`);
-      } catch (_) {}
-
-      try {
-        await runQuery(`ALTER TABLE almox_alocacoes ADD COLUMN quantidade_devolvida INTEGER NOT NULL DEFAULT 0`);
-      } catch (_) {}
-
-      try {
-        await runQuery(`ALTER TABLE almox_alocacoes ADD COLUMN status TEXT NOT NULL DEFAULT 'ALOCADA'`);
-      } catch (_) {}
-
-      try {
-        await runQuery(`ALTER TABLE almox_alocacoes ADD COLUMN atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP`);
-      } catch (_) {}
-
-      await runQuery(`
-        CREATE TABLE IF NOT EXISTS almox_manutencoes (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          ferramenta_id INTEGER NOT NULL,
-          alocacao_id INTEGER,
-          projeto_id INTEGER NOT NULL,
-          quantidade INTEGER NOT NULL DEFAULT 1,
-          status TEXT NOT NULL DEFAULT 'EM_MANUTENCAO',
-          justificativa TEXT,
-          local_manutencao TEXT,
-          prazo_estimado_dias INTEGER,
-          endereco_manutencao TEXT,
-          responsavel_retirada TEXT,
-          retirada_necessaria INTEGER NOT NULL DEFAULT 0,
-          retorna_estoque INTEGER NOT NULL DEFAULT 1,
-          custo REAL,
-          data_envio DATETIME DEFAULT CURRENT_TIMESTAMP,
-          data_retorno DATETIME,
-          criado_por INTEGER NOT NULL,
-          finalizado_por INTEGER,
-          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (ferramenta_id) REFERENCES almox_ferramentas(id),
-          FOREIGN KEY (alocacao_id) REFERENCES almox_alocacoes(id),
-          FOREIGN KEY (projeto_id) REFERENCES projetos(id),
-          FOREIGN KEY (criado_por) REFERENCES usuarios(id),
-          FOREIGN KEY (finalizado_por) REFERENCES usuarios(id)
-        )
-      `);
-
-      try {
-        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN local_manutencao TEXT`);
-      } catch (_) {}
-
-      try {
-        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN prazo_estimado_dias INTEGER`);
-      } catch (_) {}
-
-      try {
-        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN endereco_manutencao TEXT`);
-      } catch (_) {}
-
-      try {
-        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN responsavel_retirada TEXT`);
-      } catch (_) {}
-
-      try {
-        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN retirada_necessaria INTEGER NOT NULL DEFAULT 0`);
-      } catch (_) {}
-
-      try {
-        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN custo REAL`);
-      } catch (_) {}
-
-      try {
-        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN alocacao_id INTEGER`);
-      } catch (_) {}
-
-      try {
-        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN projeto_id INTEGER`);
-      } catch (_) {}
-
-      try {
-        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN quantidade INTEGER NOT NULL DEFAULT 1`);
-      } catch (_) {}
-
-      try {
-        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN status TEXT NOT NULL DEFAULT 'EM_MANUTENCAO'`);
-      } catch (_) {}
-
-      try {
-        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN justificativa TEXT`);
-      } catch (_) {}
-
-      try {
-        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN retorna_estoque INTEGER NOT NULL DEFAULT 1`);
-      } catch (_) {}
-
-      try {
-        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN data_envio DATETIME DEFAULT CURRENT_TIMESTAMP`);
-      } catch (_) {}
-
-      try {
-        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN data_retorno DATETIME`);
-      } catch (_) {}
-
-      try {
-        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN criado_por INTEGER`);
-      } catch (_) {}
-
-      try {
-        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN finalizado_por INTEGER`);
-      } catch (_) {}
-
-      try {
-        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN criado_em DATETIME DEFAULT CURRENT_TIMESTAMP`);
-      } catch (_) {}
-
-      try {
-        await runQuery(`ALTER TABLE almox_manutencoes ADD COLUMN atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP`);
-      } catch (_) {}
-
-      await runQuery(`
-        CREATE TABLE IF NOT EXISTS almox_perdas (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          ferramenta_id INTEGER NOT NULL,
-          alocacao_id INTEGER,
-          projeto_id INTEGER NOT NULL,
-          quantidade INTEGER NOT NULL,
-          valor_unitario REAL NOT NULL,
-          custo_total REAL NOT NULL,
-          justificativa TEXT,
-          criado_por INTEGER NOT NULL,
-          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (ferramenta_id) REFERENCES almox_ferramentas(id),
-          FOREIGN KEY (alocacao_id) REFERENCES almox_alocacoes(id),
-          FOREIGN KEY (projeto_id) REFERENCES projetos(id),
-          FOREIGN KEY (criado_por) REFERENCES usuarios(id)
-        )
-      `);
-
-      await runQuery(`
-        CREATE TABLE IF NOT EXISTS almox_movimentacoes (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          ferramenta_id INTEGER NOT NULL,
-          tipo TEXT NOT NULL,
-          quantidade INTEGER NOT NULL,
-          projeto_origem_id INTEGER,
-          projeto_destino_id INTEGER,
-          colaborador_id INTEGER,
-          colaborador_nome TEXT,
-          rdo_id INTEGER,
-          alocacao_id INTEGER,
-          justificativa TEXT,
-          custo REAL,
-          usuario_id INTEGER NOT NULL,
-          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (ferramenta_id) REFERENCES almox_ferramentas(id),
-          FOREIGN KEY (projeto_origem_id) REFERENCES projetos(id),
-          FOREIGN KEY (projeto_destino_id) REFERENCES projetos(id),
-          FOREIGN KEY (colaborador_id) REFERENCES usuarios(id),
-          FOREIGN KEY (rdo_id) REFERENCES rdos(id),
-          FOREIGN KEY (alocacao_id) REFERENCES almox_alocacoes(id),
-          FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
-        )
-      `);
-
-      await runQuery(`
-        CREATE TABLE IF NOT EXISTS rdo_ferramentas (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          rdo_id INTEGER NOT NULL,
-          ferramenta_id INTEGER NOT NULL,
-          alocacao_id INTEGER NOT NULL,
-          colaborador_id INTEGER,
-          colaborador_nome TEXT,
-          quantidade INTEGER NOT NULL,
-          criado_por INTEGER NOT NULL,
-          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE,
-          FOREIGN KEY (ferramenta_id) REFERENCES almox_ferramentas(id),
-          FOREIGN KEY (alocacao_id) REFERENCES almox_alocacoes(id),
-          FOREIGN KEY (colaborador_id) REFERENCES usuarios(id),
-          FOREIGN KEY (criado_por) REFERENCES usuarios(id)
-        )
-      `);
-
-      await runQuery(`
-        CREATE TABLE IF NOT EXISTS mao_obra_direta (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          identificador TEXT,
-          projeto_id INTEGER,
-          nome TEXT NOT NULL,
-          funcao TEXT NOT NULL,
-          ativo INTEGER DEFAULT 1,
-          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          criado_por INTEGER,
-          baixado_em DATETIME,
-          baixado_por INTEGER,
-          FOREIGN KEY (projeto_id) REFERENCES projetos(id),
-          FOREIGN KEY (criado_por) REFERENCES usuarios(id),
-          FOREIGN KEY (baixado_por) REFERENCES usuarios(id)
-        )
-      `);
-
-      try {
-        await runQuery(`ALTER TABLE mao_obra_direta ADD COLUMN projeto_id INTEGER`);
-      } catch (_) {}
-
-      await runQuery('CREATE INDEX IF NOT EXISTS idx_almox_ferramentas_projeto ON almox_ferramentas(projeto_id)');
-      await runQuery('CREATE INDEX IF NOT EXISTS idx_almox_alocacoes_projeto_status ON almox_alocacoes(projeto_id, status)');
-      await runQuery('CREATE INDEX IF NOT EXISTS idx_almox_movimentacoes_tipo_data ON almox_movimentacoes(tipo, criado_em)');
-      await runQuery('CREATE INDEX IF NOT EXISTS idx_almox_perdas_projeto_data ON almox_perdas(projeto_id, criado_em)');
-      await runQuery('CREATE INDEX IF NOT EXISTS idx_rdo_ferramentas_rdo ON rdo_ferramentas(rdo_id)');
-
-  } catch (error) {
-    throw error;
-  }
+  await ensureSchemaReady({ getQuery, allQuery }, {
+    tables: [
+      'almox_ferramentas',
+      'almox_alocacoes',
+      'almox_manutencoes',
+      'almox_perdas',
+      'almox_movimentacoes',
+      'rdo_ferramentas',
+      'mao_obra_direta'
+    ],
+    columns: {
+      usuarios: ['perfil_almoxarifado'],
+      almox_ferramentas: ['projeto_id', 'codigo', 'nome', 'categoria', 'nf_compra', 'marca', 'modelo', 'quantidade_total', 'quantidade_disponivel'],
+      almox_alocacoes: ['ferramenta_id', 'projeto_id', 'colaborador_nome', 'quantidade', 'quantidade_devolvida', 'status', 'atualizado_em'],
+      almox_manutencoes: ['ferramenta_id', 'alocacao_id', 'projeto_id', 'quantidade', 'status', 'justificativa', 'local_manutencao', 'prazo_estimado_dias', 'endereco_manutencao', 'responsavel_retirada', 'retirada_necessaria', 'retorna_estoque', 'custo', 'data_envio', 'data_retorno', 'criado_por', 'finalizado_por', 'criado_em', 'atualizado_em'],
+      almox_perdas: ['ferramenta_id', 'alocacao_id', 'projeto_id', 'quantidade', 'valor_unitario', 'custo_total', 'justificativa'],
+      almox_movimentacoes: ['ferramenta_id', 'tipo', 'quantidade', 'projeto_origem_id', 'projeto_destino_id', 'colaborador_id', 'colaborador_nome', 'rdo_id', 'alocacao_id', 'justificativa', 'custo', 'usuario_id'],
+      rdo_ferramentas: ['rdo_id', 'ferramenta_id', 'alocacao_id', 'colaborador_id', 'colaborador_nome', 'quantidade', 'criado_por'],
+      mao_obra_direta: ['identificador', 'projeto_id', 'nome', 'funcao', 'ativo', 'criado_por', 'baixado_em', 'baixado_por']
+    }
+  });
 };
 
 router.get('/perfil', [auth, requireReadPermission], async (req, res) => {

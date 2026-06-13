@@ -14,6 +14,10 @@
     "migrate": "node scripts/runMigrations.js",
     "migrate:dry-run": "node scripts/runMigrations.js --dry-run",
     "migrate:status": "node scripts/runMigrations.js --status",
+    "db:init": "node scripts/initDatabase.js",
+    "db:migrate": "node scripts/runMigrations.js",
+    "db:check": "node scripts/runMigrations.js --status",
+    "db:backup": "node scripts/backupDatabase.js",
     "migrate-curva-s": "node scripts/migrate_add_curva_s_fields.js"
   },
   "keywords": [

@@ -10,6 +10,7 @@ const { inferirPerfil } = require('../constants/access');
 const { ensureAccessSchema } = require('../middleware/rbac');
 const { auth, isAdm } = require('../middleware/auth');
 const { hasForbiddenPasswordSequence } = require('../services/passwordPolicy');
+const { ensureSchemaReady, sendSchemaOutdated } = require('../utils/schemaGuard');
 
 const router = express.Router();
 const GLOBAL_SIGNUP_CODE = process.env.GLOBAL_SIGNUP_CODE || '052298';
@@ -58,8 +59,15 @@ const verifyPasswordWithLegacySupport = async (plainPassword, storedPassword) =>
 };
 
 const ensureTenantTrialColumns = async () => {
-  try { await runQuery('ALTER TABLE tenants ADD COLUMN trial_expires_at DATETIME'); } catch (_) {}
-  try { await runQuery('ALTER TABLE tenants ADD COLUMN trial_ativo INTEGER DEFAULT 1'); } catch (_) {}
+  await ensureSchemaReady({ getQuery, allQuery }, {
+    columns: { tenants: ['trial_expires_at', 'trial_ativo'] }
+  });
+};
+
+const ensurePasswordResetSchema = async () => {
+  await ensureSchemaReady({ getQuery, allQuery }, {
+    columns: { usuarios: ['password_reset_token', 'password_reset_expires'] }
+  });
 };
 
 const generateSlug = (nomeEmpresa) => {
@@ -328,6 +336,7 @@ router.post('/login', [
 
   } catch (error) {
     console.error('Erro no login:', error);
+    if (sendSchemaOutdated(res, error, 'Schema de autenticacao desatualizado. Execute as migrations pendentes.')) return;
     res.status(500).json({ erro: 'Erro ao realizar login.' });
   }
 });
@@ -622,8 +631,7 @@ router.post('/esqueci-senha', [
   body('login').isString().trim().notEmpty().withMessage('Informe o login ou e-mail.')
 ], async (req, res) => {
   try {
-    await runQuery('ALTER TABLE usuarios ADD COLUMN password_reset_token TEXT').catch(() => {});
-    await runQuery('ALTER TABLE usuarios ADD COLUMN password_reset_expires DATETIME').catch(() => {});
+    await ensurePasswordResetSchema();
 
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -696,6 +704,8 @@ router.post('/redefinir-senha', [
   body('senha').isString().isLength({ min: 1, max: 72 }).withMessage('Senha inválida.')
 ], async (req, res) => {
   try {
+    await ensurePasswordResetSchema();
+
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ erro: errors.array()[0].msg });

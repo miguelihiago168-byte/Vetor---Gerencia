@@ -5,6 +5,7 @@ const { body, validationResult } = require('express-validator');
 const { allQuery, getQuery, runQuery } = require('../config/database');
 const { auth, isGestor } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
+const { ensureSchemaReady, sendSchemaOutdated } = require('../utils/schemaGuard');
 
 const router = express.Router();
 
@@ -129,13 +130,9 @@ const extractLegacyRegistroFotos = (rawValue) => {
 };
 
 const ensureRncAnexosSchema = async () => {
-  // Compatibilidade com bancos legados/tenant que ainda não possuem colunas de RNC.
-  try {
-    await runQuery('ALTER TABLE anexos ADD COLUMN rnc_id INTEGER');
-  } catch (_) { /* coluna já existe */ }
-  try {
-    await runQuery("ALTER TABLE anexos ADD COLUMN categoria TEXT DEFAULT 'registro'");
-  } catch (_) { /* coluna já existe */ }
+  await ensureSchemaReady({ getQuery, allQuery }, {
+    columns: { anexos: ['rnc_id', 'categoria'] }
+  });
 };
 // Gerar PDF da RNC (puppeteer — HTML → PDF com layout rico)
 router.get('/:id/pdf', auth, async (req, res) => {
@@ -503,6 +500,7 @@ router.get('/:id/pdf', auth, async (req, res) => {
     if (browser) { try { await browser.close(); } catch (_) {} }
     console.error('Erro ao gerar PDF da RNC:', error);
     if (!res.headersSent) {
+      if (sendSchemaOutdated(res, error, 'Schema de anexos de RNC desatualizado. Execute as migrations pendentes.')) return;
       return res.status(500).json({ erro: 'Erro ao gerar PDF da RNC: ' + (error?.message || 'erro desconhecido') });
     }
   }

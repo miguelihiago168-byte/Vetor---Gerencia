@@ -1,5 +1,6 @@
 const { allQuery, getQuery, runQuery } = require('../config/database');
 const { registrarAuditoria } = require('../middleware/auditoria');
+const { ensureSchemaReady } = require('../utils/schemaGuard');
 
 let schemaReadyPromise = null;
 
@@ -26,97 +27,15 @@ const isLate = (dataPrevista, status) => {
 const ensureFinanceiroSchema = async () => {
   if (!schemaReadyPromise) {
     schemaReadyPromise = (async () => {
-      await runQuery(`
-        CREATE TABLE IF NOT EXISTS financeiro_obra_config (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          projeto_id INTEGER NOT NULL UNIQUE,
-          saldo_inicial NUMERIC NOT NULL DEFAULT 0,
-          criado_por INTEGER,
-          atualizado_por INTEGER,
-          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (projeto_id) REFERENCES projetos(id) ON DELETE CASCADE,
-          FOREIGN KEY (criado_por) REFERENCES usuarios(id),
-          FOREIGN KEY (atualizado_por) REFERENCES usuarios(id)
-        )
-      `);
-
-      await runQuery(`
-        CREATE TABLE IF NOT EXISTS financeiro_receitas (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          projeto_id INTEGER NOT NULL,
-          numero_contrato TEXT,
-          cliente TEXT,
-          descricao TEXT,
-          valor_previsto NUMERIC NOT NULL,
-          valor_recebido NUMERIC NOT NULL DEFAULT 0,
-          data_prevista DATE NOT NULL,
-          data_recebida DATE,
-          nf_numero TEXT,
-          status TEXT NOT NULL DEFAULT 'PREVISTO',
-          criado_por INTEGER NOT NULL,
-          atualizado_por INTEGER,
-          recebido_por INTEGER,
-          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (projeto_id) REFERENCES projetos(id) ON DELETE CASCADE,
-          FOREIGN KEY (criado_por) REFERENCES usuarios(id),
-          FOREIGN KEY (atualizado_por) REFERENCES usuarios(id),
-          FOREIGN KEY (recebido_por) REFERENCES usuarios(id)
-        )
-      `);
-
-      await runQuery(`
-        CREATE TABLE IF NOT EXISTS financeiro_despesas (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          projeto_id INTEGER NOT NULL,
-          tipo TEXT NOT NULL,
-          fornecedor TEXT,
-          descricao TEXT,
-          categoria TEXT,
-          valor_previsto NUMERIC NOT NULL,
-          valor_pago NUMERIC NOT NULL DEFAULT 0,
-          data_prevista DATE NOT NULL,
-          data_paga DATE,
-          forma_pagamento TEXT,
-          status TEXT NOT NULL DEFAULT 'PREVISTO',
-          pedido_compra_id INTEGER,
-          cotacao_id INTEGER,
-          criado_por INTEGER NOT NULL,
-          atualizado_por INTEGER,
-          pago_por INTEGER,
-          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (projeto_id) REFERENCES projetos(id) ON DELETE CASCADE,
-          FOREIGN KEY (pedido_compra_id) REFERENCES pedidos_compra(id),
-          FOREIGN KEY (cotacao_id) REFERENCES cotacoes(id),
-          FOREIGN KEY (criado_por) REFERENCES usuarios(id),
-          FOREIGN KEY (atualizado_por) REFERENCES usuarios(id),
-          FOREIGN KEY (pago_por) REFERENCES usuarios(id)
-        )
-      `);
-
-      await runQuery(`
-        CREATE TABLE IF NOT EXISTS financeiro_estornos (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          entidade_tipo TEXT NOT NULL,
-          entidade_id INTEGER NOT NULL,
-          projeto_id INTEGER NOT NULL,
-          valor_estornado NUMERIC NOT NULL,
-          motivo TEXT NOT NULL,
-          usuario_id INTEGER NOT NULL,
-          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (projeto_id) REFERENCES projetos(id) ON DELETE CASCADE,
-          FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
-        )
-      `);
-
-      await runQuery('CREATE INDEX IF NOT EXISTS idx_fin_receitas_proj_data ON financeiro_receitas (projeto_id, data_prevista, data_recebida)');
-      await runQuery('CREATE INDEX IF NOT EXISTS idx_fin_receitas_status ON financeiro_receitas (status)');
-      await runQuery('CREATE INDEX IF NOT EXISTS idx_fin_despesas_proj_data ON financeiro_despesas (projeto_id, data_prevista, data_paga)');
-      await runQuery('CREATE INDEX IF NOT EXISTS idx_fin_despesas_status ON financeiro_despesas (status)');
-      await runQuery('CREATE INDEX IF NOT EXISTS idx_fin_estornos_proj ON financeiro_estornos (projeto_id, criado_em)');
-      await runQuery('CREATE UNIQUE INDEX IF NOT EXISTS idx_fin_despesa_pedido_unico ON financeiro_despesas (pedido_compra_id) WHERE pedido_compra_id IS NOT NULL');
+      await ensureSchemaReady({ getQuery, allQuery }, {
+        tables: ['financeiro_obra_config', 'financeiro_receitas', 'financeiro_despesas', 'financeiro_estornos'],
+        columns: {
+          financeiro_obra_config: ['projeto_id', 'saldo_inicial', 'criado_por', 'atualizado_por'],
+          financeiro_receitas: ['projeto_id', 'valor_previsto', 'valor_recebido', 'data_prevista', 'data_recebida', 'status'],
+          financeiro_despesas: ['projeto_id', 'tipo', 'valor_previsto', 'valor_pago', 'data_prevista', 'data_paga', 'status', 'pedido_compra_id'],
+          financeiro_estornos: ['entidade_tipo', 'entidade_id', 'projeto_id', 'valor_estornado', 'motivo', 'usuario_id']
+        }
+      });
     })().catch((error) => {
       schemaReadyPromise = null;
       throw error;
