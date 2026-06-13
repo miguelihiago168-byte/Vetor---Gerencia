@@ -7,7 +7,7 @@ const { body, validationResult } = require('express-validator');
 const { allQuery, runQuery, getQuery, runQueryMain, getQueryMain } = require('../config/database');
 const { auth } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
-const { PERMISSIONS, requirePermission, ensureAccessSchema } = require('../middleware/rbac');
+const { PERMISSIONS, requirePermission } = require('../middleware/rbac');
 const { PERFIS, PERFIS_LISTA, SETORES, SETORES_LISTA, normalizarPerfil, mapPerfilParaLegado } = require('../constants/access');
 const { hasForbiddenPasswordSequence } = require('../services/passwordPolicy');
 
@@ -30,6 +30,93 @@ const uploadAvatar = multer({
 });
 
 const PRESENCAS_VALIDAS = ['disponivel', 'ausente', 'indisponivel'];
+const USERS_SCHEMA_MIGRATION = '000001_users_runtime_schema';
+const REQUIRED_USUARIOS_COLUMNS = [
+  'perfil',
+  'setor',
+  'setor_outro',
+  'funcao',
+  'perfil_almoxarifado',
+  'is_adm',
+  'primeiro_acesso_pendente',
+  'avatar',
+  'presenca_status',
+  'presenca_atualizado_em'
+];
+const REQUIRED_MAO_OBRA_DIRETA_COLUMNS = [
+  'identificador',
+  'projeto_id',
+  'nome',
+  'funcao',
+  'ativo',
+  'criado_em',
+  'atualizado_em',
+  'criado_por',
+  'baixado_em',
+  'baixado_por'
+];
+
+const createSchemaOutdatedError = (missing) => {
+  const err = new Error(`Schema de usuarios desatualizado. Execute a migration ${USERS_SCHEMA_MIGRATION}.`);
+  err.code = 'DATABASE_SCHEMA_OUTDATED';
+  err.migration = USERS_SCHEMA_MIGRATION;
+  err.missing = missing;
+  return err;
+};
+
+const assertTableColumns = async (tableName, requiredColumns) => {
+  const columns = await allQuery(`PRAGMA table_info(${tableName})`);
+  if (!Array.isArray(columns) || columns.length === 0) {
+    throw createSchemaOutdatedError([`${tableName}.*`]);
+  }
+
+  const existing = new Set(columns.map((column) => String(column.name)));
+  const missing = requiredColumns
+    .filter((column) => !existing.has(column))
+    .map((column) => `${tableName}.${column}`);
+
+  if (missing.length > 0) {
+    throw createSchemaOutdatedError(missing);
+  }
+};
+
+const assertUsuariosSchemaReady = async () => {
+  await assertTableColumns('usuarios', REQUIRED_USUARIOS_COLUMNS);
+  await assertTableColumns('mao_obra_direta', REQUIRED_MAO_OBRA_DIRETA_COLUMNS);
+};
+
+const handleSchemaOutdated = (res, error) => {
+  const missing = Array.isArray(error?.missing)
+    ? error.missing
+    : (Array.isArray(error?.missingColumns) ? error.missingColumns : []);
+
+  return res.status(503).json({
+    erro: 'Schema de usuarios desatualizado. Execute as migrations pendentes antes de usar esta rota.',
+    codigo: 'DATABASE_SCHEMA_OUTDATED',
+    migration: error?.migration || USERS_SCHEMA_MIGRATION,
+    detalhes: missing
+  });
+};
+
+const requireUsuariosSchemaReady = async (_req, res, next) => {
+  try {
+    await assertUsuariosSchemaReady();
+    next();
+  } catch (error) {
+    if (error?.code === 'DATABASE_SCHEMA_OUTDATED') {
+      console.error('Schema de usuarios desatualizado:', {
+        migration: error.migration,
+        missing: error.missing || error.missingColumns
+      });
+      return handleSchemaOutdated(res, error);
+    }
+    console.error('Erro ao validar schema de usuarios:', error);
+    return res.status(500).json({
+      erro: 'Erro ao validar dados de usuarios.',
+      codigo: 'USERS_SCHEMA_VALIDATION_FAILED'
+    });
+  }
+};
 
 const normalizeLogin = (value) => String(value || '').trim().replace(/\s+/g, '').toLowerCase();
 const normalizeName = (value) => String(value || '')
@@ -169,38 +256,17 @@ const carregarUsuarioComProjetos = async (id) => {
 
 router.use(async (req, res, next) => {
   try {
-    await ensureAccessSchema();
-    await runQuery(`
-      CREATE TABLE IF NOT EXISTS mao_obra_direta (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        identificador TEXT,
-        projeto_id INTEGER,
-        nome TEXT NOT NULL,
-        funcao TEXT NOT NULL,
-        ativo INTEGER DEFAULT 1,
-        criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-        atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-        criado_por INTEGER,
-        baixado_em DATETIME,
-        baixado_por INTEGER,
-        FOREIGN KEY (projeto_id) REFERENCES projetos(id),
-        FOREIGN KEY (criado_por) REFERENCES usuarios(id),
-        FOREIGN KEY (baixado_por) REFERENCES usuarios(id)
-      )
-    `);
-
-    const colunasMaoObraDireta = await allQuery('PRAGMA table_info(mao_obra_direta)');
-    const temProjetoId = (colunasMaoObraDireta || []).some((col) => String(col.name) === 'projeto_id');
-    if (!temProjetoId) {
-      await runQuery('ALTER TABLE mao_obra_direta ADD COLUMN projeto_id INTEGER');
-    }
-
-    try { await runQuery('ALTER TABLE usuarios ADD COLUMN avatar TEXT'); } catch (_) {}
-    try { await runQuery("ALTER TABLE usuarios ADD COLUMN presenca_status TEXT DEFAULT 'disponivel'"); } catch (_) {}
-    try { await runQuery('ALTER TABLE usuarios ADD COLUMN presenca_atualizado_em DATETIME'); } catch (_) {}
-
+    await assertUsuariosSchemaReady();
     next();
   } catch (error) {
+    if (error?.code === 'DATABASE_SCHEMA_OUTDATED') {
+      console.error('Schema de usuarios desatualizado:', {
+        migration: error.migration,
+        missing: error.missing || error.missingColumns
+      });
+      return handleSchemaOutdated(res, error);
+    }
+
     console.error('Erro ao preparar schema de usuários:', error);
     res.status(500).json({ erro: 'Erro interno ao preparar dados de usuários.' });
   }
@@ -968,10 +1034,6 @@ router.patch('/:id/avatar', auth, uploadAvatar.single('avatar'), async (req, res
     }
     if (!req.file) return res.status(400).json({ erro: 'Nenhuma imagem enviada.' });
 
-    // Garantir que a coluna avatar existe (caso o server não tenha sido reiniciado após migration)
-    try {
-      await runQuery('ALTER TABLE usuarios ADD COLUMN avatar TEXT', []);
-    } catch (_) { /* coluna já existe, ok */ }
 
     // Remove avatar antigo se existir
     try {
@@ -1080,6 +1142,7 @@ router.patch('/:id/presenca', [
 
 router.patch('/me/primeiro-acesso', [
   auth,
+  requireUsuariosSchemaReady,
   body('funcao').trim().notEmpty(),
   body('setor').isString(),
   body('setor_outro').optional({ nullable: true }).isString()
@@ -1168,7 +1231,13 @@ router.patch('/me/primeiro-acesso', [
     });
   } catch (error) {
     console.error('Erro ao concluir primeiro acesso:', error);
-    res.status(500).json({ erro: 'Erro ao concluir primeiro acesso.' });
+    if (error?.code === 'DATABASE_SCHEMA_OUTDATED') {
+      return handleSchemaOutdated(res, error);
+    }
+    res.status(500).json({
+      erro: 'Erro ao concluir primeiro acesso.',
+      codigo: 'FIRST_ACCESS_UPDATE_FAILED'
+    });
   }
 });
 
