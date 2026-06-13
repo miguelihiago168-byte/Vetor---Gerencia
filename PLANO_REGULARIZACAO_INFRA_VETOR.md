@@ -352,6 +352,36 @@ Rollback tecnico da Fase 5:
 
 Nenhuma restauracao foi executada na Fase 5.
 
+## Correcao urgente: primeiro acesso de usuarios
+
+Incidente investigado durante a continuidade da Fase 4:
+
+- Tela afetada: `/primeiro-acesso`.
+- Endpoint afetado: `PATCH /api/usuarios/me/primeiro-acesso`.
+- Sintoma: resposta 500 antes de concluir o primeiro acesso, com mensagem generica de preparacao de dados de usuarios.
+- Causa confirmada: `backend/routes/usuarios.js` executava `CREATE TABLE` e `ALTER TABLE` em `router.use`; em `NODE_ENV=production`, `DISABLE_STARTUP_SCHEMA_MUTATIONS=true` bloqueia essas mutacoes em runtime.
+- Causa complementar: `middleware/rbac.js` ainda tentava garantir colunas de acesso por `ALTER TABLE` durante autenticacao.
+- Banco afetado no teste local: banco principal `gestao_obras.db` e tenant `tenant_1.db`.
+- Migration criada: `000001_users_runtime_schema`.
+- A migration centraliza colunas de usuarios, primeiro acesso, presenca, avatar, reset de senha e tabela `mao_obra_direta`.
+- `routes/usuarios.js` e `middleware/rbac.js` passaram a validar schema por `PRAGMA table_info`, sem mutar banco em requisição.
+- Quando o schema estiver desatualizado, a rota passa a responder `DATABASE_SCHEMA_OUTDATED` informando a migration pendente.
+
+Validacoes executadas:
+
+- `node --check routes/usuarios.js`
+- `node --check middleware/rbac.js`
+- `node --check scripts/migrations/000001_users_runtime_schema.js`
+- `npm run migrate`
+- `npm run migrate:status`
+- `PATCH /api/usuarios/me/primeiro-acesso` em backend local com `NODE_ENV=production`, retornando 200.
+- Consulta SQLite somente leitura confirmou migration aplicada em `gestao_obras.db` e `tenant_1.db`.
+- Consulta SQLite confirmou ausencia de duplicidade de login no teste local.
+
+Limitacao registrada:
+
+- O login real por senha do usuario reportado nao foi validado localmente porque a senha desse usuario nao esta disponivel no ambiente local; nao foi feita redefinicao de senha, criacao de usuario ou remocao de usuario.
+
 ## Branches e commits
 
 Branch de trabalho da Fase 1:
