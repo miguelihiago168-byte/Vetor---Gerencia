@@ -77,6 +77,35 @@ jobs:
             fi
 
             sh scripts/validate_data_dir.sh "$APP_DATA_DIR"
+            node <<'NODE'
+            const fs = require('fs');
+            const crypto = require('crypto');
+
+            const envPath = 'backend/.env';
+            if (!fs.existsSync(envPath)) {
+              console.error('Arquivo backend/.env ausente. Abortando deploy.');
+              process.exit(1);
+            }
+
+            const jwtSecrets = fs.readFileSync(envPath, 'utf8')
+              .split(/\r?\n/)
+              .filter((line) => line.trim().startsWith('JWT_SECRET='))
+              .map((line) => line.slice('JWT_SECRET='.length).trim());
+
+            if (jwtSecrets.length !== 1) {
+              console.error(`backend/.env deve conter exatamente um JWT_SECRET. Encontrados: ${jwtSecrets.length}`);
+              process.exit(1);
+            }
+
+            const jwtSecret = jwtSecrets[0];
+            if (jwtSecret.length < 32) {
+              console.error(`JWT_SECRET muito curto para producao: ${jwtSecret.length} caracteres.`);
+              process.exit(1);
+            }
+
+            const fingerprint = crypto.createHash('sha256').update(jwtSecret).digest('hex').slice(0, 16);
+            console.log(`JWT_SECRET validado: len=${jwtSecret.length} sha256=${fingerprint}`);
+            NODE
             docker compose config >/dev/null
 
             if [ ! -d "$APP_DATA_DIR/database" ]; then

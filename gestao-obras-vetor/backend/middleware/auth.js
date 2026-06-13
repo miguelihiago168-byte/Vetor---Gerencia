@@ -14,6 +14,14 @@ const auth = async (req, res, next) => {
       return res.status(401).json({ erro: 'Acesso negado. Token não fornecido.' });
     }
 
+    if (!process.env.JWT_SECRET) {
+      console.error('[auth] JWT_SECRET ausente no ambiente.');
+      return res.status(500).json({
+        codigo: 'AUTH_CONFIGURATION_ERROR',
+        erro: 'Configuracao invalida do servidor de autenticacao.'
+      });
+    }
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const usuarioAtual = await carregarPerfilUsuario(decoded.id);
     if (!usuarioAtual) {
@@ -73,7 +81,43 @@ const auth = async (req, res, next) => {
     await ensureTenantDatabase(tenantIdAtivo);
     return runWithTenantContext(tenantIdAtivo, () => next());
   } catch (error) {
-    res.status(401).json({ erro: 'Token inválido.' });
+    if (error?.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        codigo: 'TOKEN_EXPIRED',
+        erro: 'Token expirado.'
+      });
+    }
+
+    if (error?.name === 'JsonWebTokenError' || error?.name === 'NotBeforeError') {
+      return res.status(401).json({
+        codigo: 'TOKEN_INVALID',
+        erro: 'Token inválido.'
+      });
+    }
+
+    if (error?.code === 'DATABASE_SCHEMA_OUTDATED') {
+      console.error('[auth] Schema desatualizado durante autenticacao:', error.message);
+      return res.status(500).json({
+        codigo: 'DATABASE_SCHEMA_OUTDATED',
+        erro: 'Schema do banco desatualizado. Execute as migrations pendentes.',
+        migration: error.migration || null
+      });
+    }
+
+    const message = String(error?.message || '');
+    if (message.includes('Banco tenant') || message.includes('tenant_id')) {
+      console.error('[auth] Falha de tenant durante autenticacao:', message);
+      return res.status(403).json({
+        codigo: 'TENANT_INVALID',
+        erro: 'Tenant invalido ou indisponivel para este usuario.'
+      });
+    }
+
+    console.error('[auth] Erro interno durante autenticacao:', error);
+    return res.status(500).json({
+      codigo: 'AUTH_INTERNAL_ERROR',
+      erro: 'Erro interno ao validar autenticacao.'
+    });
   }
 };
 
