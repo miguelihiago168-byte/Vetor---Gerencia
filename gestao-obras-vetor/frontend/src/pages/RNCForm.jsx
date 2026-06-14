@@ -92,7 +92,6 @@ function RNCForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.gravidade) { setErro('Selecione a gravidade da não conformidade.'); return; }
-    if (fotos.length < 4) { setErro('Inclua no mínimo 4 fotos da não conformidade.'); return; }
     setLoading(true);
     setErro('');
     try {
@@ -382,8 +381,8 @@ function RNCForm() {
               <div className="rnc-section-head">
                 <div className="rnc-section-icon rnc-icon-teal"><Camera size={16} /></div>
                 <div>
-                  <h3>Evidências fotográficas</h3>
-                  <p>Selecione no mínimo 4 fotos da não conformidade como evidência inicial</p>
+                  <h3>Fotos opcionais</h3>
+                  <p>Adicione evidências fotográficas quando elas ajudarem a documentar a não conformidade</p>
                 </div>
               </div>
 
@@ -403,8 +402,8 @@ function RNCForm() {
                   onChange={e => adicionarFotos(e.target.files)}
                 />
                 <Upload size={28} className="rnc-dropzone-icon" />
-                <p><strong>Selecionar fotos da não conformidade</strong></p>
-                <small>Clique ou arraste as evidências aqui. JPG, PNG ou HEIC, até 10 MB por arquivo. Mínimo de 4 fotos.</small>
+                <p><strong>Adicionar evidências</strong></p>
+                <small>Clique ou arraste fotos opcionais aqui. JPG, PNG ou HEIC, até 10 MB por arquivo.</small>
               </div>
 
               {fotoPreviews.length > 0 && (
@@ -516,7 +515,7 @@ function RNCForm() {
               <ul>
                 <li>Seja específico na descrição: mencione medições e desvios</li>
                 <li>A ação corretiva deve evitar que o problema se repita</li>
-                <li>Fotos são fundamentais para registro e PDF</li>
+                <li>Fotos ajudam no registro e no PDF, mas não são obrigatórias</li>
                 <li>Defina sempre um responsável para não ficar sem acompanhamento</li>
               </ul>
             </div>

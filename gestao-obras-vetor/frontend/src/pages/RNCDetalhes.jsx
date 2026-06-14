@@ -177,11 +177,6 @@ function RNCDetalhes() {
       return;
     }
 
-    const totalFotosCorrecao = anexos.filter((anexo) => anexo.categoria === 'correcao' && isImage(anexo)).length + fotosCorrecao.length;
-    if (totalFotosCorrecao < 4) {
-      error('Inclua no mínimo 4 fotos da correção para enviar à aprovação.');
-      return;
-    }
     if (enviando) return;
 
     setEnviando(true);
@@ -455,7 +450,7 @@ function RNCDetalhes() {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Fotos da correção (mínimo 4)</label>
+                  <label className="form-label">Fotos da correção (opcional)</label>
                   <div
                     ref={dropCorrecaoRef}
                     className={`rdet-dropzone${draggingC ? ' dragging' : ''}`}
@@ -470,7 +465,7 @@ function RNCDetalhes() {
                   >
                     <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={(event) => adicionarFotosCorrecao(event.target.files)} />
                     <Upload size={20} />
-                    <span>Adicionar fotos da correção ({totalFotosCorrecao}/4)</span>
+                    <span>Adicionar evidências da correção ({totalFotosCorrecao})</span>
                   </div>
                   {previewCorrecao.length > 0 && (
                     <div className="rdet-preview-grid">
@@ -486,7 +481,7 @@ function RNCDetalhes() {
                   )}
                 </div>
                 <div className="rdet-correction-actions">
-                  <button className="btn btn-primary rdet-send-btn" disabled={enviando || !correcaoTexto.trim() || totalFotosCorrecao < 4} onClick={enviarCorrecao}>
+                  <button className="btn btn-primary rdet-send-btn" disabled={enviando || !correcaoTexto.trim()} onClick={enviarCorrecao}>
                     <Send size={15} />
                     {enviando ? 'Enviando...' : 'Enviar para aprovação'}
                   </button>
