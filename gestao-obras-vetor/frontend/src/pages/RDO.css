@@ -1168,22 +1168,26 @@
 }
 
 .rdo-report-back-btn {
-  min-width: 96px;
-  min-height: 38px;
+  min-width: 0;
+  min-height: 40px;
   flex-shrink: 0;
-  padding: 0 14px;
+  padding: 0 15px;
   gap: 8px;
   justify-content: center;
-  border-color: #b8c7da;
-  color: #334155;
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+  border-radius: 999px;
+  border-color: #dbe4ef;
+  color: #475569;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: none;
+  font-size: 14px;
+  font-weight: 800;
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
 }
 
 .rdo-report-back-btn:hover {
-  border-color: #2563eb;
-  color: #1d4ed8;
-  background: #ffffff;
+  border-color: #bae6fd;
+  color: #075985;
+  background: #f0f9ff;
   transform: translateY(-1px);
 }
 
