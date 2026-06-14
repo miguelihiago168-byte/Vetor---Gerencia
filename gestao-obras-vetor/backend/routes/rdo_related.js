@@ -461,7 +461,7 @@ router.post('/:rdoId/foto', auth, uploadFotoSingle, async (req, res) => {
     }
     if (!rdoAtividadeId && !atividadeAvulsaDescricao) {
       try {
-        const savedPath = path.join(uploadsDir, filename);
+        const savedPath = req.file.path;
         if (fs.existsSync(savedPath)) fs.unlinkSync(savedPath);
       } catch (_) {}
       return res.status(400).json({ erro: 'Vincule a foto a uma atividade antes de enviar.' });
@@ -489,7 +489,7 @@ router.post('/:rdoId/foto', auth, uploadFotoSingle, async (req, res) => {
   } catch (err) {
     if (req.file?.filename) {
       try {
-        const savedPath = path.join(uploadsDir, req.file.filename);
+        const savedPath = req.file.path;
         if (fs.existsSync(savedPath)) fs.unlinkSync(savedPath);
       } catch (_) {}
     }

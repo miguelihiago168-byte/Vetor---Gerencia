@@ -10,10 +10,17 @@ const api = axios.create({
 export const getStoredToken = () => localStorage.getItem('token') || sessionStorage.getItem('token') || '';
 
 export const getUploadUrl = (storedPath) => {
-  const cleanPath = String(storedPath || '')
+  let cleanPath = String(storedPath || '')
     .replace(/\\/g, '/')
-    .replace(/^\/+/, '')
-    .replace(/^uploads\//i, '');
+    .replace(/^\/+/, '');
+
+  const uploadsIndex = cleanPath.toLowerCase().lastIndexOf('/uploads/');
+  if (uploadsIndex >= 0) cleanPath = cleanPath.slice(uploadsIndex + '/uploads/'.length);
+
+  cleanPath = cleanPath
+    .replace(/^api\/uploads\//i, '')
+    .replace(/^uploads\//i, '')
+    .split('?')[0];
 
   if (!cleanPath) return '#';
 
