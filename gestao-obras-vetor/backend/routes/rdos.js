@@ -757,7 +757,7 @@ router.post('/', auth, [
       }
     }
 
-    // Notificar gestores do projeto sobre novo RDO
+    // Notificar aprovadores do projeto sobre novo RDO
     try {
       const criadorNome = req.usuario.nome || `Usuário #${req.usuario.id}`;
       const gestoresProjeto = await allQuery(
@@ -766,7 +766,7 @@ router.post('/', auth, [
          WHERE pu.projeto_id = ?
            AND u.id != ?
            AND u.ativo = 1
-           AND (u.perfil IN ('Gestor Geral', 'Gestor da Obra') OR u.is_gestor = 1)`,
+           AND (u.perfil IN ('Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade', 'Gestor de Qualidade') OR u.is_gestor = 1)`,
         [projeto_id, req.usuario.id]
       );
       for (const g of gestoresProjeto) {
@@ -777,7 +777,7 @@ router.post('/', auth, [
         );
       }
     } catch (e) {
-      console.warn('Falha ao notificar gestores sobre novo RDO:', e?.message || e);
+      console.warn('Falha ao notificar aprovadores sobre novo RDO:', e?.message || e);
     }
 
     res.status(201).json({
@@ -1004,12 +1004,12 @@ router.patch('/:id/status', auth, async (req, res) => {
 
     // Verificar permissões por ação
     const perfilAtual = inferirPerfil(req.usuario);
-    const podeAprovar = [PERFIS.GESTOR_GERAL, PERFIS.GESTOR_OBRA].includes(perfilAtual);
+    const podeAprovar = [PERFIS.GESTOR_GERAL, PERFIS.GESTOR_OBRA, PERFIS.GESTOR_QUALIDADE].includes(perfilAtual);
     const podeReprovar = [PERFIS.GESTOR_GERAL, PERFIS.GESTOR_OBRA, PERFIS.FISCAL].includes(perfilAtual);
     const podeReverter = podeAprovar; // apenas gestores
 
     if (status === 'Aprovado' && !podeAprovar) {
-      return res.status(403).json({ erro: 'Apenas Gestores Geral ou de Obra podem aprovar RDOs.' });
+      return res.status(403).json({ erro: 'Apenas Gestores Geral, de Obra ou da Qualidade podem aprovar RDOs.' });
     }
     if (status === 'Reprovado' && !podeReprovar) {
       return res.status(403).json({ erro: 'Apenas Gestores ou Fiscal podem reprovar RDOs.' });

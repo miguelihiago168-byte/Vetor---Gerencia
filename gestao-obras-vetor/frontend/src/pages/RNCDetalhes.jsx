@@ -107,7 +107,8 @@ const stepIndex = (status) => {
 function RNCDetalhes() {
   const { projetoId, rncId } = useParams();
   const navigate = useNavigate();
-  const { isGestor } = useAuth();
+  const { isGestor, perfil } = useAuth();
+  const canAprovarRnc = isGestor || ['Gestor da Qualidade', 'Gestor de Qualidade'].includes(perfil);
   const { success, error } = useNotification();
 
   const [rnc, setRnc] = useState(null);
@@ -489,7 +490,7 @@ function RNCDetalhes() {
               </div>
             )}
 
-            {isGestor && isEmAnalise && (
+            {canAprovarRnc && isEmAnalise && (
               <div className="rdet-card rdet-card-approval">
                 <div className="rdet-card-head">
                   <div className="rdet-card-icon rdet-icon-amber"><CheckCircle size={15} /></div>

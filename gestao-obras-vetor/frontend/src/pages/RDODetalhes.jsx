@@ -136,8 +136,8 @@ function RDODetalhes() {
   const { isGestor, perfil } = useAuth();
   const { alert } = useDialog();
 
-  const canAprovarRdo = perfil === 'Gestor Geral' || perfil === 'Gestor da Obra' || perfil === 'Gestor Local';
-  const canReprovarRdo = canAprovarRdo || perfil === 'Fiscal';
+  const canAprovarRdo = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade'].includes(perfil);
+  const canReprovarRdo = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Fiscal'].includes(perfil);
 
   const [rdo, setRdo] = useState(null);
   const [sucesso, setSucesso] = useState('');
