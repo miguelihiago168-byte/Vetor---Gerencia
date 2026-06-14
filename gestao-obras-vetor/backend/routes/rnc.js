@@ -14,10 +14,15 @@ const normalizeUploadPath = (rawPath) => {
   if (rawPath == null) return '';
   const text = String(rawPath).trim();
   if (!text) return '';
-  return text
+  let normalized = text
     .replace(/\\/g, '/')
-    .replace(/^\/+/, '')
-    .replace(/^uploads\//i, '');
+    .replace(/^\/+/, '');
+  const uploadsIndex = normalized.toLowerCase().lastIndexOf('/uploads/');
+  if (uploadsIndex >= 0) normalized = normalized.slice(uploadsIndex + '/uploads/'.length);
+  return normalized
+    .replace(/^api\/uploads\//i, '')
+    .replace(/^uploads\//i, '')
+    .split('?')[0];
 };
 
 const safeEncodePath = (rawPath) => {

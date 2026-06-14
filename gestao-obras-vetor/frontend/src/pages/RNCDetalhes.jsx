@@ -22,7 +22,11 @@ const cleanText = (v) => {
 };
 const normalizeUploadPath = (raw) => {
   const b = cleanText(raw);
-  return b ? b.replace(/\\/g, '/').replace(/^\/+/, '').replace(/^uploads\//i, '') : '';
+  if (!b) return '';
+  let normalized = b.replace(/\\/g, '/').replace(/^\/+/, '');
+  const uploadsIndex = normalized.toLowerCase().lastIndexOf('/uploads/');
+  if (uploadsIndex >= 0) normalized = normalized.slice(uploadsIndex + '/uploads/'.length);
+  return normalized.replace(/^api\/uploads\//i, '').replace(/^uploads\//i, '').split('?')[0];
 };
 const uploadFileUrl = (a) => {
   const p = normalizeUploadPath(a?.caminho_arquivo);

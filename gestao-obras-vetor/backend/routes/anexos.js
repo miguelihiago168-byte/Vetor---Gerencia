@@ -63,6 +63,12 @@ const sanitizeFilename = (name) => {
 const allowedRdoAttachmentExt = /\.(jpe?g|png|webp|gif|heic|heif|pdf|doc|docx|xls|xlsx)$/i;
 const allowedRdoAttachmentMime = /^(image\/(jpeg|png|webp|gif|heic|heif)|application\/pdf|application\/msword|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document|application\/vnd\.ms-excel|application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet)$/i;
 
+const removeUploadedFile = (file) => {
+  try {
+    if (file?.path && fs.existsSync(file.path)) fs.unlinkSync(file.path);
+  } catch (_) {}
+};
+
 // Configurar multer para upload
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -164,24 +170,31 @@ router.post('/upload-rnc/:rncId', auth, uploadGeral.single('arquivo'), async (re
     const { rncId } = req.params;
     const rnc = await getQuery('SELECT id, projeto_id, rdo_id, status, criado_por, responsavel_id FROM rnc WHERE id = ?', [rncId]);
     if (!rnc) {
+      removeUploadedFile(req.file);
       return res.status(404).json({ erro: 'RNC não encontrada.' });
     }
     if (rnc.status === 'Encerrada') {
+      removeUploadedFile(req.file);
       return res.status(403).json({ erro: 'Não é permitido anexar arquivos em RNC encerrada.' });
     }
     const uid = String(req.usuario?.id ?? '');
     const podeAnexar = uid === String(rnc.criado_por ?? '') || uid === String(rnc.responsavel_id ?? '') || Boolean(req.usuario?.is_gestor);
     if (!podeAnexar) {
+      removeUploadedFile(req.file);
       return res.status(403).json({ erro: 'Sem permissão para anexar arquivos nesta RNC.' });
     }
 
-    // Compatibilidade com bases antigas: anexos.rdo_id pode ser NOT NULL.
+    const anexoColumns = await allQuery('PRAGMA table_info(anexos)');
+    const rdoIdColumn = anexoColumns.find((column) => column.name === 'rdo_id');
+    const rdoIdObrigatorio = Boolean(rdoIdColumn && Number(rdoIdColumn.notnull) === 1);
+
     let rdoIdForInsert = rnc.rdo_id || null;
     if (!rdoIdForInsert) {
       const rdoFallback = await getQuery('SELECT id FROM rdos WHERE projeto_id = ? ORDER BY id DESC LIMIT 1', [rnc.projeto_id]);
       rdoIdForInsert = rdoFallback?.id || null;
     }
-    if (!rdoIdForInsert) {
+    if (rdoIdObrigatorio && !rdoIdForInsert) {
+      removeUploadedFile(req.file);
       return res.status(400).json({ erro: 'Não foi possível anexar fotos: esta RNC não possui RDO vinculado e o projeto não tem RDO cadastrado.' });
     }
 
@@ -189,22 +202,33 @@ router.post('/upload-rnc/:rncId', auth, uploadGeral.single('arquivo'), async (re
     const caminhoArquivo = path.posix.join(tenantUploadRelativeDir(req.tenantId), filename);
     const categoria = req.body.categoria === 'correcao' ? 'correcao' : 'registro';
 
-    const result = await runQuery(`
-      INSERT INTO anexos (rdo_id, rnc_id, tipo, nome_arquivo, caminho_arquivo, tamanho, categoria)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `, [rdoIdForInsert, rncId, mimetype, originalname, caminhoArquivo, size, categoria]);
+    const columns = ['rnc_id', 'tipo', 'nome_arquivo', 'caminho_arquivo', 'tamanho', 'categoria'];
+    const values = [rncId, mimetype, originalname, caminhoArquivo, size, categoria];
+    if (rdoIdForInsert || rdoIdObrigatorio) {
+      columns.unshift('rdo_id');
+      values.unshift(rdoIdForInsert);
+    }
+
+    const placeholders = columns.map(() => '?').join(', ');
+    const result = await runQuery(
+      `INSERT INTO anexos (${columns.join(', ')}) VALUES (${placeholders})`,
+      values
+    );
 
     res.status(201).json({
       mensagem: 'Arquivo enviado com sucesso.',
       anexo: {
         id: result.lastID,
         nome_arquivo: originalname,
+        caminho_arquivo: caminhoArquivo,
         tipo: mimetype,
+        tamanho: size,
         categoria
       }
     });
 
   } catch (error) {
+    removeUploadedFile(req.file);
     console.error('Erro ao fazer upload (RNC):', error);
     if (sendSchemaOutdated(res, error, 'Schema de anexos de RNC desatualizado. Execute as migrations pendentes.')) return;
     res.status(500).json({ erro: 'Erro ao fazer upload do arquivo (RNC).' });

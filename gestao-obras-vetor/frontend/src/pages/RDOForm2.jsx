@@ -130,6 +130,7 @@ function RDOForm2() {
   const [rdoFotos, setRdoFotos] = useState([]);
   const [fotoPendente, setFotoPendente] = useState({ file: null, atividadeId: '', descricao: '' });
   const [fotosQueue, setFotosQueue] = useState([]);
+  const fotosQueueRef = useRef([]);
   const [isUploadingFoto, setIsUploadingFoto] = useState(false);
   const [dragFotoIndex, setDragFotoIndex] = useState(null);
   const [editingFotoId, setEditingFotoId] = useState(null);
@@ -212,6 +213,16 @@ function RDOForm2() {
   useEffect(() => {
     carregarLogsRdo();
   }, [rdoId]);
+
+  useEffect(() => {
+    fotosQueueRef.current = fotosQueue;
+  }, [fotosQueue]);
+
+  useEffect(() => () => {
+    fotosQueueRef.current.forEach((foto) => {
+      if (foto.previewUrl) URL.revokeObjectURL(foto.previewUrl);
+    });
+  }, []);
 
   /* ── Helpers de tempo ──────────────────────────────── */
   const toMinutes = (t) => {
@@ -1005,6 +1016,7 @@ function RDOForm2() {
     } else {
       setFotosQueue(prev => [...prev, {
         file: arquivoFoto,
+        previewUrl: URL.createObjectURL(arquivoFoto),
         atividadeId,
         descricao,
         atividadeTipo: atividadeSelecionada?.tipo || null,
@@ -1063,7 +1075,11 @@ function RDOForm2() {
   };
 
   const removerFotoFila = (index) => {
-    setFotosQueue(prev => prev.filter((_, idx) => idx !== index));
+    setFotosQueue(prev => {
+      const item = prev[index];
+      if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      return prev.filter((_, idx) => idx !== index);
+    });
   };
 
   const persistirOrdemFotos = async (listaFotos) => {
@@ -1305,6 +1321,9 @@ function RDOForm2() {
             fotosFalharam.push(`${foto.file?.name || 'foto'} (${uploadFotoError?.response?.data?.erro || uploadFotoError.message})`);
           }
         }
+        fotosQueue.forEach((foto) => {
+          if (foto.previewUrl) URL.revokeObjectURL(foto.previewUrl);
+        });
         setFotosQueue([]);
         if (fotosFalharam.length) {
           setErro(`RDO salvo, mas ${fotosFalharam.length} foto(s) não foram enviadas: ${fotosFalharam.join('; ')}`);
@@ -2050,24 +2069,35 @@ function RDOForm2() {
               )}
 
               {fotosQueue.length > 0 && (
-                <table className="rdo-table" style={{ marginTop: '10px' }}>
-                  <thead><tr><th>Arquivo</th><th>Descrição</th><th>Atividade</th><th>Status</th><th className="td-actions"></th></tr></thead>
-                  <tbody>
+                <div style={{ marginTop: '10px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: '12px' }}>
                     {fotosQueue.map((f, i) => (
-                      <tr key={`q-${i}`} style={{ background: '#fefce8' }}>
-                        <td><FileText size={14} style={{ marginRight: '6px', color: '#94a3b8' }} />{f.file.name}</td>
-                        <td>{f.descricao || '—'}</td>
-                        <td style={{ color: '#64748b', fontSize: '12px' }}>{f.atividade_label || '—'}</td>
-                        <td style={{ color: '#94a3b8', fontSize: '12px' }}>Pendente</td>
-                        <td className="td-actions">
-                          <button className="btn btn-danger" style={{ padding: '4px 8px' }} onClick={() => removerFotoFila(i)}>
-                            <Trash2 size={14} />
-                          </button>
-                        </td>
-                      </tr>
+                      <div key={`q-${i}`} className="rdo-photo-card-edit" style={{ border: '1px solid #fde68a', borderRadius: '10px', overflow: 'hidden', background: '#fffbeb', position: 'relative' }}>
+                        <button
+                          type="button"
+                          className="rdo-photo-delete-btn"
+                          title="Remover foto"
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); removerFotoFila(i); }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                        <div className="rdo-photo-card-preview" style={{ position: 'relative', width: '100%', paddingTop: '70%', background: '#f8fafc' }}>
+                          <img
+                            src={f.previewUrl}
+                            alt={f.file?.name || 'foto pendente'}
+                            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                          />
+                        </div>
+                        <div style={{ padding: '8px 10px' }}>
+                          <div style={{ fontSize: '11px', color: '#92400e', marginBottom: '4px' }}>{f.file?.name}</div>
+                          <div style={{ fontSize: '12px', fontWeight: 600, color: '#1f2937' }}>{f.descricao || 'Sem descrição'}</div>
+                          <div style={{ marginTop: '4px', fontSize: '11px', color: '#64748b' }}>{f.atividade_label || 'Atividade vinculada'}</div>
+                          <div style={{ marginTop: '6px', fontSize: '11px', color: '#b45309', fontWeight: 600 }}>Pronta para envio ao salvar o RDO</div>
+                        </div>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                </div>
               )}
             </>
           )}
@@ -2255,6 +2285,11 @@ function RDOForm2() {
                       {a.tipo || a.tipo_arquivo || ''}{a.tamanho ? ` — ${(a.tamanho / 1024).toFixed(0)} KB` : ''}
                     </div>
                   </div>
+                  {a.caminho_arquivo && (
+                    <a className="btn btn-secondary" style={{ padding: '4px 8px', flexShrink: 0 }} href={getUploadUrl(a.caminho_arquivo)} target="_blank" rel="noreferrer">
+                      Abrir
+                    </a>
+                  )}
                   <button className="btn btn-danger" style={{ padding: '4px 8px', flexShrink: 0 }}
                     onClick={() => handleRemoveAnexo(a.id)}>
                     <Trash2 size={14} />

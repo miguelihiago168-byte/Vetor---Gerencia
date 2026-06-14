@@ -7,10 +7,17 @@ const router = express.Router();
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 
 const normalizeStoredPath = (value) => {
-  const cleaned = String(value || '')
+  let cleaned = String(value || '')
     .replace(/\\/g, '/')
-    .replace(/^\/+/, '')
-    .replace(/^uploads\//i, '');
+    .replace(/^\/+/, '');
+
+  const uploadsIndex = cleaned.toLowerCase().lastIndexOf('/uploads/');
+  if (uploadsIndex >= 0) cleaned = cleaned.slice(uploadsIndex + '/uploads/'.length);
+
+  cleaned = cleaned
+    .replace(/^api\/uploads\//i, '')
+    .replace(/^uploads\//i, '')
+    .split('?')[0];
 
   const normalized = path.posix.normalize(cleaned);
   if (!normalized || normalized === '.' || normalized.startsWith('../') || normalized.includes('/../')) {
