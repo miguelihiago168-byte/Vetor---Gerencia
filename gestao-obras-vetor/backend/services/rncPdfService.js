@@ -301,25 +301,23 @@ const buildHtml = ({ rnc, imagensRegistro, imagensCorrecao, anexosComplementares
   * { box-sizing: border-box; }
   body { margin: 0; color: #0f172a; font-family: "Inter", "Segoe UI", Arial, sans-serif; background: #ffffff; font-size: 12px; }
   .page { padding: 28px 34px 22px; }
-  .hero { border: 1px solid #dbe4ef; border-radius: 14px; overflow: hidden; background: linear-gradient(135deg, #f8fbff 0%, #eef6ff 58%, #fff7ed 100%); page-break-inside: avoid; }
-  .hero-top { padding: 24px 26px 18px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: start; }
+  .hero { position: relative; border: 1px solid #dbe4ef; border-radius: 14px; overflow: hidden; background: linear-gradient(135deg, #f8fbff 0%, #eef6ff 58%, #fff7ed 100%); page-break-inside: avoid; }
+  .hero-top { padding: 24px 190px 20px; text-align: center; }
   .eyebrow { color: #64748b; font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
-  h1 { margin: 5px 0 8px; font-size: 28px; line-height: 1.05; letter-spacing: 0; }
+  h1 { margin: 5px 0 6px; font-size: 25px; line-height: 1.05; letter-spacing: 0; }
   .subtitle {
-    display: inline-block;
-    margin-top: 2px;
-    padding: 6px 10px;
-    border-radius: 10px;
+    display: block;
+    margin: 6px auto 0;
     color: #0f172a;
-    background: rgba(255, 255, 255, .72);
-    border: 1px solid rgba(148, 163, 184, .24);
-    font-size: 16px;
+    font-size: 15px;
     line-height: 1.25;
     font-weight: 900;
-    max-width: 390px;
+    max-width: 420px;
   }
-  .badges { display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
-  .badge { display: inline-flex; align-items: center; min-height: 26px; padding: 5px 11px; border-radius: 999px; font-size: 11px; font-weight: 800; border: 1px solid transparent; }
+  .badges { position: absolute; top: 22px; right: 26px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 4px 10px; border-radius: 999px; font-size: 10px; font-weight: 800; border: 1px solid transparent; }
+  .badge-label { opacity: .72; font-size: 8px; letter-spacing: .06em; text-transform: uppercase; }
+  .badge-value { font-size: 10px; }
   .status-open { color: #1e40af; background: #dbeafe; border-color: #bfdbfe; }
   .status-review { color: #92400e; background: #fef3c7; border-color: #fde68a; }
   .status-done { color: #166534; background: #dcfce7; border-color: #86efac; }
@@ -373,9 +371,9 @@ const buildHtml = ({ rnc, imagensRegistro, imagensCorrecao, anexosComplementares
           <div class="subtitle">${escapeHtml(safeText(rnc.titulo, `RNC #${rnc.id}`))}</div>
         </div>
         <div class="badges">
-          <span class="badge status-${status.cls}">${escapeHtml(status.label)}</span>
-          ${rnc.gravidade ? `<span class="badge gravity-${gravidadeClass}">${escapeHtml(rnc.gravidade)}</span>` : ''}
-          ${rnc.origem ? `<span class="badge origin">${escapeHtml(rnc.origem)}</span>` : ''}
+          <span class="badge status-${status.cls}"><span class="badge-label">Status</span><span class="badge-value">${escapeHtml(status.label)}</span></span>
+          ${rnc.gravidade ? `<span class="badge gravity-${gravidadeClass}"><span class="badge-label">Gravidade</span><span class="badge-value">${escapeHtml(rnc.gravidade)}</span></span>` : ''}
+          ${rnc.origem ? `<span class="badge origin"><span class="badge-label">Origem</span><span class="badge-value">${escapeHtml(rnc.origem)}</span></span>` : ''}
         </div>
       </div>
       <div class="meta-grid">
