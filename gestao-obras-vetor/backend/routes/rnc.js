@@ -3,10 +3,17 @@ const { body, validationResult } = require('express-validator');
 const { allQuery, getQuery, runQuery } = require('../config/database');
 const { auth, isGestor } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
+const { PERFIS, inferirPerfil } = require('../constants/access');
 const { sendSchemaOutdated } = require('../utils/schemaGuard');
 const { generateRncPdfBuffer } = require('../services/rncPdfService');
 
 const router = express.Router();
+
+const podeAprovarQualidade = (usuario) => [
+  PERFIS.GESTOR_GERAL,
+  PERFIS.GESTOR_OBRA,
+  PERFIS.GESTOR_QUALIDADE
+].includes(inferirPerfil(usuario));
 
 // Gerar PDF da RNC.
 router.get('/:id/pdf', auth, async (req, res) => {
@@ -231,12 +238,14 @@ router.put('/:id', auth, async (req, res) => {
   }
 });
 
-// Alterar status
-// Alterar status (somente gestor)
-router.patch('/:id/status', [auth, isGestor], async (req, res) => {
+// Alterar status (gestores e qualidade)
+router.patch('/:id/status', auth, async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
+    if (!podeAprovarQualidade(req.usuario)) {
+      return res.status(403).json({ erro: 'Acesso negado. Apenas gestores ou Qualidade podem alterar o status da RNC.' });
+    }
     const validos = ['Aberta', 'Em andamento', 'Encerrada', 'Reprovada', 'Em análise'];
 
     if (!validos.includes(status)) {
@@ -284,7 +293,11 @@ router.post('/:id/enviar-aprovacao', auth, async (req, res) => {
 
     // Notificar gestor(es) que há RNC para aprovação (opcional simples: todos gestores)
     try {
-      const gestores = await allQuery('SELECT id FROM usuarios WHERE is_gestor = 1');
+      const gestores = await allQuery(`
+        SELECT id FROM usuarios
+        WHERE ativo = 1
+          AND (is_gestor = 1 OR perfil IN ('Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade', 'Gestor de Qualidade'))
+      `);
       for (const g of gestores) {
         await runQuery(
           'INSERT OR IGNORE INTO notificacoes (usuario_id, tipo, mensagem, referencia_tipo, referencia_id) VALUES (?, ?, ?, ?, ?)',

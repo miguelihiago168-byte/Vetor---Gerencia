@@ -16,8 +16,8 @@ function RDOs() {
   const { isGestor, perfil } = useAuth();
 
   // Controle de permissões para ações nos RDOs
-  const canAprovarRdo = perfil === 'Gestor Geral' || perfil === 'Gestor da Obra' || perfil === 'Gestor Local';
-  const canReprovarRdo = canAprovarRdo || perfil === 'Fiscal';
+  const canAprovarRdo = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade'].includes(perfil);
+  const canReprovarRdo = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Fiscal'].includes(perfil);
   const { info, success, error: notifyError } = useNotification();
   const { alert } = useDialog();
   const [sucesso, setSucesso] = useState('');
@@ -414,7 +414,7 @@ function RDOs() {
                                   Ver detalhes
                                 </button>
 
-                                {/* Aprovar: somente Gestor Geral / Gestor de Obra */}
+                                {/* Aprovar: Gestores de obra e qualidade */}
                                 {canAprovarRdo && isEmAnalise && (
                                   <>
                                     <div className="rdo-dropdown-divider" />
