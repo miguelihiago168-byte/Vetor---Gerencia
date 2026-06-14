@@ -1160,18 +1160,37 @@
 }
 
 .rdo-report-hero-main {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 18px;
   min-width: 0;
 }
 
 .rdo-report-back-btn {
-  width: 42px;
-  height: 38px;
+  min-width: 96px;
+  min-height: 38px;
   flex-shrink: 0;
-  padding: 0;
+  padding: 0 14px;
+  gap: 8px;
   justify-content: center;
+  border-color: #b8c7da;
+  color: #334155;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+}
+
+.rdo-report-back-btn:hover {
+  border-color: #2563eb;
+  color: #1d4ed8;
+  background: #ffffff;
+  transform: translateY(-1px);
+}
+
+.rdo-report-title-block {
+  min-width: 0;
+  justify-self: center;
+  text-align: center;
 }
 
 .rdo-report-eyebrow {
@@ -1185,6 +1204,7 @@
 .rdo-report-title-row {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 12px;
   margin-top: 3px;
   flex-wrap: wrap;
@@ -1783,7 +1803,17 @@
   }
 
   .rdo-report-hero-main {
-    flex-direction: column;
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .rdo-report-back-btn {
+    justify-self: start;
+  }
+
+  .rdo-report-title-block {
+    justify-self: stretch;
   }
 
   .rdo-report-title-row h1 {
