@@ -306,7 +306,7 @@ function RDODetalhes() {
       <main className="container rdo-report-page">
         <div className="rdo-report-hero">
           <div className="rdo-report-hero-main">
-            <button className="btn btn-secondary rdo-report-back-btn" onClick={() => navigate(`/projeto/${projetoId}/rdos`)}>
+            <button className="btn rdo-report-back-btn" onClick={() => navigate(`/projeto/${projetoId}/rdos`)}>
               <ArrowLeft size={16} />
               <span>Voltar</span>
             </button>
