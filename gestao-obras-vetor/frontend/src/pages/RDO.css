@@ -695,33 +695,64 @@
   gap: 10px;
 }
 
-.rdo-action-btn {
+.rdo-form-action-pill {
   min-height: 40px;
-  padding: 8px 14px;
-  border-radius: 12px;
+  padding: 0 15px;
+  border-radius: 999px;
   box-shadow: none;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 800;
+  border: 1px solid transparent;
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
 }
 
-.rdo-action-btn.btn-secondary {
-  background: #ffffff;
-  border-color: #cbd5e1;
+.rdo-form-action-pill:hover:not(:disabled),
+.rdo-form-action-pill:focus-visible:not(:disabled) {
+  transform: translateY(-1px);
+  opacity: 1;
+}
+
+.rdo-form-action-pill:disabled {
+  transform: none;
+}
+
+.rdo-form-action-pill-neutral {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: #dbe4ef;
   color: #475569;
 }
 
-.rdo-action-btn.btn-success {
+.rdo-form-action-pill-neutral:hover:not(:disabled),
+.rdo-form-action-pill-neutral:focus-visible:not(:disabled) {
+  background: #f0f9ff;
+  border-color: #bae6fd;
+  color: #075985;
+}
+
+.rdo-form-action-pill-draft {
+  background: #f8fafc;
+  border-color: #dbe4ef;
+  color: #334155;
+}
+
+.rdo-form-action-pill-draft:hover:not(:disabled),
+.rdo-form-action-pill-draft:focus-visible:not(:disabled) {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+
+.rdo-form-action-pill-success {
   background: #ecfdf5;
   border-color: #86efac;
   color: #166534;
 }
 
-.rdo-action-btn.btn-success:hover,
-.rdo-action-btn.btn-success:focus-visible {
+.rdo-form-action-pill-success:hover:not(:disabled),
+.rdo-form-action-pill-success:focus-visible:not(:disabled) {
   background: #dcfce7;
   border-color: #4ade80;
   color: #14532d;
-  opacity: 1;
 }
 
 /* ── Visualização do RDO (detalhes) ─────────────────────── */
@@ -967,10 +998,10 @@
     font-size: 12px;
     line-height: 1.1;
     justify-content: center;
-    border-radius: 9px;
+    border-radius: 999px;
     box-shadow: none !important;
     border-width: 1px;
-    font-weight: 500;
+    font-weight: 800;
   }
 
   .rdo-action-label-desktop {
@@ -982,24 +1013,9 @@
     white-space: nowrap;
   }
 
-  .rdo-actions-bar .rdo-action-btn.btn-secondary {
-    background: #ffffff !important;
-    color: #64748b !important;
-    border-color: #d1d9e6 !important;
-  }
-
-  .rdo-actions-bar .rdo-action-btn.btn-success {
-    background: #f0fdf4 !important;
-    color: #15803d !important;
-    border-color: #bbf7d0 !important;
-  }
-
-  .rdo-actions-bar .rdo-action-btn.btn-success:hover,
-  .rdo-actions-bar .rdo-action-btn.btn-success:focus-visible {
-    background: #dcfce7 !important;
-    color: #14532d !important;
-    border-color: #86efac !important;
-    opacity: 1 !important;
+  .rdo-form-action-pill:hover:not(:disabled),
+  .rdo-form-action-pill:focus-visible:not(:disabled) {
+    transform: none;
   }
 }
 
@@ -1168,22 +1184,26 @@
 }
 
 .rdo-report-back-btn {
-  min-width: 96px;
-  min-height: 38px;
+  min-width: 0;
+  min-height: 40px;
   flex-shrink: 0;
-  padding: 0 14px;
+  padding: 0 15px;
   gap: 8px;
   justify-content: center;
-  border-color: #b8c7da;
-  color: #334155;
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+  border-radius: 999px;
+  border-color: #dbe4ef;
+  color: #475569;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: none;
+  font-size: 14px;
+  font-weight: 800;
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
 }
 
 .rdo-report-back-btn:hover {
-  border-color: #2563eb;
-  color: #1d4ed8;
-  background: #ffffff;
+  border-color: #bae6fd;
+  color: #075985;
+  background: #f0f9ff;
   transform: translateY(-1px);
 }
 
@@ -1205,9 +1225,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
   margin-top: 3px;
-  flex-wrap: wrap;
 }
 
 .rdo-report-title-row h1 {
@@ -1219,14 +1237,42 @@
   letter-spacing: 0;
 }
 
+.rdo-report-status-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 5px 8px 5px 12px;
+  border: 1px solid #dbe4ef;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .rdo-report-status {
   display: inline-flex;
   align-items: center;
-  min-height: 26px;
-  padding: 4px 10px;
+  gap: 6px;
+  min-height: 28px;
+  padding: 5px 12px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 800;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.rdo-report-status::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.72);
 }
 
 .rdo-report-status.is-approved {
@@ -1260,6 +1306,70 @@
   justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.rdo-report-actions .rdo-report-action-pill {
+  min-height: 40px;
+  padding: 0 15px;
+  border-radius: 999px;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 800;
+  border: 1px solid transparent;
+  box-shadow: none;
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.rdo-report-actions .rdo-report-action-pill:hover {
+  transform: translateY(-1px);
+}
+
+.rdo-report-action-pill-primary {
+  color: #075985;
+  border-color: #bae6fd;
+  background: #e0f2fe;
+}
+
+.rdo-report-action-pill-primary:hover {
+  color: #0369a1;
+  border-color: #7dd3fc;
+  background: #f0f9ff;
+}
+
+.rdo-report-action-pill-warning {
+  color: #9a3412;
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+
+.rdo-report-action-pill-warning:hover {
+  color: #c2410c;
+  border-color: #fdba74;
+  background: #fffbeb;
+}
+
+.rdo-report-action-pill-success {
+  color: #166534;
+  border-color: #86efac;
+  background: #ecfdf5;
+}
+
+.rdo-report-action-pill-success:hover {
+  color: #14532d;
+  border-color: #4ade80;
+  background: #dcfce7;
+}
+
+.rdo-report-action-pill-danger {
+  color: #991b1b;
+  border-color: #fecaca;
+  background: #fff1f2;
+}
+
+.rdo-report-action-pill-danger:hover {
+  color: #b91c1c;
+  border-color: #fca5a5;
+  background: #fee2e2;
 }
 
 .rdo-report-meta-grid {

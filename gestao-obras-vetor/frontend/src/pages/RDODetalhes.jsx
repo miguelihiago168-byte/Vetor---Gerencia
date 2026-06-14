@@ -306,7 +306,7 @@ function RDODetalhes() {
       <main className="container rdo-report-page">
         <div className="rdo-report-hero">
           <div className="rdo-report-hero-main">
-            <button className="btn btn-secondary rdo-report-back-btn" onClick={() => navigate(`/projeto/${projetoId}/rdos`)}>
+            <button className="btn rdo-report-back-btn" onClick={() => navigate(`/projeto/${projetoId}/rdos`)}>
               <ArrowLeft size={16} />
               <span>Voltar</span>
             </button>
@@ -314,33 +314,36 @@ function RDODetalhes() {
               <div className="rdo-report-eyebrow">Relatório diário de obra</div>
               <div className="rdo-report-title-row">
                 <h1>RDO {numeroRdoExibicao}</h1>
-                <span className={`rdo-report-status ${statusClass(rdo.status)}`}>{statusLabel(rdo.status)}</span>
+              </div>
+              <div className="rdo-report-status-row">
+                <span>Status</span>
+                <strong className={`rdo-report-status ${statusClass(rdo.status)}`}>{statusLabel(rdo.status)}</strong>
               </div>
             </div>
           </div>
 
           <div className="rdo-report-actions">
-            <button className="btn btn-primary rdo-view-action-btn" onClick={handleDownloadPDF}>
+            <button className="btn rdo-view-action-btn rdo-report-action-pill rdo-report-action-pill-primary" onClick={handleDownloadPDF}>
               <Download size={16} /> PDF
             </button>
             {canAprovarRdo && rdo.status === 'Em análise' && (
-              <button className="btn btn-success rdo-view-action-btn" onClick={aprovarRDO}>
+              <button className="btn rdo-view-action-btn rdo-report-action-pill rdo-report-action-pill-success" onClick={aprovarRDO}>
                 Aprovar
               </button>
             )}
             {canReprovarRdo && rdo.status === 'Em análise' && (
-              <button className="btn btn-danger rdo-view-action-btn" onClick={reprovarRDO}>
+              <button className="btn rdo-view-action-btn rdo-report-action-pill rdo-report-action-pill-danger" onClick={reprovarRDO}>
                 Reprovar
               </button>
             )}
             {canReprovarRdo && rdo.status === 'Em análise' && (
-              <button className="btn btn-warning rdo-view-action-btn" onClick={() => setShowSolicitarCorrecaoModal(true)}>
+              <button className="btn rdo-view-action-btn rdo-report-action-pill rdo-report-action-pill-warning" onClick={() => setShowSolicitarCorrecaoModal(true)}>
                 Solicitar correção
               </button>
             )}
             {isGestor && rdo.status === 'Aprovado' && (
               <button
-                className="btn btn-warning rdo-view-action-btn rdo-view-action-btn-wide"
+                className="btn rdo-view-action-btn rdo-view-action-btn-wide rdo-report-action-pill rdo-report-action-pill-warning"
                 onClick={async () => {
                   try {
                     await updateStatusRDO(rdoId, 'Em preenchimento');
