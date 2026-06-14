@@ -327,17 +327,17 @@ function RDODetalhes() {
               <Download size={16} /> PDF
             </button>
             {canAprovarRdo && rdo.status === 'Em análise' && (
-              <button className="btn btn-success rdo-view-action-btn" onClick={aprovarRDO}>
+              <button className="btn rdo-view-action-btn rdo-report-action-pill rdo-report-action-pill-success" onClick={aprovarRDO}>
                 Aprovar
               </button>
             )}
             {canReprovarRdo && rdo.status === 'Em análise' && (
-              <button className="btn btn-danger rdo-view-action-btn" onClick={reprovarRDO}>
+              <button className="btn rdo-view-action-btn rdo-report-action-pill rdo-report-action-pill-danger" onClick={reprovarRDO}>
                 Reprovar
               </button>
             )}
             {canReprovarRdo && rdo.status === 'Em análise' && (
-              <button className="btn btn-warning rdo-view-action-btn" onClick={() => setShowSolicitarCorrecaoModal(true)}>
+              <button className="btn rdo-view-action-btn rdo-report-action-pill rdo-report-action-pill-warning" onClick={() => setShowSolicitarCorrecaoModal(true)}>
                 Solicitar correção
               </button>
             )}

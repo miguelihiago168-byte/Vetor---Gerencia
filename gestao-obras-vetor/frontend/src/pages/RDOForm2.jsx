@@ -2328,18 +2328,18 @@ function RDOForm2() {
               </>
             )}
             <div className="rdo-actions-buttons">
-              <button className="btn btn-secondary rdo-action-btn" onClick={() => navigate(`/projeto/${projetoId}/rdos`)}>
+              <button className="btn rdo-action-btn rdo-form-action-pill rdo-form-action-pill-neutral" onClick={() => navigate(`/projeto/${projetoId}/rdos`)}>
                 <span className="rdo-action-label-desktop">Voltar</span>
                 <span className="rdo-action-label-mobile">Voltar</span>
               </button>
               {canEditRdo && (
                 <>
-                  <button className="btn btn-secondary rdo-action-btn" onClick={() => salvar('rascunho')}
+                  <button className="btn rdo-action-btn rdo-form-action-pill rdo-form-action-pill-draft" onClick={() => salvar('rascunho')}
                     disabled={isSaving || !formData.data_relatorio}>
                     <span className="rdo-action-label-desktop">{isSaving ? 'Salvando...' : 'Salvar rascunho'}</span>
                     <span className="rdo-action-label-mobile">{isSaving ? 'Salvando...' : 'Rascunho'}</span>
                   </button>
-                  <button className="btn btn-success rdo-action-btn" onClick={() => salvar('analise')}
+                  <button className="btn rdo-action-btn rdo-form-action-pill rdo-form-action-pill-success" onClick={() => salvar('analise')}
                     disabled={isSaving || !formData.data_relatorio}>
                     <span className="rdo-action-label-desktop">{isSaving ? 'Enviando...' : 'Enviar para aprovação'}</span>
                     <span className="rdo-action-label-mobile">{isSaving ? 'Enviando...' : 'Enviar'}</span>
