@@ -301,8 +301,8 @@ const buildHtml = ({ rnc, imagensRegistro, imagensCorrecao, anexosComplementares
   * { box-sizing: border-box; }
   body { margin: 0; color: #0f172a; font-family: "Inter", "Segoe UI", Arial, sans-serif; background: #ffffff; font-size: 12px; }
   .page { padding: 28px 34px 22px; }
-  .hero { position: relative; border: 1px solid #dbe4ef; border-radius: 14px; overflow: hidden; background: linear-gradient(135deg, #f8fbff 0%, #eef6ff 58%, #fff7ed 100%); page-break-inside: avoid; }
-  .hero-top { padding: 24px 190px 20px; text-align: center; }
+  .hero { border: 1px solid #dbe4ef; border-radius: 14px; overflow: hidden; background: linear-gradient(135deg, #f8fbff 0%, #eef6ff 58%, #fff7ed 100%); page-break-inside: avoid; }
+  .hero-top { padding: 24px 26px 12px; text-align: center; }
   .eyebrow { color: #64748b; font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
   h1 { margin: 5px 0 6px; font-size: 25px; line-height: 1.05; letter-spacing: 0; }
   .subtitle {
@@ -314,7 +314,7 @@ const buildHtml = ({ rnc, imagensRegistro, imagensCorrecao, anexosComplementares
     font-weight: 900;
     max-width: 420px;
   }
-  .badges { position: absolute; top: 22px; right: 26px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+  .badges { padding: 0 26px 16px; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
   .badge {
     display: inline-flex;
     align-items: center;
@@ -381,11 +381,11 @@ const buildHtml = ({ rnc, imagensRegistro, imagensCorrecao, anexosComplementares
           <h1>RNC ${String(rnc.id).padStart(3, '0')}</h1>
           <div class="subtitle">${escapeHtml(safeText(rnc.titulo, `RNC #${rnc.id}`))}</div>
         </div>
-        <div class="badges">
-          <span class="badge"><span class="badge-label">Status</span><span class="badge-value status-${status.cls}">${escapeHtml(status.label)}</span></span>
-          ${rnc.gravidade ? `<span class="badge"><span class="badge-label">Gravidade</span><span class="badge-value gravity-${gravidadeClass}">${escapeHtml(rnc.gravidade)}</span></span>` : ''}
-          ${rnc.origem ? `<span class="badge"><span class="badge-label">Origem</span><span class="badge-value origin">${escapeHtml(rnc.origem)}</span></span>` : ''}
-        </div>
+      </div>
+      <div class="badges">
+        <span class="badge"><span class="badge-label">Status</span><span class="badge-value status-${status.cls}">${escapeHtml(status.label)}</span></span>
+        ${rnc.gravidade ? `<span class="badge"><span class="badge-label">Gravidade</span><span class="badge-value gravity-${gravidadeClass}">${escapeHtml(rnc.gravidade)}</span></span>` : ''}
+        ${rnc.origem ? `<span class="badge"><span class="badge-label">Origem</span><span class="badge-value origin">${escapeHtml(rnc.origem)}</span></span>` : ''}
       </div>
       <div class="meta-grid">
         ${metaItem('Projeto', rnc.projeto_nome)}
