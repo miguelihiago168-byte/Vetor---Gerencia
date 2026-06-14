@@ -836,6 +836,183 @@ code {
 .almox-content .card {
   width: 100%;
 }
+
+.almox-user-picker {
+  position: relative;
+  width: 100%;
+}
+
+.almox-user-picker-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 46px;
+  border: 1.5px solid var(--input-border);
+  border-radius: var(--radius-md);
+  background: var(--input-bg);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.almox-user-picker-control:focus-within,
+.almox-user-picker-control.is-open {
+  border-color: var(--input-focus-border);
+  box-shadow: 0 0 0 4px var(--input-focus-shadow);
+}
+
+.almox-user-picker-control.has-value {
+  border-color: rgba(14, 165, 233, 0.55);
+  background: #f8fcff;
+}
+
+.almox-user-picker-input {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  padding: 0 44px 0 14px;
+}
+
+.almox-user-picker-input::placeholder {
+  color: var(--gray-400);
+}
+
+.almox-user-picker-caret,
+.almox-user-picker-clear {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: var(--gray-600);
+  font-weight: 800;
+}
+
+.almox-user-picker-clear {
+  border: 0;
+  background: #eaf6ff;
+  color: var(--primary);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.almox-user-picker-clear:hover {
+  background: #d8efff;
+}
+
+.almox-user-picker-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid #dbe4ef;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: var(--shadow-strong);
+}
+
+.almox-user-picker-option {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "name type"
+    "meta type";
+  gap: 3px 12px;
+  align-items: center;
+  padding: 11px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.almox-user-picker-option:hover,
+.almox-user-picker-option.is-active {
+  background: #f1f7ff;
+}
+
+.almox-user-picker-option.is-selected {
+  background: #e8f4ff;
+}
+
+.almox-user-picker-name {
+  grid-area: name;
+  min-width: 0;
+  font-size: 0.92rem;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.almox-user-picker-meta {
+  grid-area: meta;
+  min-width: 0;
+  color: var(--gray-500);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.almox-user-picker-type {
+  grid-area: type;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.almox-user-picker-type.system {
+  color: #075985;
+  background: #e0f2fe;
+}
+
+.almox-user-picker-type.direct {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.almox-user-picker-empty {
+  padding: 18px 14px;
+  color: var(--gray-500);
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .almox-user-picker-option {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "name"
+      "meta"
+      "type";
+    justify-items: start;
+  }
+}
 .modal-overlay {
   position: fixed;
   inset: 0;
