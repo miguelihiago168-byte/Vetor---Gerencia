@@ -1,43 +1,153 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getRDO, updateRDO, getAtividadesEAP, addRdoMaoObra, listRdoMaoObra, addRdoComentario, addRdoMaterial, addRdoOcorrencia, uploadRdoFoto, getAnexos, updateStatusRDO, getRdoFerramentasDisponiveis, getRdoFerramentas, addRdoFerramenta, getUploadUrl } from '../services/api';
+import {
+  getRDO,
+  listRdoMaoObra,
+  getAnexos,
+  updateStatusRDO,
+  addRdoComentario,
+  getUploadUrl
+} from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
-import { FileText, Download, ArrowLeft, MapPin, Building2, User, Calendar, Save, AlertTriangle } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Building2,
+  Calendar,
+  CloudSun,
+  ClipboardList,
+  Download,
+  File,
+  FileImage,
+  FileText,
+  Image as ImageIcon,
+  MapPin,
+  MessageSquare,
+  Package,
+  Paperclip,
+  User,
+  Users,
+  Wrench
+} from 'lucide-react';
 import { KPICards } from '../components/RDOTimeline';
 import './RDO.css';
+
+const formatLocalDate = (dstr) => {
+  if (!dstr) return 'N/A';
+  const m = String(dstr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) {
+    const dt = new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+    return dt.toLocaleDateString('pt-BR');
+  }
+  const dt = new Date(dstr);
+  return isNaN(dt.getTime()) ? dstr : dt.toLocaleDateString('pt-BR');
+};
+
+const statusLabel = (s) => {
+  if (s === 'Em análise') return 'Em aprovação';
+  if (s === 'Em preenchimento') return 'Em preenchimento';
+  return s || 'N/A';
+};
+
+const statusClass = (s) => {
+  const normalized = String(s || '').toLowerCase();
+  if (normalized.includes('aprov')) return 'is-approved';
+  if (normalized.includes('analise') || normalized.includes('análise')) return 'is-review';
+  if (normalized.includes('preench')) return 'is-draft';
+  if (normalized.includes('reprov')) return 'is-rejected';
+  return 'is-neutral';
+};
+
+const arrayOf = (value) => (Array.isArray(value) ? value : []);
+
+const valueOrDash = (value) => {
+  if (value === null || value === undefined || value === '') return '-';
+  return value;
+};
+
+const formatBytes = (value) => {
+  const size = Number(value || 0);
+  if (!size) return 'Tamanho não informado';
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const toMinutes = (time) => {
+  const match = String(time || '').match(/(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+};
+
+const calculateHours = (item) => {
+  if (item.horas || item.horas_trabalhadas) return item.horas || item.horas_trabalhadas;
+  const start = toMinutes(item.entrada);
+  const end = toMinutes(item.saida_final);
+  const breakStart = toMinutes(item.saida_almoco);
+  const breakEnd = toMinutes(item.retorno_almoco);
+  if (start === null || end === null || end <= start) return 0;
+  let total = end - start;
+  if (breakStart !== null && breakEnd !== null && breakEnd > breakStart) {
+    total -= breakEnd - breakStart;
+  }
+  return Math.round((Math.max(0, total) / 60) * 100) / 100;
+};
+
+const getAttachmentKind = (anexo) => {
+  const name = String(anexo.nome_arquivo || anexo.nome_original || anexo.nome || '').toLowerCase();
+  const type = String(anexo.tipo || anexo.mime_type || '').toLowerCase();
+  if (type.includes('pdf') || name.endsWith('.pdf')) return 'pdf';
+  if (type.includes('image') || /\.(png|jpe?g|webp|gif|bmp)$/i.test(name)) return 'image';
+  return 'file';
+};
+
+const getAttachmentIcon = (kind) => {
+  if (kind === 'pdf') return FileText;
+  if (kind === 'image') return FileImage;
+  return File;
+};
+
+const Section = ({ icon: Icon, title, count, children }) => (
+  <section className="rdo-report-section">
+    <div className="rdo-report-section-head">
+      <div className="rdo-report-section-title">
+        {Icon && (
+          <span className="rdo-report-section-icon">
+            <Icon size={17} />
+          </span>
+        )}
+        <h2>{title}</h2>
+      </div>
+      {count !== undefined && <span className="rdo-report-count">{count}</span>}
+    </div>
+    <div className="rdo-report-section-body">{children}</div>
+  </section>
+);
+
+const EmptyState = ({ children }) => (
+  <div className="rdo-report-empty">{children}</div>
+);
 
 function RDODetalhes() {
   const { projetoId, rdoId } = useParams();
   const navigate = useNavigate();
   const { isGestor, perfil } = useAuth();
+  const { alert } = useDialog();
 
-  // Controle de permissões para ações nos RDOs
   const canAprovarRdo = perfil === 'Gestor Geral' || perfil === 'Gestor da Obra' || perfil === 'Gestor Local';
   const canReprovarRdo = canAprovarRdo || perfil === 'Fiscal';
-  const { alert } = useDialog();
+
   const [rdo, setRdo] = useState(null);
   const [sucesso, setSucesso] = useState('');
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState('');
-  const [atividades, setAtividades] = useState([]);
   const [maoObra, setMaoObra] = useState([]);
   const [materiais, setMateriais] = useState([]);
   const [ocorrencias, setOcorrencias] = useState([]);
   const [anexos, setAnexos] = useState([]);
   const [comentarios, setComentarios] = useState([]);
-  const [ferramentasDisponiveis, setFerramentasDisponiveis] = useState([]);
-  const [ferramentasRdo, setFerramentasRdo] = useState([]);
-  const [novaFerramentaRdo, setNovaFerramentaRdo] = useState({ alocacao_id: '', quantidade: 1 });
-
-  // Estados para novos itens
-  const [novoComentario, setNovoComentario] = useState('');
-  const [novoMaterial, setNovoMaterial] = useState({ nome: '', quantidade: '', unidade: '' });
-  const [novaOcorrencia, setNovaOcorrencia] = useState({ titulo: '', descricao: '', tipo: '' });
-  const [novaMaoObra, setNovaMaoObra] = useState({ nome: '', funcao: '', horas: '' });
-
-  // Estados para modal de solicitar correção
   const [showSolicitarCorrecaoModal, setShowSolicitarCorrecaoModal] = useState(false);
   const [textoCorrecao, setTextoCorrecao] = useState('');
   const [isEnviandoCorrecao, setIsEnviandoCorrecao] = useState(false);
@@ -49,33 +159,32 @@ function RDODetalhes() {
   const carregarDados = async () => {
     try {
       setLoading(true);
+      setErro('');
+
       const results = await Promise.allSettled([
         getRDO(rdoId),
-        getAtividadesEAP(projetoId),
         listRdoMaoObra(rdoId),
-        getAnexos(rdoId),
-        getRdoFerramentasDisponiveis(rdoId),
-        getRdoFerramentas(rdoId)
+        getAnexos(rdoId)
       ]);
 
-      const [rdoRes, atividadesRes, maoObraRes, anexosRes, ferramentasDispRes, ferramentasRdoRes] = results;
+      const [rdoRes, maoObraRes, anexosRes] = results;
 
       if (rdoRes.status === 'fulfilled') {
-        setRdo(rdoRes.value.data);
-        setComentarios(rdoRes.value.data?.comentarios || []);
+        const rdoData = rdoRes.value.data;
+        setRdo(rdoData);
+        setComentarios(arrayOf(rdoData?.comentarios));
+        setMateriais(arrayOf(rdoData?.materiais));
+        setOcorrencias(arrayOf(rdoData?.ocorrencias));
       } else {
         const err = rdoRes.reason;
         const msg = err?.response?.data?.erro || err?.message || 'RDO não encontrado';
         setErro(msg);
         setRdo(null);
-        return; // sem RDO, evita processar demais
+        return;
       }
 
-      setAtividades(atividadesRes.status === 'fulfilled' ? (atividadesRes.value.data || []) : []);
-      setMaoObra(maoObraRes.status === 'fulfilled' ? (maoObraRes.value.data || []) : []);
-      setAnexos(anexosRes.status === 'fulfilled' ? (anexosRes.value.data || []) : []);
-      setFerramentasDisponiveis(ferramentasDispRes.status === 'fulfilled' ? (ferramentasDispRes.value.data || []) : []);
-      setFerramentasRdo(ferramentasRdoRes.status === 'fulfilled' ? (ferramentasRdoRes.value.data || []) : []);
+      setMaoObra(maoObraRes.status === 'fulfilled' ? arrayOf(maoObraRes.value.data) : []);
+      setAnexos(anexosRes.status === 'fulfilled' ? arrayOf(anexosRes.value.data) : []);
     } catch (error) {
       console.error('Erro ao carregar RDO:', error);
       const msg = error.response?.data?.erro || error.message || 'Erro ao carregar RDO';
@@ -85,7 +194,9 @@ function RDODetalhes() {
     }
   };
 
-  // Página de visualização: sem ações de edição/adicionar/upload
+  const numeroRdoRaw = String(rdo?.numero_rdo ?? rdo?.id ?? '').trim();
+  const numeroRdoMatch = numeroRdoRaw.match(/(\d+)$/);
+  const numeroRdoExibicao = String(Number(numeroRdoMatch?.[1] || numeroRdoRaw || rdo?.id || 0) || rdo?.id || '').padStart(3, '0');
 
   const handleDownloadPDF = async () => {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
@@ -99,27 +210,6 @@ function RDODetalhes() {
     link.click();
     link.remove();
   };
-
-  const formatLocalDate = (dstr) => {
-    if (!dstr) return 'N/A';
-    const m = dstr.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (m) {
-      const dt = new Date(parseInt(m[1],10), parseInt(m[2],10)-1, parseInt(m[3],10));
-      return dt.toLocaleDateString('pt-BR');
-    }
-    const dt = new Date(dstr);
-    return isNaN(dt.getTime()) ? dstr : dt.toLocaleDateString('pt-BR');
-  };
-
-  const statusLabel = (s) => {
-    if (s === 'Em análise') return 'Em aprovação';
-    if (s === 'Em preenchimento') return 'Em preenchimento';
-    return s || 'N/A';
-  };
-
-  const numeroRdoRaw = String(rdo?.numero_rdo ?? rdo?.id ?? '').trim();
-  const numeroRdoMatch = numeroRdoRaw.match(/(\d+)$/);
-  const numeroRdoExibicao = String(Number(numeroRdoMatch?.[1] || numeroRdoRaw || rdo?.id || 0) || rdo?.id || '').padStart(3, '0');
 
   const aprovarRDO = async () => {
     try {
@@ -147,50 +237,20 @@ function RDODetalhes() {
         await alert({ title: 'Aviso', message: 'Por favor, descreva a correção solicitada.' });
         return;
       }
-      
+
       setIsEnviandoCorrecao(true);
-      
-      // Adicionar comentário com a solicitação de correção
-      await addRdoComentario(rdoId, { comentario: `[SOLICITAR CORRECAO] ${textoCorrecao.trim()}` });
-      
-      // Atualizar status do RDO para "Em preenchimento" para permitir edição
+      await addRdoComentario(rdoId, { comentario: `[SOLICITAR CORREÇÃO] ${textoCorrecao.trim()}` });
       await updateStatusRDO(rdoId, 'Em preenchimento');
-      
+
       setRdo(prev => ({ ...prev, status: 'Em preenchimento' }));
       setTextoCorrecao('');
       setShowSolicitarCorrecaoModal(false);
       setSucesso('Correção solicitada com sucesso. RDO retornou para edição.');
-      
-      // Recarregar comentários
       carregarDados();
     } catch (error) {
       await alert({ title: 'Erro', message: 'Falha ao solicitar correção: ' + (error.response?.data?.erro || error.message) });
     } finally {
       setIsEnviandoCorrecao(false);
-    }
-  };
-
-  const vincularFerramentaRdo = async () => {
-    try {
-      setErro('');
-      if (!novaFerramentaRdo.alocacao_id) {
-        setErro('Selecione um ativo retirado para a obra.');
-        return;
-      }
-      await addRdoFerramenta(rdoId, {
-        alocacao_id: Number(novaFerramentaRdo.alocacao_id),
-        quantidade: Number(novaFerramentaRdo.quantidade || 1)
-      });
-      setNovaFerramentaRdo({ alocacao_id: '', quantidade: 1 });
-      const [dispRes, itensRes] = await Promise.all([
-        getRdoFerramentasDisponiveis(rdoId),
-        getRdoFerramentas(rdoId)
-      ]);
-      setFerramentasDisponiveis(dispRes.data || []);
-      setFerramentasRdo(itensRes.data || []);
-      setSucesso('Ativo vinculado ao RDO com sucesso.');
-    } catch (error) {
-      setErro(error?.response?.data?.erro || 'Erro ao vincular ativo ao RDO.');
     }
   };
 
@@ -211,12 +271,12 @@ function RDODetalhes() {
         <Navbar />
         <div className="container">
           <div className="alert alert-error">{erro || 'RDO não encontrado'}</div>
-          <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+          <div className="rdo-report-inline-actions">
             <button className="btn btn-secondary" onClick={() => navigate(`/projeto/${projetoId}/rdos`)}>
               <ArrowLeft size={16} /> Voltar
             </button>
             <button className="btn btn-primary" onClick={carregarDados}>
-              <Save size={16} /> Tentar recarregar
+              Recarregar
             </button>
           </div>
         </div>
@@ -224,36 +284,41 @@ function RDODetalhes() {
     );
   }
 
+  const fotos = arrayOf(rdo.fotos);
+  const anexosLista = anexos.length > 0 ? anexos : arrayOf(rdo.anexos);
+  const maoObraLista = arrayOf(rdo.mao_obra_detalhada).length > 0 ? arrayOf(rdo.mao_obra_detalhada) : maoObra;
+  const equipamentosLista = arrayOf(rdo.equipamentos_lista);
+  const atividadesEap = arrayOf(rdo.atividades).map(item => ({ ...item, tipo_relatorio: 'EAP' }));
+  const atividadesAvulsas = arrayOf(rdo.atividades_avulsas).map(item => ({
+    ...item,
+    tipo_relatorio: 'Avulsa',
+    descricao: item.descricao || item.atividade || item.nome
+  }));
+  const atividadesRelatorio = [...atividadesEap, ...atividadesAvulsas];
+  const cidadeUf = [rdo.cidade, rdo.uf].filter(Boolean).join(' - ') || 'N/A';
+  const horarioInicio = rdo.horario_inicio || rdo.entrada_saida_inicio || rdo.inicio_jornada;
+  const horarioFim = rdo.horario_fim || rdo.entrada_saida_fim || rdo.fim_jornada;
+  const intervalo = rdo.intervalo || rdo.intervalo_almoco || rdo.horario_intervalo;
+
   return (
     <>
       <Navbar />
-      <div className="container" style={{ paddingTop: '24px', paddingBottom: '40px' }}>
-        {/* Cabeçalho: título + ações */}
-        <div className="rdo-view-header">
-          <div className="rdo-view-header-left">
-            <button className="btn btn-secondary" onClick={() => navigate(`/projeto/${projetoId}/rdos`)}>
+      <main className="container rdo-report-page">
+        <div className="rdo-report-hero">
+          <div className="rdo-report-hero-main">
+            <button className="btn btn-secondary rdo-report-back-btn" onClick={() => navigate(`/projeto/${projetoId}/rdos`)}>
               <ArrowLeft size={16} />
             </button>
-            <div className="rdo-view-title-row">
-              <h1 className="rdo-view-title">{`RDO ${numeroRdoExibicao}`}</h1>
-              <span className="rdo-view-status" style={{
-                padding: '4px 10px',
-                background: (function(){
-                  if (rdo.status === 'Aprovado') return '#2E7D32';
-                  if (rdo.status === 'Em análise') return '#F9A825';
-                  if (rdo.status === 'Em preenchimento') return '#2962FF';
-                  if (rdo.status === 'Reprovado') return '#C62828';
-                  return '#888';
-                })(),
-                color: 'white',
-                borderRadius: '16px',
-                fontSize: '12px'
-              }}>
-                {statusLabel(rdo.status)}
-              </span>
+            <div>
+              <div className="rdo-report-eyebrow">Relatório diário de obra</div>
+              <div className="rdo-report-title-row">
+                <h1>RDO {numeroRdoExibicao}</h1>
+                <span className={`rdo-report-status ${statusClass(rdo.status)}`}>{statusLabel(rdo.status)}</span>
+              </div>
             </div>
           </div>
-          <div className="rdo-view-actions">
+
+          <div className="rdo-report-actions">
             <button className="btn btn-primary rdo-view-action-btn" onClick={handleDownloadPDF}>
               <Download size={16} /> PDF
             </button>
@@ -269,368 +334,327 @@ function RDODetalhes() {
             )}
             {canReprovarRdo && rdo.status === 'Em análise' && (
               <button className="btn btn-warning rdo-view-action-btn" onClick={() => setShowSolicitarCorrecaoModal(true)}>
-                Solicitar Correção
+                Solicitar correção
               </button>
             )}
             {isGestor && rdo.status === 'Aprovado' && (
-              <button className="btn btn-warning rdo-view-action-btn rdo-view-action-btn-wide" onClick={async () => {
-                try {
-                  await updateStatusRDO(rdoId, 'Em preenchimento');
-                  setRdo(prev => ({ ...prev, status: 'Em preenchimento' }));
-                } catch (error) {
-                  await alert({ title: 'Erro', message: 'Falha ao permitir edição: ' + (error.response?.data?.erro || error.message) });
-                }
-              }}>
+              <button
+                className="btn btn-warning rdo-view-action-btn rdo-view-action-btn-wide"
+                onClick={async () => {
+                  try {
+                    await updateStatusRDO(rdoId, 'Em preenchimento');
+                    setRdo(prev => ({ ...prev, status: 'Em preenchimento' }));
+                  } catch (error) {
+                    await alert({ title: 'Erro', message: 'Falha ao permitir edição: ' + (error.response?.data?.erro || error.message) });
+                  }
+                }}
+              >
                 Permitir edição
               </button>
             )}
           </div>
+
+          <div className="rdo-report-meta-grid">
+            <div className="rdo-report-meta-item">
+              <Calendar size={16} />
+              <span>Data</span>
+              <strong>{formatLocalDate(rdo.data_relatorio)}</strong>
+            </div>
+            <div className="rdo-report-meta-item">
+              <User size={16} />
+              <span>Responsável</span>
+              <strong>{rdo.criado_por_nome || 'N/A'}</strong>
+            </div>
+            <div className="rdo-report-meta-item">
+              <MapPin size={16} />
+              <span>Local</span>
+              <strong>{cidadeUf}</strong>
+            </div>
+            <div className="rdo-report-meta-item">
+              <Building2 size={16} />
+              <span>Obra</span>
+              <strong>{rdo.projeto_nome || 'N/A'}</strong>
+            </div>
+          </div>
         </div>
 
-        <div className="card" style={{ marginBottom: '16px', padding: '10px 16px', display: 'flex', gap: '18px', flexWrap: 'wrap', color: '#64748b', fontSize: '13px' }}>
-          <span><Calendar size={14} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} />{formatLocalDate(rdo.data_relatorio)}</span>
-          <span><User size={14} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} />{rdo.criado_por_nome || 'N/A'}</span>
-          <span><Building2 size={14} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} />{rdo.projeto_nome || 'N/A'}</span>
-          <span><MapPin size={14} style={{ marginRight: 6, verticalAlign: 'text-bottom' }} />{rdo.cidade || 'N/A'}</span>
-        </div>
-
-        {erro && <div className="alert alert-error" style={{ marginBottom: '16px' }}>{erro}</div>}
-        {sucesso && <div className="alert alert-success" style={{ marginBottom: '16px' }}>{sucesso}</div>}
+        {erro && <div className="alert alert-error rdo-report-alert">{erro}</div>}
+        {sucesso && <div className="alert alert-success rdo-report-alert">{sucesso}</div>}
         {Number(rdo.correcao_solicitada || 0) === 1 && (
           <div className="rdo-correction-alert">
             <div className="rdo-correction-alert-icon">
               <AlertTriangle size={18} />
             </div>
             <div>
-              <strong>Este RDO foi impactado por um recalculo de atividade.</strong>
-              <p>{rdo.correcao_motivo || 'Revise as informacoes antes de reenviar.'}</p>
-              <span>Revise as informacoes antes de reenviar para aprovacao.</span>
+              <strong>Este RDO foi impactado por um recálculo de atividade.</strong>
+              <p>{rdo.correcao_motivo || 'Revise as informações antes de reenviar.'}</p>
+              <span>Revise as informações antes de reenviar para aprovação.</span>
             </div>
           </div>
         )}
 
-        {/* KPI Cards */}
         <KPICards
           rdo={rdo}
-          maoObra={maoObra}
-          atividadesExecutadas={rdo.atividades || []}
+          maoObra={maoObraLista}
+          atividadesExecutadas={atividadesRelatorio}
           ocorrencias={ocorrencias}
         />
 
-        {/* Condições Climáticas — Manhã | Tarde lado a lado */}
-        <div className="card" style={{ padding: '0', marginBottom: '16px', overflow: 'hidden' }}>
-          <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
-            <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Condições Climáticas</span>
-          </div>
-          <div className="rdo-weather-grid">
-            <div className="rdo-weather-col rdo-weather-col-left">
-              <div className="rdo-weather-col-head">
-                <span className="rdo-weather-col-title">Manhã</span>
-              </div>
-              {[
-                { label: 'Clima', value: rdo.clima_manha || 'N/A' },
-                { label: 'Praticabilidade', value: rdo.praticabilidade_manha || 'N/A' },
-              ].map((row, i) => (
-                <div key={i} className="rdo-weather-row">
-                  <span className="rdo-weather-label">{row.label}</span>
-                  <span className="rdo-weather-value">{row.value}</span>
-                </div>
-              ))}
+        <Section icon={CloudSun} title="Clima e jornada">
+          <div className="rdo-report-info-grid">
+            <div className="rdo-report-daypart">
+              <strong>Manha</strong>
+              <div><span>Clima</span><b>{valueOrDash(rdo.clima_manha)}</b></div>
+              <div><span>Praticabilidade</span><b>{valueOrDash(rdo.praticabilidade_manha)}</b></div>
             </div>
-            <div className="rdo-weather-col">
-              <div className="rdo-weather-col-head">
-                <span className="rdo-weather-col-title">Tarde</span>
-              </div>
-              {[
-                { label: 'Clima', value: rdo.clima_tarde || 'N/A' },
-                { label: 'Praticabilidade', value: rdo.praticabilidade_tarde || 'N/A' },
-              ].map((row, i) => (
-                <div key={i} className="rdo-weather-row">
-                  <span className="rdo-weather-label">{row.label}</span>
-                  <span className="rdo-weather-value">{row.value}</span>
-                </div>
-              ))}
+            <div className="rdo-report-daypart">
+              <strong>Tarde</strong>
+              <div><span>Clima</span><b>{valueOrDash(rdo.clima_tarde)}</b></div>
+              <div><span>Praticabilidade</span><b>{valueOrDash(rdo.praticabilidade_tarde)}</b></div>
+            </div>
+            <div className="rdo-report-daypart">
+              <strong>Jornada</strong>
+              <div><span>Inicio</span><b>{valueOrDash(horarioInicio)}</b></div>
+              <div><span>Fim</span><b>{valueOrDash(horarioFim)}</b></div>
+              <div><span>Intervalo</span><b>{valueOrDash(intervalo)}</b></div>
+              <div><span>Total</span><b>{rdo.horas_trabalhadas ? `${rdo.horas_trabalhadas}h` : '-'}</b></div>
             </div>
           </div>
-        </div>
+        </Section>
 
-        {/* Mão de Obra */}
-        <div className="card" style={{ padding: '0', marginBottom: '16px', overflow: 'hidden' }}>
-          <div className="rdo-det-titlebar" style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
-            <span className="rdo-det-titlebar-label" style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Mão de Obra</span>
-          </div>
-          {(Array.isArray(rdo.mao_obra_detalhada) && rdo.mao_obra_detalhada.length > 0 ? rdo.mao_obra_detalhada : maoObra).length > 0 ? (
-            <div>
-              <div className="rdo-det-head-row" style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr', padding: '6px 16px', background: '#F9FAFB', borderBottom: '1px solid #F3F4F6' }}>
-                {['Nome', 'Função', 'Tipo', 'Horas'].map(h => (
-                  <span key={h} className="rdo-det-head-label" style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#9CA3AF' }}>{h}</span>
-                ))}
-              </div>
-              {(Array.isArray(rdo.mao_obra_detalhada) && rdo.mao_obra_detalhada.length > 0 ? rdo.mao_obra_detalhada : maoObra).map((item, index) => (
-                <div key={index} className="rdo-det-data-row" style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
-                  <span className="rdo-det-text-strong" style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{item.nome || item.nome_colaborador || '-'}</span>
-                  <span className="rdo-det-text" style={{ fontSize: '14px', color: '#374151' }}>{item.funcao || item.funcao_colaborador || '-'}</span>
-                  <span className="rdo-det-text" style={{ fontSize: '14px', color: '#374151' }}>{item.tipo ? String(item.tipo) : '-'}</span>
-                  <span className="rdo-det-text" style={{ fontSize: '14px', color: '#374151' }}>{(item.horas || item.horas_trabalhadas || (function(){
-                    const toMin = (t) => { const m = String(t||'').match(/(\d{1,2}):(\d{2})/); return m ? (parseInt(m[1],10)*60+parseInt(m[2],10)) : null; };
-                    const ini = toMin(item.entrada);
-                    const fim = toMin(item.saida_final);
-                    const i1 = toMin(item.saida_almoco);
-                    const i2 = toMin(item.retorno_almoco);
-                    if (ini==null || fim==null || fim<=ini) return 0;
-                    let tot = Math.max(0, fim-ini);
-                    if (i1!=null && i2!=null && i2>i1) tot = Math.max(0, tot-(i2-i1));
-                    return Math.round((tot/60)*100)/100;
-                  })())}h</span>
-                </div>
-              ))}
+        <Section icon={Users} title="Mão de obra" count={maoObraLista.length}>
+          {maoObraLista.length > 0 ? (
+            <div className="rdo-report-table-wrap">
+              <table className="rdo-report-table">
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>Função</th>
+                    <th>Tipo</th>
+                    <th>Horas</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {maoObraLista.map((item, index) => (
+                    <tr key={item.id || index}>
+                      <td>{item.nome || item.nome_colaborador || '-'}</td>
+                      <td>{item.funcao || item.funcao_colaborador || '-'}</td>
+                      <td>{valueOrDash(item.tipo)}</td>
+                      <td>{calculateHours(item)}h</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           ) : (
-            <div className="rdo-det-empty" style={{ padding: '16px', color: '#9CA3AF', fontSize: '14px' }}>Nenhum registro de mão de obra.</div>
+            <EmptyState>Nenhum registro de mão de obra.</EmptyState>
           )}
-        </div>
+        </Section>
 
-        {/* Equipamentos */}
-        {(rdo.equipamentos_lista || []).length > 0 && (
-          <div className="card" style={{ padding: '0', marginBottom: '16px', overflow: 'hidden' }}>
-            <div className="rdo-det-titlebar" style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
-              <span className="rdo-det-titlebar-label" style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Equipamentos</span>
-            </div>
-            <div className="rdo-det-head-row" style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', padding: '6px 16px', background: '#F9FAFB', borderBottom: '1px solid #F3F4F6' }}>
-              {['Equipamento', 'Quantidade'].map(h => (
-                <span key={h} className="rdo-det-head-label" style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#9CA3AF' }}>{h}</span>
-              ))}
-            </div>
-            {(rdo.equipamentos_lista || []).map((eq, idx) => (
-              <div key={eq.id || idx} className="rdo-det-data-row" style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
-                <span className="rdo-det-text-strong" style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{eq.nome}</span>
-                <span className="rdo-det-text" style={{ fontSize: '14px', color: '#374151' }}>{eq.quantidade}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Atividades Executadas */}
-        <div className="card" style={{ padding: '0', marginBottom: '16px', overflow: 'hidden' }}>
-          <div className="rdo-det-titlebar" style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
-            <span className="rdo-det-titlebar-label" style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Atividades Executadas</span>
-          </div>
-          {(rdo.atividades || []).length > 0 ? (
-            <div>
-              <div className="rdo-det-head-row" style={{ display: 'grid', gridTemplateColumns: '3fr 1fr 1fr', padding: '6px 16px', background: '#F9FAFB', borderBottom: '1px solid #F3F4F6' }}>
-                {['Atividade', 'Qtd', '%'].map(h => (
-                  <span key={h} className="rdo-det-head-label" style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#9CA3AF' }}>{h}</span>
-                ))}
-              </div>
-              {(rdo.atividades || []).map(atividade => (
-                <div key={atividade.id} className="rdo-det-data-row" style={{ display: 'grid', gridTemplateColumns: '3fr 1fr 1fr', padding: '8px 16px', borderBottom: '1px solid #F3F4F6', alignItems: 'center' }}>
-                  <div>
-                    <div className="rdo-det-text-strong" style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{atividade.codigo_eap ? `${atividade.codigo_eap} — ` : ''}{atividade.descricao}</div>
-                    {atividade.observacao && <div className="rdo-det-head-label" style={{ fontSize: '12px', color: '#9CA3AF', marginTop: '2px' }}>{atividade.observacao}</div>}
-                  </div>
-                  <span className="rdo-det-text" style={{ fontSize: '14px', color: '#374151' }}>{atividade.quantidade_executada ?? '-'}</span>
-                  <span className="rdo-det-text" style={{ fontSize: '14px', color: '#374151' }}>{atividade.percentual_executado != null ? `${atividade.percentual_executado}%` : '-'}</span>
-                </div>
-              ))}
+        <Section icon={Wrench} title="Equipamentos" count={equipamentosLista.length}>
+          {equipamentosLista.length > 0 ? (
+            <div className="rdo-report-table-wrap">
+              <table className="rdo-report-table">
+                <thead>
+                  <tr>
+                    <th>Equipamento</th>
+                    <th>Quantidade</th>
+                    <th>Observação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {equipamentosLista.map((eq, index) => (
+                    <tr key={eq.id || index}>
+                      <td>{eq.nome || eq.equipamento || '-'}</td>
+                      <td>{valueOrDash(eq.quantidade)}</td>
+                      <td>{valueOrDash(eq.observacao)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           ) : (
-            <div className="rdo-det-empty" style={{ padding: '16px', color: '#9CA3AF', fontSize: '14px' }}>Nenhuma atividade registrada neste RDO.</div>
+            <EmptyState>Nenhum equipamento registrado.</EmptyState>
           )}
-        </div>
+        </Section>
 
-        {/* Registros Fotográficos */}
-        {(rdo.fotos || []).length > 0 && (
-          <div className="card" style={{ padding: '0', marginBottom: '16px', overflow: 'hidden' }}>
-            <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>
-                Registros Fotográficos ({(rdo.fotos || []).length})
-              </span>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '12px', padding: '16px' }}>
-              {(rdo.fotos || []).map((foto) => (
-                <a
-                  key={foto.id}
-                  href={getUploadUrl(foto.caminho_arquivo)}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ display: 'block', textDecoration: 'none', borderRadius: '8px', overflow: 'hidden', border: '1px solid #E5E7EB', background: '#fff' }}
-                >
-                  <div style={{ position: 'relative', width: '100%', paddingTop: '75%', background: '#F3F4F6', overflow: 'hidden' }}>
-                    <img
-                      src={getUploadUrl(foto.caminho_arquivo)}
-                      alt={foto.descricao || 'Foto'}
-                      style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
+        <Section icon={ClipboardList} title="Atividades executadas" count={atividadesRelatorio.length}>
+          {atividadesRelatorio.length > 0 ? (
+            <div className="rdo-report-activity-list">
+              {atividadesRelatorio.map((atividade, index) => (
+                <article key={`${atividade.tipo_relatorio}-${atividade.id || index}`} className="rdo-report-activity-item">
+                  <div className="rdo-report-activity-main">
+                    <span className={`rdo-report-tag ${atividade.tipo_relatorio === 'Avulsa' ? 'is-loose' : ''}`}>
+                      {atividade.tipo_relatorio}
+                    </span>
+                    <h3>
+                      {atividade.codigo_eap ? `${atividade.codigo_eap} - ` : ''}
+                      {atividade.descricao || '-'}
+                    </h3>
+                    {atividade.observacao && <p>{atividade.observacao}</p>}
                   </div>
-                  <div style={{ padding: '8px 10px' }}>
-                    <div style={{ fontSize: '12px', fontWeight: 600, color: '#374151', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {foto.descricao || 'Foto'}
+                  <div className="rdo-report-activity-numbers">
+                    <div>
+                      <span>Qtd</span>
+                      <strong>{valueOrDash(atividade.quantidade_executada)}</strong>
                     </div>
-                    {(foto.atividade_descricao || foto.atividade_avulsa_descricao) && (
-                      <div style={{ fontSize: '11px', color: '#9CA3AF', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {foto.atividade_descricao
-                          ? `${foto.atividade_codigo ? `${foto.atividade_codigo} — ` : ''}${foto.atividade_descricao}`
-                          : `Avulsa — ${foto.atividade_avulsa_descricao}`}
-                      </div>
-                    )}
+                    <div>
+                      <span>%</span>
+                      <strong>{atividade.percentual_executado != null ? `${atividade.percentual_executado}%` : '-'}</strong>
+                    </div>
                   </div>
-                </a>
+                </article>
               ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <EmptyState>Nenhuma atividade registrada neste RDO.</EmptyState>
+          )}
+        </Section>
 
-        {/* Materiais Utilizados */}
-        <div className="card" style={{ padding: '0', marginBottom: '16px', overflow: 'hidden' }}>
-          <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
-            <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Materiais Utilizados</span>
-          </div>
+        <Section icon={ImageIcon} title="Registros fotográficos" count={fotos.length}>
+          {fotos.length > 0 ? (
+            <div className="rdo-report-photo-grid">
+              {fotos.map((foto, index) => {
+                const linkedActivity = foto.atividade_descricao
+                  ? `${foto.atividade_codigo ? `${foto.atividade_codigo} - ` : ''}${foto.atividade_descricao}`
+                  : foto.atividade_avulsa_descricao
+                    ? `Avulsa - ${foto.atividade_avulsa_descricao}`
+                    : '';
+                const fileName = foto.nome_arquivo || foto.nome_original || foto.caminho_arquivo?.split('/').pop();
+                return (
+                  <a
+                    key={foto.id || index}
+                    className={`rdo-report-photo-card ${index === 0 && fotos.length > 1 ? 'is-featured' : ''}`}
+                    href={getUploadUrl(foto.caminho_arquivo)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <div className="rdo-report-photo-media">
+                      <img src={getUploadUrl(foto.caminho_arquivo)} alt={foto.descricao || 'Foto do RDO'} />
+                    </div>
+                    <div className="rdo-report-photo-info">
+                      <strong>{foto.descricao || 'Foto sem descrição'}</strong>
+                      {linkedActivity && <span>{linkedActivity}</span>}
+                      {fileName && <small>{fileName}</small>}
+                    </div>
+                  </a>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyState>Nenhum registro fotográfico anexado.</EmptyState>
+          )}
+        </Section>
+
+        <Section icon={Package} title="Materiais utilizados" count={materiais.length}>
           {materiais.length > 0 ? (
-            <div>
-              <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr 1fr 2fr', padding: '6px 16px', background: '#F9FAFB', borderBottom: '1px solid #F3F4F6' }}>
-                {['Material', 'Quantidade', 'Unidade', 'Nº NF'].map(h => (
-                  <span key={h} style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#9CA3AF' }}>{h}</span>
-                ))}
-              </div>
-              {materiais.map((item, index) => (
-                <div key={index} style={{ display: 'grid', gridTemplateColumns: '3fr 1fr 1fr 2fr', padding: '8px 16px', borderBottom: '1px solid #F3F4F6' }}>
-                  <span style={{ fontSize: '14px', color: '#111827', fontWeight: 500 }}>{item.nome_material || item.nome}</span>
-                  <span style={{ fontSize: '14px', color: '#374151' }}>{item.quantidade}</span>
-                  <span style={{ fontSize: '14px', color: '#374151' }}>{item.unidade}</span>
-                  <span style={{ fontSize: '14px', color: '#374151' }}>{item.numero_nf || '—'}</span>
-                </div>
-              ))}
+            <div className="rdo-report-table-wrap">
+              <table className="rdo-report-table">
+                <thead>
+                  <tr>
+                    <th>Material</th>
+                    <th>Quantidade</th>
+                    <th>Unidade</th>
+                    <th>NF</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {materiais.map((item, index) => (
+                    <tr key={item.id || index}>
+                      <td>{item.nome_material || item.nome || '-'}</td>
+                      <td>{valueOrDash(item.quantidade)}</td>
+                      <td>{valueOrDash(item.unidade)}</td>
+                      <td>{valueOrDash(item.numero_nf)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           ) : (
-            <div style={{ padding: '16px', color: '#9CA3AF', fontSize: '14px' }}>Nenhum material registrado.</div>
+            <EmptyState>Nenhum material registrado.</EmptyState>
           )}
-        </div>
+        </Section>
 
-        {/* Ocorrências */}
-        <div className="card" style={{ padding: '0', marginBottom: '16px', overflow: 'hidden' }}>
-          <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
-            <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Ocorrências</span>
-          </div>
+        <Section icon={AlertTriangle} title="Ocorrências" count={ocorrencias.length}>
           {ocorrencias.length > 0 ? (
-            <div>
+            <div className="rdo-report-note-list">
               {ocorrencias.map((item, index) => (
-                <div key={index} style={{ padding: '12px 16px', borderBottom: '1px solid #F3F4F6', background: (item.gravidade || '').toLowerCase() === 'alta' ? '#FFFBEB' : 'transparent' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                    <span style={{ fontSize: '14px', color: '#111827', fontWeight: 600 }}>{item.titulo}</span>
-                    {item.gravidade && (
-                      <span style={{
-                        fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em',
-                        padding: '2px 8px', borderRadius: '4px',
-                        background: (item.gravidade || '').toLowerCase() === 'alta' ? '#FEF3C7' : (item.gravidade || '').toLowerCase().startsWith('m') ? '#EDE9FE' : '#F3F4F6',
-                        color: (item.gravidade || '').toLowerCase() === 'alta' ? '#92400E' : (item.gravidade || '').toLowerCase().startsWith('m') ? '#5B21B6' : '#6B7280',
-                      }}>{item.gravidade}</span>
-                    )}
+                <article key={item.id || index} className="rdo-report-note-item">
+                  <div>
+                    <h3>{item.titulo || item.tipo || 'Ocorrência'}</h3>
+                    <p>{item.descricao || '-'}</p>
                   </div>
-                  <div style={{ fontSize: '13px', color: '#6B7280' }}>{item.descricao}</div>
-                </div>
+                  {item.gravidade && <span className="rdo-report-severity">{item.gravidade}</span>}
+                </article>
               ))}
             </div>
           ) : (
-            <div style={{ padding: '16px', color: '#9CA3AF', fontSize: '14px' }}>Nenhuma ocorrência registrada.</div>
+            <EmptyState>Nenhuma ocorrência registrada.</EmptyState>
           )}
-        </div>
+        </Section>
 
-        {/* Comentários */}
-        {comentarios.length > 0 && (
-          <div className="card" style={{ padding: '0', marginBottom: '16px', overflow: 'hidden' }}>
-            <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>Comentários</span>
+        <Section icon={MessageSquare} title="Comentários" count={comentarios.length}>
+          {comentarios.length > 0 ? (
+            <div className="rdo-report-note-list">
+              {comentarios.map((item, index) => (
+                <article key={item.id || index} className="rdo-report-note-item">
+                  <div>
+                    <h3>{item.usuario_nome || item.autor || 'Comentário'}</h3>
+                    <p>{item.comentario}</p>
+                  </div>
+                  {item.created_at && <span>{formatLocalDate(item.created_at)}</span>}
+                </article>
+              ))}
             </div>
-            {comentarios.map((item, index) => (
-              <div key={index} style={{ padding: '12px 16px', borderBottom: '1px solid #F3F4F6', fontSize: '14px', color: '#374151' }}>
-                {item.comentario}
-              </div>
-            ))}
-          </div>
-        )}
+          ) : (
+            <EmptyState>Nenhum comentário registrado.</EmptyState>
+          )}
+        </Section>
 
-        {/* Anexos — somente PDFs */}
-        {anexos.filter(a => (a.tipo || '').includes('pdf') || (a.nome_arquivo || a.nome_original || '').toLowerCase().endsWith('.pdf')).length > 0 && (
-          <div className="card" style={{ padding: '0', marginBottom: '16px', overflow: 'hidden' }}>
-            <div style={{ padding: '10px 16px', borderBottom: '1px solid #F3F4F6', background: '#F9FAFB' }}>
-              <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6B7280' }}>
-                Anexos ({anexos.filter(a => (a.tipo || '').includes('pdf') || (a.nome_arquivo || a.nome_original || '').toLowerCase().endsWith('.pdf')).length})
-              </span>
+        <Section icon={Paperclip} title="Anexos" count={anexosLista.length}>
+          {anexosLista.length > 0 ? (
+            <div className="rdo-report-attachment-grid">
+              {anexosLista.map((anexo, index) => {
+                const kind = getAttachmentKind(anexo);
+                const Icon = getAttachmentIcon(kind);
+                const nome = anexo.nome_arquivo || anexo.nome_original || anexo.nome || 'Anexo';
+                const caminho = anexo.caminho_arquivo || '';
+                return (
+                  <a
+                    key={anexo.id || index}
+                    className={`rdo-report-attachment-card is-${kind}`}
+                    href={getUploadUrl(caminho)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <span className="rdo-report-attachment-icon">
+                      <Icon size={22} />
+                    </span>
+                    <span className="rdo-report-attachment-info">
+                      <strong>{nome}</strong>
+                      <small>{kind.toUpperCase()} - {formatBytes(anexo.tamanho)}</small>
+                    </span>
+                  </a>
+                );
+              })}
             </div>
-            <div style={{ padding: '8px 0' }}>
-              {anexos
-                .filter(a => (a.tipo || '').includes('pdf') || (a.nome_arquivo || a.nome_original || '').toLowerCase().endsWith('.pdf'))
-                .map((anexo) => {
-                  const nome = anexo.nome_arquivo || anexo.nome_original || 'Anexo.pdf';
-                  const caminho = anexo.caminho_arquivo || '';
-                  return (
-                    <a
-                      key={anexo.id}
-                      href={getUploadUrl(caminho)}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 16px', borderBottom: '1px solid #F3F4F6', textDecoration: 'none', color: 'inherit' }}
-                    >
-                      <FileText size={20} style={{ color: '#ef4444', flexShrink: 0 }} />
-                      <div>
-                        <div style={{ fontSize: '13px', fontWeight: 600, color: '#111827' }}>{nome}</div>
-                        {anexo.tamanho ? (
-                          <div style={{ fontSize: '11px', color: '#9CA3AF' }}>{(anexo.tamanho / 1024).toFixed(0)} KB · Clique para abrir</div>
-                        ) : (
-                          <div style={{ fontSize: '11px', color: '#9CA3AF' }}>Clique para abrir</div>
-                        )}
-                      </div>
-                    </a>
-                  );
-                })}
-            </div>
-          </div>
-        )}
-      </div>
+          ) : (
+            <EmptyState>Nenhum anexo enviado para este RDO.</EmptyState>
+          )}
+        </Section>
+      </main>
 
-      {/* Modal de Solicitar Correção */}
       {showSolicitarCorrecaoModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            background: 'white',
-            borderRadius: '12px',
-            padding: '24px',
-            maxWidth: '500px',
-            width: '90%',
-            boxShadow: '0 20px 25px rgba(0, 0, 0, 0.15)'
-          }}>
-            <h2 style={{ marginBottom: '16px', color: '#111827', fontSize: '20px' }}>Solicitar Correção</h2>
-            <p style={{ marginBottom: '16px', color: '#6B7280', fontSize: '14px' }}>
-              Descreva quais correções devem ser feitas neste RDO.
-            </p>
+        <div className="rdo-report-modal-backdrop">
+          <div className="rdo-report-modal">
+            <h2>Solicitar correção</h2>
+            <p>Descreva quais correções devem ser feitas neste RDO.</p>
             <textarea
               value={textoCorrecao}
               onChange={(e) => setTextoCorrecao(e.target.value)}
               placeholder="Ex: Revisar as quantidades de mão de obra registradas..."
-              style={{
-                width: '100%',
-                minHeight: '120px',
-                padding: '12px',
-                borderRadius: '8px',
-                border: '1px solid #D1D5DB',
-                fontFamily: 'inherit',
-                fontSize: '14px',
-                marginBottom: '16px',
-                resize: 'vertical'
-              }}
             />
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+            <div className="rdo-report-modal-actions">
               <button
                 onClick={() => {
                   setShowSolicitarCorrecaoModal(false);
@@ -646,7 +670,7 @@ function RDODetalhes() {
                 className="btn btn-warning"
                 disabled={isEnviandoCorrecao || !textoCorrecao.trim()}
               >
-                {isEnviandoCorrecao ? 'Enviando...' : 'Solicitar Correção'}
+                {isEnviandoCorrecao ? 'Enviando...' : 'Solicitar correção'}
               </button>
             </div>
           </div>
