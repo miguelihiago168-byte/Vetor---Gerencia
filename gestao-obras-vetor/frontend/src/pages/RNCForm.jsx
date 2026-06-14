@@ -383,7 +383,7 @@ function RNCForm() {
                 <div className="rnc-section-icon rnc-icon-teal"><Camera size={16} /></div>
                 <div>
                   <h3>Evidências fotográficas</h3>
-                  <p>Registre no mínimo 4 fotos da não conformidade como evidência</p>
+                  <p>Selecione no mínimo 4 fotos da não conformidade como evidência inicial</p>
                 </div>
               </div>
 
@@ -403,8 +403,8 @@ function RNCForm() {
                   onChange={e => adicionarFotos(e.target.files)}
                 />
                 <Upload size={28} className="rnc-dropzone-icon" />
-                <p><strong>Clique ou arraste as fotos aqui</strong></p>
-                <small>JPG, PNG, HEIC — até 10 MB por arquivo (mínimo de 4 fotos)</small>
+                <p><strong>Selecionar fotos da não conformidade</strong></p>
+                <small>Clique ou arraste as evidências aqui. JPG, PNG ou HEIC, até 10 MB por arquivo. Mínimo de 4 fotos.</small>
               </div>
 
               {fotoPreviews.length > 0 && (

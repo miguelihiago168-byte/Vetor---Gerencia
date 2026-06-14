@@ -308,6 +308,8 @@ const initDatabase = async () => {
           gravidade TEXT NOT NULL,
           status TEXT DEFAULT 'Aberta',
           acao_corretiva TEXT,
+          descricao_correcao TEXT,
+          descricao_correcao_em DATETIME,
           responsavel_id INTEGER,
           criado_por INTEGER NOT NULL,
           criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,

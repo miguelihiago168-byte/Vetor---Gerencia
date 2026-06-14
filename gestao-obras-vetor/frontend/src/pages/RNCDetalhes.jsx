@@ -2,83 +2,104 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import {
-  getRNCs, updateStatusRNC, getAnexosRNC, uploadAnexoRNC,
-  submitCorrecaoRNC, enviarRncParaAprovacao, getRNCPDF, getUploadUrl
+  getRNCs,
+  updateStatusRNC,
+  getAnexosRNC,
+  uploadAnexoRNC,
+  submitCorrecaoRNC,
+  enviarRncParaAprovacao,
+  getRNCPDF,
+  getUploadUrl
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import {
-  AlertTriangle, ArrowLeft, FileText, CheckCircle2,
-  XCircle, Send, Paperclip, Wrench, User,
-  Calendar, Info, Upload, X, CheckCircle
+  AlertTriangle,
+  ArrowLeft,
+  FileText,
+  CheckCircle2,
+  XCircle,
+  Send,
+  Paperclip,
+  Wrench,
+  User,
+  Calendar,
+  Info,
+  Upload,
+  X,
+  CheckCircle
 } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import './RNCDetalhes.css';
 
-/* helpers */
-const cleanText = (v) => {
-  if (v == null) return '';
-  const t = String(v).trim();
-  return (t === '' || t.toLowerCase() === 'null' || t.toLowerCase() === 'undefined') ? '' : t;
+const cleanText = (value) => {
+  if (value == null) return '';
+  const text = String(value).trim();
+  return text === '' || text.toLowerCase() === 'null' || text.toLowerCase() === 'undefined' ? '' : text;
 };
+
 const normalizeUploadPath = (raw) => {
-  const b = cleanText(raw);
-  if (!b) return '';
-  let normalized = b.replace(/\\/g, '/').replace(/^\/+/, '');
+  const base = cleanText(raw);
+  if (!base) return '';
+  let normalized = base.replace(/\\/g, '/').replace(/^\/+/, '');
   const uploadsIndex = normalized.toLowerCase().lastIndexOf('/uploads/');
   if (uploadsIndex >= 0) normalized = normalized.slice(uploadsIndex + '/uploads/'.length);
   return normalized.replace(/^api\/uploads\//i, '').replace(/^uploads\//i, '').split('?')[0];
 };
-const uploadFileUrl = (a) => {
-  const p = normalizeUploadPath(a?.caminho_arquivo);
-  return p ? getUploadUrl(p) : '#';
+
+const uploadFileUrl = (anexo) => {
+  const path = normalizeUploadPath(anexo?.caminho_arquivo);
+  return path ? getUploadUrl(path) : '#';
 };
+
 const getToken = () => localStorage.getItem('token') || sessionStorage.getItem('token') || '';
-const isImage = (a) => {
-  const t = String(a?.tipo || '').toLowerCase();
-  const n = String(a?.nome_arquivo || '').toLowerCase();
-  return t.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|heic|heif)$/.test(n);
+
+const isImage = (anexo) => {
+  const type = String(anexo?.tipo || '').toLowerCase();
+  const name = String(anexo?.nome_arquivo || '').toLowerCase();
+  return type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|heic|heif)$/.test(name);
 };
-const fmtDate = (s) => {
-  if (!s) return null;
-  const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (m) return new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString('pt-BR');
-  const d = new Date(s);
-  return isNaN(d.getTime()) ? null : d.toLocaleDateString('pt-BR');
+
+const fmtDate = (value) => {
+  if (!value) return null;
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const date = match ? new Date(+match[1], +match[2] - 1, +match[3]) : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toLocaleDateString('pt-BR');
 };
-const fmtDatetime = (s) => {
-  if (!s) return null;
-  const d = new Date(s);
-  if (isNaN(d.getTime())) return fmtDate(s);
-  return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+const fmtDatetime = (value) => {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return fmtDate(value);
+  return `${date.toLocaleDateString('pt-BR')} ${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 };
 
 const STATUS_META = {
-  'Aberta':       { label: 'Aberta',       cls: 'status-aberta'   },
-  'Em andamento': { label: 'Aberta',       cls: 'status-aberta'   },
-  'Em análise':   { label: 'Em aprovação', cls: 'status-analise'  },
-  'Encerrada':    { label: 'Encerrada',    cls: 'status-encerrada'},
-  'Reprovada':    { label: 'Reprovada',    cls: 'status-reprovada'},
+  Aberta: { label: 'Aberta', cls: 'status-aberta' },
+  'Em andamento': { label: 'Aberta', cls: 'status-aberta' },
+  'Em análise': { label: 'Em aprovação', cls: 'status-analise' },
+  Encerrada: { label: 'Encerrada', cls: 'status-encerrada' },
+  Reprovada: { label: 'Reprovada', cls: 'status-reprovada' }
 };
 
-const GRAV_CLS = (g) => {
-  if (!g) return '';
-  const l = g.toLowerCase();
-  if (l.includes('cr')) return 'grav-critica';
-  if (l === 'alta')     return 'grav-alta';
-  if (l.includes('m'))  return 'grav-media';
+const GRAV_CLS = (gravidade) => {
+  if (!gravidade) return '';
+  const lower = gravidade.toLowerCase();
+  if (lower.includes('cr')) return 'grav-critica';
+  if (lower === 'alta') return 'grav-alta';
+  if (lower.includes('m')) return 'grav-media';
   return 'grav-baixa';
 };
 
 const STEPS = [
-  { key: 'abertura',  label: 'Registro',  icon: AlertTriangle },
-  { key: 'correcao',  label: 'Correção',   icon: Wrench        },
-  { key: 'aprovacao', label: 'Aprovação',  icon: CheckCircle   },
-  { key: 'encerrada', label: 'Encerrada',  icon: CheckCircle2  },
+  { key: 'abertura', label: 'Registro', icon: AlertTriangle },
+  { key: 'correcao', label: 'Correção', icon: Wrench },
+  { key: 'aprovacao', label: 'Aprovação', icon: CheckCircle },
+  { key: 'encerrada', label: 'Encerrada', icon: CheckCircle2 }
 ];
 
 const stepIndex = (status) => {
-  if (status === 'Em análise')              return 2;
-  if (status === 'Encerrada')               return 3;
+  if (status === 'Em análise') return 2;
+  if (status === 'Encerrada') return 3;
   if (status === 'Aberta' || status === 'Em andamento' || status === 'Reprovada') return 1;
   return 1;
 };
@@ -86,24 +107,24 @@ const stepIndex = (status) => {
 function RNCDetalhes() {
   const { projetoId, rncId } = useParams();
   const navigate = useNavigate();
-  const { isGestor, usuario } = useAuth();
+  const { isGestor } = useAuth();
   const { success, error } = useNotification();
 
-  const [rnc,    setRnc]    = useState(null);
-  const [loading,setLoading]= useState(true);
-  const [erro,   setErro]   = useState('');
+  const [rnc, setRnc] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState('');
   const [anexos, setAnexos] = useState([]);
-
-  const [correcaoTexto,   setCorrecaoTexto]   = useState('');
-  const [fotosCorrecao,   setFotosCorrecao]   = useState([]);
+  const [correcaoTexto, setCorrecaoTexto] = useState('');
+  const [fotosCorrecao, setFotosCorrecao] = useState([]);
   const [previewCorrecao, setPreviewCorrecao] = useState([]);
-  const [enviando,        setEnviando]        = useState(false);
-  const [draggingC,       setDraggingC]       = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [draggingC, setDraggingC] = useState(false);
   const dropCorrecaoRef = useRef(null);
 
-  const [fotoFile, setFotoFile] = useState(null);
+  useEffect(() => {
+    carregarRNC();
+  }, [rncId]);
 
-  useEffect(() => { carregarRNC(); }, [rncId]);
   useEffect(() => {
     if (rnc?.descricao_correcao) setCorrecaoTexto(rnc.descricao_correcao);
   }, [rnc?.descricao_correcao]);
@@ -112,183 +133,209 @@ function RNCDetalhes() {
     try {
       setLoading(true);
       const res = await getRNCs(projetoId);
-      const found = (res.data || []).find(r => String(r.id) === String(rncId));
-      if (!found) { setErro('RNC não encontrada'); return; }
+      const found = (res.data || []).find((item) => String(item.id) === String(rncId));
+      if (!found) {
+        setErro('RNC não encontrada');
+        return;
+      }
       setRnc(found);
       try {
-        const aRes = await getAnexosRNC(rncId);
-        setAnexos(aRes.data || []);
-      } catch {}
-    } catch { setErro('Erro ao carregar RNC'); }
-    finally  { setLoading(false); }
+        const anexosRes = await getAnexosRNC(rncId);
+        setAnexos(anexosRes.data || []);
+      } catch (_) {
+        setAnexos([]);
+      }
+    } catch (_) {
+      setErro('Erro ao carregar RNC');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const adicionarFotosCorrecao = (files) => {
-    const arr = Array.from(files).filter(f => f.type.startsWith('image/') || /\.(jpg|jpeg|png|heic|heif|webp)$/i.test(f.name));
-    if (!arr.length) return;
-    setFotosCorrecao(prev => [...prev, ...arr]);
-    arr.forEach(f => {
+    const selected = Array.from(files || []).filter((file) =>
+      file.type.startsWith('image/') || /\.(jpg|jpeg|png|heic|heif|webp)$/i.test(file.name)
+    );
+    if (!selected.length) return;
+
+    setFotosCorrecao((prev) => [...prev, ...selected]);
+    selected.forEach((file) => {
       const reader = new FileReader();
-      reader.onload = ev => setPreviewCorrecao(prev => [...prev, { name: f.name, src: ev.target.result }]);
-      reader.readAsDataURL(f);
+      reader.onload = (event) => setPreviewCorrecao((prev) => [...prev, { name: file.name, src: event.target.result }]);
+      reader.readAsDataURL(file);
     });
   };
 
-  const removerFotoCorrecao = (i) => {
-    setFotosCorrecao(prev => prev.filter((_, j) => j !== i));
-    setPreviewCorrecao(prev => prev.filter((_, j) => j !== i));
+  const removerFotoCorrecao = (index) => {
+    setFotosCorrecao((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
+    setPreviewCorrecao((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
   };
 
   const enviarCorrecao = async () => {
-    if (!correcaoTexto.trim()) { error('Descreva o que foi feito para corrigir a não conformidade.'); return; }
-    const totalFotosCorrecao = anexos.filter(a => a.categoria === 'correcao' && isImage(a)).length + fotosCorrecao.length;
-    if (totalFotosCorrecao < 4) { error('Inclua no mínimo 4 fotos da correção para enviar à aprovação.'); return; }
+    if (!correcaoTexto.trim()) {
+      error('Descreva o que foi feito para corrigir a não conformidade.');
+      return;
+    }
+
+    const totalFotosCorrecao = anexos.filter((anexo) => anexo.categoria === 'correcao' && isImage(anexo)).length + fotosCorrecao.length;
+    if (totalFotosCorrecao < 4) {
+      error('Inclua no mínimo 4 fotos da correção para enviar à aprovação.');
+      return;
+    }
     if (enviando) return;
+
     setEnviando(true);
     try {
-      await submitCorrecaoRNC(rncId, { descricao_correcao: correcaoTexto.trim() });
       for (const foto of fotosCorrecao) {
-        try {
-          const fd = new FormData();
-          fd.append('arquivo', foto);
-          fd.append('descricao', 'Foto da correção');
-          fd.append('categoria', 'correcao');
-          await uploadAnexoRNC(rncId, fd);
-        } catch {}
+        const formData = new FormData();
+        formData.append('arquivo', foto);
+        formData.append('descricao', 'Foto da correção');
+        formData.append('categoria', 'correcao');
+        await uploadAnexoRNC(rncId, formData);
       }
+
+      await submitCorrecaoRNC(rncId, { descricao_correcao: correcaoTexto.trim() });
       await enviarRncParaAprovacao(rncId);
       success('Correção registrada e enviada para aprovação!');
       await carregarRNC();
       setFotosCorrecao([]);
       setPreviewCorrecao([]);
     } catch (err) {
-      error('Falha: ' + (err.response?.data?.erro || err.message));
-    } finally { setEnviando(false); }
+      error('Falha ao enviar correção: ' + (err.response?.data?.erro || err.message));
+    } finally {
+      setEnviando(false);
+    }
   };
 
   const aprovarRNC = async () => {
     try {
       await updateStatusRNC(rncId, 'Encerrada');
-      setRnc(prev => ({ ...prev, status: 'Encerrada' }));
+      setRnc((prev) => ({ ...prev, status: 'Encerrada' }));
       success('RNC aprovada e encerrada.');
-    } catch (err) { error('Falha: ' + (err.response?.data?.erro || err.message)); }
+    } catch (err) {
+      error('Falha: ' + (err.response?.data?.erro || err.message));
+    }
   };
 
   const reprovarRNC = async () => {
     try {
       await updateStatusRNC(rncId, 'Reprovada');
-      setRnc(prev => ({ ...prev, status: 'Reprovada' }));
-      success('RNC reprovada — responsável deve corrigir novamente.');
-    } catch (err) { error('Falha: ' + (err.response?.data?.erro || err.message)); }
-  };
-
-  const uploadFotoRegistro = async () => {
-    if (!fotoFile) return;
-    try {
-      const fd = new FormData();
-      fd.append('arquivo', fotoFile);
-      fd.append('descricao', 'Evidência fotográfica');
-      fd.append('categoria', 'registro');
-      await uploadAnexoRNC(rncId, fd);
-      const res = await getAnexosRNC(rncId);
-      setAnexos(res.data || []);
-      setFotoFile(null);
-      success('Foto adicionada.');
-    } catch (err) { error('Falha ao enviar foto: ' + (err.response?.data?.erro || err.message)); }
+      setRnc((prev) => ({ ...prev, status: 'Reprovada' }));
+      success('RNC reprovada - responsável deve corrigir novamente.');
+    } catch (err) {
+      error('Falha: ' + (err.response?.data?.erro || err.message));
+    }
   };
 
   const handleOpenPdf = async () => {
-    const w = window.open('about:blank', '_blank');
+    const pdfWindow = window.open('about:blank', '_blank');
     try {
       const res = await getRNCPDF(rncId);
       const url = URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
-      if (w) w.location.href = url; else window.open(url, '_blank');
+      if (pdfWindow) pdfWindow.location.href = url;
+      else window.open(url, '_blank');
       window.setTimeout(() => URL.revokeObjectURL(url), 300000);
     } catch (err) {
       if (Number(err?.response?.status) >= 500) {
         const token = getToken();
-        const fb = token ? `/api/rnc/${rncId}/pdf?token=${encodeURIComponent(token)}` : `/api/rnc/${rncId}/pdf`;
-        if (w) w.location.href = fb; else window.open(fb, '_blank');
+        const fallback = token ? `/api/rnc/${rncId}/pdf?token=${encodeURIComponent(token)}` : `/api/rnc/${rncId}/pdf`;
+        if (pdfWindow) pdfWindow.location.href = fallback;
+        else window.open(fallback, '_blank');
         return;
       }
-      if (w) w.close();
+      if (pdfWindow) pdfWindow.close();
       error('Falha ao abrir PDF: ' + (err.response?.data?.erro || err.message));
     }
   };
 
-  // Suporte ao campo legado registros_fotograficos (JSON com paths)
   const legacyFotos = (() => {
     if (!rnc?.registros_fotograficos) return [];
     try {
       let raw = rnc.registros_fotograficos;
       if (typeof raw === 'string') raw = JSON.parse(raw);
       if (!Array.isArray(raw)) return [];
-      return raw.map((item, i) => {
-        const p = typeof item === 'string' ? item : (item?.caminho_arquivo || item?.path || item?.url || '');
-        if (!p) return null;
-        const normalized = p.replace(/\\/g, '/').replace(/^\/+/, '').replace(/^uploads\//i, '');
+      return raw.map((item, index) => {
+        const path = typeof item === 'string' ? item : (item?.caminho_arquivo || item?.path || item?.url || '');
+        if (!path) return null;
+        const normalized = path.replace(/\\/g, '/').replace(/^\/+/, '').replace(/^uploads\//i, '');
         if (!normalized) return null;
-        return { id: `legacy-${i}`, caminho_arquivo: normalized, nome_arquivo: normalized.split('/').pop(), tipo: 'image/jpeg', categoria: 'registro' };
+        return {
+          id: `legacy-${index}`,
+          caminho_arquivo: normalized,
+          nome_arquivo: normalized.split('/').pop(),
+          tipo: 'image/jpeg',
+          categoria: 'registro'
+        };
       }).filter(Boolean);
-    } catch { return []; }
+    } catch (_) {
+      return [];
+    }
   })();
 
   const anexosRegistro = [
-    ...anexos.filter(a => !a.categoria || a.categoria === 'registro'),
-    ...legacyFotos.filter(lf => !anexos.some(a => a.caminho_arquivo === lf.caminho_arquivo))
+    ...anexos.filter((anexo) => !anexo.categoria || anexo.categoria === 'registro'),
+    ...legacyFotos.filter((legacy) => !anexos.some((anexo) => anexo.caminho_arquivo === legacy.caminho_arquivo))
   ];
-  const anexosCorrecao = anexos.filter(a => a.categoria === 'correcao');
+  const anexosCorrecao = anexos.filter((anexo) => anexo.categoria === 'correcao');
   const fotosRegistro = anexosRegistro.filter(isImage);
   const fotosCorrecaoRegistradas = anexosCorrecao.filter(isImage);
 
-  if (loading) return (
-    <><Navbar />
-      <div className="container rdet-page" style={{ textAlign: 'center', paddingTop: 80 }}>
-        <div className="spinner" />
-      </div>
-    </>
-  );
-
-  if (!rnc) return (
-    <><Navbar />
-      <div className="container rdet-page">
-        <div className="rdet-empty-state">
-          <AlertTriangle size={40} />
-          <p>{erro || 'RNC não encontrada.'}</p>
-          <button className="btn btn-secondary" onClick={() => navigate(`/projeto/${projetoId}/rnc`)}>
-            <ArrowLeft size={15} /> Voltar
-          </button>
+  if (loading) {
+    return (
+      <>
+        <Navbar />
+        <div className="container rdet-page" style={{ textAlign: 'center', paddingTop: 80 }}>
+          <div className="spinner" />
         </div>
-      </div>
-    </>
-  );
+      </>
+    );
+  }
 
-  const titulo      = cleanText(rnc.titulo) || `RNC #${rnc.id}`;
-  const statusMeta  = STATUS_META[rnc.status] || { label: rnc.status, cls: 'status-aberta' };
-  const activeStep  = stepIndex(rnc.status);
+  if (!rnc) {
+    return (
+      <>
+        <Navbar />
+        <div className="container rdet-page">
+          <div className="rdet-empty-state">
+            <AlertTriangle size={40} />
+            <p>{erro || 'RNC não encontrada.'}</p>
+            <button className="btn btn-secondary" onClick={() => navigate(`/projeto/${projetoId}/rnc`)}>
+              <ArrowLeft size={15} /> Voltar
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  const titulo = cleanText(rnc.titulo) || `RNC #${rnc.id}`;
+  const statusMeta = STATUS_META[rnc.status] || { label: rnc.status, cls: 'status-aberta' };
+  const activeStep = stepIndex(rnc.status);
   const isEncerrada = rnc.status === 'Encerrada';
   const isEmAnalise = rnc.status === 'Em análise';
-  const isAberta    = rnc.status === 'Aberta' || rnc.status === 'Em andamento';
+  const isAberta = rnc.status === 'Aberta' || rnc.status === 'Em andamento';
   const isReprovada = rnc.status === 'Reprovada';
-  const uid = String(usuario?.id ?? '');
-  const canEdit     = (isGestor || uid === String(rnc.criado_por) || uid === String(rnc.responsavel_id)) && !isEncerrada;
-  // Mostra o campo de correção sempre que a RNC está aberta/reprovada; o backend valida a permissão real
-  const podeCorrigir  = isAberta || isReprovada;
+  const podeCorrigir = (isAberta || isReprovada) && !isEncerrada;
   const totalFotosCorrecao = fotosCorrecaoRegistradas.length + fotosCorrecao.length;
 
   const timeline = [
-    { icon: AlertTriangle, color: '#2563eb', label: 'RNC registrada',          date: fmtDatetime(rnc.criado_em),    detail: titulo },
-    rnc.descricao_correcao && { icon: Wrench, color: '#16a34a', label: 'Correção registrada', date: fmtDatetime(rnc.atualizado_em), detail: cleanText(rnc.descricao_correcao).slice(0,80) + (cleanText(rnc.descricao_correcao).length > 80 ? '…' : '') },
+    { icon: AlertTriangle, color: '#2563eb', label: 'RNC registrada', date: fmtDatetime(rnc.criado_em), detail: titulo },
+    rnc.descricao_correcao && {
+      icon: Wrench,
+      color: '#16a34a',
+      label: 'Correção registrada',
+      date: fmtDatetime(rnc.atualizado_em),
+      detail: cleanText(rnc.descricao_correcao).slice(0, 80) + (cleanText(rnc.descricao_correcao).length > 80 ? '...' : '')
+    },
     isEmAnalise && { icon: Send, color: '#d97706', label: 'Enviada para aprovação', date: fmtDatetime(rnc.atualizado_em), detail: 'Aguardando revisão do gestor' },
     isEncerrada && { icon: CheckCircle2, color: '#16a34a', label: 'RNC encerrada', date: fmtDatetime(rnc.atualizado_em), detail: 'Correção aprovada' },
-    isReprovada && { icon: XCircle, color: '#dc2626', label: 'Correção reprovada', date: fmtDatetime(rnc.atualizado_em), detail: 'Responsável deve corrigir novamente' },
+    isReprovada && { icon: XCircle, color: '#dc2626', label: 'Correção reprovada', date: fmtDatetime(rnc.atualizado_em), detail: 'Responsável deve corrigir novamente' }
   ].filter(Boolean);
 
   return (
-    <><Navbar />
+    <>
+      <Navbar />
       <div className="container rdet-page">
-
-        {/* Header */}
         <div className="rdet-header">
           <button className="rdet-back" onClick={() => navigate(`/projeto/${projetoId}/rnc`)}>
             <ArrowLeft size={15} />
@@ -311,29 +358,25 @@ function RNCDetalhes() {
           </div>
         </div>
 
-        {/* Progresso */}
         <div className="rdet-progress">
-          {STEPS.map((s, i) => {
-            const Icon = s.icon;
-            const done   = i < activeStep;
-            const active = i === activeStep;
+          {STEPS.map((step, index) => {
+            const Icon = step.icon;
+            const done = index < activeStep;
+            const active = index === activeStep;
             return (
-              <React.Fragment key={s.key}>
+              <React.Fragment key={step.key}>
                 <div className={`rdet-prog-step${active ? ' active' : done ? ' done' : ''}`}>
                   <div className="rdet-prog-circle"><Icon size={14} /></div>
-                  <span>{s.label}</span>
+                  <span>{step.label}</span>
                 </div>
-                {i < STEPS.length - 1 && <div className={`rdet-prog-line${done ? ' done' : ''}`} />}
+                {index < STEPS.length - 1 && <div className={`rdet-prog-line${done ? ' done' : ''}`} />}
               </React.Fragment>
             );
           })}
         </div>
 
-        {/* Body */}
         <div className="rdet-body">
           <div className="rdet-main">
-
-            {/* Não Conformidade */}
             <div className="rdet-card">
               <div className="rdet-card-head">
                 <div className="rdet-card-icon rdet-icon-red"><AlertTriangle size={15} /></div>
@@ -347,39 +390,29 @@ function RNCDetalhes() {
                 </div>
               )}
 
-              {(fotosRegistro.length > 0 || canEdit) && (
+              {anexosRegistro.length > 0 && (
                 <div className="rdet-gallery-block">
                   <p className="rdet-gallery-title">Fotos da não conformidade</p>
                   {fotosRegistro.length > 0 && (
                     <div className="rdet-gallery-grid">
-                      {fotosRegistro.map(a => (
-                        <a key={a.id} href={uploadFileUrl(a)} target="_blank" rel="noreferrer" className="rdet-gallery-item">
-                          <img src={uploadFileUrl(a)} alt={a.nome_arquivo} loading="lazy" />
-                          <span>{a.nome_arquivo}</span>
+                      {fotosRegistro.map((anexo) => (
+                        <a key={anexo.id} href={uploadFileUrl(anexo)} target="_blank" rel="noreferrer" className="rdet-gallery-item">
+                          <img src={uploadFileUrl(anexo)} alt={anexo.nome_arquivo} loading="lazy" />
+                          <span>{anexo.nome_arquivo}</span>
                         </a>
                       ))}
                     </div>
                   )}
 
-                  {anexosRegistro.filter(a => !isImage(a)).map(a => (
-                    <a key={a.id} href={uploadFileUrl(a)} target="_blank" rel="noreferrer" className="rdet-file-link">
-                      <Paperclip size={13} /> {a.nome_arquivo}
+                  {anexosRegistro.filter((anexo) => !isImage(anexo)).map((anexo) => (
+                    <a key={anexo.id} href={uploadFileUrl(anexo)} target="_blank" rel="noreferrer" className="rdet-file-link">
+                      <Paperclip size={13} /> {anexo.nome_arquivo}
                     </a>
                   ))}
-
-                  {canEdit && (
-                    <div className="rdet-upload-row">
-                      <input type="file" accept="image/*" className="form-input" onChange={e => setFotoFile(e.target.files?.[0] || null)} />
-                      <button className="btn btn-secondary" disabled={!fotoFile} onClick={uploadFotoRegistro}>
-                        <Upload size={13} /> Enviar
-                      </button>
-                    </div>
-                  )}
                 </div>
               )}
             </div>
 
-            {/* O que deve ser corrigido */}
             {rnc.acao_corretiva && (
               <div className="rdet-card rdet-card-blue">
                 <div className="rdet-card-head">
@@ -402,14 +435,13 @@ function RNCDetalhes() {
               </div>
             )}
 
-            {/* Registrar Correção */}
             {podeCorrigir && (
               <div className="rdet-card rdet-card-correction">
                 <div className="rdet-card-head">
                   <div className="rdet-card-icon rdet-icon-green"><Wrench size={15} /></div>
                   <h3>Registrar Correção</h3>
                   <span className="rdet-correction-hint">
-                    {isReprovada ? 'Correção reprovada — registre novamente' : 'Descreva o que foi feito e envie para aprovação'}
+                    {isReprovada ? 'Correção reprovada - registre novamente' : 'Descreva o que foi feito e envie para aprovação'}
                   </span>
                 </div>
                 <div className="form-group">
@@ -418,7 +450,7 @@ function RNCDetalhes() {
                     className="form-input rdet-correcao-textarea"
                     rows={5}
                     value={correcaoTexto}
-                    onChange={e => setCorrecaoTexto(e.target.value)}
+                    onChange={(event) => setCorrecaoTexto(event.target.value)}
                     placeholder="Descreva detalhadamente as ações tomadas para eliminar a não conformidade..."
                   />
                 </div>
@@ -427,21 +459,25 @@ function RNCDetalhes() {
                   <div
                     ref={dropCorrecaoRef}
                     className={`rdet-dropzone${draggingC ? ' dragging' : ''}`}
-                    onDragOver={e => { e.preventDefault(); setDraggingC(true); }}
+                    onDragOver={(event) => { event.preventDefault(); setDraggingC(true); }}
                     onDragLeave={() => setDraggingC(false)}
-                    onDrop={e => { e.preventDefault(); setDraggingC(false); adicionarFotosCorrecao(e.dataTransfer.files); }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      setDraggingC(false);
+                      adicionarFotosCorrecao(event.dataTransfer.files);
+                    }}
                     onClick={() => dropCorrecaoRef.current?.querySelector('input')?.click()}
                   >
-                    <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => adicionarFotosCorrecao(e.target.files)} />
+                    <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={(event) => adicionarFotosCorrecao(event.target.files)} />
                     <Upload size={20} />
-                    <span>Clique ou arraste as fotos aqui ({totalFotosCorrecao}/4)</span>
+                    <span>Adicionar fotos da correção ({totalFotosCorrecao}/4)</span>
                   </div>
                   {previewCorrecao.length > 0 && (
                     <div className="rdet-preview-grid">
-                      {previewCorrecao.map((p, i) => (
-                        <div key={i} className="rdet-preview-thumb">
-                          <img src={p.src} alt={p.name} />
-                          <button type="button" className="rdet-preview-remove" onClick={() => removerFotoCorrecao(i)}>
+                      {previewCorrecao.map((preview, index) => (
+                        <div key={`${preview.name}-${index}`} className="rdet-preview-thumb">
+                          <img src={preview.src} alt={preview.name} />
+                          <button type="button" className="rdet-preview-remove" onClick={() => removerFotoCorrecao(index)}>
                             <X size={11} />
                           </button>
                         </div>
@@ -458,7 +494,6 @@ function RNCDetalhes() {
               </div>
             )}
 
-            {/* Aguardando Aprovação */}
             {isGestor && isEmAnalise && (
               <div className="rdet-card rdet-card-approval">
                 <div className="rdet-card-head">
@@ -478,10 +513,10 @@ function RNCDetalhes() {
                   <>
                     <p className="rdet-correcao-label" style={{ margin: '12px 0 8px' }}>Galeria da correção:</p>
                     <div className="rdet-gallery-grid">
-                      {fotosCorrecaoRegistradas.map(a => (
-                        <a key={a.id} href={uploadFileUrl(a)} target="_blank" rel="noreferrer" className="rdet-gallery-item">
-                          <img src={uploadFileUrl(a)} alt={a.nome_arquivo} loading="lazy" />
-                          <span>{a.nome_arquivo}</span>
+                      {fotosCorrecaoRegistradas.map((anexo) => (
+                        <a key={anexo.id} href={uploadFileUrl(anexo)} target="_blank" rel="noreferrer" className="rdet-gallery-item">
+                          <img src={uploadFileUrl(anexo)} alt={anexo.nome_arquivo} loading="lazy" />
+                          <span>{anexo.nome_arquivo}</span>
                         </a>
                       ))}
                     </div>
@@ -498,7 +533,6 @@ function RNCDetalhes() {
               </div>
             )}
 
-            {/* Correção registrada (histórico) */}
             {rnc.descricao_correcao && !isEmAnalise && (
               <div className="rdet-card rdet-card-done">
                 <div className="rdet-card-head">
@@ -515,10 +549,10 @@ function RNCDetalhes() {
                   <>
                     <p className="rdet-correcao-label" style={{ margin: '12px 0 8px' }}>Galeria da correção:</p>
                     <div className="rdet-gallery-grid">
-                      {fotosCorrecaoRegistradas.map(a => (
-                        <a key={a.id} href={uploadFileUrl(a)} target="_blank" rel="noreferrer" className="rdet-gallery-item">
-                          <img src={uploadFileUrl(a)} alt={a.nome_arquivo} loading="lazy" />
-                          <span>{a.nome_arquivo}</span>
+                      {fotosCorrecaoRegistradas.map((anexo) => (
+                        <a key={anexo.id} href={uploadFileUrl(anexo)} target="_blank" rel="noreferrer" className="rdet-gallery-item">
+                          <img src={uploadFileUrl(anexo)} alt={anexo.nome_arquivo} loading="lazy" />
+                          <span>{anexo.nome_arquivo}</span>
                         </a>
                       ))}
                     </div>
@@ -526,10 +560,8 @@ function RNCDetalhes() {
                 )}
               </div>
             )}
-
           </div>
 
-          {/* Sidebar */}
           <aside className="rdet-sidebar">
             <div className="rdet-side-card">
               <h4>Informações</h4>
@@ -540,11 +572,11 @@ function RNCDetalhes() {
                 { label: 'Norma/Ref.', val: cleanText(rnc.norma_referencia) },
                 { label: 'Aberta em', val: fmtDate(rnc.criado_em) },
                 { label: 'Prazo', val: fmtDate(rnc.data_prevista_encerramento) },
-                { label: 'RDO vinculado', val: rnc.rdo_id ? `#${rnc.rdo_id}` : null },
-              ].filter(r => r.val).map(r => (
-                <div key={r.label} className="rdet-meta-row">
-                  <span>{r.label}</span>
-                  <strong>{r.val}</strong>
+                { label: 'RDO vinculado', val: rnc.rdo_id ? `#${rnc.rdo_id}` : null }
+              ].filter((row) => row.val).map((row) => (
+                <div key={row.label} className="rdet-meta-row">
+                  <span>{row.label}</span>
+                  <strong>{row.val}</strong>
                 </div>
               ))}
             </div>
@@ -552,20 +584,20 @@ function RNCDetalhes() {
             <div className="rdet-side-card">
               <h4>Histórico</h4>
               <div className="rdet-timeline">
-                {timeline.map((ev, i) => {
-                  const Icon = ev.icon;
+                {timeline.map((event, index) => {
+                  const Icon = event.icon;
                   return (
-                    <div key={i} className="rdet-timeline-item">
+                    <div key={`${event.label}-${index}`} className="rdet-timeline-item">
                       <div className="rdet-timeline-track">
-                        <div className="rdet-timeline-dot" style={{ background: ev.color }}>
+                        <div className="rdet-timeline-dot" style={{ background: event.color }}>
                           <Icon size={11} color="#fff" />
                         </div>
-                        {i < timeline.length - 1 && <div className="rdet-timeline-line" />}
+                        {index < timeline.length - 1 && <div className="rdet-timeline-line" />}
                       </div>
                       <div className="rdet-timeline-content">
-                        <strong>{ev.label}</strong>
-                        {ev.date && <span>{ev.date}</span>}
-                        {ev.detail && <p>{ev.detail}</p>}
+                        <strong>{event.label}</strong>
+                        {event.date && <span>{event.date}</span>}
+                        {event.detail && <p>{event.detail}</p>}
                       </div>
                     </div>
                   );
