@@ -1205,9 +1205,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
   margin-top: 3px;
-  flex-wrap: wrap;
 }
 
 .rdo-report-title-row h1 {
@@ -1219,14 +1217,42 @@
   letter-spacing: 0;
 }
 
+.rdo-report-status-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 5px 8px 5px 12px;
+  border: 1px solid #dbe4ef;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .rdo-report-status {
   display: inline-flex;
   align-items: center;
-  min-height: 26px;
-  padding: 4px 10px;
+  gap: 6px;
+  min-height: 28px;
+  padding: 5px 12px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 800;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.rdo-report-status::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.72);
 }
 
 .rdo-report-status.is-approved {
@@ -1260,6 +1286,46 @@
   justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.rdo-report-actions .rdo-report-action-pill {
+  min-height: 40px;
+  padding: 0 15px;
+  border-radius: 999px;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 800;
+  border: 1px solid transparent;
+  box-shadow: none;
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+
+.rdo-report-actions .rdo-report-action-pill:hover {
+  transform: translateY(-1px);
+}
+
+.rdo-report-action-pill-primary {
+  color: #075985;
+  border-color: #bae6fd;
+  background: #e0f2fe;
+}
+
+.rdo-report-action-pill-primary:hover {
+  color: #0369a1;
+  border-color: #7dd3fc;
+  background: #f0f9ff;
+}
+
+.rdo-report-action-pill-warning {
+  color: #9a3412;
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+
+.rdo-report-action-pill-warning:hover {
+  color: #c2410c;
+  border-color: #fdba74;
+  background: #fffbeb;
 }
 
 .rdo-report-meta-grid {
