@@ -844,6 +844,70 @@ body.dark-mode select option {
   color-scheme: dark;
 }
 
+body.dark-mode .almox-user-picker-control {
+  background: #1b2836;
+  border-color: #2a4060;
+}
+
+body.dark-mode .almox-user-picker-control.has-value {
+  background: #172334;
+  border-color: rgba(56, 189, 248, 0.42);
+}
+
+body.dark-mode .almox-user-picker-input {
+  color: #e8edf3;
+}
+
+body.dark-mode .almox-user-picker-input::placeholder {
+  color: #607080;
+}
+
+body.dark-mode .almox-user-picker-caret {
+  color: #8fa3b9;
+}
+
+body.dark-mode .almox-user-picker-clear {
+  background: #1f3044;
+  color: #60a5fa;
+}
+
+body.dark-mode .almox-user-picker-clear:hover {
+  background: #263b55;
+}
+
+body.dark-mode .almox-user-picker-menu {
+  background: #111827;
+  border-color: #2a4060;
+}
+
+body.dark-mode .almox-user-picker-option {
+  color: #e8edf3;
+}
+
+body.dark-mode .almox-user-picker-option:hover,
+body.dark-mode .almox-user-picker-option.is-active {
+  background: #1f3044;
+}
+
+body.dark-mode .almox-user-picker-option.is-selected {
+  background: rgba(37, 99, 235, 0.18);
+}
+
+body.dark-mode .almox-user-picker-meta,
+body.dark-mode .almox-user-picker-empty {
+  color: #8fa3b9;
+}
+
+body.dark-mode .almox-user-picker-type.system {
+  color: #7dd3fc;
+  background: rgba(14, 165, 233, 0.16);
+}
+
+body.dark-mode .almox-user-picker-type.direct {
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.16);
+}
+
 
 /* -- Dashboard -------------------------------------------- */
 .dashboard-status-badge {
