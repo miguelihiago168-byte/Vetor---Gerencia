@@ -305,7 +305,19 @@ const buildHtml = ({ rnc, imagensRegistro, imagensCorrecao, anexosComplementares
   .hero-top { padding: 24px 26px 18px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: start; }
   .eyebrow { color: #64748b; font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
   h1 { margin: 5px 0 8px; font-size: 28px; line-height: 1.05; letter-spacing: 0; }
-  .subtitle { color: #475569; font-weight: 700; }
+  .subtitle {
+    display: inline-block;
+    margin-top: 2px;
+    padding: 6px 10px;
+    border-radius: 10px;
+    color: #0f172a;
+    background: rgba(255, 255, 255, .72);
+    border: 1px solid rgba(148, 163, 184, .24);
+    font-size: 16px;
+    line-height: 1.25;
+    font-weight: 900;
+    max-width: 390px;
+  }
   .badges { display: flex; flex-wrap: wrap; gap: 7px; justify-content: flex-end; }
   .badge { display: inline-flex; align-items: center; min-height: 26px; padding: 5px 11px; border-radius: 999px; font-size: 11px; font-weight: 800; border: 1px solid transparent; }
   .status-open { color: #1e40af; background: #dbeafe; border-color: #bfdbfe; }
@@ -494,7 +506,8 @@ const renderFallbackPdf = ({ rnc, imagensRegistro, imagensCorrecao, anexosComple
     doc.font('Helvetica-Bold').fontSize(18).fillColor('#0f172a').text(`RNC ${String(rnc.id).padStart(3, '0')}`);
     doc.font('Helvetica').fontSize(10).fillColor('#64748b').text(safeText(rnc.projeto_nome));
     doc.moveDown();
-    doc.font('Helvetica-Bold').fontSize(12).fillColor('#0f172a').text(safeText(rnc.titulo));
+    doc.font('Helvetica-Bold').fontSize(15).fillColor('#0f172a').text(safeText(rnc.titulo), { width: 500 });
+    doc.moveDown(0.35);
     doc.font('Helvetica').fontSize(10).fillColor('#334155').text(`Status: ${statusMeta(rnc.status).label}`);
     doc.text(`Gravidade: ${safeText(rnc.gravidade)}`);
     doc.text(`Responsavel: ${safeText(rnc.responsavel_nome, 'Nao definido')}`);
