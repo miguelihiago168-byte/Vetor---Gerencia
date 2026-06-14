@@ -315,9 +315,20 @@ const buildHtml = ({ rnc, imagensRegistro, imagensCorrecao, anexosComplementares
     max-width: 420px;
   }
   .badges { position: absolute; top: 22px; right: 26px; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-  .badge { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 4px 10px; border-radius: 999px; font-size: 10px; font-weight: 800; border: 1px solid transparent; }
-  .badge-label { opacity: .72; font-size: 8px; letter-spacing: .06em; text-transform: uppercase; }
-  .badge-value { font-size: 10px; }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 27px;
+    padding: 4px 7px 4px 11px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .78);
+    border: 1px solid #dbe4ef;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+  }
+  .badge-label { color: #64748b; font-size: 8px; font-weight: 900; letter-spacing: .07em; text-transform: uppercase; }
+  .badge-value { display: inline-flex; align-items: center; gap: 5px; min-height: 19px; padding: 3px 8px; border-radius: 999px; font-size: 10px; font-weight: 900; border: 1px solid transparent; }
+  .badge-value::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .9; }
   .status-open { color: #1e40af; background: #dbeafe; border-color: #bfdbfe; }
   .status-review { color: #92400e; background: #fef3c7; border-color: #fde68a; }
   .status-done { color: #166534; background: #dcfce7; border-color: #86efac; }
@@ -371,9 +382,9 @@ const buildHtml = ({ rnc, imagensRegistro, imagensCorrecao, anexosComplementares
           <div class="subtitle">${escapeHtml(safeText(rnc.titulo, `RNC #${rnc.id}`))}</div>
         </div>
         <div class="badges">
-          <span class="badge status-${status.cls}"><span class="badge-label">Status</span><span class="badge-value">${escapeHtml(status.label)}</span></span>
-          ${rnc.gravidade ? `<span class="badge gravity-${gravidadeClass}"><span class="badge-label">Gravidade</span><span class="badge-value">${escapeHtml(rnc.gravidade)}</span></span>` : ''}
-          ${rnc.origem ? `<span class="badge origin"><span class="badge-label">Origem</span><span class="badge-value">${escapeHtml(rnc.origem)}</span></span>` : ''}
+          <span class="badge"><span class="badge-label">Status</span><span class="badge-value status-${status.cls}">${escapeHtml(status.label)}</span></span>
+          ${rnc.gravidade ? `<span class="badge"><span class="badge-label">Gravidade</span><span class="badge-value gravity-${gravidadeClass}">${escapeHtml(rnc.gravidade)}</span></span>` : ''}
+          ${rnc.origem ? `<span class="badge"><span class="badge-label">Origem</span><span class="badge-value origin">${escapeHtml(rnc.origem)}</span></span>` : ''}
         </div>
       </div>
       <div class="meta-grid">
