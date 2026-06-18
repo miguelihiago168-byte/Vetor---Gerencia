@@ -299,7 +299,7 @@ function Landing({ initialAccess = false }) {
         <div className="landing-container landing-nav">
           <a className="landing-brand" href="#inicio" onClick={closeMenu}>
             <img src="/logo_vetor.png" alt="" />
-            <span>Vetor</span>
+            <span>Vetor Gerenciamento</span>
           </a>
 
           <nav className={`landing-nav-links ${menuOpen ? 'open' : ''}`} aria-label="Navegação principal">
@@ -709,7 +709,7 @@ function Landing({ initialAccess = false }) {
       <footer className="landing-footer">
         <div className="landing-container landing-footer-inner">
           <img src="/logo_externo_vetor.png" alt="Vetor" />
-          <span>© {new Date().getFullYear()} Vetor. Todos os direitos reservados.</span>
+          <span>© {new Date().getFullYear()} Vetor Gerenciamento. Todos os direitos reservados.</span>
         </div>
       </footer>
 
