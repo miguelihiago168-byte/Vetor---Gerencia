@@ -556,7 +556,7 @@ function Landing({ initialAccess = false }) {
                       checked={manterLogin}
                       onChange={(event) => setManterLogin(event.target.checked)}
                     />
-                    Manter conectado por 30 dias
+                    Manter minha sessão ativa
                   </label>
 
                   <button className="landing-access-submit" type="submit" disabled={loading}>
