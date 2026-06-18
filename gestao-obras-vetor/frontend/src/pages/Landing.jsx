@@ -18,7 +18,7 @@ import {
   ShieldCheck,
   X,
 } from 'lucide-react';
-import { cancelarConta, esqueciSenha, login as loginAPI, renovarTrial } from '../services/api';
+import { cancelarConta, esqueciSenha, login as loginAPI, registerTrialAccount, renovarTrial } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import './Landing.css';
 
@@ -39,12 +39,66 @@ const features = [
 
 const normalizeAuthErrorMessage = (msg) => String(msg || '');
 
+const getPasswordStrength = (value) => {
+  const pwd = String(value || '');
+  if (!pwd) return { level: 'fraca', label: 'Fraca', color: '#ef4444' };
+
+  const upper = (pwd.match(/[A-Z]/g) || []).length;
+  const lower = (pwd.match(/[a-z]/g) || []).length;
+  const digits = (pwd.match(/\d/g) || []).length;
+  const special = (pwd.match(/[^A-Za-z0-9]/g) || []).length;
+
+  let score = 0;
+  if (pwd.length >= 6) score += 1;
+  if (pwd.length >= 8) score += 1;
+  if (pwd.length >= 12) score += 1;
+  if (upper > 0) score += 1;
+  if (upper >= 2) score += 1;
+  if (lower > 0) score += 1;
+  if (digits > 0) score += 1;
+  if (digits >= 3) score += 1;
+  if (special > 0) score += 1;
+  if (special >= 2) score += 1;
+
+  if (score <= 3) return { level: 'fraca', label: 'Fraca', color: '#ef4444' };
+  if (score <= 6) return { level: 'medio', label: 'Médio', color: '#f59e0b' };
+  if (score <= 8) return { level: 'forte', label: 'Forte', color: '#10b981' };
+  return { level: 'extraforte', label: 'Extraforte', color: '#0ea5e9' };
+};
+
+const isSequentialPassword = (value) => {
+  const pwd = String(value || '').toLowerCase().replace(/\s+/g, '');
+  if (!pwd) return false;
+  return [
+    '123456', '1234567', '12345678', '123456789', '0123456789',
+    'qwerty', 'qwertyu', 'qwertyuiop', 'asdfgh', 'asdfghj', 'zxcvbn',
+    'abcdef', 'abcdefg', 'abcdefgh', 'abcdefghi', 'password',
+  ].some((seq) => pwd.includes(seq));
+};
+
+const normalizeName = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase()
+  .replace(/\s+/g, '')
+  .replace(/[^a-z0-9]/g, '');
+
+const buildUsernameFromName = (name) => {
+  const base = normalizeName(name).slice(0, 14) || 'usuario';
+  const suffix = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+  return `${base}${suffix}`;
+};
+
 function Landing({ initialAccess = false }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [accessOpen, setAccessOpen] = useState(initialAccess);
+  const [accessMode, setAccessMode] = useState('login');
   const [forgotOpen, setForgotOpen] = useState(false);
   const [loginForm, setLoginForm] = useState({ usuario: '', senha: '' });
+  const [cadastroForm, setCadastroForm] = useState({ nome: '', empresa: '', email: '', usuario: '', senha: '', codigo_acesso: '' });
+  const [usuarioManual, setUsuarioManual] = useState(false);
   const [showSenha, setShowSenha] = useState(false);
+  const [showCadastroSenha, setShowCadastroSenha] = useState(false);
   const [manterLogin, setManterLogin] = useState(true);
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
@@ -65,6 +119,7 @@ function Landing({ initialAccess = false }) {
 
   const openAccess = () => {
     setAccessOpen(true);
+    setAccessMode('login');
     setForgotOpen(false);
     setErro('');
     setSucesso('');
@@ -72,6 +127,73 @@ function Landing({ initialAccess = false }) {
     requestAnimationFrame(() => {
       accessRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
+  };
+
+  const handleCadastro = async (event) => {
+    event.preventDefault();
+    setErro('');
+    setSucesso('');
+
+    const usuario = cadastroForm.usuario.trim();
+
+    if (!cadastroForm.nome.trim()) {
+      setErro('Nome é obrigatório.');
+      return;
+    }
+    if (!cadastroForm.empresa.trim()) {
+      setErro('Empresa é obrigatória.');
+      return;
+    }
+    if (!cadastroForm.email.trim()) {
+      setErro('E-mail é obrigatório.');
+      return;
+    }
+    if (!usuario) {
+      setErro('Usuário é obrigatório.');
+      return;
+    }
+    if (!cadastroForm.senha) {
+      setErro('Senha é obrigatória.');
+      return;
+    }
+    if (isSequentialPassword(cadastroForm.senha)) {
+      setErro('Senhas sequenciais não são aceitas.');
+      return;
+    }
+
+    const senhaStrength = getPasswordStrength(cadastroForm.senha);
+    if (senhaStrength.level === 'fraca') {
+      setErro('Senha muito fraca. Use uma senha com nível mínimo Médio.');
+      return;
+    }
+
+    if (!cadastroForm.codigo_acesso.trim()) {
+      setErro('Código global é obrigatório para criar conta.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await registerTrialAccount({
+        nome: cadastroForm.nome.trim(),
+        empresa: cadastroForm.empresa.trim(),
+        email: cadastroForm.email.trim(),
+        usuario,
+        senha: cadastroForm.senha,
+        codigo_acesso: cadastroForm.codigo_acesso.trim(),
+      });
+
+      const loginCriado = response.data?.usuario || usuario;
+      setSucesso(`Conta criada com 30 dias de teste. Usuário: ${loginCriado}`);
+      setAccessMode('login');
+      setLoginForm((prev) => ({ ...prev, usuario: loginCriado }));
+      setCadastroForm({ nome: '', empresa: '', email: '', usuario: '', senha: '', codigo_acesso: '' });
+      setUsuarioManual(false);
+    } catch (error) {
+      setErro(normalizeAuthErrorMessage(error.response?.data?.erro || 'Erro ao criar conta de teste.'));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleLogin = async (event) => {
@@ -176,7 +298,8 @@ function Landing({ initialAccess = false }) {
       <header className="landing-header">
         <div className="landing-container landing-nav">
           <a className="landing-brand" href="#inicio" onClick={closeMenu}>
-            <img src="/logo_externo_vetor.png" alt="Vetor" />
+            <img src="/logo_vetor.png" alt="" />
+            <span>Vetor</span>
           </a>
 
           <nav className={`landing-nav-links ${menuOpen ? 'open' : ''}`} aria-label="Navegação principal">
@@ -187,7 +310,7 @@ function Landing({ initialAccess = false }) {
           </nav>
 
           <div className="landing-nav-actions">
-            <button type="button" className="landing-btn landing-btn-outline" onClick={openAccess}>Entrar</button>
+            <button type="button" className="landing-nav-access" onClick={openAccess}>Acessar sistema</button>
             <button
               type="button"
               className="landing-menu-btn"
@@ -217,7 +340,7 @@ function Landing({ initialAccess = false }) {
               </button>
               <a className="landing-btn landing-btn-light" href={mailTo}>
                 <Mail size={18} />
-                Falar com a Vetor
+                Contato
               </a>
             </div>
             <div className="landing-hero-points">
@@ -237,10 +360,29 @@ function Landing({ initialAccess = false }) {
                 <span>Área do cliente</span>
               </div>
 
-              <h2>{forgotOpen ? 'Recuperar senha' : 'Entrar no sistema'}</h2>
+              <div className="landing-access-tabs" aria-label="Tipo de acesso">
+                <button
+                  type="button"
+                  className={accessMode === 'login' ? 'active' : ''}
+                  onClick={() => { setAccessMode('login'); setForgotOpen(false); setErro(''); setSucesso(''); }}
+                >
+                  Entrar
+                </button>
+                <button
+                  type="button"
+                  className={accessMode === 'cadastro' ? 'active' : ''}
+                  onClick={() => { setAccessMode('cadastro'); setForgotOpen(false); setErro(''); setSucesso(''); }}
+                >
+                  Criar conta (30 dias)
+                </button>
+              </div>
+
+              <h2>{forgotOpen ? 'Recuperar senha' : accessMode === 'cadastro' ? 'Criar conta de teste' : 'Entrar no sistema'}</h2>
               <p>
                 {forgotOpen
                   ? 'Informe seu login ou e-mail cadastrado para receber as instruções.'
+                  : accessMode === 'cadastro'
+                    ? 'Preencha os dados para iniciar o período de teste de 30 dias.'
                   : 'Use seu usuário ou e-mail e a senha cadastrada para acessar seus projetos.'}
               </p>
 
@@ -273,6 +415,104 @@ function Landing({ initialAccess = false }) {
                     onClick={() => { setForgotOpen(false); setErro(''); setSucesso(''); }}
                   >
                     Voltar ao login
+                  </button>
+                </form>
+              ) : accessMode === 'cadastro' ? (
+                <form className="landing-access-form" onSubmit={handleCadastro}>
+                  <label>
+                    Nome completo
+                    <input
+                      type="text"
+                      maxLength="80"
+                      value={cadastroForm.nome}
+                      onChange={(event) => {
+                        const nome = event.target.value;
+                        setCadastroForm((prev) => ({
+                          ...prev,
+                          nome,
+                          usuario: usuarioManual ? prev.usuario : buildUsernameFromName(nome),
+                        }));
+                      }}
+                      placeholder="Seu nome"
+                      required
+                    />
+                  </label>
+
+                  <label>
+                    Empresa
+                    <input
+                      type="text"
+                      maxLength="80"
+                      value={cadastroForm.empresa}
+                      onChange={(event) => setCadastroForm((prev) => ({ ...prev, empresa: event.target.value }))}
+                      placeholder="Nome da empresa"
+                      required
+                    />
+                  </label>
+
+                  <label>
+                    E-mail
+                    <input
+                      type="email"
+                      maxLength="120"
+                      value={cadastroForm.email}
+                      onChange={(event) => setCadastroForm((prev) => ({ ...prev, email: event.target.value }))}
+                      placeholder="seuemail@empresa.com"
+                      required
+                    />
+                  </label>
+
+                  <label>
+                    Usuário
+                    <input
+                      type="text"
+                      maxLength="40"
+                      value={cadastroForm.usuario}
+                      onChange={(event) => {
+                        setUsuarioManual(true);
+                        setCadastroForm((prev) => ({ ...prev, usuario: event.target.value.replace(/\s+/g, '') }));
+                      }}
+                      placeholder="seunome1234"
+                      required
+                    />
+                  </label>
+
+                  <label>
+                    Senha
+                    <span className="landing-password-wrap">
+                      <input
+                        type={showCadastroSenha ? 'text' : 'password'}
+                        maxLength="72"
+                        value={cadastroForm.senha}
+                        onChange={(event) => setCadastroForm((prev) => ({ ...prev, senha: event.target.value }))}
+                        placeholder="Digite sua senha"
+                        required
+                      />
+                      <button type="button" onClick={() => setShowCadastroSenha((value) => !value)} aria-label={showCadastroSenha ? 'Ocultar senha' : 'Mostrar senha'}>
+                        {showCadastroSenha ? <EyeOff size={17} /> : <Eye size={17} />}
+                      </button>
+                    </span>
+                    {cadastroForm.senha && (
+                      <small className="landing-password-hint" style={{ color: getPasswordStrength(cadastroForm.senha).color }}>
+                        Nível da senha: {getPasswordStrength(cadastroForm.senha).label}
+                      </small>
+                    )}
+                  </label>
+
+                  <label>
+                    Código global de criação
+                    <input
+                      type="text"
+                      value={cadastroForm.codigo_acesso}
+                      onChange={(event) => setCadastroForm((prev) => ({ ...prev, codigo_acesso: event.target.value }))}
+                      placeholder="Informe o código"
+                      required
+                    />
+                  </label>
+
+                  <button className="landing-access-submit" type="submit" disabled={loading}>
+                    {loading ? 'Criando conta...' : 'Criar conta teste (30 dias)'}
+                    <ArrowRight size={18} />
                   </button>
                 </form>
               ) : (
@@ -373,13 +613,16 @@ function Landing({ initialAccess = false }) {
 
       <section className="landing-strip" id="solucoes">
         <div className="landing-container landing-strip-inner">
-          <span>Uma plataforma para acompanhar obra, suprimentos e qualidade com clareza operacional.</span>
-          <div>
-            <b>RDO</b>
-            <b>RNC</b>
-            <b>EAP</b>
-            <b>Compras</b>
-            <b>Ativos</b>
+          <div className="landing-strip-copy">
+            <strong>Operação conectada</strong>
+            <span>Obra, suprimentos e qualidade em uma leitura objetiva.</span>
+          </div>
+          <div className="landing-strip-modules">
+            <span>RDO</span>
+            <span>RNC</span>
+            <span>EAP</span>
+            <span>Compras</span>
+            <span>Ativos</span>
           </div>
         </div>
       </section>
