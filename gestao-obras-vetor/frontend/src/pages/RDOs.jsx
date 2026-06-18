@@ -124,10 +124,15 @@ function RDOs() {
     setOpenDropdown(null);
     try {
       const { updateStatusRDO } = await import('../services/api');
-      await updateStatusRDO(rdoId, 'Reprovado');
-      setRdos(prev => prev.map(r => r.id === rdoId ? { ...r, status: 'Reprovado' } : r));
-      setSucesso('RDO reprovado.');
-      success('RDO reprovado.', 4000);
+      const resp = await updateStatusRDO(rdoId, 'Reprovado');
+      setRdos(prev => prev.map(r => r.id === rdoId ? {
+        ...r,
+        status: resp.data?.status || 'Em preenchimento',
+        correcao_solicitada: resp.data?.correcao_solicitada ?? 1,
+        correcao_motivo: resp.data?.correcao_motivo || 'RDO reprovado. Revise as informações e envie novamente para aprovação.'
+      } : r));
+      setSucesso(resp.data?.mensagem || 'RDO reprovado e enviado para correção.');
+      success(resp.data?.mensagem || 'RDO reprovado e enviado para correção.', 4000);
     } catch (err) {
       const msg = 'Falha ao reprovar RDO: ' + (err.response?.data?.erro || err.message);
       notifyError(msg, 6000);

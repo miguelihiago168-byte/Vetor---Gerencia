@@ -1059,8 +1059,20 @@ router.patch('/:id/status', auth, async (req, res) => {
       }
     }
 
+    const statusPersistido = status === 'Reprovado' ? 'Em preenchimento' : status;
     const aprovadoPor = (status === 'Aprovado' || status === 'Reprovado') ? req.usuario.id : null;
     const aprovadoEm = (status === 'Aprovado' || status === 'Reprovado') ? new Date().toISOString() : null;
+    const correcaoSolicitada = status === 'Reprovado' ? 1 : Number(rdoAtual.correcao_solicitada || 0);
+    const correcaoMotivo = status === 'Reprovado'
+      ? 'RDO reprovado. Revise as informações e envie novamente para aprovação.'
+      : rdoAtual.correcao_motivo;
+    const correcaoOrigem = status === 'Reprovado' ? 'Reprovação do RDO' : rdoAtual.correcao_origem;
+    const correcaoSolicitadaPor = status === 'Reprovado'
+      ? String(req.usuario.nome || req.usuario.id || 'Sistema')
+      : rdoAtual.correcao_solicitada_por;
+    const statusAnteriorCorrecao = status === 'Reprovado'
+      ? (rdoAtual.status_anterior_correcao || rdoAtual.status)
+      : rdoAtual.status_anterior_correcao;
 
       // Atualizar historico_status: anexar novo registro
       try {
@@ -1072,15 +1084,59 @@ router.patch('/:id/status', auth, async (req, res) => {
         hist.push({ status, por: req.usuario.id, nome: req.usuario.nome || null, em: new Date().toISOString() });
 
         await runQuery(`
-          UPDATE rdos SET status = ?, aprovado_por = ?, aprovado_em = ?, historico_status = ?, atualizado_em = CURRENT_TIMESTAMP
+          UPDATE rdos SET
+            status = ?,
+            aprovado_por = ?,
+            aprovado_em = ?,
+            historico_status = ?,
+            correcao_solicitada = ?,
+            correcao_motivo = ?,
+            correcao_origem = ?,
+            correcao_solicitada_em = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE correcao_solicitada_em END,
+            correcao_solicitada_por = ?,
+            status_anterior_correcao = ?,
+            atualizado_em = CURRENT_TIMESTAMP
           WHERE id = ?
-        `, [status, aprovadoPor, aprovadoEm, JSON.stringify(hist), id]);
+        `, [
+          statusPersistido,
+          aprovadoPor,
+          aprovadoEm,
+          JSON.stringify(hist),
+          correcaoSolicitada,
+          correcaoMotivo,
+          correcaoOrigem,
+          status === 'Reprovado' ? 1 : 0,
+          correcaoSolicitadaPor,
+          statusAnteriorCorrecao,
+          id
+        ]);
       } catch (err) {
         // fallback: apenas atualizar status
         await runQuery(`
-          UPDATE rdos SET status = ?, aprovado_por = ?, aprovado_em = ?, atualizado_em = CURRENT_TIMESTAMP
+          UPDATE rdos SET
+            status = ?,
+            aprovado_por = ?,
+            aprovado_em = ?,
+            correcao_solicitada = ?,
+            correcao_motivo = ?,
+            correcao_origem = ?,
+            correcao_solicitada_em = CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE correcao_solicitada_em END,
+            correcao_solicitada_por = ?,
+            status_anterior_correcao = ?,
+            atualizado_em = CURRENT_TIMESTAMP
           WHERE id = ?
-        `, [status, aprovadoPor, aprovadoEm, id]);
+        `, [
+          statusPersistido,
+          aprovadoPor,
+          aprovadoEm,
+          correcaoSolicitada,
+          correcaoMotivo,
+          correcaoOrigem,
+          status === 'Reprovado' ? 1 : 0,
+          correcaoSolicitadaPor,
+          statusAnteriorCorrecao,
+          id
+        ]);
       }
 
       if (status === 'Em análise' && Number(rdoAtual.correcao_solicitada || 0) === 1) {
@@ -1106,7 +1162,7 @@ router.patch('/:id/status', auth, async (req, res) => {
         if (criadorId) {
           await runQuery(
             'INSERT OR IGNORE INTO notificacoes (usuario_id, tipo, mensagem, referencia_tipo, referencia_id) VALUES (?, ?, ?, ?, ?)',
-            [criadorId, 'rdo_reprovado', `Seu RDO #${id} foi reprovado.`, 'rdo', id]
+            [criadorId, 'rdo_reprovado', `Seu RDO #${id} foi reprovado e retornou para correção.`, 'rdo', id]
           );
         }
       } catch (e) {
@@ -1114,9 +1170,16 @@ router.patch('/:id/status', auth, async (req, res) => {
       }
     }
 
-    await registrarAuditoria('rdos', id, 'STATUS_CHANGE', rdoAtual, { status, aprovado_por: aprovadoPor }, req.usuario.id);
+    await registrarAuditoria('rdos', id, 'STATUS_CHANGE', rdoAtual, { status, status_atual: statusPersistido, aprovado_por: aprovadoPor }, req.usuario.id);
 
-    res.json({ mensagem: `RDO ${status.toLowerCase()} com sucesso.` });
+    res.json({
+      mensagem: status === 'Reprovado'
+        ? 'RDO reprovado e enviado para correção.'
+        : `RDO ${status.toLowerCase()} com sucesso.`,
+      status: statusPersistido,
+      correcao_solicitada: correcaoSolicitada,
+      correcao_motivo: correcaoMotivo
+    });
 
   } catch (error) {
     console.error('Erro ao alterar status do RDO:', error);

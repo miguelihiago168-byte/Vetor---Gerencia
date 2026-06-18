@@ -223,9 +223,14 @@ function RDODetalhes() {
 
   const reprovarRDO = async () => {
     try {
-      await updateStatusRDO(rdoId, 'Reprovado');
-      setRdo(prev => ({ ...prev, status: 'Reprovado' }));
-      setSucesso('RDO reprovado.');
+      const resp = await updateStatusRDO(rdoId, 'Reprovado');
+      setRdo(prev => ({
+        ...prev,
+        status: resp.data?.status || 'Em preenchimento',
+        correcao_solicitada: resp.data?.correcao_solicitada ?? 1,
+        correcao_motivo: resp.data?.correcao_motivo || 'RDO reprovado. Revise as informações e envie novamente para aprovação.'
+      }));
+      setSucesso(resp.data?.mensagem || 'RDO reprovado e enviado para correção.');
     } catch (error) {
       await alert({ title: 'Erro', message: 'Falha ao reprovar RDO: ' + (error.response?.data?.erro || error.message) });
     }

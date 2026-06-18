@@ -7,7 +7,7 @@ import { useDialog } from '../context/DialogContext';
 import { useNotification } from '../context/NotificationContext';
 import {
   getProjeto,
-  getAtividadesEAP, getRDO, createRDO, updateRDO,
+  getAtividadesEAP, getRDO, getRDOs, createRDO, updateRDO,
   addRdoClima, addRdoComentario, addRdoOcorrencia, addRdoMaterial,
   uploadRdoFoto, updateRdoFoto, deleteRdoFoto, reorderRdoFotos, updateStatusRDO, getExecucaoAcumulada,
   getRdoColaboradores, createRdoColaborador,
@@ -165,6 +165,11 @@ function RDOForm2() {
     comentarios_lista: [],
     materiais_lista: []
   });
+  const showRdoError = (message, duration = 6000) => {
+    const texto = String(message || 'Erro inesperado no RDO.').trim();
+    setErro('');
+    notifyError(texto, duration);
+  };
 
   const [draftAtividade, setDraftAtividade] = useState({
     atividade_eap_id: '',
@@ -243,6 +248,17 @@ function RDOForm2() {
       total = Math.max(0, total - (intF - intI));
     }
     return Math.round((total / 60) * 100) / 100;
+  };
+  const calcDuracaoHoras = (inicio, fim) => {
+    const inicioM = toMinutes(inicio || null);
+    const fimM = toMinutes(fim || null);
+    if (inicioM == null || fimM == null) return null;
+    const total = fimM >= inicioM ? fimM - inicioM : (24 * 60 - inicioM) + fimM;
+    return Math.round((total / 60) * 100) / 100;
+  };
+  const formatHoras = (horas) => {
+    if (horas == null) return '—';
+    return `${Number(horas).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} h`;
   };
 
   /* ── Helpers de formatação ───────────────────────── */
@@ -328,7 +344,7 @@ function RDOForm2() {
             const res = await getRDO(rdoId);
             rdo = res.data;
           } catch (err) {
-            setErro(err?.response?.status === 404
+            showRdoError(err?.response?.status === 404
               ? 'RDO removido ou não encontrado.'
               : 'Erro ao carregar dados do formulário.');
             rdo = null;
@@ -423,11 +439,10 @@ function RDOForm2() {
 
         } else {
           setLoadedRdoStatus('');
-          // Novo RDO: copiar mão de obra, equipamentos e atividades não concluídas do último RDO
+          // Novo RDO: copia atividades em aberto, mão de obra e equipamentos do último RDO.
           const copyLast = location.state?.copyLast;
           if (copyLast) {
             try {
-              const { getRDOs } = await import('../services/api');
               const lista = (await getRDOs(projetoId)).data || [];
               if (lista.length > 0) {
                 const listaAprovados = lista.filter(item => String(item.status || '') === 'Aprovado');
@@ -442,21 +457,22 @@ function RDOForm2() {
                   return (!acc || dCur.getTime() > dAcc.getTime()) ? cur : acc;
                 }, null);
                 if (ultimo) {
-                  // Copia apenas o que deve ser reaproveitado. Data e dia permanecem vazios no novo RDO.
-                  const naoConcluidasIds = new Set(
-                    (eapRes.data || [])
-                      .filter(eap => Number(eap.percentual_executado || 0) < 100)
-                      .map(eap => String(eap.id))
-                  );
+                  const detalheUltimo = (await getRDO(ultimo.id)).data || ultimo;
+                  const atividadeEstaAberta = (atividadeEapId) => {
+                    const atividade = (eapRes.data || []).find(x => String(x.id) === String(atividadeEapId));
+                    if (!atividade) return false;
+                    const quantidadeTotal = Number(atividade.quantidade_total || 0);
+                    if (quantidadeTotal > 0) {
+                      const executadoAprovado = Number(acumMap[String(atividade.id)] || 0);
+                      return executadoAprovado < quantidadeTotal;
+                    }
+                    return Number(atividade.percentual_executado || 0) < 100;
+                  };
 
                   setFormData(prev => ({
                     ...prev,
-                    entrada_saida_inicio: ultimo.entrada_saida_inicio || '07:00',
-                    entrada_saida_fim: ultimo.entrada_saida_fim || '17:00',
-                    intervalo_almoco_inicio: ultimo.intervalo_almoco_inicio || '12:00',
-                    intervalo_almoco_fim: ultimo.intervalo_almoco_fim || '13:00',
-                    atividades: (ultimo.atividades || [])
-                      .filter(a => naoConcluidasIds.has(String(a.atividade_eap_id)))
+                    atividades: (detalheUltimo.atividades || [])
+                      .filter(a => atividadeEstaAberta(a.atividade_eap_id))
                       .map(a => ({
                         rdo_atividade_id: null,
                         atividade_eap_id: a.atividade_eap_id,
@@ -468,8 +484,8 @@ function RDOForm2() {
                         })(),
                         observacao: ''
                       })),
-                    atividades_avulsas: Array.isArray(ultimo.atividades_avulsas)
-                      ? ultimo.atividades_avulsas
+                    atividades_avulsas: Array.isArray(detalheUltimo.atividades_avulsas)
+                      ? detalheUltimo.atividades_avulsas
                           .filter(a => {
                             const previsto = Number(a?.quantidade_prevista || 0);
                             const executado = Number(a?.quantidade_executada || 0);
@@ -480,14 +496,28 @@ function RDOForm2() {
                             descricao: a?.descricao || '',
                             quantidade_prevista: a?.quantidade_prevista ?? '',
                             quantidade_executada: '',
-                            observacao: a?.observacao || ''
+                            observacao: ''
                           }))
                       : [],
-                    mao_obra_detalhada: Array.isArray(ultimo.mao_obra_detalhada) ? ultimo.mao_obra_detalhada : []
+                    ocorrencias_lista: [],
+                    comentarios_lista: [],
+                    materiais_lista: [],
+                    mao_obra_detalhada: Array.isArray(detalheUltimo.mao_obra_detalhada)
+                      ? detalheUltimo.mao_obra_detalhada.map(({ id, ...colaborador }) => ({ ...colaborador }))
+                      : []
                   }));
 
-                  // Equipamentos vêm da nova tabela
-                  setEquipamentosLista(ultimo.equipamentos_lista || []);
+                  setEquipamentosLista(
+                    Array.isArray(detalheUltimo.equipamentos_lista)
+                      ? detalheUltimo.equipamentos_lista.map(({ id, rdo_id, criado_em, ...equipamento }) => ({
+                          nome: equipamento.nome || '',
+                          quantidade: Number(equipamento.quantidade || 1),
+                          horario_utilizacao: equipamento.horario_utilizacao || null,
+                          horas_utilizadas: equipamento.horas_utilizadas ?? null,
+                          observacao: equipamento.observacao || null
+                        }))
+                      : []
+                  );
                 }
               }
             } catch {}
@@ -495,7 +525,7 @@ function RDOForm2() {
         }
         // ...existing code...
       } catch {
-        setErro('Erro ao carregar dados do formulário.');
+        showRdoError('Erro ao carregar dados do formulário.');
       }
     };
     carregar();
@@ -641,7 +671,7 @@ function RDOForm2() {
     if (String(draftAtividade.atividade_eap_id) === AVULSA_OPTION) {
       const descricao = String(draftAtividade.descricao_avulsa || '').trim();
       if (!descricao) {
-        setErro('Descrição da atividade avulsa é obrigatória.');
+        showRdoError('Descrição da atividade avulsa é obrigatória.');
         return;
       }
 
@@ -653,15 +683,15 @@ function RDOForm2() {
         : NaN;
 
       if (!Number.isFinite(qtdPrevista) || qtdPrevista <= 0) {
-        setErro('Quantidade prevista da atividade avulsa deve ser maior que zero.');
+        showRdoError('Quantidade prevista da atividade avulsa deve ser maior que zero.');
         return;
       }
       if (!Number.isFinite(qtdExecutada) || qtdExecutada < 0) {
-        setErro('Quantidade executada da atividade avulsa é inválida.');
+        showRdoError('Quantidade executada da atividade avulsa é inválida.');
         return;
       }
       if (qtdExecutada > qtdPrevista) {
-        setErro('Quantidade executada da atividade avulsa não pode ser maior que a prevista.');
+        showRdoError('Quantidade executada da atividade avulsa não pode ser maior que a prevista.');
         return;
       }
 
@@ -695,13 +725,13 @@ function RDOForm2() {
     const { atividadeSel, quantidadeTotal, restante } = getAtividadeLimites(draftAtividade.atividade_eap_id);
     const qtdExec = draftAtividade.quantidade_executada !== '' ? Number(draftAtividade.quantidade_executada) : null;
     if (qtdExec !== null && !Number.isFinite(qtdExec)) {
-      setErro('Quantidade executada inválida.'); return;
+      showRdoError('Quantidade executada inválida.'); return;
     }
     if (qtdExec !== null && qtdExec < 0) {
-      setErro('Quantidade executada não pode ser negativa.'); return;
+      showRdoError('Quantidade executada não pode ser negativa.'); return;
     }
     if (qtdExec !== null && quantidadeTotal > 0 && restante != null && qtdExec > restante) {
-      setErro(`Quantidade acima do permitido. Restante: ${formatQtd(restante)} ${atividadeSel?.unidade_medida || ''}.`); return;
+      showRdoError(`Quantidade acima do permitido. Restante: ${formatQtd(restante)} ${atividadeSel?.unidade_medida || ''}.`); return;
     }
     let percAuto = 0;
     if (qtdExec !== null && quantidadeTotal > 0) {
@@ -873,6 +903,12 @@ function RDOForm2() {
     const total = end >= ini ? end - ini : (24 * 60 - ini) + end;
     return Math.round((total / 60) * 100) / 100;
   };
+  const calcularHorasEquipamentoTotal = (inicio, fim, quantidade) => {
+    const horasUnitarias = calcularHorasEquipamento(inicio, fim);
+    if (horasUnitarias == null) return null;
+    const qtd = Math.max(1, Number(quantidade || 1));
+    return Math.round(horasUnitarias * qtd * 100) / 100;
+  };
 
   const addEquip = async () => {
     if (!draftEquip.nome.trim()) return;
@@ -882,7 +918,7 @@ function RDOForm2() {
       horario_inicio: draftEquip.horario_inicio || null,
       horario_fim: draftEquip.horario_fim || null,
       horario_utilizacao: draftEquip.horario_inicio && draftEquip.horario_fim ? `${draftEquip.horario_inicio} às ${draftEquip.horario_fim}` : null,
-      horas_utilizadas: calcularHorasEquipamento(draftEquip.horario_inicio, draftEquip.horario_fim),
+      horas_utilizadas: calcularHorasEquipamentoTotal(draftEquip.horario_inicio, draftEquip.horario_fim, draftEquip.quantidade),
       observacao: String(draftEquip.observacao || '').trim() || null
     };
     if (rdoId) {
@@ -890,7 +926,7 @@ function RDOForm2() {
         const resp = await addRdoEquipamento(rdoId, item);
         setEquipamentosLista(prev => [...prev, { ...item, id: resp.data?.id }]);
       } catch (e) {
-        setErro('Erro ao adicionar equipamento: ' + (e?.response?.data?.erro || e.message));
+        showRdoError('Erro ao adicionar equipamento: ' + (e?.response?.data?.erro || e.message));
         return;
       }
     } else {
@@ -904,7 +940,7 @@ function RDOForm2() {
     const item = equipamentosLista[idx];
     if (rdoId && item?.id) {
       try { await deleteRdoEquipamento(rdoId, item.id); } catch (e) {
-        setErro('Erro ao remover equipamento: ' + (e?.response?.data?.erro || e.message));
+        showRdoError('Erro ao remover equipamento: ' + (e?.response?.data?.erro || e.message));
         return;
       }
     }
@@ -979,18 +1015,67 @@ function RDOForm2() {
   const handleFotoUpload = async () => {
     if (!fotoPendente.file) return;
     const { file, atividadeId, descricao } = fotoPendente;
-    const atividadeSelecionada = fotoAtividadeOptions.find((opt) => opt.value === atividadeId) || null;
+    const atividadeSelecionada = fotoAtividadeOptions.find((opt) => String(opt.value) === String(atividadeId))
+      || (() => {
+        const valor = String(atividadeId || '');
+        if (valor.startsWith(FOTO_EAP_PREFIX)) {
+          const atividadeEapId = valor.slice(FOTO_EAP_PREFIX.length);
+          const atividade = formData.atividades.find((a) => String(a.atividade_eap_id) === String(atividadeEapId));
+          if (!atividade) return null;
+          const sel = atividadesEap.find((x) => String(x.id) === String(atividadeEapId));
+          return {
+            value: valor,
+            label: sel ? `${sel.codigo_eap ? `${sel.codigo_eap} — ` : ''}${sel.nome || sel.descricao || ''}` : `Atividade ${atividadeEapId}`,
+            tipo: 'eap',
+            atividade_eap_id: atividade.atividade_eap_id,
+            rdo_atividade_id: atividade.rdo_atividade_id || null
+          };
+        }
+        if (valor.startsWith(FOTO_AVULSA_PREFIX)) {
+          const index = Number(valor.slice(FOTO_AVULSA_PREFIX.length));
+          const atividade = formData.atividades_avulsas[index];
+          if (!atividade) return null;
+          return {
+            value: valor,
+            label: atividade?.descricao ? `Avulsa — ${atividade.descricao}` : `Avulsa ${index + 1}`,
+            tipo: 'avulsa',
+            avulsaIndex: index,
+            atividade_avulsa_descricao: atividade?.descricao || ''
+          };
+        }
+        return null;
+      })();
     if (!atividadeSelecionada) {
-      setErro('Vincule a foto a uma atividade antes de enviar.');
+      showRdoError('Vincule a foto a uma atividade antes de enviar.');
       return;
     }
     const arquivoFoto = await prepararFotoRdo(file);
+    const fotoParaFila = {
+      file: arquivoFoto,
+      previewUrl: URL.createObjectURL(arquivoFoto),
+      atividadeId,
+      descricao,
+      atividadeTipo: atividadeSelecionada?.tipo || null,
+      atividade_eap_id: atividadeSelecionada?.tipo === 'eap' ? atividadeSelecionada.atividade_eap_id : null,
+      atividade_avulsa_descricao: atividadeSelecionada?.tipo === 'avulsa' ? atividadeSelecionada.atividade_avulsa_descricao : null,
+      atividade_label: atividadeSelecionada?.label || ''
+    };
     if (rdoId) {
+      if (atividadeSelecionada?.tipo === 'eap' && !atividadeSelecionada?.rdo_atividade_id) {
+        setFotosQueue(prev => [...prev, fotoParaFila]);
+        notifyInfo('Foto adicionada à fila. Ela será enviada ao salvar o RDO.', 4500);
+        setFotoPendente({ file: null, atividadeId: '', descricao: '' });
+        if (fotoInputRef.current) fotoInputRef.current.value = '';
+        return;
+      }
       setIsUploadingFoto(true);
       const fd = new FormData();
       fd.append('arquivo', arquivoFoto);
       if (atividadeSelecionada?.tipo === 'eap' && atividadeSelecionada?.rdo_atividade_id) {
         fd.append('rdo_atividade_id', atividadeSelecionada.rdo_atividade_id);
+      }
+      if (atividadeSelecionada?.tipo === 'eap' && atividadeSelecionada?.atividade_eap_id) {
+        fd.append('atividade_eap_id', atividadeSelecionada.atividade_eap_id);
       }
       if (atividadeSelecionada?.tipo === 'avulsa' && atividadeSelecionada?.atividade_avulsa_descricao) {
         fd.append('atividade_avulsa_descricao', atividadeSelecionada.atividade_avulsa_descricao);
@@ -1009,21 +1094,12 @@ function RDOForm2() {
           criado_em: new Date().toISOString()
         }]);
       } catch (e) {
-        setErro('Erro ao enviar foto: ' + (e?.response?.data?.erro || e.message));
+        showRdoError('Erro ao enviar foto: ' + (e?.response?.data?.erro || e.message));
       } finally {
         setIsUploadingFoto(false);
       }
     } else {
-      setFotosQueue(prev => [...prev, {
-        file: arquivoFoto,
-        previewUrl: URL.createObjectURL(arquivoFoto),
-        atividadeId,
-        descricao,
-        atividadeTipo: atividadeSelecionada?.tipo || null,
-        atividade_eap_id: atividadeSelecionada?.tipo === 'eap' ? atividadeSelecionada.atividade_eap_id : null,
-        atividade_avulsa_descricao: atividadeSelecionada?.tipo === 'avulsa' ? atividadeSelecionada.atividade_avulsa_descricao : null,
-        atividade_label: atividadeSelecionada?.label || ''
-      }]);
+      setFotosQueue(prev => [...prev, fotoParaFila]);
     }
     setFotoPendente({ file: null, atividadeId: '', descricao: '' });
     if (fotoInputRef.current) fotoInputRef.current.value = '';
@@ -1049,7 +1125,7 @@ function RDOForm2() {
       )));
       cancelarEditarFotoDescricao();
     } catch (e) {
-      setErro('Erro ao atualizar descrição da foto: ' + (e?.response?.data?.erro || e.message));
+      showRdoError('Erro ao atualizar descrição da foto: ' + (e?.response?.data?.erro || e.message));
     } finally {
       setIsSavingFotoDescricao(false);
     }
@@ -1070,7 +1146,7 @@ function RDOForm2() {
       setRdoFotos(prev => prev.filter(f => f.id !== foto.id));
       notifySuccess('Foto removida.', 3000);
     } catch (e) {
-      setErro('Erro ao remover foto: ' + (e?.response?.data?.erro || e.message));
+      showRdoError('Erro ao remover foto: ' + (e?.response?.data?.erro || e.message));
     }
   };
 
@@ -1089,7 +1165,7 @@ function RDOForm2() {
     try {
       await reorderRdoFotos(rdoId, ids);
     } catch (e) {
-      setErro('Erro ao salvar nova ordem das fotos: ' + (e?.response?.data?.erro || e.message));
+      showRdoError('Erro ao salvar nova ordem das fotos: ' + (e?.response?.data?.erro || e.message));
     }
   };
 
@@ -1113,7 +1189,7 @@ function RDOForm2() {
     if (!file) return;
     const nome = String(file.name || '').toLowerCase();
     if (!ANEXO_EXT_RE.test(nome)) {
-      setErro('Tipo de arquivo não permitido para anexos do RDO.');
+      showRdoError('Tipo de arquivo não permitido para anexos do RDO.');
       return;
     }
     if (!rdoId) {
@@ -1127,10 +1203,14 @@ function RDOForm2() {
     fd.append('nome', file.name);
     try {
       await uploadAnexo(rdoId, fd);
-      const lista = await getAnexos(rdoId);
-      setAnexos(lista.data || []);
+      try {
+        const lista = await getAnexos(rdoId);
+        setAnexos(lista.data || []);
+      } catch (listError) {
+        notifyInfo('Anexo enviado. Atualize a tela se ele não aparecer na lista.', 6000);
+      }
     } catch (e) {
-      setErro('Erro ao enviar anexo: ' + (e?.response?.data?.erro || e.message));
+      showRdoError('Erro ao enviar anexo: ' + (e?.response?.data?.erro || e.message));
     } finally {
       setIsUploadingAnexo(false);
       if (anexoInputRef.current) anexoInputRef.current.value = '';
@@ -1142,7 +1222,7 @@ function RDOForm2() {
       await deleteAnexo(id);
       setAnexos(prev => prev.filter(a => a.id !== id));
     } catch (e) {
-      setErro('Erro ao remover anexo: ' + (e?.response?.data?.erro || e.message));
+      showRdoError('Erro ao remover anexo: ' + (e?.response?.data?.erro || e.message));
     }
   };
 
@@ -1233,6 +1313,45 @@ function RDOForm2() {
         }
       }
 
+      const enviarFotosDaFila = async (targetRdoId) => {
+        if (!targetRdoId || fotosQueue.length === 0) return [];
+
+        let rdoDetalhado = null;
+        try {
+          const det = await getRDO(targetRdoId);
+          rdoDetalhado = det.data || null;
+        } catch {}
+
+        const fotosFalharam = [];
+        for (const foto of fotosQueue) {
+          try {
+            if (!foto.atividadeTipo) {
+              throw new Error('Foto sem atividade vinculada.');
+            }
+            const fd = new FormData();
+            fd.append('arquivo', foto.file);
+            if (foto.atividadeTipo === 'eap' && foto.atividade_eap_id) {
+              const atividadeRdo = rdoDetalhado?.atividades?.find((a) => String(a.atividade_eap_id) === String(foto.atividade_eap_id));
+              if (atividadeRdo?.id) fd.append('rdo_atividade_id', atividadeRdo.id);
+              fd.append('atividade_eap_id', foto.atividade_eap_id);
+            }
+            if (foto.atividadeTipo === 'avulsa' && foto.atividade_avulsa_descricao) {
+              fd.append('atividade_avulsa_descricao', foto.atividade_avulsa_descricao);
+            }
+            if (foto.descricao) fd.append('descricao', foto.descricao);
+            await uploadRdoFoto(targetRdoId, fd);
+          } catch (uploadFotoError) {
+            fotosFalharam.push(`${foto.file?.name || 'foto'} (${uploadFotoError?.response?.data?.erro || uploadFotoError.message})`);
+          }
+        }
+
+        fotosQueue.forEach((foto) => {
+          if (foto.previewUrl) URL.revokeObjectURL(foto.previewUrl);
+        });
+        setFotosQueue([]);
+        return fotosFalharam;
+      };
+
       let finalId = rdoId;
       if (rdoId) {
         await updateRDO(rdoId, body);
@@ -1249,6 +1368,10 @@ function RDOForm2() {
             unidade: m.unidade || null,
             numero_nf: m.numero_nf || null
           });
+        }
+        const fotosFalharam = await enviarFotosDaFila(rdoId);
+        if (fotosFalharam.length) {
+          showRdoError(`RDO salvo, mas ${fotosFalharam.length} foto(s) não foram enviadas: ${fotosFalharam.join('; ')}`, 9000);
         }
         if (targetStatus === 'analise') {
           try { await updateStatusRDO(rdoId, 'Em análise'); } catch {}
@@ -1289,44 +1412,9 @@ function RDOForm2() {
             });
           } catch {}
         }
-        let rdoCriadoDetalhado = null;
-        if (fotosQueue.length > 0) {
-          try {
-            const det = await getRDO(finalId);
-            rdoCriadoDetalhado = det.data || null;
-          } catch {}
-        }
-
-        // Upload fotos da fila
-        const fotosFalharam = [];
-        for (const foto of fotosQueue) {
-          try {
-            if (!foto.atividadeTipo) {
-              throw new Error('Foto sem atividade vinculada.');
-            }
-            const fd = new FormData();
-            fd.append('arquivo', foto.file);
-            if (foto.atividadeTipo === 'eap' && foto.atividade_eap_id && rdoCriadoDetalhado?.atividades) {
-              const atividadeRdo = rdoCriadoDetalhado.atividades.find((a) => String(a.atividade_eap_id) === String(foto.atividade_eap_id));
-              if (atividadeRdo?.id) {
-                fd.append('rdo_atividade_id', atividadeRdo.id);
-              }
-            }
-            if (foto.atividadeTipo === 'avulsa' && foto.atividade_avulsa_descricao) {
-              fd.append('atividade_avulsa_descricao', foto.atividade_avulsa_descricao);
-            }
-            if (foto.descricao) fd.append('descricao', foto.descricao);
-            await uploadRdoFoto(finalId, fd);
-          } catch (uploadFotoError) {
-            fotosFalharam.push(`${foto.file?.name || 'foto'} (${uploadFotoError?.response?.data?.erro || uploadFotoError.message})`);
-          }
-        }
-        fotosQueue.forEach((foto) => {
-          if (foto.previewUrl) URL.revokeObjectURL(foto.previewUrl);
-        });
-        setFotosQueue([]);
+        const fotosFalharam = await enviarFotosDaFila(finalId);
         if (fotosFalharam.length) {
-          setErro(`RDO salvo, mas ${fotosFalharam.length} foto(s) não foram enviadas: ${fotosFalharam.join('; ')}`);
+          showRdoError(`RDO salvo, mas ${fotosFalharam.length} foto(s) não foram enviadas: ${fotosFalharam.join('; ')}`, 9000);
         }
         // Upload anexos da fila
         for (const file of anexosQueue) {
@@ -1352,8 +1440,7 @@ function RDOForm2() {
       try { setDirty(false); } catch {}
     } catch (error) {
       const msg = error.response?.data?.erro || error.message || 'Erro ao salvar RDO.';
-      setErro(msg);
-      notifyError(msg, 6000);
+      showRdoError(msg);
     } finally {
       setIsSaving(false);
     }
@@ -1458,7 +1545,6 @@ function RDOForm2() {
         </div>
 
         {/* Alertas */}
-        {erro && <div className="alert alert-error" style={{ marginBottom: '12px' }}>{erro}</div>}
         {sucesso && <div className="alert alert-success" style={{ marginBottom: '12px' }}>{sucesso}</div>}
 
         {/* ══ SEÇÃO 1 — Horário do Dia ══════════════════ */}
@@ -1490,6 +1576,11 @@ function RDOForm2() {
               <label className="form-label">Retorno almoço</label>
               <input className="form-input" type="time" value={formData.intervalo_almoco_fim}
                 onChange={(e) => { setFormData({ ...formData, intervalo_almoco_fim: e.target.value }); setDirty(true); }} />
+            </div>
+            <div className="form-group" style={{ flex: '1 1 100px', minWidth: '90px' }}>
+              <label className="form-label">Intervalo</label>
+              <input className="form-input" type="text" readOnly
+                value={formatHoras(calcDuracaoHoras(formData.intervalo_almoco_inicio, formData.intervalo_almoco_fim))} />
             </div>
             <div className="form-group" style={{ flex: '1 1 100px', minWidth: '90px' }}>
               <label className="form-label">Saída</label>
@@ -1669,7 +1760,7 @@ function RDOForm2() {
               <label className="form-label">Horas usadas</label>
               <input className="form-input" type="text" readOnly
                 value={(() => {
-                  const horas = calcularHorasEquipamento(draftEquip.horario_inicio, draftEquip.horario_fim);
+                  const horas = calcularHorasEquipamentoTotal(draftEquip.horario_inicio, draftEquip.horario_fim, draftEquip.quantidade);
                   return horas == null ? '—' : `${horas.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} h`;
                 })()} />
             </div>
@@ -1985,7 +2076,7 @@ function RDOForm2() {
               </button>
             </div>
           </div>
-          {!rdoId && fotosQueue.length > 0 && (
+          {fotosQueue.length > 0 && (
             <div className="alert alert-info" style={{ marginBottom: '8px', fontSize: '12px' }}>
               {fotosQueue.length} foto(s) na fila — serão enviadas ao salvar o RDO.
             </div>
