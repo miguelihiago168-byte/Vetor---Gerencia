@@ -328,7 +328,10 @@ function Landing({ initialAccess = false }) {
         <div className="landing-container landing-hero-grid">
           <div className="landing-hero-copy">
             <span className="landing-kicker">Gerenciamento, consultoria e tecnologia</span>
-            <h1>Gestão de obras com controle real, do planejamento ao campo.</h1>
+            <h1>
+              Gestão de obras
+              <span>com controle real.</span>
+            </h1>
             <p>
               A Vetor centraliza projetos, RDO, RNC, compras, ativos e indicadores para equipes que precisam
               decidir rápido sem perder rastreabilidade.
@@ -631,7 +634,10 @@ function Landing({ initialAccess = false }) {
         <div className="landing-container landing-split">
           <div>
             <span className="landing-kicker">Controle integrado</span>
-            <h2>Menos planilhas soltas. Mais contexto para gerir a obra.</h2>
+            <h2>
+              Menos planilhas soltas.
+              <span>Mais contexto para gerir a obra.</span>
+            </h2>
             <p>
               A Vetor conecta rotinas que normalmente ficam dispersas: planejamento, acompanhamento diário,
               não conformidades, compras e ativos. O resultado é uma leitura mais precisa do que está acontecendo.
@@ -667,7 +673,11 @@ function Landing({ initialAccess = false }) {
         <div className="landing-container landing-security">
           <div>
             <span className="landing-kicker">Gestão com governança</span>
-            <h2>Dados organizados, acessos definidos e decisões rastreáveis.</h2>
+            <h2>
+              Dados organizados.
+              <span>Acessos definidos.</span>
+              <span>Decisões rastreáveis.</span>
+            </h2>
             <p>
               O sistema foi estruturado para equipes com múltiplos perfis, mantendo cada usuário no fluxo certo
               e preservando o registro das ações importantes.

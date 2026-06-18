@@ -179,9 +179,9 @@
 .landing-hero-grid {
   min-height: 700px;
   display: grid;
-  grid-template-columns: minmax(0, 0.92fr) minmax(420px, 0.78fr);
+  grid-template-columns: minmax(0, 0.9fr) minmax(420px, 0.82fr);
   align-items: center;
-  gap: 72px;
+  gap: 88px;
   padding: 74px 0 72px;
 }
 
@@ -213,17 +213,23 @@
 }
 
 .landing-hero h1 {
-  max-width: 680px;
-  font-size: clamp(42px, 4.7vw, 72px);
-  line-height: 1.06;
+  max-width: 620px;
+  font-size: clamp(42px, 4.25vw, 64px);
+  line-height: 1.02;
+  text-wrap: balance;
+}
+
+.landing-hero h1 span,
+.landing-section h2 span {
+  display: block;
 }
 
 .landing-hero-copy p {
-  max-width: 650px;
-  margin: 22px 0 0;
+  max-width: 610px;
+  margin: 24px 0 0;
   color: #dcecff;
-  font-size: clamp(17px, 1.8vw, 21px);
-  line-height: 1.6;
+  font-size: clamp(17px, 1.45vw, 20px);
+  line-height: 1.62;
 }
 
 .landing-hero-actions {
@@ -717,15 +723,16 @@
 
 .landing-section h2,
 .landing-contact h2 {
-  max-width: 780px;
+  max-width: 690px;
   color: var(--landing-ink);
-  font-size: clamp(31px, 4vw, 52px);
-  line-height: 1.08;
+  font-size: clamp(31px, 3.35vw, 48px);
+  line-height: 1.12;
+  text-wrap: balance;
 }
 
 .landing-section p,
 .landing-contact p {
-  max-width: 680px;
+  max-width: 620px;
   margin: 18px 0 0;
   color: var(--landing-muted);
   font-size: 16px;
@@ -735,9 +742,9 @@
 .landing-split,
 .landing-security {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 0.94fr) minmax(360px, 0.76fr);
   align-items: center;
-  gap: 60px;
+  gap: 76px;
 }
 
 .landing-checklist {
@@ -962,6 +969,12 @@
 
   .landing-hero h1 {
     font-size: 36px;
+    line-height: 1.08;
+  }
+
+  .landing-hero h1 span,
+  .landing-section h2 span {
+    display: inline;
   }
 
   .landing-hero-actions,
