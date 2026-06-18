@@ -9,7 +9,6 @@ import { UserPreferencesProvider } from './context/UserPreferencesContext';
 import PrivateRoute from './components/PrivateRoute';
 import NotificationContainer from './components/NotificationContainer';
 import Landing from './pages/Landing';
-import Login from './pages/Login';
 import CriarConta from './pages/CriarConta';
 import RedefinirSenha from './pages/RedefinirSenha';
 // Dashboard removido como página inicial; manter rota para compatibilidade opcional
@@ -75,7 +74,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
               <BrowserRouter>
                 <Routes>
           <Route path="/login" element={<Landing />} />
-          <Route path="/acesso" element={<Login />} />
+          <Route path="/acesso" element={<Landing initialAccess />} />
           <Route path="/register/:token" element={<CriarConta />} />
           <Route path="/redefinir-senha/:token" element={<RedefinirSenha />} />
           <Route path="/criar-conta" element={<Navigate to="/acesso" replace />} />
