@@ -447,7 +447,7 @@ router.post('/:rdoId/foto', auth, uploadFotoSingle, async (req, res) => {
     if (!req.file) return res.status(400).json({ erro: 'Nenhum arquivo enviado.' });
     await ensureRdoFotosSchema();
     const { rdoId } = req.params;
-    const { rdo_atividade_id, descricao, atividade_avulsa_descricao } = req.body;
+    const { rdo_atividade_id, atividade_eap_id, descricao, atividade_avulsa_descricao } = req.body;
     const { originalname, filename, mimetype, size } = req.file;
     const caminhoArquivo = path.posix.join(tenantUploadRelativeDir(req.tenantId), filename);
     const atividadeAvulsaDescricao = String(atividade_avulsa_descricao || '').trim();
@@ -458,6 +458,13 @@ router.post('/:rdoId/foto', auth, uploadFotoSingle, async (req, res) => {
         [rdoAtividadeId, rdoId]
       );
       if (!atividade) rdoAtividadeId = null;
+    }
+    if (!rdoAtividadeId && atividade_eap_id) {
+      const atividade = await getQuery(
+        'SELECT id FROM rdo_atividades WHERE rdo_id = ? AND atividade_eap_id = ? LIMIT 1',
+        [rdoId, atividade_eap_id]
+      );
+      if (atividade?.id) rdoAtividadeId = atividade.id;
     }
     if (!rdoAtividadeId && !atividadeAvulsaDescricao) {
       try {

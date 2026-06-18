@@ -10,7 +10,7 @@ const router = express.Router();
 
 const ensureAnexosRdoSchema = async () => {
   await ensureSchemaReady({ getQuery, allQuery }, {
-    columns: { anexos: ['descricao', 'criado_por'] }
+    columns: { anexos: ['descricao', 'criado_por', 'criado_em'] }
   });
 };
 
@@ -241,14 +241,28 @@ router.get('/rdo/:rdoId', auth, async (req, res) => {
     await ensureAnexosRdoSchema();
     const { rdoId } = req.params;
 
-    const anexos = await allQuery(
-      `SELECT a.*, u.nome AS usuario_nome
-       FROM anexos
-       LEFT JOIN usuarios u ON u.id = a.criado_por
-       WHERE a.rdo_id = ?
-       ORDER BY a.criado_em DESC, a.id DESC`,
-      [rdoId]
-    );
+    let anexos;
+    try {
+      anexos = await allQuery(
+        `SELECT a.*, u.nome AS usuario_nome
+         FROM anexos a
+         LEFT JOIN usuarios u ON u.id = a.criado_por
+         WHERE a.rdo_id = ?
+         ORDER BY a.criado_em DESC, a.id DESC`,
+        [rdoId]
+      );
+    } catch (queryError) {
+      if (!/no such column:.*criado_por|no such column:.*criado_em|no such table: usuarios/i.test(String(queryError?.message || ''))) {
+        throw queryError;
+      }
+      anexos = await allQuery(
+        `SELECT a.*, NULL AS usuario_nome
+         FROM anexos a
+         WHERE a.rdo_id = ?
+         ORDER BY a.id DESC`,
+        [rdoId]
+      );
+    }
 
     res.json(anexos);
 
