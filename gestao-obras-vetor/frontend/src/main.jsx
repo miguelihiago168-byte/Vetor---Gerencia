@@ -8,6 +8,7 @@ import { DialogProvider } from './context/DialogContext';
 import { UserPreferencesProvider } from './context/UserPreferencesContext';
 import PrivateRoute from './components/PrivateRoute';
 import NotificationContainer from './components/NotificationContainer';
+import Landing from './pages/Landing';
 import Login from './pages/Login';
 import CriarConta from './pages/CriarConta';
 import RedefinirSenha from './pages/RedefinirSenha';
@@ -311,7 +312,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           {/* Email Dashboard */}
           <Route path="/email-dashboard" element={<PrivateRoute><EmailDashboard /></PrivateRoute>} />
           <Route path="/mensagens" element={<PrivateRoute><ProjetoSelector destino="mensagens" /></PrivateRoute>} />
-          <Route path="/" element={<Navigate to="/projetos" replace />} />
+          <Route path="/" element={<Landing />} />
                 </Routes>
                 <NotificationContainer />
               </BrowserRouter>
