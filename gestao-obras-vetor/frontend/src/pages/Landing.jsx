@@ -18,6 +18,7 @@ import {
 import './Landing.css';
 
 const CONTACT_EMAIL = 'contatovetorgerenciamento@gmail.com';
+const ACCESS_PATH = '/acesso';
 
 const modules = [
   { icon: Layers3, title: 'Projetos e EAP', text: 'Estruture etapas, atividades, responsaveis e avancos em uma unica visao.' },
@@ -54,7 +55,7 @@ function Landing() {
           </nav>
 
           <div className="landing-nav-actions">
-            <Link className="landing-btn landing-btn-outline" to="/login">Entrar</Link>
+            <Link className="landing-btn landing-btn-outline" to={ACCESS_PATH}>Entrar</Link>
             <button
               type="button"
               className="landing-menu-btn"
@@ -78,7 +79,7 @@ function Landing() {
               decidir rapido sem perder rastreabilidade.
             </p>
             <div className="landing-hero-actions">
-              <Link className="landing-btn landing-btn-primary" to="/login">
+              <Link className="landing-btn landing-btn-primary" to={ACCESS_PATH}>
                 Entrar no sistema
                 <ArrowRight size={18} />
               </Link>

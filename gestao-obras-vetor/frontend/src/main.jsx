@@ -74,10 +74,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <DialogProvider>
               <BrowserRouter>
                 <Routes>
-          <Route path="/login" element={<Login />} />
+          <Route path="/login" element={<Landing />} />
+          <Route path="/acesso" element={<Login />} />
           <Route path="/register/:token" element={<CriarConta />} />
           <Route path="/redefinir-senha/:token" element={<RedefinirSenha />} />
-          <Route path="/criar-conta" element={<Navigate to="/login" replace />} />
+          <Route path="/criar-conta" element={<Navigate to="/acesso" replace />} />
           <Route path="/primeiro-acesso" element={<PrivateRoute allowPendingFirstAccess><PrimeiroAcesso /></PrivateRoute>} />
           <Route path="/perfil" element={<PrivateRoute><MeuPerfil /></PrivateRoute>} />
           {/* Redirecionar Dashboard para Projetos */}
