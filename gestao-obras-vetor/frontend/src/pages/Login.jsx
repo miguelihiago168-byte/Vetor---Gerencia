@@ -337,7 +337,7 @@ function Login() {
                 onChange={(e) => setManterLogin(e.target.checked)}
                 style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--primary, #6366f1)' }}
               />
-              Manter conectado por 30 dias
+              Manter minha sessão ativa
             </label>
             
 

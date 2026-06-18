@@ -8,7 +8,7 @@ import { DialogProvider } from './context/DialogContext';
 import { UserPreferencesProvider } from './context/UserPreferencesContext';
 import PrivateRoute from './components/PrivateRoute';
 import NotificationContainer from './components/NotificationContainer';
-import Login from './pages/Login';
+import Landing from './pages/Landing';
 import CriarConta from './pages/CriarConta';
 import RedefinirSenha from './pages/RedefinirSenha';
 // Dashboard removido como página inicial; manter rota para compatibilidade opcional
@@ -73,10 +73,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <DialogProvider>
               <BrowserRouter>
                 <Routes>
-          <Route path="/login" element={<Login />} />
+          <Route path="/login" element={<Landing />} />
+          <Route path="/acesso" element={<Landing initialAccess />} />
           <Route path="/register/:token" element={<CriarConta />} />
           <Route path="/redefinir-senha/:token" element={<RedefinirSenha />} />
-          <Route path="/criar-conta" element={<Navigate to="/login" replace />} />
+          <Route path="/criar-conta" element={<Navigate to="/acesso" replace />} />
           <Route path="/primeiro-acesso" element={<PrivateRoute allowPendingFirstAccess><PrimeiroAcesso /></PrivateRoute>} />
           <Route path="/perfil" element={<PrivateRoute><MeuPerfil /></PrivateRoute>} />
           {/* Redirecionar Dashboard para Projetos */}
@@ -311,7 +312,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           {/* Email Dashboard */}
           <Route path="/email-dashboard" element={<PrivateRoute><EmailDashboard /></PrivateRoute>} />
           <Route path="/mensagens" element={<PrivateRoute><ProjetoSelector destino="mensagens" /></PrivateRoute>} />
-          <Route path="/" element={<Navigate to="/projetos" replace />} />
+          <Route path="/" element={<Landing />} />
                 </Routes>
                 <NotificationContainer />
               </BrowserRouter>
