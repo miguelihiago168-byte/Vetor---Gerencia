@@ -213,8 +213,8 @@
 }
 
 .landing-hero h1 {
-  max-width: 620px;
-  font-size: clamp(42px, 4.25vw, 64px);
+  max-width: 760px;
+  font-size: clamp(42px, 3.85vw, 58px);
   line-height: 1.02;
   text-wrap: balance;
 }
@@ -222,6 +222,10 @@
 .landing-hero h1 span,
 .landing-section h2 span {
   display: block;
+}
+
+.landing-hero h1 span {
+  white-space: nowrap;
 }
 
 .landing-hero-copy p {
@@ -975,6 +979,10 @@
   .landing-hero h1 span,
   .landing-section h2 span {
     display: inline;
+  }
+
+  .landing-hero h1 span {
+    white-space: normal;
   }
 
   .landing-hero-actions,
