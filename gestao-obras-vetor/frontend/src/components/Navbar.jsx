@@ -3,7 +3,10 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Bell, LogOut, User, ChevronDown, Menu, X } from 'lucide-react';
 import { useLeaveGuard } from '../context/LeaveGuardContext';
-import { getRDOs, getRNCs, getRequisicoesBadges, getMensagensNaoLidasCount } from '../services/api';
+import {
+  getRDOs, getRNCs, getRequisicoesBadges, getMensagensNaoLidasCount,
+  getNotificacoes, marcarNotificacaoLida, marcarTodasNotificacoesLidas
+} from '../services/api';
 import { useDialog } from '../context/DialogContext';
 import ThemeToggle from './ThemeToggle';
 
@@ -43,6 +46,9 @@ function Navbar() {
   const [pendRdos, setPendRdos] = useState(0);
   const [pendRnc, setPendRnc] = useState(0);
   const [pendMensagens, setPendMensagens] = useState(0);
+  const [notificacoes, setNotificacoes] = useState([]);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [isMarkingNotifications, setIsMarkingNotifications] = useState(false);
   const [perfilDropdownOpen, setPerfilDropdownOpen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -130,6 +136,22 @@ function Navbar() {
     return () => clearInterval(id);
   }, [usuario?.id]);
 
+  const carregarNotificacoes = async () => {
+    if (!usuario?.id) return;
+    try {
+      const response = await getNotificacoes();
+      setNotificacoes(response.data || []);
+    } catch (_) {
+      setNotificacoes([]);
+    }
+  };
+
+  useEffect(() => {
+    carregarNotificacoes();
+    const id = setInterval(carregarNotificacoes, 30000);
+    return () => clearInterval(id);
+  }, [usuario?.id]);
+
   const confirmNav = async (e, to) => {
     if (!isDirty) return true;
     if (e?.preventDefault) e.preventDefault();
@@ -148,17 +170,20 @@ function Navbar() {
   const handleLogout = async (e) => {
     setPerfilDropdownOpen(false);
     setIsMobileMenuOpen(false);
+    setNotifOpen(false);
     const ok = await confirmNav(e);
     if (!ok) return;
     logout();
     navigate('/login');
   };
 
-  // Fechar dropdown ao clicar fora
   useEffect(() => {
     const handler = (e) => {
       if (perfilDropdownRef.current && !perfilDropdownRef.current.contains(e.target)) {
         setPerfilDropdownOpen(false);
+      }
+      if (!e.target.closest('.notif-bell-wrapper')) {
+        setNotifOpen(false);
       }
     };
     document.addEventListener('mousedown', handler);
@@ -167,7 +192,17 @@ function Navbar() {
 
   useEffect(() => {
     setIsMobileMenuOpen(false);
+    setNotifOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!notifOpen) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setNotifOpen(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [notifOpen]);
 
   useEffect(() => {
     if (!isMobileMenuOpen) return undefined;
@@ -218,19 +253,109 @@ function Navbar() {
     if (ok) {
       setIsMobileMenuOpen(false);
       setPerfilDropdownOpen(false);
+      setNotifOpen(false);
     }
     return ok;
   };
 
-  const abrirSuprimentosPendentes = async () => {
+  const toggleNotificacoes = () => {
     setIsMobileMenuOpen(false);
     setPerfilDropdownOpen(false);
-    if (isDirty) {
-      await confirmNav(null, rotaCompras);
-      return;
-    }
-    navigate(rotaCompras);
+    setNotifOpen((open) => !open);
+    carregarNotificacoes();
   };
+
+  const marcarNotificacao = async (id) => {
+    try {
+      await marcarNotificacaoLida(id);
+      setNotificacoes((items) => items.filter((item) => item.id !== id));
+    } catch (_) {
+      // Mantém a notificação visível para uma nova tentativa.
+    }
+  };
+
+  const marcarTodasNotificacoes = async () => {
+    if (notificacoes.length === 0 || isMarkingNotifications) return;
+    setIsMarkingNotifications(true);
+    try {
+      await marcarTodasNotificacoesLidas();
+      setNotificacoes([]);
+    } finally {
+      setIsMarkingNotifications(false);
+    }
+  };
+
+  const formatarDataNotificacao = (value) => {
+    if (!value) return '';
+    const date = new Date(String(value).replace(' ', 'T'));
+    return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('pt-BR');
+  };
+
+  const renderNotificationBell = () => (
+    <div className="notif-bell-wrapper">
+      <button
+        type="button"
+        className="notif-bell-btn"
+        onClick={toggleNotificacoes}
+        aria-label={pendRequisicoes > 0
+          ? `${pendRequisicoes} processo(s) de suprimentos em aberto`
+          : 'Abrir notificações'}
+        aria-expanded={notifOpen}
+        title="Notificações"
+      >
+        <Bell size={19} />
+        {pendRequisicoes > 0 && (
+          <span className="notif-bell-badge">{pendRequisicoes > 99 ? '99+' : pendRequisicoes}</span>
+        )}
+      </button>
+
+      {notifOpen && (
+        <div className="notif-dropdown" role="dialog" aria-label="Notificações">
+          <div className="notif-dropdown-header">
+            <span className="notif-dropdown-title">Notificações</span>
+            <button
+              type="button"
+              className="notif-mark-all-btn"
+              onClick={marcarTodasNotificacoes}
+              disabled={notificacoes.length === 0 || isMarkingNotifications}
+            >
+              {isMarkingNotifications ? 'Lendo...' : 'Marcar todas como lidas'}
+            </button>
+          </div>
+          <div className="notif-supply-summary">
+            <Bell size={16} aria-hidden="true" />
+            <span>
+              {pendRequisicoes > 0
+                ? `${pendRequisicoes} processo(s) de suprimentos em aberto.`
+                : 'Nenhum processo de suprimentos em aberto.'}
+            </span>
+          </div>
+          <div className="notif-dropdown-list">
+            {notificacoes.length === 0 ? (
+              <div className="notif-empty">Não há notificações não lidas.</div>
+            ) : notificacoes.map((notificacao) => (
+              <div className="notif-item" key={notificacao.id}>
+                <div className="notif-item-icon"><Bell size={16} aria-hidden="true" /></div>
+                <div className="notif-item-body">
+                  <span className="notif-item-msg">{notificacao.mensagem}</span>
+                  <span className="notif-item-time">{formatarDataNotificacao(notificacao.criado_em)}</span>
+                </div>
+                <button
+                  type="button"
+                  className="notif-item-close"
+                  onClick={() => marcarNotificacao(notificacao.id)}
+                  aria-label="Marcar notificação como lida"
+                  title="Marcar como lida"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   const renderMainLinks = () => (
     <>
@@ -354,29 +479,17 @@ function Navbar() {
 
           {canViewCompras && (
             <div className="navbar-mobile-supply-bell">
-              <button
-                type="button"
-                className="notif-bell-btn"
-                onClick={abrirSuprimentosPendentes}
-                aria-label={pendRequisicoes > 0
-                  ? `${pendRequisicoes} processo(s) de suprimentos em aberto`
-                  : 'Abrir suprimentos'}
-                title={pendRequisicoes > 0
-                  ? `${pendRequisicoes} processo(s) de suprimentos em aberto`
-                  : 'Suprimentos'}
-              >
-                <Bell size={19} />
-                {pendRequisicoes > 0 && (
-                  <span className="notif-bell-badge">{pendRequisicoes > 99 ? '99+' : pendRequisicoes}</span>
-                )}
-              </button>
+              {renderNotificationBell()}
             </div>
           )}
 
           <button
             type="button"
             className="navbar-mobile-toggle"
-            onClick={() => setIsMobileMenuOpen((prev) => !prev)}
+            onClick={() => {
+              setNotifOpen(false);
+              setIsMobileMenuOpen((prev) => !prev);
+            }}
             aria-expanded={isMobileMenuOpen}
             aria-controls="navbar-mobile-drawer"
             aria-label={isMobileMenuOpen ? 'Fechar menu de navegação' : 'Abrir menu de navegação'}
@@ -386,24 +499,7 @@ function Navbar() {
 
           <div className="navbar-account navbar-account-desktop">
             {canViewCompras && (
-              <div className="notif-bell-wrapper">
-                <button
-                  type="button"
-                  className="notif-bell-btn"
-                  onClick={abrirSuprimentosPendentes}
-                  aria-label={pendRequisicoes > 0
-                    ? `${pendRequisicoes} processo(s) de suprimentos em aberto`
-                    : 'Abrir suprimentos'}
-                  title={pendRequisicoes > 0
-                    ? `${pendRequisicoes} processo(s) de suprimentos em aberto`
-                    : 'Suprimentos'}
-                >
-                  <Bell size={19} />
-                  {pendRequisicoes > 0 && (
-                    <span className="notif-bell-badge">{pendRequisicoes > 99 ? '99+' : pendRequisicoes}</span>
-                  )}
-                </button>
-              </div>
+              renderNotificationBell()
             )}
             <div className="navbar-perfil-dropdown" ref={perfilDropdownRef}>
               <button
