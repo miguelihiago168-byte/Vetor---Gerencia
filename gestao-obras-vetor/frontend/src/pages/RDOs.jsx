@@ -8,6 +8,7 @@ import { useNotification } from '../context/NotificationContext';
 import { useDialog } from '../context/DialogContext';
 import { useUserPreferences } from '../context/UserPreferencesContext';
 import './RDOs.css';
+import Modal from '../components/Modal';
 
 function RDOs() {
   const { projetoId } = useParams();
