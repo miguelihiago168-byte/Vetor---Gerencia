@@ -1228,6 +1228,16 @@ function RDOForm2() {
 
   /* ── Salvar ─────────────────────────────────────── */
   const salvar = async (targetStatus = 'analise') => {
+    if (targetStatus === 'analise') {
+      const confirmarEnvio = await confirm({
+        title: 'Enviar para aprovação?',
+        message: 'Ao enviar para aprovação, este RDO ficará bloqueado para edição enquanto aguarda análise.\n\nSe ainda houver algo pendente, clique em "Salvar RDO" para mantê-lo aberto para edição.',
+        confirmText: 'Enviar para aprovação',
+        cancelText: 'Continuar editando'
+      });
+      if (!confirmarEnvio) return;
+    }
+
     try {
       setErro('');
       setSucesso('');
@@ -2427,8 +2437,8 @@ function RDOForm2() {
                 <>
                   <button className="btn rdo-action-btn rdo-form-action-pill rdo-form-action-pill-draft" onClick={() => salvar('rascunho')}
                     disabled={isSaving || !formData.data_relatorio}>
-                    <span className="rdo-action-label-desktop">{isSaving ? 'Salvando...' : 'Salvar rascunho'}</span>
-                    <span className="rdo-action-label-mobile">{isSaving ? 'Salvando...' : 'Rascunho'}</span>
+                    <span className="rdo-action-label-desktop">{isSaving ? 'Salvando...' : 'Salvar RDO'}</span>
+                    <span className="rdo-action-label-mobile">{isSaving ? 'Salvando...' : 'Salvar'}</span>
                   </button>
                   <button className="btn rdo-action-btn rdo-form-action-pill rdo-form-action-pill-success" onClick={() => salvar('analise')}
                     disabled={isSaving || !formData.data_relatorio}>

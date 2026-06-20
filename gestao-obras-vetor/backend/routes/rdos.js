@@ -959,7 +959,7 @@ router.put('/:id', auth, async (req, res) => {
 
     if (Number(rdoAtual.correcao_solicitada || 0) === 1) {
       try {
-        await clearRdoCorrection({ rdoId: id, usuarioId: req.usuario.id });
+        await clearRdoCorrection({ rdoId: id });
       } catch (clearError) {
         console.warn('Falha ao encerrar pendência de correção do RDO:', clearError?.message || clearError);
       }
@@ -1141,7 +1141,7 @@ router.patch('/:id/status', auth, async (req, res) => {
 
       if (status === 'Em análise' && Number(rdoAtual.correcao_solicitada || 0) === 1) {
         try {
-          await clearRdoCorrection({ rdoId: id, usuarioId: req.usuario.id });
+          await clearRdoCorrection({ rdoId: id });
         } catch (clearError) {
           console.warn('Falha ao encerrar pendência de correção do RDO:', clearError?.message || clearError);
         }

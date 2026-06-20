@@ -46,21 +46,6 @@ const notifyUser = async ({ usuarioId, rdoId, numero }) => {
   }
 };
 
-const insertCorrectionComment = async ({ rdoId, usuarioId, motivo }) => {
-  const comentario = [
-    'Correção solicitada automaticamente.',
-    '',
-    `Motivo: ${motivo}`,
-    '',
-    'O RDO retornou para "Em preenchimento" e deverá ser revisado antes de novo envio.'
-  ].join('\n');
-
-  await runQuery(
-    'INSERT INTO rdo_comentarios (rdo_id, usuario_id, comentario) VALUES (?, ?, ?)',
-    [rdoId, usuarioId, comentario]
-  );
-};
-
 const ensureRdoCorrectionColumns = async () => {
   await ensureSchemaReady({ getQuery, allQuery }, {
     columns: {
@@ -122,7 +107,6 @@ const markAffectedRDOs = async ({ atividadeIds = [], usuario, origem = CORRECAO_
 
   const affected = [];
   const usuarioLabel = String(usuario?.nome || usuario?.id || 'Sistema');
-  const usuarioId = usuario?.id || null;
 
   for (const rdo of grouped.values()) {
     const motivo = buildMotivo(rdo.atividades);
@@ -148,7 +132,6 @@ const markAffectedRDOs = async ({ atividadeIds = [], usuario, origem = CORRECAO_
       rdo.id
     ]);
 
-    await insertCorrectionComment({ rdoId: rdo.id, usuarioId, motivo });
     await notifyUser({ usuarioId: rdo.criado_por, rdoId: rdo.id, numero: rdo.numero_rdo });
 
     affected.push({
@@ -163,7 +146,7 @@ const markAffectedRDOs = async ({ atividadeIds = [], usuario, origem = CORRECAO_
   return { affectedRDOs: affected.length, rdos: affected };
 };
 
-const clearRdoCorrection = async ({ rdoId, usuarioId } = {}) => {
+const clearRdoCorrection = async ({ rdoId } = {}) => {
   await ensureRdoCorrectionColumns();
   const rows = await allQuery('SELECT id, correcao_solicitada FROM rdos WHERE id = ? AND COALESCE(correcao_solicitada, 0) = 1', [rdoId]);
   if (!rows || rows.length === 0) return false;
@@ -179,13 +162,6 @@ const clearRdoCorrection = async ({ rdoId, usuarioId } = {}) => {
       atualizado_em = CURRENT_TIMESTAMP
     WHERE id = ?
   `, [rdoId]);
-
-  if (usuarioId) {
-    await runQuery(
-      'INSERT INTO rdo_comentarios (rdo_id, usuario_id, comentario) VALUES (?, ?, ?)',
-      [rdoId, usuarioId, 'Correção realizada e pendência encerrada.']
-    );
-  }
 
   return true;
 };
