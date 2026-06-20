@@ -833,6 +833,10 @@ code {
   min-width: 0;
 }
 
+.navbar-mobile-supply-bell {
+  display: none;
+}
+
 .almox-content .card {
   width: 100%;
 }
@@ -1103,6 +1107,8 @@ code {
   .navbar-main { width: auto; display: none; }
   .navbar-menu { margin-left: 0; }
   .navbar-account-desktop { display: none; }
+  .navbar-mobile-supply-bell { display: flex; margin-left: auto; }
+  .navbar-mobile-supply-bell + .navbar-mobile-toggle { margin-left: 8px; }
   .navbar-mobile-toggle { display: inline-flex; margin-left: auto; }
   .navbar-mobile-drawer { max-width: 100vw; }
   .navbar-brand { min-width: 0; }

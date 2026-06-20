@@ -1,10 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogOut, User, ChevronDown, Menu, X } from 'lucide-react';
+import { Bell, LogOut, User, ChevronDown, Menu, X } from 'lucide-react';
 import { useLeaveGuard } from '../context/LeaveGuardContext';
-import { getRDOs, getRNCs, getNotificacoes, marcarNotificacaoLida, getRequisicoesBadges, getMensagensNaoLidasCount } from '../services/api';
-import { useNotification } from '../context/NotificationContext';
+import { getRDOs, getRNCs, getRequisicoesBadges, getMensagensNaoLidasCount } from '../services/api';
 import { useDialog } from '../context/DialogContext';
 import ThemeToggle from './ThemeToggle';
 
@@ -44,8 +43,6 @@ function Navbar() {
   const [pendRdos, setPendRdos] = useState(0);
   const [pendRnc, setPendRnc] = useState(0);
   const [pendMensagens, setPendMensagens] = useState(0);
-  const [notifCompras, setNotifCompras] = useState(0);
-  const [notifTotal, setNotifTotal] = useState(0);
   const [perfilDropdownOpen, setPerfilDropdownOpen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -54,7 +51,6 @@ function Navbar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const perfilDropdownRef = useRef(null);
   const mobileDrawerRef = useRef(null);
-  const { info } = useNotification();
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
@@ -81,39 +77,9 @@ function Navbar() {
       if (!projetoId) {
         setPendRdos(0);
         setPendRnc(0);
-        setPendRequisicoes(0);
         return;
       }
       try {
-        // Badges de requisições por perfil
-        const BADGE_PERFIL = {
-          'ADM':            new Set(['em-cotacao', 'aprovado-compra']),
-          'Gestor Geral':   new Set(['solicitado', 'cotacoes-recebidas']),
-          'Gestor da Obra': new Set(['solicitado', 'cotacoes-recebidas']),
-          'Gestor Local':   new Set(['solicitado']),
-          'Almoxarife':     new Set(['solicitado']),
-        };
-        const STATUS_FLOW = [
-          { slug: 'solicitado',         statuses: ['Em análise'] },
-          { slug: 'em-cotacao',         statuses: ['Em cotação'] },
-          { slug: 'cotacoes-recebidas', statuses: ['Cotações recebidas'] },
-          { slug: 'aprovado-compra',    statuses: ['Compra autorizada'] },
-        ];
-        try {
-          const badgesRes = await getRequisicoesBadges(Number(projetoId));
-          const rows = badgesRes.data || [];
-          const meusBadges = BADGE_PERFIL[perfil] || new Set();
-          let totalReq = 0;
-          STATUS_FLOW.forEach((sf) => {
-            if (meusBadges.has(sf.slug)) {
-              totalReq += rows
-                .filter((r) => sf.statuses.includes(r.status))
-                .reduce((sum, r) => sum + Number(r.count), 0);
-            }
-          });
-          setPendRequisicoes(totalReq);
-        } catch { setPendRequisicoes(0); }
-
         const rdosRes = await getRDOs(projetoId);
         const rdos = rdosRes.data || [];
         const rdosCount = rdos.filter(r => (r.status === 'Em análise' || r.status === 'Em analise')).length;
@@ -130,20 +96,28 @@ function Navbar() {
     loadCounts();
   }, [usuario, projetoId, location.pathname]);
 
-  // Buscar contagem de notificações não lidas; exibe como badge junto ao nome
   useEffect(() => {
-    const fetchNotifs = async () => {
+    const loadPendenciasSuprimentos = async () => {
       if (!usuario?.id) return;
       try {
-        const res = await getNotificacoes();
-        const notifs = res.data || [];
-        setNotifTotal(notifs.length);
-        const comprasPendentes = notifs.filter((n) => n.referencia_tipo === 'pedido').length;
-        setNotifCompras(comprasPendentes);
-      } catch (e) {
-        // silenciar falhas de notificação
+        const response = await getRequisicoesBadges(projetoId ? Number(projetoId) : undefined);
+        const statusAbertos = new Set(['Em análise', 'Em cotação', 'Cotações recebidas', 'Compra autorizada']);
+        const total = (response.data || [])
+          .filter((item) => statusAbertos.has(item.status))
+          .reduce((sum, item) => sum + Number(item.count || 0), 0);
+        setPendRequisicoes(total);
+      } catch (_) {
+        setPendRequisicoes(0);
       }
+    };
+    loadPendenciasSuprimentos();
+    const id = setInterval(loadPendenciasSuprimentos, 30000);
+    return () => clearInterval(id);
+  }, [usuario?.id, projetoId, location.pathname]);
 
+  useEffect(() => {
+    const loadMensagens = async () => {
+      if (!usuario?.id) return;
       try {
         const msgRes = await getMensagensNaoLidasCount();
         setPendMensagens(Number(msgRes.data?.total || 0));
@@ -151,8 +125,8 @@ function Navbar() {
         setPendMensagens(0);
       }
     };
-    fetchNotifs();
-    const id = setInterval(fetchNotifs, 30000);
+    loadMensagens();
+    const id = setInterval(loadMensagens, 30000);
     return () => clearInterval(id);
   }, [usuario?.id]);
 
@@ -248,6 +222,16 @@ function Navbar() {
     return ok;
   };
 
+  const abrirSuprimentosPendentes = async () => {
+    setIsMobileMenuOpen(false);
+    setPerfilDropdownOpen(false);
+    if (isDirty) {
+      await confirmNav(null, rotaCompras);
+      return;
+    }
+    navigate(rotaCompras);
+  };
+
   const renderMainLinks = () => (
     <>
       {isProjectContext && (
@@ -279,6 +263,9 @@ function Navbar() {
       {!isProjectContext && canViewCompras && (
         <NavLink to={rotaCompras} onClick={(e) => handleMenuNavigation(e, rotaCompras)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
           Suprimentos
+          {pendRequisicoes > 0 && (
+            <span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendRequisicoes}</span>
+          )}
         </NavLink>
       )}
 
@@ -365,6 +352,27 @@ function Navbar() {
             )}
           </div>
 
+          {canViewCompras && (
+            <div className="navbar-mobile-supply-bell">
+              <button
+                type="button"
+                className="notif-bell-btn"
+                onClick={abrirSuprimentosPendentes}
+                aria-label={pendRequisicoes > 0
+                  ? `${pendRequisicoes} processo(s) de suprimentos em aberto`
+                  : 'Abrir suprimentos'}
+                title={pendRequisicoes > 0
+                  ? `${pendRequisicoes} processo(s) de suprimentos em aberto`
+                  : 'Suprimentos'}
+              >
+                <Bell size={19} />
+                {pendRequisicoes > 0 && (
+                  <span className="notif-bell-badge">{pendRequisicoes > 99 ? '99+' : pendRequisicoes}</span>
+                )}
+              </button>
+            </div>
+          )}
+
           <button
             type="button"
             className="navbar-mobile-toggle"
@@ -377,6 +385,26 @@ function Navbar() {
           </button>
 
           <div className="navbar-account navbar-account-desktop">
+            {canViewCompras && (
+              <div className="notif-bell-wrapper">
+                <button
+                  type="button"
+                  className="notif-bell-btn"
+                  onClick={abrirSuprimentosPendentes}
+                  aria-label={pendRequisicoes > 0
+                    ? `${pendRequisicoes} processo(s) de suprimentos em aberto`
+                    : 'Abrir suprimentos'}
+                  title={pendRequisicoes > 0
+                    ? `${pendRequisicoes} processo(s) de suprimentos em aberto`
+                    : 'Suprimentos'}
+                >
+                  <Bell size={19} />
+                  {pendRequisicoes > 0 && (
+                    <span className="notif-bell-badge">{pendRequisicoes > 99 ? '99+' : pendRequisicoes}</span>
+                  )}
+                </button>
+              </div>
+            )}
             <div className="navbar-perfil-dropdown" ref={perfilDropdownRef}>
               <button
                 className={`navbar-link navbar-perfil-btn${perfilDropdownOpen ? ' active' : ''}`}
