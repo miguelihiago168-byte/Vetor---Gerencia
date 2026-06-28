@@ -108,7 +108,7 @@ function CronogramaGantt({ hideNavbar = false }) {
   return (
     <>
       {!hideNavbar && <Navbar />}
-      <div className="container" style={{ paddingTop: '24px', paddingBottom: '40px' }}>
+      <div className="container" style={{ paddingTop: hideNavbar ? '6px' : '24px', paddingBottom: '40px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 10, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             {!hideNavbar && (

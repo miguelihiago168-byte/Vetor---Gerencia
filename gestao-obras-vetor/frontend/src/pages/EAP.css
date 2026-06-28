@@ -1,0 +1,243 @@
+.eap-page {
+  padding-top: 12px;
+  padding-bottom: 40px;
+}
+
+.eap-page-embedded {
+  padding-top: 6px;
+}
+
+.eap-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 26px;
+}
+
+.eap-list-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.eap-list-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: clamp(28px, 3vw, 34px);
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.08;
+}
+
+.eap-toolbar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.eap-toolbar-btn {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 14px;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.64);
+  color: var(--gray-600);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: none;
+  transition: background 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.eap-toolbar-btn:hover,
+.eap-toolbar-btn:focus-visible {
+  background: #ffffff;
+  border-color: var(--gray-300);
+  color: var(--gray-800);
+  outline: none;
+}
+
+.eap-toolbar-btn svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.eap-toolbar-btn-primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #ffffff;
+  padding-inline: 16px;
+}
+
+.eap-toolbar-btn-primary:hover,
+.eap-toolbar-btn-primary:focus-visible {
+  background: var(--primary-strong);
+  border-color: var(--primary-strong);
+  color: #ffffff;
+}
+
+.eap-toolbar-btn-back {
+  padding-left: 10px;
+}
+
+.eap-actions-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.eap-toolbar-btn-menu {
+  background: transparent;
+}
+
+.eap-actions-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  min-width: 220px;
+  padding: 6px;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+}
+
+.eap-actions-item {
+  width: 100%;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--gray-600);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+
+.eap-actions-item:hover,
+.eap-actions-item:focus-visible {
+  background: var(--gray-25);
+  color: var(--gray-800);
+  outline: none;
+}
+
+.eap-actions-item svg {
+  width: 15px;
+  height: 15px;
+  color: var(--gray-400);
+  flex-shrink: 0;
+}
+
+body.dark-mode .eap-list-title {
+  color: #e8edf3;
+}
+
+body.dark-mode .eap-toolbar-btn {
+  background: #1b2836;
+  border-color: #2a4060;
+  color: #c5d3de;
+}
+
+body.dark-mode .eap-toolbar-btn:hover,
+body.dark-mode .eap-toolbar-btn:focus-visible {
+  background: #243650;
+  border-color: #45627d;
+  color: #ffffff;
+}
+
+body.dark-mode .eap-toolbar-btn-primary {
+  background: #0284c7;
+  border-color: #0284c7;
+  color: #ffffff;
+}
+
+body.dark-mode .eap-toolbar-btn-primary:hover,
+body.dark-mode .eap-toolbar-btn-primary:focus-visible {
+  background: #0369a1;
+  border-color: #0369a1;
+}
+
+body.dark-mode .eap-actions-dropdown {
+  background: #1b2836;
+  border-color: #2a4060;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.34);
+}
+
+body.dark-mode .eap-actions-item {
+  color: #c5d3de;
+}
+
+body.dark-mode .eap-actions-item:hover,
+body.dark-mode .eap-actions-item:focus-visible {
+  background: #243650;
+  color: #ffffff;
+}
+
+body.dark-mode .eap-actions-item svg {
+  color: #8fa3b9;
+}
+
+@media (max-width: 900px) {
+  .eap-list-header {
+    align-items: flex-start;
+    flex-direction: column;
+    margin-bottom: 20px;
+  }
+
+  .eap-list-title-wrap,
+  .eap-toolbar {
+    width: 100%;
+  }
+
+  .eap-toolbar {
+    justify-content: flex-start;
+  }
+
+  .eap-actions-dropdown {
+    left: 0;
+    right: auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .eap-page {
+    padding-top: 10px;
+  }
+
+  .eap-page-embedded {
+    padding-top: 6px;
+  }
+
+  .eap-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .eap-toolbar-btn,
+  .eap-actions-menu {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .eap-actions-dropdown {
+    min-width: min(260px, calc(100vw - 24px));
+  }
+}
