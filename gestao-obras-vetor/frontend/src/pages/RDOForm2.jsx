@@ -57,6 +57,7 @@ const Section = ({ id, num, title, badge, children, isOpen, onToggle }) => (
   <div className="rdo-section">
     <div className="rdo-section-header" onClick={() => onToggle(id)}>
       <div className="rdo-section-header-left">
+        {num != null && <span className="rdo-section-number">{num}</span>}
         <span className="rdo-section-title">{title}</span>
         {badge != null && <span className="rdo-section-badge">{badge}</span>}
       </div>
