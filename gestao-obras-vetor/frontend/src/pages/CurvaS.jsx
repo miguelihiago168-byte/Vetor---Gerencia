@@ -110,7 +110,7 @@ function CurvaS({ hideNavbar = false }) {
   return (
     <>
       {!hideNavbar && <Navbar />}
-      <div className="container" style={{ paddingTop: '24px', paddingBottom: '40px' }}>
+      <div className="container" style={{ paddingTop: hideNavbar ? '6px' : '24px', paddingBottom: '40px' }}>
         <div style={{ marginBottom: '20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '8px' }}>
             <h1 style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>

@@ -1368,7 +1368,7 @@ router.get('/projeto/:projetoId/analise-cronograma', [auth, isGestor], async (re
       folgas: caminhoCriticoInfo.folgas || {},
       caminhoCritico: caminhoCriticoInfo.caminhoCritico || [],
       dependencias: dependenciasConfirmadas,
-      exigirImpactoNoPrazo: true,
+      exigirImpactoNoPrazo: false,
       apenasCaminhoCritico: false
     }).map(Number);
 
@@ -1975,12 +1975,13 @@ router.get('/projeto/:projetoId/gantt-data', auth, async (req, res) => {
       caminoCritico = ganttService.calcularCaminoCritico(atividades, dependenciasConfirmadas);
     }
 
-    // Detectar atividades atrasadas considerando impacto real no prazo
+    // Detectar atividades vencidas no prazo planejado. O impacto no cronograma
+    // continua sendo calculado separadamente por severidade e sucessoras.
     const atividadesAtrasadas = ganttService.detectarAtividadesAtrasadas(atividades, {
       folgas: caminoCritico?.folgas || {},
       caminhoCritico: caminoCritico?.caminhoCritico || [],
       dependencias: dependenciasConfirmadas,
-      exigirImpactoNoPrazo: true,
+      exigirImpactoNoPrazo: false,
       apenasCaminhoCritico: false
     });
 

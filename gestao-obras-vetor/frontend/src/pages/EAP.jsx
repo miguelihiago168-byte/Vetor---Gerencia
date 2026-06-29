@@ -12,7 +12,8 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
 import { useNotification } from '../context/NotificationContext';
-import { Activity, Plus, Eye, ChevronRight, ChevronDown, Trash2, ArrowLeft, Download, Upload, X, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Activity, Plus, Eye, ChevronRight, ChevronDown, Trash2, ArrowLeft, Download, Upload, X, AlertTriangle, CheckCircle2, MoreHorizontal } from 'lucide-react';
+import './EAP.css';
 
 function EAP({ hideNavbar = false }) {
   const { projetoId } = useParams();
@@ -27,6 +28,7 @@ function EAP({ hideNavbar = false }) {
   const [importFile, setImportFile] = useState(null);
   const [importLoading, setImportLoading] = useState(false);
   const [importPreview, setImportPreview] = useState(null);
+  const [eapActionsOpen, setEapActionsOpen] = useState(false);
 
   useEffect(() => {
     carregarAtividades();
@@ -169,6 +171,30 @@ function EAP({ hideNavbar = false }) {
       error('Erro ao importar EAP: ' + (err.response?.data?.erro || err.message), 9000);
     } finally {
       setImportLoading(false);
+    }
+  };
+
+  const handleRecalcularEap = async () => {
+    setEapActionsOpen(false);
+    const ok = await confirm({
+      title: 'Recalcular EAP',
+      message: 'Recalcular avanço da EAP para este projeto?',
+      confirmText: 'Recalcular',
+      cancelText: 'Cancelar'
+    });
+    if (!ok) return;
+    try {
+      const resp = await recalcularEapProjeto(projetoId);
+      const mostrouAfetados = await showAffectedRdosAlert(resp.data);
+      success(
+        mostrouAfetados
+          ? `${resp.data?.affectedRDOs || 0} RDO(s) enviados para correção.`
+          : (resp.data?.mensagem || 'EAP recalculada.'),
+        5000
+      );
+      carregarAtividades();
+    } catch (err) {
+      error('Erro ao recalcular EAP: ' + (err.response?.data?.erro || err.message), 7000);
     }
   };
 
@@ -475,58 +501,67 @@ function EAP({ hideNavbar = false }) {
   return (
     <>
       {!hideNavbar && <Navbar />}
-      <div className="container" style={{ paddingTop: '24px', paddingBottom: '40px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+      <div className={`container eap-page${hideNavbar ? ' eap-page-embedded' : ''}`}>
+        <div className="eap-list-header">
+          <div className="eap-list-title-wrap">
             {!hideNavbar && (
-              <button className="btn btn-secondary" onClick={() => navigate(`/projeto/${projetoId}/planejamento`)}>
+              <button className="eap-toolbar-btn eap-toolbar-btn-back" onClick={() => navigate(`/projeto/${projetoId}/planejamento`)}>
                 <ArrowLeft size={16} />
-                Voltar ao Planejamento
+                <span>Planejamento</span>
               </button>
             )}
-            <h1 style={{ margin: 0 }}>EAP do Projeto</h1>
+            <h1 className="eap-list-title">EAP do Projeto</h1>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="btn btn-secondary" onClick={handleBaixarModelo}>
-              <Download size={16} />
-              Baixar Modelo Excel
-            </button>
-            {isGestor && (
-              <button className="btn btn-secondary" onClick={() => setImportModalOpen(true)}>
-                <Upload size={16} />
-                Importar Excel
-              </button>
-            )}
-            <button className="btn btn-primary" onClick={() => navigate(`/projeto/${projetoId}/eap/novo`)}>
+          <div className="eap-toolbar" aria-label="Acoes da EAP">
+            <button className="eap-toolbar-btn eap-toolbar-btn-primary" onClick={() => navigate(`/projeto/${projetoId}/eap/novo`)}>
               <Plus size={16} />
-              Nova Atividade
+              <span>Nova Atividade</span>
             </button>
-            {isGestor && (
-              <button className="btn btn-secondary" onClick={async () => {
-                const ok = await confirm({
-                  title: 'Recalcular EAP',
-                  message: 'Recalcular avanço da EAP para este projeto?',
-                  confirmText: 'Recalcular',
-                  cancelText: 'Cancelar'
-                });
-                if (!ok) return;
-                try {
-                  const resp = await recalcularEapProjeto(projetoId);
-                  const mostrouAfetados = await showAffectedRdosAlert(resp.data);
-                  success(
-                    mostrouAfetados
-                      ? `${resp.data?.affectedRDOs || 0} RDO(s) enviados para correção.`
-                      : (resp.data?.mensagem || 'EAP recalculada.'),
-                    5000
-                  );
-                  carregarAtividades();
-                } catch (err) {
-                  error('Erro ao recalcular EAP: ' + (err.response?.data?.erro || err.message), 7000);
-                }
-              }}>
-                Recalcular EAP
+            <div className="eap-actions-menu">
+              <button
+                className="eap-toolbar-btn eap-toolbar-btn-menu"
+                onClick={() => setEapActionsOpen((open) => !open)}
+                aria-expanded={eapActionsOpen}
+                aria-haspopup="menu"
+              >
+                <MoreHorizontal size={16} />
+                <span>Mais ações</span>
               </button>
-            )}
+              {eapActionsOpen && (
+                <div className="eap-actions-dropdown" role="menu">
+                  <button
+                    className="eap-actions-item"
+                    role="menuitem"
+                    onClick={() => {
+                      setEapActionsOpen(false);
+                      handleBaixarModelo();
+                    }}
+                  >
+                    <Download size={15} />
+                    <span>Baixar modelo Excel</span>
+                  </button>
+                  {isGestor && (
+                    <button
+                      className="eap-actions-item"
+                      role="menuitem"
+                      onClick={() => {
+                        setEapActionsOpen(false);
+                        setImportModalOpen(true);
+                      }}
+                    >
+                      <Upload size={15} />
+                      <span>Importar Excel</span>
+                    </button>
+                  )}
+                  {isGestor && (
+                    <button className="eap-actions-item" role="menuitem" onClick={handleRecalcularEap}>
+                      <Activity size={15} />
+                      <span>Recalcular EAP</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
