@@ -19,11 +19,11 @@ const normalizeActivityLabel = (atividade) => {
 
 const buildMotivo = (labels) => {
   const unique = [...new Set(labels.filter(Boolean))];
-  if (unique.length === 0) return 'Atividade recalculada.';
-  if (unique.length === 1) return `Atividade recalculada: ${unique[0]}`;
+  if (unique.length === 0) return 'Regressão de avanço pendente.';
+  if (unique.length === 1) return `Regressão de avanço: ${unique[0]}`;
   const shown = unique.slice(0, 4).join('; ');
   const extra = unique.length > 4 ? `; +${unique.length - 4} atividade(s)` : '';
-  return `Atividades recalculadas: ${shown}${extra}`;
+  return `Regressões de avanço: ${shown}${extra}`;
 };
 
 const notifyUser = async ({ usuarioId, rdoId, numero }) => {
@@ -109,7 +109,7 @@ const markAffectedRDOs = async ({ atividadeIds = [], usuario, origem = CORRECAO_
   const usuarioLabel = String(usuario?.nome || usuario?.id || 'Sistema');
 
   for (const rdo of grouped.values()) {
-    const motivo = buildMotivo(rdo.atividades);
+    const motivo = null;
     const statusAnteriorCorrecao = rdo.status_anterior_correcao || rdo.status_anterior;
 
     await runQuery(`

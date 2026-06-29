@@ -142,6 +142,7 @@ export const updateAtividade = (id, data) => api.put(`/eap/${id}`, data);
 export const deleteAtividade = (id) => api.delete(`/eap/${id}`);
 export const recalcularAvanco = (id) => api.post(`/eap/${id}/recalcular`);
 export const getHistoricoAtividade = (id) => api.get(`/eap/${id}/historico`);
+export const previewRecalculoEapProjeto = (projetoId) => api.get(`/eap/projeto/${projetoId}/recalcular-preview`);
 export const recalcularEapProjeto = (projetoId) => api.post(`/eap/projeto/${projetoId}/recalcular-tudo`);
 export const getUnidadesEAP = () => api.get('/eap/unidades');
 export const baixarModeloEAP = () => api.get('/eap/modelo-excel', { responseType: 'blob' });

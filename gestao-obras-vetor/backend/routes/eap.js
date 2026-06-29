@@ -1182,6 +1182,112 @@ const recalcularPercentualPaiLocal = async (atividadeId) => {
 };
 
 // Recalcular avanço físico de uma atividade
+const calcularPreviewRecalculoProjeto = async (projetoId) => {
+  const atividades = await allQuery(`
+    SELECT id, id_atividade, codigo_eap, nome, descricao, pai_id,
+           quantidade_total, percentual_executado, peso_percentual_projeto, percentual_previsto
+    FROM atividades_eap
+    WHERE projeto_id = ?
+    ORDER BY nivel DESC, ordem ASC, codigo_eap ASC
+  `, [projetoId]);
+
+  const execucoes = await allQuery(`
+    SELECT
+      ra.atividade_eap_id,
+      COALESCE(SUM(COALESCE(ra.quantidade_executada, 0)), 0) AS total_executado_qt,
+      COALESCE(SUM(COALESCE(ra.percentual_executado, 0)), 0) AS total_exec_perc
+    FROM rdo_atividades ra
+    INNER JOIN rdos r ON ra.rdo_id = r.id
+    WHERE r.projeto_id = ? AND r.status = 'Aprovado'
+    GROUP BY ra.atividade_eap_id
+  `, [projetoId]);
+
+  const execucaoPorAtividade = new Map(execucoes.map((row) => [Number(row.atividade_eap_id), row]));
+  const calculadas = new Map();
+  const filhosPorPai = new Map();
+
+  atividades.forEach((atividade) => {
+    if (atividade.pai_id) {
+      const paiId = Number(atividade.pai_id);
+      if (!filhosPorPai.has(paiId)) filhosPorPai.set(paiId, []);
+      filhosPorPai.get(paiId).push(Number(atividade.id));
+    }
+
+    const quantidadeTotal = Number(atividade.quantidade_total || 0);
+    const execucao = execucaoPorAtividade.get(Number(atividade.id)) || {};
+    const novoPerc = quantidadeTotal > 0
+      ? Math.min(Math.round(((Number(execucao.total_executado_qt || 0) / quantidadeTotal) * 10000)) / 100, 100)
+      : Math.min(Number(execucao.total_exec_perc || 0), 100);
+
+    calculadas.set(Number(atividade.id), {
+      ...atividade,
+      percentual_recalculado: Number.isFinite(novoPerc) ? novoPerc : 0
+    });
+  });
+
+  const calcularPai = (paiId) => {
+    const pai = calculadas.get(Number(paiId));
+    if (!pai) return 0;
+
+    const filhosIds = filhosPorPai.get(Number(paiId)) || [];
+    if (!filhosIds.length) return Number(pai.percentual_recalculado || 0);
+
+    let somaContribuicao = 0;
+    let somaPeso = 0;
+    let somaSimples = 0;
+
+    filhosIds.forEach((filhoId) => {
+      const filho = calculadas.get(Number(filhoId));
+      if (!filho) return;
+      const perc = filhosPorPai.has(Number(filhoId))
+        ? calcularPai(filhoId)
+        : Number(filho.percentual_recalculado || 0);
+      const peso = Number(filho.peso_percentual_projeto || filho.percentual_previsto || 0);
+
+      somaSimples += perc;
+      if (peso > 0) {
+        somaContribuicao += (perc * peso) / 100;
+        somaPeso += peso;
+      }
+    });
+
+    const novoPerc = somaPeso > 0
+      ? Math.min(Math.round(somaContribuicao * 100) / 100, 100)
+      : Math.min(Math.round((somaSimples / filhosIds.length) * 100) / 100, 100);
+
+    pai.percentual_recalculado = novoPerc;
+    return novoPerc;
+  };
+
+  Array.from(filhosPorPai.keys()).forEach(calcularPai);
+
+  const atividadesAfetadas = atividades
+    .map((atividade) => {
+      const calculada = calculadas.get(Number(atividade.id));
+      const atual = Number(atividade.percentual_executado || 0);
+      const novo = Number(calculada?.percentual_recalculado || 0);
+      const diferenca = Math.round((novo - atual) * 100) / 100;
+      if (diferenca >= -0.0001) return null;
+      return {
+        id: atividade.id,
+        id_atividade: atividade.id_atividade,
+        codigo_eap: atividade.codigo_eap,
+        nome: atividade.nome || atividade.descricao || atividade.codigo_eap,
+        percentual_atual: Math.round(atual * 100) / 100,
+        percentual_recalculado: Math.round(novo * 100) / 100,
+        diferenca
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => String(a.codigo_eap || '').localeCompare(String(b.codigo_eap || ''), 'pt-BR', { numeric: true, sensitivity: 'base' }));
+
+  return {
+    total_atividades: atividades.length,
+    total_atividades_afetadas: atividadesAfetadas.length,
+    atividades: atividadesAfetadas
+  };
+};
+
 router.post('/:id/recalcular', auth, async (req, res) => {
   try {
     const { id } = req.params;
@@ -1265,6 +1371,24 @@ router.delete('/:id', auth, async (req, res) => {
 });
 
 // Recalcular avanço de TODAS as atividades do projeto (apenas gestor)
+router.get('/projeto/:projetoId/recalcular-preview', [auth, isGestor], async (req, res) => {
+  try {
+    await ensureEapOptionalColumns();
+    const { projetoId } = req.params;
+    const tenantId = req.tenantId;
+    const projeto = await getQuery('SELECT id FROM projetos WHERE id = ? AND tenant_id = ?', [projetoId, tenantId]);
+    if (!projeto) {
+      return res.status(404).json({ erro: 'Projeto nao encontrado.' });
+    }
+
+    const preview = await calcularPreviewRecalculoProjeto(projetoId);
+    res.json(preview);
+  } catch (error) {
+    console.error('Erro ao preparar preview do recalculo da EAP:', error);
+    res.status(500).json({ erro: 'Erro ao preparar preview do recalculo da EAP.' });
+  }
+});
+
 router.post('/projeto/:projetoId/recalcular-tudo', [auth, isGestor], async (req, res) => {
   try {
     const { projetoId } = req.params;
@@ -1292,7 +1416,7 @@ router.post('/projeto/:projetoId/recalcular-tudo', [auth, isGestor], async (req,
         novoPerc = Math.min(parseFloat(r?.total_exec_perc || 0), 100);
       }
 
-      if (Math.abs(Number(a.percentual_executado || 0) - Number(novoPerc || 0)) > 0.0001) {
+      if (Number(novoPerc || 0) < Number(a.percentual_executado || 0) - 0.0001) {
         atividadesImpactadas.push(a.id);
       }
 

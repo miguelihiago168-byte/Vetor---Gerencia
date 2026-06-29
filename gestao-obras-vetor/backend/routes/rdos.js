@@ -77,15 +77,15 @@ const atualizarStatusAtividade = async (atividadeId) => {
   );
 };
 
-// Recalcula EAP para uma lista de atividadeIds com base apenas em RDOs aprovados.
-// Chamado ao salvar (criar/atualizar) e mudar status de RDO para refletir aprovações.
+// Avanços normais seguem automáticos; regressões ficam pendentes para confirmação na EAP.
 const recalcularEapAtividades = async (atividadeIds) => {
   const ids = [...new Set(atividadeIds.filter(Boolean))];
   for (const atividadeId of ids) {
     try {
-      const infoAtividade = await getQuery('SELECT quantidade_total FROM atividades_eap WHERE id = ?', [atividadeId]);
+      const infoAtividade = await getQuery('SELECT quantidade_total, percentual_executado FROM atividades_eap WHERE id = ?', [atividadeId]);
       if (!infoAtividade) continue;
       const quantidadeTotal = Number(infoAtividade.quantidade_total || 0);
+      const percentualAtual = Number(infoAtividade.percentual_executado || 0);
 
       const resultadoQt = await getQuery(`
         SELECT COALESCE(SUM(COALESCE(ra.quantidade_executada, 0)), 0) AS total_executado_qt
@@ -105,6 +105,10 @@ const recalcularEapAtividades = async (atividadeIds) => {
           WHERE ra.atividade_eap_id = ? AND r.status = 'Aprovado'
         `, [atividadeId]);
         percentualExecutado = Math.min(resultado?.total_executado || 0, 100);
+      }
+
+      if (percentualExecutado < percentualAtual - 0.0001) {
+        continue;
       }
 
       let dataConclusaoReal = null;
