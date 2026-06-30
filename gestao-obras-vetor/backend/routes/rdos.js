@@ -8,6 +8,13 @@ const backendPackage = require('../package.json');
 const { ensureRdoCorrectionColumns, clearRdoCorrection } = require('../services/rdoCorrectionService');
 const { generateRdoPdfBuffer } = require('../services/rdoPdfService');
 const { ensureSchemaReady } = require('../utils/schemaGuard');
+const {
+  ORIGINS,
+  ensureEapActivityEventSchema,
+  recordActivityEvent,
+  clearRdoActivityAlerts,
+  getActiveAlertsForRdos
+} = require('../services/eapActivityEventService');
 
 const router = express.Router();
 
@@ -19,6 +26,7 @@ const getPdfVersionLabel = () => {
 
 const ensureRdoOptionalColumns = async () => {
   await ensureRdoCorrectionColumns();
+  await ensureEapActivityEventSchema();
   await ensureSchemaReady({ getQuery, allQuery }, {
     tables: ['rdo_logs', 'rdo_comentarios', 'rdo_materiais', 'rdo_ocorrencias', 'rdo_assinaturas', 'rdo_clima', 'rdo_fotos', 'rdo_equipamentos'],
     columns: {
@@ -55,6 +63,21 @@ const gerarNumeroRDO = async (projetoId) => {
   return Number(row?.proximo_numero || 1);
 };
 
+const attachActivityAlerts = async (rdos = []) => {
+  const list = Array.isArray(rdos) ? rdos : [rdos].filter(Boolean);
+  if (list.length === 0) return rdos;
+
+  const alertsByRdo = await getActiveAlertsForRdos(list.map((rdo) => rdo.id));
+  for (const rdo of list) {
+    const alertas = alertsByRdo.get(Number(rdo.id)) || [];
+    rdo.alertas_atividade = alertas;
+    rdo.alertas_atividade_count = alertas.length;
+    rdo.alerta_atividade_mensagem = alertas[0]?.mensagem || null;
+  }
+
+  return rdos;
+};
+
 // Atualizar status da atividade EAP
 const atualizarStatusAtividade = async (atividadeId) => {
   const atividade = await getQuery(
@@ -78,7 +101,7 @@ const atualizarStatusAtividade = async (atividadeId) => {
 };
 
 // Avanços normais seguem automáticos; regressões ficam pendentes para confirmação na EAP.
-const recalcularEapAtividades = async (atividadeIds) => {
+const recalcularEapAtividades = async (atividadeIds, options = {}) => {
   const ids = [...new Set(atividadeIds.filter(Boolean))];
   for (const atividadeId of ids) {
     try {
@@ -108,6 +131,16 @@ const recalcularEapAtividades = async (atividadeIds) => {
       }
 
       if (percentualExecutado < percentualAtual - 0.0001) {
+        if (options.rdoId) {
+          await recordActivityEvent({
+            atividadeId,
+            rdoId: options.rdoId,
+            origem: options.origem || ORIGINS.RDO_REVERTIDO,
+            percentualAnterior: percentualAtual,
+            percentualNovo: percentualExecutado,
+            usuarioId: options.usuarioId
+          });
+        }
         continue;
       }
 
@@ -126,6 +159,16 @@ const recalcularEapAtividades = async (atividadeIds) => {
         'UPDATE atividades_eap SET percentual_executado = ?, data_conclusao_real = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
         [percentualExecutado, dataConclusaoReal, atividadeId]
       );
+      if (Math.abs(percentualExecutado - percentualAtual) > 0.0001 && options.rdoId) {
+        await recordActivityEvent({
+          atividadeId,
+          rdoId: options.rdoId,
+          origem: options.origem || ORIGINS.RDO_APROVADO,
+          percentualAnterior: percentualAtual,
+          percentualNovo: percentualExecutado,
+          usuarioId: options.usuarioId
+        });
+      }
       await atualizarStatusAtividade(atividadeId);
       await recalcularPercentualPai(atividadeId);
     } catch (err) {
@@ -213,6 +256,7 @@ router.get('/projeto/:projetoId', auth, async (req, res) => {
       `, [projetoId]);
     }
 
+    await attachActivityAlerts(rdos);
     res.json(rdos);
   } catch (error) {
     console.error('Erro ao listar RDOs:', error);
@@ -258,6 +302,8 @@ router.get('/:id', auth, async (req, res) => {
     if (!rdo) {
       return res.status(404).json({ erro: 'RDO não encontrado.' });
     }
+
+    await attachActivityAlerts(rdo);
 
     // Buscar atividades executadas
     let atividades = [];
@@ -728,6 +774,21 @@ router.post('/', auth, [
           VALUES (?, ?, ?, ?, ?)
         `, [rdoId, atividade.atividade_eap_id, percentual, quantidadeExec || null, atividade.observacao || null]);
 
+        try {
+          await recordActivityEvent({
+            atividadeId: atividade.atividade_eap_id,
+            rdoId,
+            origem: ORIGINS.RDO_CRIADO,
+            percentualAnterior: 0,
+            percentualNovo: percentual,
+            quantidadeAnterior: 0,
+            quantidadeNova: quantidadeExec,
+            usuarioId: req.usuario.id
+          });
+        } catch (eventError) {
+          console.warn('Falha ao registrar evento de atividade do RDO:', eventError?.message || eventError);
+        }
+
         // Registrar no histórico (mesmo que não aprovado ainda)
         try {
           const atividadeEap = await getQuery('SELECT percentual_executado FROM atividades_eap WHERE id = ?', [atividade.atividade_eap_id]);
@@ -755,7 +816,11 @@ router.post('/', auth, [
     // Recalcular avanço EAP imediatamente após criar o RDO
     if (atividades && atividades.length > 0) {
       try {
-        await recalcularEapAtividades(atividades.map(a => a.atividade_eap_id));
+        await recalcularEapAtividades(atividades.map(a => a.atividade_eap_id), {
+          rdoId,
+          origem: ORIGINS.RDO_CRIADO,
+          usuarioId: req.usuario.id
+        });
       } catch (err) {
         console.warn('Erro ao recalcular EAP após criar RDO:', err);
       }
@@ -922,29 +987,86 @@ router.put('/:id', auth, async (req, res) => {
 
     // Atualizar atividades preservando IDs (para manter fotos vinculadas)
     if (atividades) {
-      const existentes = await allQuery('SELECT id, atividade_eap_id FROM rdo_atividades WHERE rdo_id = ?', [id]);
+      const existentes = await allQuery('SELECT id, atividade_eap_id, percentual_executado, quantidade_executada FROM rdo_atividades WHERE rdo_id = ?', [id]);
       const mapExist = new Map();
-      existentes.forEach(row => mapExist.set(row.atividade_eap_id, row.id));
+      existentes.forEach(row => mapExist.set(Number(row.atividade_eap_id), row));
 
       const enviadosIds = new Set();
       for (const atividade of atividades) {
-        enviadosIds.add(atividade.atividade_eap_id);
-        const existenteId = mapExist.get(atividade.atividade_eap_id);
-        if (existenteId) {
+        const atividadeEapId = Number(atividade.atividade_eap_id);
+        enviadosIds.add(atividadeEapId);
+        const existente = mapExist.get(atividadeEapId);
+        const percentualNovo = atividade.percentual_executado !== undefined && atividade.percentual_executado !== null && atividade.percentual_executado !== ''
+          ? Number(atividade.percentual_executado)
+          : 0;
+        const quantidadeNova = atividade.quantidade_executada !== undefined && atividade.quantidade_executada !== null && atividade.quantidade_executada !== ''
+          ? Number(atividade.quantidade_executada)
+          : null;
+        if (existente) {
           await runQuery(`
             UPDATE rdo_atividades SET percentual_executado = ?, quantidade_executada = ?, observacao = ? WHERE id = ?
-          `, [atividade.percentual_executado, atividade.quantidade_executada || null, atividade.observacao || null, existenteId]);
+          `, [atividade.percentual_executado, atividade.quantidade_executada || null, atividade.observacao || null, existente.id]);
+          const percentualAnterior = Number(existente.percentual_executado || 0);
+          const quantidadeAnterior = existente.quantidade_executada === null || typeof existente.quantidade_executada === 'undefined'
+            ? null
+            : Number(existente.quantidade_executada);
+          const mudouPercentual = Math.abs(percentualAnterior - percentualNovo) > 0.0001;
+          const mudouQuantidade = (quantidadeAnterior === null ? null : Number(quantidadeAnterior)) !== (quantidadeNova === null ? null : Number(quantidadeNova));
+          if (mudouPercentual || mudouQuantidade) {
+            try {
+              await recordActivityEvent({
+                atividadeId: atividadeEapId,
+                rdoId: id,
+                origem: ORIGINS.RDO_EDITADO,
+                percentualAnterior,
+                percentualNovo,
+                quantidadeAnterior,
+                quantidadeNova,
+                usuarioId: req.usuario.id
+              });
+            } catch (eventError) {
+              console.warn('Falha ao registrar evento de edicao de atividade do RDO:', eventError?.message || eventError);
+            }
+          }
         } else {
           await runQuery(`
             INSERT INTO rdo_atividades (rdo_id, atividade_eap_id, percentual_executado, quantidade_executada, observacao)
             VALUES (?, ?, ?, ?, ?)
           `, [id, atividade.atividade_eap_id, atividade.percentual_executado, atividade.quantidade_executada || null, atividade.observacao || null]);
+          try {
+            await recordActivityEvent({
+              atividadeId: atividadeEapId,
+              rdoId: id,
+              origem: ORIGINS.RDO_EDITADO,
+              percentualAnterior: 0,
+              percentualNovo,
+              quantidadeAnterior: 0,
+              quantidadeNova,
+              usuarioId: req.usuario.id
+            });
+          } catch (eventError) {
+            console.warn('Falha ao registrar evento de nova atividade do RDO:', eventError?.message || eventError);
+          }
         }
       }
 
       // Remover atividades que não estão mais presentes (pode remover fotos vinculadas por FK)
-      const toDelete = existentes.filter(row => !enviadosIds.has(row.atividade_eap_id));
+      const toDelete = existentes.filter(row => !enviadosIds.has(Number(row.atividade_eap_id)));
       for (const row of toDelete) {
+        try {
+          await recordActivityEvent({
+            atividadeId: row.atividade_eap_id,
+            rdoId: id,
+            origem: ORIGINS.RDO_EDITADO,
+            percentualAnterior: row.percentual_executado,
+            percentualNovo: 0,
+            quantidadeAnterior: row.quantidade_executada,
+            quantidadeNova: 0,
+            usuarioId: req.usuario.id
+          });
+        } catch (eventError) {
+          console.warn('Falha ao registrar evento de remocao de atividade do RDO:', eventError?.message || eventError);
+        }
         await runQuery('DELETE FROM rdo_atividades WHERE id = ?', [row.id]);
       }
     }
@@ -973,7 +1095,11 @@ router.put('/:id', auth, async (req, res) => {
     if (atividades) {
       try {
         const todasAtividades = await allQuery('SELECT DISTINCT atividade_eap_id FROM rdo_atividades WHERE rdo_id = ?', [id]);
-        await recalcularEapAtividades(todasAtividades.map(r => r.atividade_eap_id));
+        await recalcularEapAtividades(todasAtividades.map(r => r.atividade_eap_id), {
+          rdoId: id,
+          origem: ORIGINS.RDO_EDITADO,
+          usuarioId: req.usuario.id
+        });
       } catch (err) {
         console.warn('Erro ao recalcular EAP após atualizar RDO:', err);
       }
@@ -1153,8 +1279,20 @@ router.patch('/:id/status', auth, async (req, res) => {
 
     // Recalcular EAP sempre que o status mudar (aprovado, reprovado ou reversão)
     try {
+      if (status === 'Em anÃ¡lise' || status === 'Aprovado') {
+        try {
+          await clearRdoActivityAlerts({ rdoId: id });
+        } catch (clearError) {
+          console.warn('Falha ao encerrar alertas de atividade do RDO:', clearError?.message || clearError);
+        }
+      }
+
       const atividadesDoRdo = await allQuery('SELECT DISTINCT atividade_eap_id FROM rdo_atividades WHERE rdo_id = ?', [id]);
-      await recalcularEapAtividades(atividadesDoRdo.map(r => r.atividade_eap_id));
+      await recalcularEapAtividades(atividadesDoRdo.map(r => r.atividade_eap_id), {
+        rdoId: id,
+        origem: status === 'Aprovado' ? ORIGINS.RDO_APROVADO : ORIGINS.RDO_REVERTIDO,
+        usuarioId: req.usuario.id
+      });
     } catch (err) {
       console.warn('Erro ao recalcular EAP após mudança de status:', err);
     }

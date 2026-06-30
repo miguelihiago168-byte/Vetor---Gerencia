@@ -7,8 +7,12 @@ const { allQuery, runQuery, getQuery } = require('../config/database');
 const { auth, isGestor } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
 const ganttService = require('../services/ganttService');
-const { markAffectedRDOs } = require('../services/rdoCorrectionService');
 const { ensureSchemaReady } = require('../utils/schemaGuard');
+const {
+  ORIGINS,
+  markRdosAffectedByEapEdit,
+  getActivityHistory
+} = require('../services/eapActivityEventService');
 
 const router = express.Router();
 const uploadExcelEap = multer({
@@ -1091,15 +1095,24 @@ router.put('/:id', auth, async (req, res) => {
         } catch (e) { /* ignore */ }
 
         if (mudouRdoAtividade) {
-          correctionResult = await markAffectedRDOs({
+          correctionResult = await markRdosAffectedByEapEdit({
             atividadeIds: [id],
-            usuario: req.usuario
+            usuarioId: req.usuario.id,
+            origem: ORIGINS.EAP_EDITADA
           });
         }
       }
 
     } catch (err) {
       console.warn('Falha ao recalcular após atualização de EAP:', err);
+    }
+
+    if (!Number(correctionResult.affectedRDOs || 0)) {
+      correctionResult = await markRdosAffectedByEapEdit({
+        atividadeIds: [id],
+        usuarioId: req.usuario.id,
+        origem: ORIGINS.EAP_EDITADA
+      });
     }
 
     res.json({ mensagem: 'Atividade atualizada com sucesso.', success: true, ...correctionResult });
@@ -1313,9 +1326,10 @@ router.post('/:id/recalcular', auth, async (req, res) => {
     await registrarAuditoria('atividades_eap', id, 'RECALCULAR', null, { percentual_executado: percentualExecutado }, req.usuario.id);
     const mudouPercentual = Math.abs(Number(atividadeAtual?.percentual_executado || 0) - Number(percentualExecutado || 0)) > 0.0001;
     const correctionResult = mudouPercentual
-      ? await markAffectedRDOs({
+      ? await markRdosAffectedByEapEdit({
           atividadeIds: [id],
-          usuario: req.usuario
+          usuarioId: req.usuario.id,
+          origem: ORIGINS.RECALCULO_MANUAL
         })
       : { affectedRDOs: 0, rdos: [] };
 
@@ -1337,7 +1351,8 @@ router.get('/:id/historico', auth, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const historico = await allQuery(`
+    const eventos = await getActivityHistory(id);
+    const historicoLegado = await allQuery(`
       SELECT h.*, u.nome as usuario_nome, r.data_relatorio
       FROM historico_atividades h
       INNER JOIN usuarios u ON h.usuario_id = u.id
@@ -1346,7 +1361,33 @@ router.get('/:id/historico', auth, async (req, res) => {
       ORDER BY h.data_execucao DESC
     `, [id]);
 
-    res.json(historico);
+    const legadoNormalizado = (historicoLegado || []).map((row) => ({
+      ...row,
+      fonte: 'historico_atividades',
+      tipo: Number(row.percentual_novo || 0) > Number(row.percentual_anterior || 0)
+        ? 'avanco'
+        : Number(row.percentual_novo || 0) < Number(row.percentual_anterior || 0)
+          ? 'regressao'
+          : 'ajuste',
+      origem: 'historico_legado',
+      percentual_novo: row.percentual_novo,
+      quantidade_anterior: null,
+      quantidade_nova: null,
+      criado_em: row.criado_em || row.data_execucao,
+      mensagem: 'Registro legado de avanço da atividade.'
+    }));
+
+    const eventosNormalizados = (eventos || []).map((row) => ({
+      ...row,
+      fonte: 'atividade_eap_eventos',
+      rdo_label: row.numero_rdo ? `RDO-${String(row.numero_rdo).padStart(3, '0')}` : (row.rdo_id ? `RDO-${String(row.rdo_id).padStart(3, '0')}` : null)
+    }));
+
+    res.json([...eventosNormalizados, ...legadoNormalizado].sort((a, b) => {
+      const da = new Date(a.criado_em || a.data_execucao || 0).getTime();
+      const db = new Date(b.criado_em || b.data_execucao || 0).getTime();
+      return db - da;
+    }));
 
   } catch (error) {
     console.error('Erro ao obter histórico:', error);
@@ -1428,9 +1469,10 @@ router.post('/projeto/:projetoId/recalcular-tudo', [auth, isGestor], async (req,
     }
 
     await registrarAuditoria('atividades_eap', null, 'RECALCULAR_TODAS', { projeto_id: projetoId }, null, req.usuario.id);
-    const correctionResult = await markAffectedRDOs({
+    const correctionResult = await markRdosAffectedByEapEdit({
       atividadeIds: atividadesImpactadas,
-      usuario: req.usuario
+      usuarioId: req.usuario.id,
+      origem: ORIGINS.RECALCULO_MANUAL
     });
 
     res.json({ success: true, mensagem: 'EAP recalculada para todas as atividades do projeto.', ...correctionResult });

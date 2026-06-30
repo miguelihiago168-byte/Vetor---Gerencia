@@ -5,6 +5,7 @@ import { getNotificacoes, marcarNotificacaoLida, marcarTodasNotificacoesLidas } 
 const TIPO_ICONE = {
   rdo_criado:       { icon: FileText,     cor: '#3b82f6' },
   rdo_reprovado:    { icon: FileText,     cor: '#ef4444' },
+  rdo_correcao_automatica: { icon: FileText, cor: '#f59e0b' },
   requisicao_status:{ icon: ShoppingCart, cor: '#f59e0b' },
   pedido:           { icon: ShoppingCart, cor: '#f59e0b' },
 };
