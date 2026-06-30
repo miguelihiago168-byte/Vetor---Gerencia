@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getAtividadesEAP, createAtividade, updateAtividade, getUnidadesEAP } from '../services/api';
+import { getAtividadesEAP, createAtividade, updateAtividade, getUnidadesEAP, getHistoricoAtividade } from '../services/api';
 import { useDialog } from '../context/DialogContext';
-import { ArrowLeft, Save, Info, Layers3, GitBranchPlus } from 'lucide-react';
+import { ArrowLeft, Save, Info, Layers3, GitBranchPlus, History, TrendingDown, TrendingUp, Activity } from 'lucide-react';
 import './EAPForm.css';
 
 function EAPForm() {
@@ -15,6 +15,8 @@ function EAPForm() {
   const [erro, setErro] = useState('');
   const [atividades, setAtividades] = useState([]);
   const [unidades, setUnidades] = useState([]);
+  const [activeTab, setActiveTab] = useState('dados');
+  const [historico, setHistorico] = useState([]);
   const [formData, setFormData] = useState({
     codigo_eap: '',
     nome: '',
@@ -34,6 +36,7 @@ function EAPForm() {
     carregarUnidades();
     if (atividadeId) {
       carregarAtividade();
+      carregarHistorico();
     } else {
       // Se não é edição, verificar se há pai_id nos parâmetros da URL
       const paiId = searchParams.get('pai');
@@ -127,6 +130,17 @@ function EAPForm() {
     }
   };
 
+  const carregarHistorico = async () => {
+    if (!atividadeId) return;
+    try {
+      const response = await getHistoricoAtividade(atividadeId);
+      setHistorico(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Erro ao carregar historico da atividade:', error);
+      setHistorico([]);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -212,6 +226,46 @@ function EAPForm() {
     return `${codigo}${nome}`;
   };
 
+  const formatarDataHora = (value) => {
+    if (!value) return '-';
+    const text = String(value).trim();
+    const sqliteUtc = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(text);
+    const data = new Date(sqliteUtc ? `${text.replace(' ', 'T')}Z` : text);
+    if (Number.isNaN(data.getTime())) return String(value);
+    return data.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+  };
+
+  const origemLabel = (origem) => ({
+    rdo_criado: 'RDO criado',
+    rdo_editado: 'RDO editado',
+    rdo_aprovado: 'RDO aprovado',
+    rdo_revertido: 'RDO revertido',
+    eap_editada: 'Atividade EAP editada',
+    recalculo_manual: 'Recálculo manual',
+    historico_legado: 'Histórico legado'
+  }[origem] || origem || 'Ajuste');
+
+  const mensagemHistorico = (mensagem) => {
+    const texto = mensagem || 'Alteração registrada na atividade.';
+    return String(texto)
+      .replace(/\bAvanco\b/g, 'Avanço')
+      .replace(/\bavanco\b/g, 'avanço')
+      .replace(/\bRegressao\b/g, 'Regressão')
+      .replace(/\bregressao\b/g, 'regressão')
+      .replace(/\bRecalculo\b/g, 'Recálculo')
+      .replace(/\brecalculo\b/g, 'recálculo')
+      .replace(/\bAlteracao\b/g, 'Alteração')
+      .replace(/\balteracao\b/g, 'alteração')
+      .replace(/\bHistorico\b/g, 'Histórico')
+      .replace(/\bhistorico\b/g, 'histórico');
+  };
+
+  const eventoIcon = (tipo) => {
+    if (tipo === 'avanco') return <TrendingUp size={16} />;
+    if (tipo === 'regressao') return <TrendingDown size={16} />;
+    return <Activity size={16} />;
+  };
+
   const atividadesPai = ordenarPorCodigoEap(
     atividades.filter(a => String(a.id) !== String(atividadeId))
   );
@@ -235,6 +289,29 @@ function EAPForm() {
           <div className="card eap-form-card">
             {erro && <div className="alert alert-error eap-form-alert">{erro}</div>}
 
+            {atividadeId && (
+              <div className="eap-form-tabs">
+                <button
+                  type="button"
+                  className={`eap-form-tab${activeTab === 'dados' ? ' is-active' : ''}`}
+                  onClick={() => setActiveTab('dados')}
+                >
+                  <Layers3 size={15} />
+                  Dados
+                </button>
+                <button
+                  type="button"
+                  className={`eap-form-tab${activeTab === 'historico' ? ' is-active' : ''}`}
+                  onClick={() => setActiveTab('historico')}
+                >
+                  <History size={15} />
+                  Histórico
+                </button>
+              </div>
+            )}
+
+            {activeTab === 'dados' && (
+              <>
             <div className="eap-form-mode">
               <span className={`eap-mode-badge ${isAtividadePai ? 'is-parent' : 'is-child'}`}>
                 {isAtividadePai ? 'Criando atividade pai (raiz)' : 'Criando atividade filha'}
@@ -450,6 +527,39 @@ function EAPForm() {
                 </button>
               </div>
             </form>
+              </>
+            )}
+
+            {activeTab === 'historico' && (
+              <div className="eap-history-panel">
+                {historico.length === 0 ? (
+                  <div className="eap-history-empty">Nenhum evento registrado para esta atividade.</div>
+                ) : (
+                  historico.map((evento) => (
+                    <article key={`${evento.fonte || 'evento'}-${evento.id}-${evento.criado_em || evento.data_execucao}`} className={`eap-history-item is-${evento.tipo || 'ajuste'}`}>
+                      <div className="eap-history-icon">{eventoIcon(evento.tipo)}</div>
+                      <div className="eap-history-content">
+                        <div className="eap-history-topline">
+                          <strong>{origemLabel(evento.origem)}</strong>
+                          <span>{formatarDataHora(evento.criado_em || evento.data_execucao)}</span>
+                        </div>
+                        <p>{mensagemHistorico(evento.mensagem)}</p>
+                        <div className="eap-history-meta">
+                          {evento.rdo_label || evento.rdo_id ? <span>{evento.rdo_label || `RDO-${String(evento.rdo_id).padStart(3, '0')}`}</span> : null}
+                          {evento.usuario_nome ? <span>{evento.usuario_nome}</span> : null}
+                          {evento.percentual_anterior != null || evento.percentual_novo != null ? (
+                            <span>{Number(evento.percentual_anterior || 0).toFixed(2)}% -&gt; {Number(evento.percentual_novo || 0).toFixed(2)}%</span>
+                          ) : null}
+                          {evento.quantidade_anterior != null || evento.quantidade_nova != null ? (
+                            <span>Qtd. {Number(evento.quantidade_anterior || 0).toFixed(2)} -&gt; {Number(evento.quantidade_nova || 0).toFixed(2)}</span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </article>
+                  ))
+                )}
+              </div>
+            )}
           </div>
 
           <aside className="card eap-info-card">
