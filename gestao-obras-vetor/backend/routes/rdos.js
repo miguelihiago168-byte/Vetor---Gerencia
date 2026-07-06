@@ -10,7 +10,6 @@ const { generateRdoPdfBuffer } = require('../services/rdoPdfService');
 const { ensureSchemaReady } = require('../utils/schemaGuard');
 const {
   ORIGINS,
-  ensureEapActivityEventSchema,
   recordActivityEvent,
   clearRdoActivityAlerts,
   getActiveAlertsForRdos
@@ -26,7 +25,6 @@ const getPdfVersionLabel = () => {
 
 const ensureRdoOptionalColumns = async () => {
   await ensureRdoCorrectionColumns();
-  await ensureEapActivityEventSchema();
   await ensureSchemaReady({ getQuery, allQuery }, {
     tables: ['rdo_logs', 'rdo_comentarios', 'rdo_materiais', 'rdo_ocorrencias', 'rdo_assinaturas', 'rdo_clima', 'rdo_fotos', 'rdo_equipamentos'],
     columns: {
