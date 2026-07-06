@@ -69,6 +69,18 @@ const ensurePasswordResetSchema = async () => {
   });
 };
 
+const isTrialExpiredOrBlocked = (tenant) => {
+  if (!tenant?.trial_expires_at) return false;
+  if (Number(tenant.ativo) === 0) return true;
+  return new Date(tenant.trial_expires_at) <= new Date();
+};
+
+const sendTrialExpired = (res, tenantId) => res.status(403).json({
+  codigo: 'TRIAL_EXPIRADO',
+  erro: 'Seu periodo de teste de 30 dias expirou. Informe o codigo de renovacao ou assine o servico para continuar.',
+  tenant_id: tenantId
+});
+
 const generateSlug = (nomeEmpresa) => {
   const base = String(nomeEmpresa || '')
     .normalize('NFD')
@@ -245,30 +257,25 @@ router.post('/login', [
       return res.status(403).json({ erro: 'Tenant não encontrado.' });
     }
 
-    // Conta desativada por expiração de trial
-    if (Number(tenant.ativo) === 0 && tenant.trial_expires_at) {
-      return res.status(403).json({
-        codigo: 'TRIAL_EXPIRADO',
-        erro: 'Seu período de teste de 30 dias expirou. Assine o serviço para continuar.',
-        tenant_id: tenantIdAtivo
-      });
+    if (isTrialExpiredOrBlocked(tenant)) {
+      if (Number(tenant.ativo) !== 0) {
+        await runQuery('UPDATE tenants SET trial_ativo = 0, ativo = 0 WHERE id = ?', [tenantIdAtivo]);
+      }
+      return sendTrialExpired(res, tenantIdAtivo);
     }
 
     if (Number(tenant.ativo) === 0) {
       return res.status(403).json({ erro: 'Tenant inativo ou inexistente.' });
     }
 
-    // Edge case: trial vencido mas cleanup ainda não rodou
-    if (tenant.trial_expires_at && new Date(tenant.trial_expires_at) <= new Date()) {
-      await runQuery('UPDATE tenants SET trial_ativo = 0, ativo = 0 WHERE id = ?', [tenantIdAtivo]);
-      return res.status(403).json({
-        codigo: 'TRIAL_EXPIRADO',
-        erro: 'Seu período de teste de 30 dias expirou. Assine o serviço para continuar.',
-        tenant_id: tenantIdAtivo
-      });
+    try {
+      await assertTenantReady(tenantIdAtivo);
+    } catch (tenantError) {
+      if (isTrialExpiredOrBlocked(tenant)) {
+        return sendTrialExpired(res, tenantIdAtivo);
+      }
+      throw tenantError;
     }
-
-    await assertTenantReady(tenantIdAtivo);
 
     let obrasVinculadas = [];
     try {

@@ -67,7 +67,19 @@ const attachActivityAlerts = async (rdos = []) => {
   const list = Array.isArray(rdos) ? rdos : [rdos].filter(Boolean);
   if (list.length === 0) return rdos;
 
-  const alertsByRdo = await getActiveAlertsForRdos(list.map((rdo) => rdo.id));
+  let alertsByRdo;
+  try {
+    alertsByRdo = await getActiveAlertsForRdos(list.map((rdo) => rdo.id));
+  } catch (error) {
+    console.warn('Alertas de atividade indisponiveis na listagem de RDOs:', error?.message || error);
+    for (const rdo of list) {
+      rdo.alertas_atividade = [];
+      rdo.alertas_atividade_count = 0;
+      rdo.alerta_atividade_mensagem = null;
+    }
+    return rdos;
+  }
+
   for (const rdo of list) {
     const alertas = alertsByRdo.get(Number(rdo.id)) || [];
     rdo.alertas_atividade = alertas;
@@ -230,7 +242,6 @@ const recalcularPercentualPai = async (atividadeId) => {
 // Listar RDOs de um projeto
 router.get('/projeto/:projetoId', auth, async (req, res) => {
   try {
-    await ensureRdoOptionalColumns();
     const { projetoId } = req.params;
 
     let rdos;
