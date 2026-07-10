@@ -713,6 +713,7 @@ router.get('/projeto/:projetoId', auth, async (req, res) => {
         copy.previsto_agregado = previsto;
         copy.executado_agregado = Math.round((executado + 0.000001) * 100) / 100;
         copy.percentual_agregado = percentual_agregado;
+        copy.percentual_executado = percentual_agregado;
       }
       copy.status = getEapStatusByPercentual(copy.percentual_executado);
       return copy;
