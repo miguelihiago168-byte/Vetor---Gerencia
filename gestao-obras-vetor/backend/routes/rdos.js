@@ -17,6 +17,13 @@ const {
 
 const router = express.Router();
 
+const getEapStatusByPercentual = (percentual) => {
+  const valor = Number(percentual || 0);
+  if (valor >= 100) return 'Concluída';
+  if (valor > 0) return 'Em andamento';
+  return 'Não iniciada';
+};
+
 const getPdfVersionLabel = () => {
   const appVersion = process.env.APP_VERSION || process.env.RELEASE_VERSION || backendPackage.version || 'desconhecida';
   const appEnv = process.env.APP_ENV || process.env.NODE_ENV || 'local';
@@ -95,14 +102,7 @@ const atualizarStatusAtividade = async (atividadeId) => {
     [atividadeId]
   );
 
-  let novoStatus;
-  if (atividade.percentual_executado === 0) {
-    novoStatus = 'Não iniciada';
-  } else if (atividade.percentual_executado >= 100) {
-    novoStatus = 'Concluída';
-  } else {
-    novoStatus = 'Em andamento';
-  }
+  const novoStatus = getEapStatusByPercentual(atividade.percentual_executado);
 
   await runQuery(
     'UPDATE atividades_eap SET status = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
@@ -166,8 +166,8 @@ const recalcularEapAtividades = async (atividadeIds, options = {}) => {
       }
 
       await runQuery(
-        'UPDATE atividades_eap SET percentual_executado = ?, data_conclusao_real = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
-        [percentualExecutado, dataConclusaoReal, atividadeId]
+        'UPDATE atividades_eap SET percentual_executado = ?, status = ?, data_conclusao_real = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+        [percentualExecutado, getEapStatusByPercentual(percentualExecutado), dataConclusaoReal, atividadeId]
       );
       if (Math.abs(percentualExecutado - percentualAtual) > 0.0001 && options.rdoId) {
         await recordActivityEvent({
@@ -179,7 +179,6 @@ const recalcularEapAtividades = async (atividadeIds, options = {}) => {
           usuarioId: options.usuarioId
         });
       }
-      await atualizarStatusAtividade(atividadeId);
       await recalcularPercentualPai(atividadeId);
     } catch (err) {
       console.warn('Erro ao recalcular EAP para atividade', atividadeId, err);
@@ -227,8 +226,10 @@ const recalcularPercentualPai = async (atividadeId) => {
       novoPerc = Math.min(Math.round((somaSimples / filhos.length) * 100) / 100, 100);
     }
 
-    await runQuery('UPDATE atividades_eap SET percentual_executado = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?', [novoPerc, paiId]);
-    await atualizarStatusAtividade(paiId);
+    await runQuery(
+      'UPDATE atividades_eap SET percentual_executado = ?, status = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+      [novoPerc, getEapStatusByPercentual(novoPerc), paiId]
+    );
 
     // Recurse up
     await recalcularPercentualPai(paiId);
@@ -1396,8 +1397,10 @@ router.delete('/:id', auth, async (req, res) => {
           `, [atividadeId]);
           percentualExecutado = Math.min(resultado.total_executado || 0, 100);
         }
-        await runQuery('UPDATE atividades_eap SET percentual_executado = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?', [percentualExecutado, atividadeId]);
-        await atualizarStatusAtividade(atividadeId);
+        await runQuery(
+          'UPDATE atividades_eap SET percentual_executado = ?, status = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+          [percentualExecutado, getEapStatusByPercentual(percentualExecutado), atividadeId]
+        );
         // Evitar recálculo da árvore da EAP ao excluir RDO; recalcular somente em alteração de métricas
       }
     } catch (err) {
