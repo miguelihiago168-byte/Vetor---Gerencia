@@ -19,6 +19,9 @@ import {
   syncImapEmails,
   getReceivedEmails,
   deleteReceivedEmail,
+  toggleReceivedEmailFavorito,
+  toggleReceivedEmailImportante,
+  markReceivedEmailRead,
 } from '../services/api';
 import {
   Inbox,
@@ -79,7 +82,8 @@ const SMTP_PRESETS = {
 
 const MENU_ITEMS = [
   { key: 'recebidos', label: 'Recebidos', icon: Inbox },
-  { key: 'novo-email', label: 'Novo Email', icon: Send },
+  { key: 'novo-email', label: 'Novo E-mail', icon: Send },
+  { key: 'rascunhos', label: 'Rascunhos', icon: FileText },
   { key: 'enviado', label: 'Enviados', icon: CheckCircle },
   { key: 'importantes', label: 'Importantes', icon: AlertCircle },
   { key: 'favoritos', label: 'Favoritos', icon: Star },
@@ -93,6 +97,7 @@ const VALID_TABS = new Set(MENU_ITEMS.map((item) => item.key));
 const MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_ATTACHMENTS = '.pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg';
 const AUTO_IMAP_SYNC_INTERVAL_MS = 90000;
+const EMPTY_COMPOSER = { to_email: '', subject: '', html_body: '', template_name: '' };
 
 const quillModules = {
   toolbar: [
@@ -125,6 +130,33 @@ function resolveSmtpErrorMsg(msg) {
   return `Erro na conexão SMTP: ${m}`;
 }
 
+function resolveSmtpTestErrorMsg(msg) {
+  const m = String(msg || '').trim();
+
+  if (!m || m === 'Erro ao testar conexão' || m === 'Erro ao testar configuracao' || m === 'Erro ao testar configuração') {
+    return 'Não foi possível testar a conexão SMTP. Verifique host, porta, usuário e senha. Para Gmail, use Senha de App em vez da senha normal.';
+  }
+
+  if (m.includes('534') && m.includes('Application-specific password required')) {
+    return 'Autenticação falhou: sua conta Gmail exige Senha de App. Insira a Senha de App nas Configurações, salve e tente novamente.';
+  }
+
+  if ((m.includes('535') || m.includes('534')) && (m.includes('BadCredentials') || m.includes('Username and Password not accepted') || m.includes('InvalidSecondFactor'))) {
+    return 'Credenciais recusadas pelo Gmail. Se sua conta tem verificação em duas etapas, crie uma Senha de App e salve nas Configurações.';
+  }
+
+  if ((m.includes('535') || m.includes('534')) && (m.includes('basic authentication is disabled') || m.includes('Basic Auth'))) {
+    return 'O Outlook/Hotmail desativou a autenticação básica. Use uma Senha de App ou revise o método de autenticação da conta.';
+  }
+
+  if (m.includes('535') || m.includes('534') || m.toLowerCase().includes('autenticacao') || m.toLowerCase().includes('autenticação')) {
+    return `Autenticação recusada. Se a conta usa dois fatores, use uma Senha de App salva nas Configurações. Detalhe: ${m}`;
+  }
+
+  if (m.startsWith('Erro na conexão SMTP:') || m.startsWith('Erro na conexao SMTP:')) return m;
+  return `Erro na conexão SMTP: ${m}`;
+}
+
 function EmailDashboard() {
   const { showNotification } = useNotification();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -134,6 +166,7 @@ function EmailDashboard() {
 
   const [activeTab, setActiveTab] = useState(initialTab);
   const [selectedPreset, setSelectedPreset] = useState('google');
+  const [hasSavedEmailConfig, setHasSavedEmailConfig] = useState(false);
   const [configFormData, setConfigFormData] = useState({
     provider: 'Google',
     smtp_host: 'smtp.gmail.com',
@@ -148,12 +181,10 @@ function EmailDashboard() {
     imap_pass: '',
     imap_tls: 1
   });
-  const [composerFormData, setComposerFormData] = useState({
-    to_email: '',
-    subject: '',
-    html_body: '',
-    template_name: ''
-  });
+  const [composerFormData, setComposerFormData] = useState(EMPTY_COMPOSER);
+  const [replyContext, setReplyContext] = useState(null);
+  const [drafts, setDrafts] = useState([]);
+  const [activeDraftId, setActiveDraftId] = useState(null);
   const [attachments, setAttachments] = useState([]);
   const [signatureData, setSignatureData] = useState({
     email_signature_html: '',
@@ -190,6 +221,12 @@ function EmailDashboard() {
   const quillRef = useRef(null);
   const imageInputRef = useRef(null);
   const syncingImapRef = useRef(false);
+  const draftsStorageKey = useMemo(() => {
+    const pathKey = typeof window !== 'undefined'
+      ? window.location.pathname.replace(/\/email-dashboard.*/, '/email-dashboard')
+      : 'email-dashboard';
+    return `vetor-email-drafts:${pathKey}`;
+  }, []);
 
   useEffect(() => {
     setSearchParams({ tab: activeTab }, { replace: true });
@@ -200,12 +237,28 @@ function EmailDashboard() {
   }, []);
 
   useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(draftsStorageKey) || '[]');
+      if (Array.isArray(stored)) {
+        setDrafts(stored);
+      }
+    } catch {
+      setDrafts([]);
+    }
+  }, [draftsStorageKey]);
+
+  useEffect(() => {
+    localStorage.setItem(draftsStorageKey, JSON.stringify(drafts));
+  }, [drafts, draftsStorageKey]);
+
+  useEffect(() => {
     if (
       activeTab === 'enviado' ||
       activeTab === 'erros' ||
       activeTab === 'recebidos' ||
       activeTab === 'importantes' ||
       activeTab === 'favoritos' ||
+      activeTab === 'rascunhos' ||
       activeTab === 'spam' ||
       activeTab === 'lixeira'
     ) {
@@ -233,6 +286,7 @@ function EmailDashboard() {
         const configResponse = await getEmailConfig();
         const config = configResponse?.data?.data;
         if (config) {
+          setHasSavedEmailConfig(true);
           setConfigFormData({
             provider: config.provider || 'Google',
             smtp_host: config.smtp_host || '',
@@ -306,7 +360,7 @@ function EmailDashboard() {
     if (manual) {
       setImapSyncState({
         status: 'running',
-        message: 'Sincronizacao em andamento...',
+        message: 'Sincroniza-o em andamento...',
         detail: '',
         at: new Date().toISOString()
       });
@@ -317,7 +371,7 @@ function EmailDashboard() {
       const synced = Number(res?.data?.synced ?? 0);
       const successMsg = synced > 0
         ? `${synced} email(s) novo(s) recebido(s)`
-        : 'Sincronizacao concluida: nenhum email novo';
+        : 'Sincroniza-o concluida: nenhum email novo';
 
       if (manual || synced > 0) {
         showNotification(successMsg, 'success');
@@ -325,7 +379,7 @@ function EmailDashboard() {
 
       setImapSyncState({
         status: 'success',
-        message: manual || synced > 0 ? successMsg : 'Sincronizacao automatica ativa',
+        message: manual || synced > 0 ? successMsg : 'Sincronização automática ativa',
         detail: '',
         at: new Date().toISOString()
       });
@@ -383,7 +437,7 @@ function EmailDashboard() {
         setEmailsErrors(data.filter((e) => e.status === 'ERRO' && !e.excluido));
       }
     } catch (error) {
-      console.error('Erro ao carregar historico:', error);
+      console.error('Erro ao carregar histórico:', error);
     } finally {
       setLoadingHistory(false);
     }
@@ -416,8 +470,8 @@ function EmailDashboard() {
   const handleTestConnection = async (e) => {
     e.preventDefault();
 
-    if (!configFormData.smtp_host || !configFormData.smtp_user || !configFormData.smtp_pass) {
-      showNotification('Preencha todos os campos SMTP para testar', 'error');
+    if (!configFormData.smtp_host || !configFormData.smtp_user) {
+      showNotification('Preencha servidor e usuário SMTP para testar', 'error');
       return;
     }
 
@@ -436,13 +490,15 @@ function EmailDashboard() {
         showNotification('Conexão SMTP validada com sucesso!', 'success');
       } else {
         const msg = payload.message || '';
-        const friendlyMsg = resolveSmtpErrorMsg(msg);
+        const friendlyMsg = resolveSmtpTestErrorMsg(msg);
         showNotification(friendlyMsg, 'error');
       }
     } catch (error) {
-      const errMsg = error.response?.data?.message || 'Erro ao testar conexão';
-      setTestResult({ success: false, message: errMsg });
-      showNotification(resolveSmtpErrorMsg(errMsg), 'error');
+      const responseData = error.response?.data || {};
+      const errMsg = responseData.message || responseData.error || error.message || 'Erro ao testar conexão';
+      const detail = responseData.detalhe_tecnico || responseData.detalhe || responseData.message || error.message || '';
+      setTestResult({ success: false, message: errMsg, detalhe: detail });
+      showNotification(resolveSmtpTestErrorMsg(errMsg), 'error');
     } finally {
       setTestingConfig(false);
     }
@@ -451,7 +507,7 @@ function EmailDashboard() {
   const handleSaveConfig = async (e) => {
     e.preventDefault();
 
-    if (!configFormData.smtp_pass) {
+    if (!configFormData.smtp_pass && !hasSavedEmailConfig) {
       showNotification('Informe a senha SMTP', 'error');
       return;
     }
@@ -464,6 +520,7 @@ function EmailDashboard() {
     try {
       setSavingConfig(true);
       await saveEmailConfig(configFormData);
+      setHasSavedEmailConfig(true);
       showNotification('Configuração salva com sucesso', 'success');
     } catch (error) {
       console.error('Erro ao salvar configuração:', error);
@@ -476,6 +533,8 @@ function EmailDashboard() {
 
   const handleSelectTemplate = (template) => {
     setSelectedTemplate(template);
+    setReplyContext(null);
+    setActiveDraftId(null);
     setComposerFormData((prev) => ({
       ...prev,
       subject: template.subject,
@@ -510,6 +569,84 @@ function EmailDashboard() {
 
   const handleRemoveAttachment = (indexToRemove) => {
     setAttachments((prev) => prev.filter((_, index) => index !== indexToRemove));
+  };
+
+  const getComposerPlainText = (html = '') => (
+    String(html)
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
+
+  const hasComposerContent = () => Boolean(
+    composerFormData.to_email ||
+    composerFormData.subject ||
+    getComposerPlainText(composerFormData.html_body) ||
+    replyContext
+  );
+
+  const handleSaveDraft = () => {
+    if (!hasComposerContent()) {
+      showNotification('Nada para salvar em rascunhos', 'error');
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const draft = {
+      id: activeDraftId || `draft-${Date.now()}`,
+      ...composerFormData,
+      replyContext,
+      updatedAt: now,
+      createdAt: drafts.find((item) => item.id === activeDraftId)?.createdAt || now,
+      attachmentNames: attachments.map((file) => file.name)
+    };
+
+    setDrafts((prev) => {
+      const withoutCurrent = prev.filter((item) => item.id !== draft.id);
+      return [draft, ...withoutCurrent];
+    });
+    setActiveDraftId(draft.id);
+
+    if (attachments.length) {
+      showNotification('Rascunho salvo. Anexos precisam ser adicionados novamente ao continuar.', 'success');
+      return;
+    }
+
+    showNotification('Rascunho salvo', 'success');
+  };
+
+  const handleOpenDraft = (draft) => {
+    setComposerFormData({
+      to_email: draft.to_email || '',
+      subject: draft.subject || '',
+      html_body: draft.html_body || '',
+      template_name: draft.template_name || ''
+    });
+    setReplyContext(draft.replyContext || null);
+    setAttachments([]);
+    setSelectedTemplate(null);
+    setActiveDraftId(draft.id);
+    setActiveTab('novo-email');
+  };
+
+  const handleDeleteDraft = (draftId, event) => {
+    event?.stopPropagation?.();
+    setDrafts((prev) => prev.filter((draft) => draft.id !== draftId));
+    if (activeDraftId === draftId) {
+      setActiveDraftId(null);
+    }
+    showNotification('Rascunho excluído', 'success');
+  };
+
+  const handleClearComposer = () => {
+    setComposerFormData(EMPTY_COMPOSER);
+    setReplyContext(null);
+    setAttachments([]);
+    setSelectedTemplate(null);
+    setActiveDraftId(null);
   };
 
   const handleInsertImageClick = () => {
@@ -568,80 +705,179 @@ function EmailDashboard() {
     }
   }), []);
 
+  const patchReceivedEmail = useCallback((emailId, patch) => {
+    setReceivedEmails((prev) => prev.map((email) => (
+      String(email.id) === String(emailId) ? { ...email, ...patch } : email
+    )));
+    setSelectedReceivedEmail((prev) => (
+      prev && String(prev.id) === String(emailId) ? { ...prev, ...patch } : prev
+    ));
+  }, []);
+
+  const handleOpenReceivedEmail = useCallback(async (email) => {
+    setSelectedEmail(null);
+    setSelectedReceivedEmail(email);
+
+    if (email.is_read) return;
+
+    patchReceivedEmail(email.id, { is_read: 1 });
+    try {
+      await markReceivedEmailRead(email.id, 1);
+    } catch (error) {
+      console.error('Erro ao marcar email como lido:', error);
+      patchReceivedEmail(email.id, { is_read: email.is_read || 0 });
+    }
+  }, [patchReceivedEmail]);
+
+  const handleToggleReceivedFavorito = useCallback(async (event, email) => {
+    event?.stopPropagation?.();
+    setOpenMenuId(null);
+    try {
+      const response = await toggleReceivedEmailFavorito(email.id);
+      const favorito = response?.data?.favorito ?? (email.favorito ? 0 : 1);
+      patchReceivedEmail(email.id, { favorito });
+      showNotification(favorito ? 'Adicionado aos favoritos' : 'Removido dos favoritos', 'success');
+    } catch (error) {
+      console.error('Erro ao favoritar email recebido:', error);
+      showNotification('Erro ao favoritar email', 'error');
+    }
+  }, [patchReceivedEmail, showNotification]);
+
+  const handleToggleReceivedImportante = useCallback(async (event, email) => {
+    event?.stopPropagation?.();
+    setOpenMenuId(null);
+    try {
+      const response = await toggleReceivedEmailImportante(email.id);
+      const importante = response?.data?.importante ?? (email.importante ? 0 : 1);
+      patchReceivedEmail(email.id, { importante });
+      showNotification(importante ? 'Email marcado como importante' : 'Email removido dos importantes', 'success');
+    } catch (error) {
+      console.error('Erro ao marcar email importante:', error);
+      showNotification('Erro ao marcar email importante', 'error');
+    }
+  }, [patchReceivedEmail, showNotification]);
+
+  const handleToggleReceivedRead = useCallback(async (event, email) => {
+    event?.stopPropagation?.();
+    setOpenMenuId(null);
+    const isRead = email.is_read ? 0 : 1;
+    patchReceivedEmail(email.id, { is_read: isRead });
+    try {
+      await markReceivedEmailRead(email.id, isRead);
+      showNotification(isRead ? 'Email marcado como lido' : 'Email marcado como não lido', 'success');
+    } catch (error) {
+      console.error('Erro ao atualizar leitura do email:', error);
+      patchReceivedEmail(email.id, { is_read: email.is_read || 0 });
+      showNotification('Erro ao atualizar leitura do email', 'error');
+    }
+  }, [patchReceivedEmail, showNotification]);
+
   const handleSelectUser = (userEmail) => {
     setComposerFormData((prev) => ({ ...prev, to_email: userEmail }));
     setShowUserList(false);
   };
 
-  const handleReplyEmail = useCallback((email) => {
-    const quotedHtml = `
-<br/><br/>
-<div style="border-left: 3px solid #ccc; padding-left: 12px; color: #666; margin-top: 12px;">
-  <p><strong>Em ${email.received_at ? new Date(email.received_at).toLocaleString('pt-BR') : ''}, ${email.from_name || email.from_email} escreveu:</strong></p>
-  ${email.body_html || `<pre style="white-space:pre-wrap">${email.body_text || ''}</pre>`}
+  const buildQuotedEmailHtml = (context) => {
+    if (!context) return '';
+    const dateLabel = context.date ? new Date(context.date).toLocaleString('pt-BR') : '';
+    const author = context.fromName || context.fromEmail || 'Remetente';
+    const body = context.bodyHtml || `<pre style="white-space:pre-wrap;font-family:inherit">${context.bodyText || ''}</pre>`;
+
+    return `
+<div style="margin-top:24px;padding-top:14px;border-top:1px solid #e5e7eb;color:#5f6368;font-size:13px;">
+  <div style="margin-bottom:10px;">Em ${dateLabel}, ${author} escreveu:</div>
+  <blockquote style="margin:0;border-left:2px solid #dadce0;padding-left:12px;color:#5f6368;">
+    ${body}
+  </blockquote>
 </div>`;
+  };
+
+  const handleReplyEmail = useCallback((email) => {
     setComposerFormData({
       to_email: email.from_email || '',
       subject: email.subject ? `Re: ${email.subject.replace(/^(Re:\s*)+/i, '')}` : '',
-      html_body: quotedHtml,
+      html_body: '<p><br></p>',
       template_name: '',
+    });
+    setReplyContext({
+      type: 'reply',
+      fromName: email.from_name || '',
+      fromEmail: email.from_email || '',
+      date: email.received_at,
+      subject: email.subject || '',
+      bodyHtml: email.body_html || '',
+      bodyText: email.body_text || ''
     });
     setAttachments([]);
     setSelectedTemplate(null);
+    setActiveDraftId(null);
     setSelectedReceivedEmail(null);
     setActiveTab('novo-email');
   }, []);
 
   const handleForwardEmail = useCallback((email) => {
-    const forwardedHtml = `
-<br/><br/>
-<div style="border-left: 3px solid #ccc; padding-left: 12px; color: #666; margin-top: 12px;">
-  <p><strong>---------- Mensagem encaminhada ----------</strong></p>
-  <p><strong>De:</strong> ${email.from_name ? `${email.from_name} &lt;${email.from_email}&gt;` : email.from_email || ''}</p>
-  <p><strong>Data:</strong> ${email.received_at ? new Date(email.received_at).toLocaleString('pt-BR') : ''}</p>
-  <p><strong>Assunto:</strong> ${email.subject || ''}</p>
-  <br/>
-  ${email.body_html || `<pre style="white-space:pre-wrap">${email.body_text || ''}</pre>`}
-</div>`;
     setComposerFormData({
       to_email: '',
       subject: email.subject ? `Fwd: ${email.subject.replace(/^(Fwd:\s*)+/i, '')}` : '',
-      html_body: forwardedHtml,
+      html_body: '<p><br></p>',
       template_name: '',
+    });
+    setReplyContext({
+      type: 'forward',
+      fromName: email.from_name || '',
+      fromEmail: email.from_email || '',
+      date: email.received_at,
+      subject: email.subject || '',
+      bodyHtml: email.body_html || '',
+      bodyText: email.body_text || ''
     });
     setAttachments([]);
     setSelectedTemplate(null);
+    setActiveDraftId(null);
     setSelectedReceivedEmail(null);
     setActiveTab('novo-email');
   }, []);
 
-  const handleDeleteReceivedEmail = useCallback(async (email) => {
-    if (!window.confirm(`Excluir o email "${email.subject || '(sem assunto)'}"?`)) return;
+  const handleDeleteReceivedEmail = useCallback(async (email, event) => {
+    event?.stopPropagation?.();
+    setOpenMenuId(null);
+    const actionLabel = email.excluido ? 'Excluir permanentemente' : 'Mover para a lixeira';
+    if (!window.confirm(`${actionLabel} o email "${email.subject || '(sem assunto)'}"?`)) return;
     try {
-      await deleteReceivedEmail(email.id);
-      setReceivedEmails((prev) => prev.filter((e) => e.id !== email.id));
-      setSelectedReceivedEmail(null);
-      showNotification('Email excluído', 'success');
+      const response = await deleteReceivedEmail(email.id);
+      const permanente = response?.data?.permanente;
+      if (permanente) {
+        setReceivedEmails((prev) => prev.filter((item) => String(item.id) !== String(email.id)));
+        setSelectedReceivedEmail(null);
+        showNotification('Email excluido permanentemente', 'success');
+      } else {
+        patchReceivedEmail(email.id, { excluido: 1 });
+        setSelectedReceivedEmail(null);
+        showNotification('Email movido para a lixeira', 'success');
+      }
     } catch (err) {
       console.error('Erro ao excluir email recebido:', err);
       showNotification('Erro ao excluir email', 'error');
     }
-  }, [showNotification]);
+  }, [patchReceivedEmail, showNotification]);
 
   const handleSendEmail = async (e) => {
     e.preventDefault();
 
-    if (!composerFormData.to_email || !composerFormData.subject || !composerFormData.html_body) {
-      showNotification('Preencha destinatário, assunto e corpo do e-mail', 'error');
+    if (!composerFormData.to_email || !composerFormData.subject || !getComposerPlainText(composerFormData.html_body)) {
+      showNotification('Preencha destinatário, assunto e corpo do email', 'error');
       return;
     }
 
     try {
       setSendingEmail(true);
+      const outgoingHtmlBody = replyContext
+        ? `${composerFormData.html_body || ''}${buildQuotedEmailHtml(replyContext)}`
+        : composerFormData.html_body;
       const formData = new FormData();
       formData.append('to_email', composerFormData.to_email);
       formData.append('subject', composerFormData.subject);
-      formData.append('html_body', composerFormData.html_body);
+      formData.append('html_body', outgoingHtmlBody);
       formData.append('template_name', composerFormData.template_name || '');
       formData.append('include_signature', String(signatureData.email_signature_auto === 0 ? 0 : 1));
 
@@ -652,9 +888,14 @@ function EmailDashboard() {
 
       if (payload.success) {
         showNotification('Email enviado com sucesso', 'success');
-        setComposerFormData({ to_email: '', subject: '', html_body: '', template_name: '' });
+        if (activeDraftId) {
+          setDrafts((prev) => prev.filter((draft) => draft.id !== activeDraftId));
+        }
+        setComposerFormData(EMPTY_COMPOSER);
+        setReplyContext(null);
         setAttachments([]);
         setSelectedTemplate(null);
+        setActiveDraftId(null);
         await loadEmailHistory();
         setActiveTab('enviado');
       } else {
@@ -670,6 +911,7 @@ function EmailDashboard() {
   };
 
   const handleViewDetails = (email) => {
+    setSelectedReceivedEmail(null);
     setSelectedEmail(prev => prev?.id === email.id ? null : email);
     setShowDetailModal(false);
   };
@@ -723,6 +965,379 @@ function EmailDashboard() {
   const formatDateFull = (dateString) => {
     if (!dateString) return '-';
     return new Date(dateString).toLocaleString('pt-BR');
+  };
+
+  const receivedInboxEmails = receivedEmails.filter((email) => !email.excluido);
+  const importantReceivedEmails = receivedEmails.filter((email) => !email.excluido && email.importante);
+  const favoriteReceivedEmails = receivedEmails.filter((email) => !email.excluido && email.favorito);
+  const trashedReceivedEmails = receivedEmails.filter((email) => email.excluido);
+  const favoriteSentEmails = allHistory.filter((email) => email.favorito && !email.excluido);
+  const trashedSentEmails = allHistory.filter((email) => email.excluido);
+  const sortedDrafts = [...drafts].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+  const renderReceivedDetail = (email) => (
+    <div className="gmail-detail">
+      <div className="gmail-detail-header">
+        <button
+          type="button"
+          className="gmail-detail-back"
+          onClick={() => setSelectedReceivedEmail(null)}
+        >
+          <ArrowLeft size={16} />
+          Voltar
+        </button>
+        <div className="gmail-detail-title">
+          <h2 className="gmail-detail-subject">{email.subject || '(sem assunto)'}</h2>
+          <div className="gmail-detail-kicker">Recebido de {email.from_name || email.from_email || '-'}</div>
+        </div>
+        <div className="mail-detail-actions">
+          <button
+            type="button"
+            className={`mail-icon-button ${email.favorito ? 'is-active' : ''}`}
+            title={email.favorito ? 'Remover favorito' : 'Favoritar'}
+            onClick={(event) => handleToggleReceivedFavorito(event, email)}
+          >
+            <Star size={16} fill={email.favorito ? 'currentColor' : 'none'} />
+          </button>
+          <button
+            type="button"
+            className={`mail-icon-button ${email.importante ? 'is-important' : ''}`}
+            title={email.importante ? 'Remover importante' : 'Marcar importante'}
+            onClick={(event) => handleToggleReceivedImportante(event, email)}
+          >
+            <AlertCircle size={16} />
+          </button>
+          <button type="button" className="mail-icon-button" title="Responder" onClick={() => handleReplyEmail(email)}>
+            <Reply size={16} />
+          </button>
+          <button type="button" className="mail-icon-button" title="Encaminhar" onClick={() => handleForwardEmail(email)}>
+            <Forward size={16} />
+          </button>
+          <button type="button" className="mail-icon-button is-danger" title="Excluir" onClick={(event) => handleDeleteReceivedEmail(email, event)}>
+            <Trash2 size={16} />
+          </button>
+        </div>
+      </div>
+
+      <div className="gmail-detail-meta">
+        <div className="gmail-detail-avatar">{((email.from_name || email.from_email || '?')[0] || '?').toUpperCase()}</div>
+        <div>
+          <div className="gmail-detail-from">
+            De: <strong>{email.from_name || email.from_email || '-'}</strong>
+            {email.importante ? (
+              <span className="gmail-status-badge warning">
+                {email.importante_auto ? 'Importante automático' : 'Importante'}
+              </span>
+            ) : null}
+          </div>
+          <div className="gmail-detail-date">
+            {email.received_at ? formatDateFull(email.received_at) : '-'}
+            {email.from_email ? ` · ${email.from_email}` : ''}
+          </div>
+        </div>
+      </div>
+
+      <div className="gmail-detail-body">
+        {email.body_html
+          ? (
+            <iframe
+              srcDoc={email.body_html}
+              title="Conteúdo do email"
+              className="gmail-body-iframe"
+              sandbox="allow-same-origin"
+            />
+          )
+          : (
+            <div className="gmail-detail-body-content">
+              <pre className="mail-plain-body">{email.body_text || '(Sem conteúdo)'}</pre>
+            </div>
+          )
+        }
+      </div>
+    </div>
+  );
+
+  const renderSentDetail = (email) => (
+    <div className="gmail-detail">
+      <div className="gmail-detail-header">
+        <button type="button" className="gmail-detail-back" onClick={handleCloseModal}>
+          <ArrowLeft size={16} />
+          Voltar
+        </button>
+        <div className="gmail-detail-title">
+          <h2 className="gmail-detail-subject">{email.subject || '(sem assunto)'}</h2>
+          <div className="gmail-detail-kicker">Enviado para {email.recipient_email || '-'}</div>
+        </div>
+        <div className="mail-detail-actions">
+          <button
+            type="button"
+            className={`mail-icon-button ${email.favorito ? 'is-active' : ''}`}
+            title={email.favorito ? 'Remover favorito' : 'Favoritar'}
+            onClick={(event) => handleToggleFavorito(event, email)}
+          >
+            <Star size={16} fill={email.favorito ? 'currentColor' : 'none'} />
+          </button>
+          <button type="button" className="mail-icon-button is-danger" title="Excluir" onClick={(event) => handleDeleteEmail(event, email)}>
+            <Trash2 size={16} />
+          </button>
+        </div>
+      </div>
+
+      <div className="gmail-detail-meta">
+        <div className="gmail-detail-avatar">{(email.recipient_email || '?')[0].toUpperCase()}</div>
+        <div>
+          <div className="gmail-detail-from">
+            Para: <strong>{email.recipient_email}</strong>
+            {email.status === 'ERRO'
+              ? <span className="gmail-status-badge error">Falhou</span>
+              : <span className="gmail-status-badge sent">Enviado</span>
+            }
+          </div>
+          <div className="gmail-detail-date">{formatDateFull(email.created_at)}</div>
+        </div>
+      </div>
+
+      {email.error_message && (
+        <div className="gmail-error-banner">
+          <AlertCircle size={15} />
+          {email.error_message}
+        </div>
+      )}
+
+      <div className="gmail-detail-body">
+        {email.body_html
+          ? (
+            <iframe
+              srcDoc={email.body_html}
+              title="Conteúdo do email"
+              className="gmail-body-iframe"
+              sandbox="allow-same-origin"
+            />
+          )
+          : <p className="mail-empty-copy">(Sem conteúdo HTML)</p>
+        }
+      </div>
+    </div>
+  );
+
+  const renderReceivedMailbox = (rows, emptyTitle, emptyText) => {
+    if (loadingHistory) {
+      return (
+        <div className="loading-spinner">
+          <Loader className="spinning" size={32} />
+        </div>
+      );
+    }
+
+    if (!rows.length) {
+      return (
+        <div className="empty-state">
+          <Mail size={42} />
+          <h3>{emptyTitle}</h3>
+          <p>{emptyText}</p>
+        </div>
+      );
+    }
+
+    const selectedInRows = selectedReceivedEmail && rows.some((email) => String(email.id) === String(selectedReceivedEmail.id));
+
+    return (
+      <div className={`gmail-pane${selectedInRows ? ' has-detail' : ''}`}>
+        <div className="gmail-list">
+          {rows.map((email) => {
+            const isSelected = selectedReceivedEmail && String(selectedReceivedEmail.id) === String(email.id);
+            return (
+              <div
+                key={email.id}
+                className={`gmail-row${isSelected ? ' gmail-row-selected' : ''}${email.is_read ? '' : ' gmail-row-unread'}${email.importante ? ' gmail-row-important' : ''}`}
+                onClick={() => handleOpenReceivedEmail(email)}
+              >
+                <button
+                  type="button"
+                  className={`gmail-row-star-btn ${email.favorito ? 'is-active' : ''}`}
+                  title={email.favorito ? 'Remover favorito' : 'Favoritar'}
+                  onClick={(event) => handleToggleReceivedFavorito(event, email)}
+                >
+                  <Star size={15} fill={email.favorito ? 'currentColor' : 'none'} />
+                </button>
+                <div className="gmail-row-avatar">
+                  {((email.from_name || email.from_email || '?')[0] || '?').toUpperCase()}
+                </div>
+                <div className="gmail-row-body">
+                  <div className="gmail-row-top">
+                    <span className="gmail-row-recipient">{email.from_name || email.from_email || '-'}</span>
+                    <span className="gmail-row-date">{email.received_at ? formatDate(email.received_at) : ''}</span>
+                  </div>
+                  <div className="gmail-row-subject">{email.subject || '(sem assunto)'}</div>
+                  <div className="gmail-row-preview">{email.body_text || email.from_email || 'Sem preview disponivel'}</div>
+                </div>
+                {email.importante ? (
+                  <span className="mail-row-tag mail-row-tag-warning">
+                    {email.importante_auto ? 'Auto' : 'Importante'}
+                  </span>
+                ) : null}
+                <div className="gmail-row-menu" onClick={(event) => event.stopPropagation()}>
+                  <button
+                    className="gmail-row-menu-btn"
+                    title="Mais a-es"
+                    onClick={(event) => { event.stopPropagation(); setOpenMenuId(openMenuId === `received-${email.id}` ? null : `received-${email.id}`); }}
+                  >
+                    <MoreVertical size={16} />
+                  </button>
+                  {openMenuId === `received-${email.id}` && (
+                    <div className="gmail-row-dropdown">
+                      <button onClick={(event) => handleToggleReceivedFavorito(event, email)}>
+                        <Star size={14} />
+                        {email.favorito ? 'Remover favorito' : 'Favoritar'}
+                      </button>
+                      <button onClick={(event) => handleToggleReceivedImportante(event, email)}>
+                        <AlertCircle size={14} />
+                        {email.importante ? 'Remover importante' : 'Marcar importante'}
+                      </button>
+                      <button onClick={(event) => handleToggleReceivedRead(event, email)}>
+                        <Mail size={14} />
+                        {email.is_read ? 'Marcar como não lido' : 'Marcar como lido'}
+                      </button>
+                      <button className="gmail-dropdown-danger" onClick={(event) => handleDeleteReceivedEmail(email, event)}>
+                        <Trash2 size={14} />
+                        {email.excluido ? 'Excluir permanentemente' : 'Mover para lixeira'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {selectedInRows && renderReceivedDetail(selectedReceivedEmail)}
+      </div>
+    );
+  };
+
+  const renderCombinedMailbox = (items, emptyTitle, emptyText) => {
+    if (loadingHistory) {
+      return (
+        <div className="loading-spinner">
+          <Loader className="spinning" size={32} />
+        </div>
+      );
+    }
+
+    if (!items.length) {
+      return (
+        <div className="empty-state">
+          <Mail size={42} />
+          <h3>{emptyTitle}</h3>
+          <p>{emptyText}</p>
+        </div>
+      );
+    }
+
+    const rows = items
+      .map((item) => ({
+        ...item,
+        sortDate: new Date(item.kind === 'received' ? item.email.received_at : item.email.created_at).getTime() || 0
+      }))
+      .sort((a, b) => b.sortDate - a.sortDate);
+    const selectedReceivedInRows = selectedReceivedEmail && rows.some((item) => item.kind === 'received' && String(item.email.id) === String(selectedReceivedEmail.id));
+    const selectedSentInRows = selectedEmail && rows.some((item) => item.kind === 'sent' && String(item.email.id) === String(selectedEmail.id));
+
+    return (
+      <div className={`gmail-pane${selectedReceivedInRows || selectedSentInRows ? ' has-detail' : ''}`}>
+        <div className="gmail-list">
+          {rows.map(({ kind, email }) => {
+            const isReceived = kind === 'received';
+            const isSelected = isReceived
+              ? selectedReceivedEmail && String(selectedReceivedEmail.id) === String(email.id)
+              : selectedEmail && String(selectedEmail.id) === String(email.id);
+            const title = isReceived ? (email.from_name || email.from_email || '-') : (email.recipient_email || '-');
+            const date = isReceived ? email.received_at : email.created_at;
+            return (
+              <div
+                key={`${kind}-${email.id}`}
+                className={`gmail-row${isSelected ? ' gmail-row-selected' : ''}${isReceived && !email.is_read ? ' gmail-row-unread' : ''}${isReceived && email.importante ? ' gmail-row-important' : ''}`}
+                onClick={() => (isReceived ? handleOpenReceivedEmail(email) : handleViewDetails(email))}
+              >
+                <button
+                  type="button"
+                  className={`gmail-row-star-btn ${email.favorito ? 'is-active' : ''}`}
+                  title={email.favorito ? 'Remover favorito' : 'Favoritar'}
+                  onClick={(event) => (isReceived ? handleToggleReceivedFavorito(event, email) : handleToggleFavorito(event, email))}
+                >
+                  <Star size={15} fill={email.favorito ? 'currentColor' : 'none'} />
+                </button>
+                <div className="gmail-row-avatar">{(title[0] || '?').toUpperCase()}</div>
+                <div className="gmail-row-body">
+                  <div className="gmail-row-top">
+                    <span className="gmail-row-recipient">{title}</span>
+                    <span className="gmail-row-date">{date ? formatDate(date) : ''}</span>
+                  </div>
+                  <div className="gmail-row-subject">{email.subject || '(sem assunto)'}</div>
+                  <div className="gmail-row-preview">{isReceived ? (email.body_text || email.from_email || 'Recebido') : (email.status === 'ERRO' ? email.error_message : 'Enviado')}</div>
+                </div>
+                <span className="mail-row-tag">{isReceived ? 'Recebido' : 'Enviado'}</span>
+              </div>
+            );
+          })}
+        </div>
+        {selectedReceivedInRows && renderReceivedDetail(selectedReceivedEmail)}
+        {selectedSentInRows && renderSentDetail(selectedEmail)}
+      </div>
+    );
+  };
+
+  const renderDraftsMailbox = () => {
+    if (!sortedDrafts.length) {
+      return (
+        <div className="empty-state">
+          <FileText size={42} />
+          <h3>Nenhum rascunho salvo</h3>
+          <p>Comece um email e use “Salvar rascunho” para continuar depois.</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="gmail-pane drafts-pane">
+        <div className="gmail-list drafts-list">
+          {sortedDrafts.map((draft) => {
+            const preview = getComposerPlainText(draft.html_body) || 'Sem conteúdo';
+            return (
+              <div
+                key={draft.id}
+                className={`gmail-row draft-row${activeDraftId === draft.id ? ' gmail-row-selected' : ''}`}
+                onClick={() => handleOpenDraft(draft)}
+              >
+                <div className="gmail-row-avatar draft-avatar">
+                  <FileText size={15} />
+                </div>
+                <div className="gmail-row-body">
+                  <div className="gmail-row-top">
+                    <span className="gmail-row-recipient">{draft.to_email || 'Sem destinatário'}</span>
+                    <span className="gmail-row-date">{draft.updatedAt ? formatDate(draft.updatedAt) : ''}</span>
+                  </div>
+                  <div className="gmail-row-subject">{draft.subject || '(sem assunto)'}</div>
+                  <div className="gmail-row-preview">{preview}</div>
+                  {draft.attachmentNames?.length ? (
+                    <div className="draft-attachment-note">
+                      {draft.attachmentNames.length} anexo(s) precisam ser adicionados novamente
+                    </div>
+                  ) : null}
+                </div>
+                <div className="draft-row-actions" onClick={(event) => event.stopPropagation()}>
+                  <button type="button" className="mail-icon-button" title="Continuar edição" onClick={() => handleOpenDraft(draft)}>
+                    <Send size={15} />
+                  </button>
+                  <button type="button" className="mail-icon-button is-danger" title="Excluir rascunho" onClick={(event) => handleDeleteDraft(draft.id, event)}>
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
   };
 
   const renderHistoryTable = (rows, emptyTitle, emptyText) => {
@@ -878,6 +1493,9 @@ function EmailDashboard() {
                   >
                     <Icon size={16} />
                     <span>{item.label}</span>
+                    {item.key === 'rascunhos' && drafts.length > 0 && (
+                      <span className="mail-menu-count">{drafts.length}</span>
+                    )}
                   </button>
                 );
               })}
@@ -917,11 +1535,18 @@ function EmailDashboard() {
                     )}
                     {imapSyncState.at && (
                       <div style={{ marginTop: '4px', opacity: 0.75 }}>
-                        Ultima tentativa: {new Date(imapSyncState.at).toLocaleString('pt-BR')}
+                        Última tentativa: {new Date(imapSyncState.at).toLocaleString('pt-BR')}
                       </div>
                     )}
                   </div>
                 )}
+                {renderReceivedMailbox(
+                  receivedInboxEmails,
+                  'Nenhum email recebido',
+                  'Configure o IMAP na aba Configurações. A sincronização automática busca novos emails periodicamente.'
+                )}
+                {false && (
+                  <>
                 {receivedEmails.length === 0 ? (
                   <div className="empty-state">
                     <Inbox size={42} />
@@ -1022,7 +1647,7 @@ function EmailDashboard() {
                             )
                             : (
                               <div className="gmail-detail-body-content">
-                                <pre style={{ whiteSpace: 'pre-wrap', fontSize: '13px' }}>{selectedReceivedEmail.body_text || '(Sem conteudo)'}</pre>
+                                <pre style={{ whiteSpace: 'pre-wrap', fontSize: '13px' }}>{selectedReceivedEmail.body_text || '(Sem conteúdo)'}</pre>
                               </div>
                             )
                           }
@@ -1050,20 +1675,50 @@ function EmailDashboard() {
                     </div>
                   )
                 )}
+                  </>
+                )}
+              </div>
+            )}
+            {activeTab === 'importantes' && (
+              <div className="tab-pane">
+                {renderReceivedMailbox(
+                  importantReceivedEmails,
+                  'Nenhum email importante',
+                  'Emails com alerta, segurança, prazo, acesso ou cobrança entram aqui automaticamente, e você também pode marcar manualmente.'
+                )}
               </div>
             )}
 
-            {activeTab === 'importantes' && (
+            {false && activeTab === 'importantes' && (
               <div className="tab-pane">
                 <div className="empty-state">
                   <AlertCircle size={42} />
-                  <h3>Nenhum e-mail importante</h3>
+                  <h3>Nenhum email importante</h3>
                   <p>Marque mensagens como importantes para vê-las aqui.</p>
                 </div>
               </div>
             )}
 
             {activeTab === 'favoritos' && (
+              <div className="tab-pane">
+                {renderCombinedMailbox(
+                  [
+                    ...favoriteReceivedEmails.map((email) => ({ kind: 'received', email })),
+                    ...favoriteSentEmails.map((email) => ({ kind: 'sent', email }))
+                  ],
+                  'Nenhum favorito',
+                  'Marque emails recebidos ou enviados com estrela para vê-los aqui.'
+                )}
+              </div>
+            )}
+
+            {activeTab === 'rascunhos' && (
+              <div className="tab-pane">
+                {renderDraftsMailbox()}
+              </div>
+            )}
+
+            {false && activeTab === 'favoritos' && (
               <div className="tab-pane">
                 {renderHistoryTable(
                   allHistory.filter(e => e.favorito && !e.excluido),
@@ -1077,13 +1732,26 @@ function EmailDashboard() {
               <div className="tab-pane">
                 <div className="empty-state">
                   <ShieldAlert size={42} />
-                  <h3>Sem e-mails em spam</h3>
+                  <h3>Sem emails em spam</h3>
                   <p>Quando houver mensagens suspeitas, elas serão listadas aqui.</p>
                 </div>
               </div>
             )}
 
             {activeTab === 'lixeira' && (
+              <div className="tab-pane">
+                {renderCombinedMailbox(
+                  [
+                    ...trashedReceivedEmails.map((email) => ({ kind: 'received', email })),
+                    ...trashedSentEmails.map((email) => ({ kind: 'sent', email }))
+                  ],
+                  'Lixeira vazia',
+                  'Emails excluídos aparecem aqui. Abra um item para excluir permanentemente quando necessário.'
+                )}
+              </div>
+            )}
+
+            {false && activeTab === 'lixeira' && (
               <div className="tab-pane">
                 {renderHistoryTable(
                   allHistory.filter(e => e.excluido),
@@ -1096,6 +1764,13 @@ function EmailDashboard() {
             {activeTab === 'novo-email' && (
               <div className="tab-pane compose-pane">
                 <form onSubmit={handleSendEmail} className="composer-form composer-card">
+                  {activeDraftId && (
+                    <div className="draft-editing-banner">
+                      <FileText size={15} />
+                      Editando rascunho salvo
+                    </div>
+                  )}
+
                   {templates.length > 0 && (
                     <div className="form-section templates-section">
                       <h3>
@@ -1127,7 +1802,7 @@ function EmailDashboard() {
                         value={composerFormData.to_email}
                         onChange={handleComposerChange}
                         className="form-input"
-                        placeholder="Informe o e-mail"
+                        placeholder="Informe o email"
                         required
                       />
                       {users.length > 0 && (
@@ -1160,13 +1835,13 @@ function EmailDashboard() {
                       value={composerFormData.subject}
                       onChange={handleComposerChange}
                       className="form-input"
-                      placeholder="Assunto do e-mail"
+                      placeholder="Assunto do email"
                       required
                     />
                   </div>
 
                   <div className="form-section">
-                    <label>Corpo do e-mail *</label>
+                    <label>Corpo do email *</label>
                     <div className="editor-toolbar-row">
                       <button type="button" className="btn-secondary btn-inline-tool" onClick={handleInsertImageClick}>
                         <ImageIcon size={16} />
@@ -1192,6 +1867,38 @@ function EmailDashboard() {
                       modules={composerModules}
                       className="mail-quill-editor"
                     />
+                    {replyContext && (
+                      <div className="reply-context-card">
+                        <div className="reply-context-main">
+                          <div className="reply-context-avatar">
+                            {((replyContext.fromName || replyContext.fromEmail || '?')[0] || '?').toUpperCase()}
+                          </div>
+                          <div className="reply-context-copy">
+                            <div className="reply-context-title">
+                              {replyContext.type === 'forward' ? 'Encaminhando mensagem' : 'Respondendo mensagem'}
+                            </div>
+                            <div className="reply-context-meta">
+                              {replyContext.fromName || replyContext.fromEmail || '-'}
+                              {replyContext.date ? ` - ${formatDateFull(replyContext.date)}` : ''}
+                            </div>
+                            <details className="reply-context-details">
+                              <summary>Mostrar mensagem original</summary>
+                              <div className="reply-context-preview">
+                                {replyContext.bodyText || replyContext.subject || 'Sem preview disponivel'}
+                              </div>
+                            </details>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="reply-context-remove"
+                          onClick={() => setReplyContext(null)}
+                          title="Remover mensagem original"
+                        >
+                          <XCircle size={16} />
+                        </button>
+                      </div>
+                    )}
                     <input
                       ref={imageInputRef}
                       type="file"
@@ -1215,15 +1922,20 @@ function EmailDashboard() {
                   <div className="form-actions">
                     <button
                       type="button"
-                      onClick={() => {
-                        setComposerFormData({ to_email: '', subject: '', html_body: '', template_name: '' });
-                        setAttachments([]);
-                        setSelectedTemplate(null);
-                      }}
+                      onClick={handleClearComposer}
                       className="btn-secondary"
                       disabled={sendingEmail}
                     >
                       Limpar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveDraft}
+                      className="btn-secondary"
+                      disabled={sendingEmail}
+                    >
+                      <Save size={18} />
+                      {activeDraftId ? 'Atualizar rascunho' : 'Salvar rascunho'}
                     </button>
                     <button type="submit" disabled={sendingEmail} className="btn-primary">
                       {sendingEmail ? (
@@ -1245,7 +1957,7 @@ function EmailDashboard() {
 
             {activeTab === 'enviado' && (
               <div className="tab-pane">
-                {renderHistoryTable(emailsSent, 'Nenhum e-mail enviado', 'Os envios aparecerão aqui.')}
+                {renderHistoryTable(emailsSent, 'Nenhum email enviado', 'Os envios aparecerão aqui.')}
               </div>
             )}
 
@@ -1294,8 +2006,16 @@ function EmailDashboard() {
                     </div>
 
                     <div className="form-group">
-                      <label>Senha *</label>
-                      <input type="password" name="smtp_pass" value={configFormData.smtp_pass} onChange={handleConfigChange} className="form-input" required />
+                      <label>{hasSavedEmailConfig ? 'Senha' : 'Senha *'}</label>
+                      <input
+                        type="password"
+                        name="smtp_pass"
+                        value={configFormData.smtp_pass}
+                        onChange={handleConfigChange}
+                        className="form-input"
+                        required={!hasSavedEmailConfig}
+                        placeholder={hasSavedEmailConfig ? 'deixe em branco para manter a senha atual' : ''}
+                      />
                     </div>
                   </div>
 
@@ -1395,7 +2115,7 @@ function EmailDashboard() {
                     <div className={`test-result ${testResult.success ? 'success' : 'error'}`}>
                       <div className="test-result-icon">{testResult.success ? <Check size={20} /> : <AlertCircle size={20} />}</div>
                       <div className="test-result-message">
-                        {testResult.success ? testResult.message : resolveSmtpErrorMsg(testResult.message)}
+                        {testResult.success ? testResult.message : resolveSmtpTestErrorMsg(testResult.message)}
                         {!testResult.success && testResult.detalhe && (
                           <details style={{ marginTop: 6, fontSize: '0.8em', opacity: 0.7 }}>
                             <summary style={{ cursor: 'pointer' }}>Detalhe técnico</summary>
