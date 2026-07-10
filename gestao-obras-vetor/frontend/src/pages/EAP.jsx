@@ -268,6 +268,49 @@ function EAP({ hideNavbar = false }) {
     return roots;
   };
 
+  const getStatusByPercentual = (percentual) => {
+    const valor = Number(percentual || 0);
+    if (valor >= 100) return 'Concluída';
+    if (valor > 0) return 'Em andamento';
+    return 'Não iniciada';
+  };
+
+  const getPesoAtividade = (atividade) => Number(
+    atividade.peso_percentual_projeto || atividade.percentual_previsto || 0
+  );
+
+  const getPercentualAtividade = (atividade) => {
+    const filhos = atividade.children || [];
+    if (!filhos.length) {
+      return Number(atividade.percentual_executado || 0);
+    }
+
+    const percentuaisFilhos = filhos.map(getPercentualAtividade);
+    if (percentuaisFilhos.length && percentuaisFilhos.every((percentual) => percentual >= 100)) {
+      return 100;
+    }
+
+    let somaContribuicao = 0;
+    let somaPeso = 0;
+    let somaSimples = 0;
+
+    filhos.forEach((filho, index) => {
+      const percentual = percentuaisFilhos[index] || 0;
+      const peso = getPesoAtividade(filho);
+      somaSimples += percentual;
+      if (peso > 0) {
+        somaContribuicao += (percentual * peso) / 100;
+        somaPeso += peso;
+      }
+    });
+
+    const percentual = somaPeso > 0
+      ? somaContribuicao
+      : somaSimples / filhos.length;
+
+    return Math.min(Math.round(percentual * 100) / 100, 100);
+  };
+
   const renderAtividade = (atividade, level = 0) => {
     const hasChildren = atividade.children && atividade.children.length > 0;
     const isExpanded = expandedItems.has(atividade.id);
@@ -276,9 +319,10 @@ function EAP({ hideNavbar = false }) {
     const descricaoExtra = (atividade.descricao && atividade.nome && atividade.descricao !== atividade.nome)
       ? atividade.descricao
       : '';
-    const percentualExecutado = Number(atividade.percentual_executado || 0);
+    const percentualExecutado = getPercentualAtividade(atividade);
     const percentualVisual = percentualExecutado > 0 ? Math.max(percentualExecutado, 2) : 0;
-    const statusTone = getStatusTone(atividade.status);
+    const statusAtividade = getStatusByPercentual(percentualExecutado);
+    const statusTone = getStatusTone(statusAtividade);
 
     return (
       <div key={atividade.id}>
@@ -319,7 +363,7 @@ function EAP({ hideNavbar = false }) {
                     Planejado: <strong>{formatarDataBr(atividade.data_inicio_planejada)}</strong> até <strong>{formatarDataBr(atividade.data_fim_planejada)}</strong>
                   </span>
                   <span>Executado: <strong>{percentualExecutado}%</strong></span>
-                  <span className={`eap-status-chip eap-status-${statusTone}`}>{atividade.status}</span>
+                  <span className={`eap-status-chip eap-status-${statusTone}`}>{statusAtividade}</span>
                 </div>
               </div>
             </div>
