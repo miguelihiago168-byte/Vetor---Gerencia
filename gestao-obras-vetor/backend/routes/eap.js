@@ -15,6 +15,13 @@ const {
 } = require('../services/eapActivityEventService');
 
 const router = express.Router();
+
+const getEapStatusByPercentual = (percentual) => {
+  const valor = Number(percentual || 0);
+  if (valor >= 100) return 'Concluída';
+  if (valor > 0) return 'Em andamento';
+  return 'Não iniciada';
+};
 const uploadExcelEap = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
@@ -707,6 +714,7 @@ router.get('/projeto/:projetoId', auth, async (req, res) => {
         copy.executado_agregado = Math.round((executado + 0.000001) * 100) / 100;
         copy.percentual_agregado = percentual_agregado;
       }
+      copy.status = getEapStatusByPercentual(copy.percentual_executado);
       return copy;
     });
 
@@ -1061,8 +1069,10 @@ router.put('/:id', auth, async (req, res) => {
         novoPerc = Math.min((somaPerc?.total_exec_perc || 0), 100);
       }
 
-      await runQuery('UPDATE atividades_eap SET percentual_executado = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?', [novoPerc, id]);
-      await atualizarStatusAtividade(id);
+      await runQuery(
+        'UPDATE atividades_eap SET percentual_executado = ?, status = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+        [novoPerc, getEapStatusByPercentual(novoPerc), id]
+      );
 
       // Atualizar o último RDO (mais recente por data_relatorio) com novo percentual da atividade
       const lastRa = await getQuery(`
@@ -1130,14 +1140,7 @@ const atualizarStatusAtividade = async (atividadeId) => {
     [atividadeId]
   );
 
-  let novoStatus;
-  if (atividade.percentual_executado === 0) {
-    novoStatus = 'Não iniciada';
-  } else if (atividade.percentual_executado >= 100) {
-    novoStatus = 'Concluída';
-  } else {
-    novoStatus = 'Em andamento';
-  }
+  const novoStatus = getEapStatusByPercentual(atividade.percentual_executado);
 
   await runQuery(
     'UPDATE atividades_eap SET status = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
@@ -1184,8 +1187,10 @@ const recalcularPercentualPaiLocal = async (atividadeId) => {
       novoPerc = Math.min(Math.round((somaSimples / filhos.length) * 100) / 100, 100);
     }
 
-    await runQuery('UPDATE atividades_eap SET percentual_executado = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?', [novoPerc, paiId]);
-    await atualizarStatusAtividade(paiId);
+    await runQuery(
+      'UPDATE atividades_eap SET percentual_executado = ?, status = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+      [novoPerc, getEapStatusByPercentual(novoPerc), paiId]
+    );
 
     // Recalcular ancestral recursivamente
     await recalcularPercentualPaiLocal(paiId);
@@ -1317,11 +1322,9 @@ router.post('/:id/recalcular', auth, async (req, res) => {
     const percentualExecutado = Math.min(resultado.total_executado, 100);
 
     await runQuery(
-      'UPDATE atividades_eap SET percentual_executado = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
-      [percentualExecutado, id]
+      'UPDATE atividades_eap SET percentual_executado = ?, status = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+      [percentualExecutado, getEapStatusByPercentual(percentualExecutado), id]
     );
-
-    await atualizarStatusAtividade(id);
 
     await registrarAuditoria('atividades_eap', id, 'RECALCULAR', null, { percentual_executado: percentualExecutado }, req.usuario.id);
     const mudouPercentual = Math.abs(Number(atividadeAtual?.percentual_executado || 0) - Number(percentualExecutado || 0)) > 0.0001;
@@ -1461,8 +1464,10 @@ router.post('/projeto/:projetoId/recalcular-tudo', [auth, isGestor], async (req,
         atividadesImpactadas.push(a.id);
       }
 
-      await runQuery('UPDATE atividades_eap SET percentual_executado = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?', [novoPerc, a.id]);
-      await atualizarStatusAtividade(a.id);
+      await runQuery(
+        'UPDATE atividades_eap SET percentual_executado = ?, status = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+        [novoPerc, getEapStatusByPercentual(novoPerc), a.id]
+      );
 
       // Após atualizar folha/filha, propagar cálculo para os pais
       await recalcularPercentualPaiLocal(a.id);
