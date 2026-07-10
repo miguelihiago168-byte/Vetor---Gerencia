@@ -63,22 +63,23 @@ export default function CotacoesFinalizadas() {
       </p>
 
       {/* Resumo */}
-      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+      <div className="suprimentos-kpi-grid">
         {[
           { label: 'Itens comprados', valor: itensFiltrados.length, cls: 'badge badge-blue' },
           { label: 'Valor total gasto', valor: fmt(totalGasto), cls: 'badge badge-green' },
           { label: 'Economia média', valor: `${economiaMedia.toFixed(1)}%`, cls: 'badge badge-yellow' },
           { label: 'Requisições encerradas', valor: reqsFiltradas.length, cls: 'badge badge-gray' },
         ].map((c) => (
-          <div key={c.label} className="card" style={{ flex: '1 1 160px', padding: '1rem' }}>
-            <p style={{ margin: 0, color: 'var(--gray-400)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{c.label}</p>
-            <p style={{ margin: '0.3rem 0 0', fontWeight: 700, fontSize: '1.25rem', color: 'var(--text-primary)' }}>{c.valor}</p>
+          <div key={c.label} className="card suprimentos-kpi-card">
+            <p className="suprimentos-kpi-label">{c.label}</p>
+            <p className="suprimentos-kpi-value">{c.valor}</p>
           </div>
         ))}
       </div>
 
       {/* Filtros */}
-      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+      <div className="card suprimentos-filter-card">
+      <div className="suprimentos-filter-row">
         <input className="form-input" style={{ flex: 1, minWidth: 200 }} placeholder="Buscar item, requisição ou fornecedor..." value={busca} onChange={(e) => setBusca(e.target.value)} />
         {!projetoId && (
           <select className="form-input" style={{ width: 'auto' }} value={filtros.projeto_id} onChange={(e) => setFiltros({ ...filtros, projeto_id: e.target.value })}>
@@ -87,15 +88,16 @@ export default function CotacoesFinalizadas() {
           </select>
         )}
       </div>
+      </div>
 
       {loading ? (
-        <div className="card" style={{ padding: '3rem', textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+        <div className="card suprimentos-empty-card"><div className="spinner" style={{ margin: '0 auto' }} /></div>
       ) : (
         <>
           {/* ── Seção: Requisições encerradas ── */}
           {reqsFiltradas.length > 0 && (
             <div style={{ marginBottom: '2rem' }}>
-              <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <h3 className="suprimentos-section-title">
                 Requisições encerradas ({reqsFiltradas.length})
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -104,7 +106,7 @@ export default function CotacoesFinalizadas() {
                   return (
                     <div
                       key={r.id}
-                      className="card"
+                      className="card suprimentos-request-card"
                       style={{ padding: '0.75rem 1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', flexWrap: 'wrap' }}
                       onClick={() => irParaReq(r.id)}
                     >
@@ -122,13 +124,13 @@ export default function CotacoesFinalizadas() {
           )}
 
           {/* ── Seção: Itens comprados ── */}
-          <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <h3 className="suprimentos-section-title">
             Itens comprados ({itensFiltrados.length})
           </h3>
           {itensFiltrados.length === 0 ? (
-            <div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--gray-400)' }}>Nenhuma compra finalizada encontrada.</div>
+            <div className="card suprimentos-empty-card">Nenhuma compra finalizada encontrada.</div>
           ) : (
-            <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
+            <div className="card suprimentos-table-card" style={{ overflowX: 'auto' }}>
               <table className="table" style={{ margin: 0 }}>
                 <thead>
                   <tr>

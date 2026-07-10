@@ -28,7 +28,7 @@ const STATUS_REQ_BADGE = {
   'Compra autorizada': 'badge badge-green', 'Finalizada': 'badge badge-green',
   'Encerrada sem compra': 'badge badge-red',
 };
-const URGENCIA_COLOR = { Normal: '#64748b', Urgente: '#d97706', Emergencial: '#dc2626' };
+const URGENCIA_COLOR = { Normal: '#5b6472', Urgente: '#b76b08', Emergencial: '#c83a3a' };
 
 const fmt = (v) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—';
 
@@ -332,15 +332,16 @@ export default function RequisicaoDetalhe() {
       </p>
 
       {/* Cabeçalho */}
-      <div className="card" style={{ padding: '1.25rem', marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem', alignItems: 'flex-start' }}>
+      <div className="card suprimentos-detail-card suprimentos-detail-summary" style={{ marginBottom: '1.5rem' }}>
+        <div className="suprimentos-detail-summary-main">
           <div>
-            <h2 style={{ margin: 0, fontSize: '1.1rem' }}>{req.tipo_material}</h2>
-            <p style={{ margin: '0.3rem 0 0', color: 'var(--gray-500)', fontSize: '0.88rem' }}>
+            <p className="suprimentos-eyebrow">Solicitação de compra</p>
+            <h2 className="suprimentos-detail-title">{req.tipo_material}</h2>
+            <p className="suprimentos-muted-line">
               {req.projeto_nome || `Obra #${req.projeto_id}`}
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div className="suprimentos-status-cluster">
             <span className={URGENCIA_BADGE[req.urgencia] || 'badge badge-gray'} style={{ color: URGENCIA_COLOR[req.urgencia] || undefined }}>{req.urgencia}</span>
             <span className={STATUS_REQ_BADGE[req.status_requisicao] || 'badge badge-gray'}>{req.status_requisicao}</span>
             {podeGestor && temAgAnalise && (
@@ -355,13 +356,28 @@ export default function RequisicaoDetalhe() {
             )}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', marginTop: '0.75rem', color: 'var(--gray-500)', fontSize: '0.84rem' }}>
-          <span>Solicitante: <strong>{req.solicitante_nome || '—'}</strong></span>
-          {req.centro_custo && <span>CC: <strong>{req.centro_custo}</strong></span>}
-          <span>{fmtData(req.criado_em)}</span>
+        <div className="suprimentos-meta-grid">
+          <div className="suprimentos-meta-item">
+            <small>Solicitante</small>
+            <strong>{req.solicitante_nome || '—'}</strong>
+          </div>
+          {req.centro_custo && (
+            <div className="suprimentos-meta-item">
+              <small>Centro de custo</small>
+              <strong>{req.centro_custo}</strong>
+            </div>
+          )}
+          <div className="suprimentos-meta-item">
+            <small>Data</small>
+            <strong>{fmtData(req.criado_em)}</strong>
+          </div>
+          <div className="suprimentos-meta-item">
+            <small>Itens ativos</small>
+            <strong>{itensAtivos.length}</strong>
+          </div>
         </div>
         {req.observacao_geral && (
-          <p style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'var(--gray-50)', borderRadius: 8, fontSize: '0.88rem', color: 'var(--gray-600)', margin: '0.75rem 0 0', border: '1px solid var(--border-default)' }}>
+          <p className="suprimentos-note">
             {req.observacao_geral}
           </p>
         )}
@@ -401,7 +417,7 @@ export default function RequisicaoDetalhe() {
             Itens Negados / Cancelados ({itensNegados.length})
           </summary>
           {itensNegados.map((item, idx) => (
-            <div key={item.id} className="card" style={{ padding: '1rem 1.25rem', marginBottom: '0.75rem', borderLeft: '4px solid #fca5a5', opacity: 0.85 }}>
+            <div key={item.id} className="card suprimentos-detail-card suprimentos-item-card" style={{ marginBottom: '0.75rem', opacity: 0.85 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <div>
                   <span style={{ color: 'var(--gray-400)', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase' }}>Item {itensAtivos.length + idx + 1}</span>
@@ -426,7 +442,7 @@ export default function RequisicaoDetalhe() {
           <summary style={{ cursor: 'pointer', color: 'var(--gray-500)', fontSize: '0.9rem', fontWeight: 600, userSelect: 'none', marginBottom: '0.5rem' }}>
             Histórico de alterações ({historico.length})
           </summary>
-          <div className="card" style={{ padding: '1rem', marginTop: '0.5rem' }}>
+          <div className="card suprimentos-history-card" style={{ marginTop: '0.5rem' }}>
             {historico.map((h) => {
               let detalhes = null;
               try { detalhes = h.detalhes ? JSON.parse(h.detalhes) : null; } catch (_) {}
@@ -791,17 +807,8 @@ export default function RequisicaoDetalhe() {
 
       {/* Toast discreto */}
       {toast && (
-        <div style={{
-          position: 'fixed', bottom: '1.5rem', right: '1.5rem', zIndex: 9999,
-          background: 'var(--card-bg, #fff)', border: '1px solid var(--gray-200)',
-          borderLeft: '4px solid var(--badge-blue-color, #3b82f6)',
-          borderRadius: 8, padding: '0.75rem 1.1rem',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-          fontSize: '0.88rem', color: 'var(--text-primary)',
-          display: 'flex', alignItems: 'center', gap: '0.6rem',
-          animation: 'fadeIn 0.2s ease',
-        }}>
-          <span>ℹ️</span> {toast.msg}
+        <div className="suprimentos-toast">
+          <span>Info</span> {toast.msg}
         </div>
       )}
     </ComprasLayout>
@@ -820,42 +827,57 @@ function ItemCard({ item, idx, perfil, podeGestor, podeCotar, podeComprar, isSol
   const podeCorrigir = isSolicitante && item.status_item === 'Correção solicitada';
 
   return (
-    <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
+    <div className="card suprimentos-detail-card suprimentos-item-card" style={{ marginBottom: '1rem' }}>
       {/* Cabeçalho */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
+      <div className="suprimentos-item-header">
         <div>
-          <span style={{ color: 'var(--gray-400)', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Item {idx + 1}</span>
-          <h4 style={{ margin: '0.2rem 0 0', fontSize: '1rem' }}>{item.descricao}</h4>
-          <span style={{ color: 'var(--gray-500)', fontSize: '0.85rem' }}>{item.quantidade} {item.unidade || ''}</span>
+          <p className="suprimentos-eyebrow">Item {idx + 1}</p>
+          <h4 className="suprimentos-item-title">{item.descricao}</h4>
           {item.quantidade_original != null && (
-            <p style={{ fontSize: '0.78rem', color: 'var(--badge-yellow-color)', margin: '0.25rem 0 0' }}>
-              ⚠ Alterado de {item.quantidade_original} {item.unidade || ''} para {item.quantidade} {item.unidade || ''} em {fmtData(item.alterado_em)} por {item.alterado_por_nome}
+            <p className="suprimentos-muted-line" style={{ fontSize: '0.78rem' }}>
+              Alterado de {item.quantidade_original} {item.unidade || ''} para {item.quantidade} {item.unidade || ''} em {fmtData(item.alterado_em)} por {item.alterado_por_nome}
             </p>
           )}
         </div>
-        <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          {!!item.impacto_cronograma && <span className="badge badge-yellow">⏱ Cronograma</span>}
-          {!!item.impacto_seguranca  && <span className="badge badge-red">⚠ Segurança</span>}
-          {!!item.impacto_qualidade  && <span className="badge badge-blue">★ Qualidade</span>}
+        <div className="suprimentos-item-flags">
+          {!!item.impacto_cronograma && <span className="badge badge-yellow">Cronograma</span>}
+          {!!item.impacto_seguranca  && <span className="badge badge-red">Segurança</span>}
+          {!!item.impacto_qualidade  && <span className="badge badge-blue">Qualidade</span>}
           <span className={STATUS_ITEM_BADGE[item.status_item] || 'badge badge-gray'}>{item.status_item}</span>
         </div>
       </div>
 
-      {item.especificacao_tecnica && <p style={{ color: 'var(--gray-600)', fontSize: '0.84rem', margin: '0 0 0.4rem' }}><strong>Especificação:</strong> {item.especificacao_tecnica}</p>}
-      {item.justificativa         && <p style={{ color: 'var(--gray-600)', fontSize: '0.84rem', margin: '0 0 0.4rem' }}><strong>Justificativa:</strong> {item.justificativa}</p>}
+      <div className="suprimentos-item-meta-grid">
+        <div className="suprimentos-meta-item">
+          <small>Quantidade</small>
+          <strong>{item.quantidade} {item.unidade || ''}</strong>
+        </div>
+        {item.especificacao_tecnica && (
+          <div className="suprimentos-meta-item">
+            <small>Especificação</small>
+            <span>{item.especificacao_tecnica}</span>
+          </div>
+        )}
+        {item.justificativa && (
+          <div className="suprimentos-meta-item">
+            <small>Justificativa</small>
+            <span>{item.justificativa}</span>
+          </div>
+        )}
+      </div>
       {item.status_item === 'Correção solicitada' && item.motivo_reprovacao && (
-        <p style={{ color: 'var(--badge-yellow-color)', background: 'var(--badge-yellow-bg)', border: '1px solid var(--badge-yellow-color)', borderRadius: 8, padding: '0.65rem 0.75rem', fontSize: '0.84rem', margin: '0.75rem 0 0' }}>
+        <p className="suprimentos-alert-note">
           <strong>Correção solicitada:</strong> {item.motivo_reprovacao}
         </p>
       )}
 
       {/* Cotações */}
       {temCotacoes && (
-        <div style={{ marginTop: '1rem', borderTop: '1px solid var(--gray-100)', paddingTop: '0.75rem' }}>
-          <p style={{ fontSize: '0.76rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--gray-400)', margin: '0 0 0.5rem', letterSpacing: '0.05em' }}>
+        <div className="suprimentos-quote-section">
+          <p className="suprimentos-section-title">
             Cotações ({item.cotacoes.length}/3)
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '0.5rem' }}>
+          <div className="suprimentos-quote-grid">
             {(() => {
               const totais = item.cotacoes.map(c => (item.quantidade * Number(c.valor_unitario)) + Number(c.frete || 0));
               const menorTotal = Math.min(...totais);
@@ -863,21 +885,17 @@ function ItemCard({ item, idx, perfil, podeGestor, podeCotar, podeComprar, isSol
               const total = totais[cidx];
               const isMenor = !cot.selecionada && total === menorTotal;
               return (
-                <div key={cot.id} style={{
-                  background: cot.selecionada ? 'var(--badge-green-bg)' : (isMenor ? 'var(--badge-yellow-bg)' : 'var(--gray-50)'),
-                  border: cot.selecionada ? '2px solid var(--badge-green-color)' : (isMenor ? '2px solid var(--badge-yellow-color)' : '1px solid var(--border-default)'),
-                  borderRadius: 8, padding: '0.7rem 1rem',
-                }}>
-                  <div style={{ fontWeight: 600, color: cot.selecionada ? 'var(--badge-green-color)' : (isMenor ? 'var(--badge-yellow-color)' : 'var(--text-primary)'), fontSize: '0.9rem', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                <div key={cot.id} className={`suprimentos-quote-card${cot.selecionada ? ' is-selected' : ''}${isMenor ? ' is-cheapest' : ''}`}>
+                  <div className="suprimentos-quote-title">
                     <span>{cot.fornecedor_nome || '—'}</span>
-                    {!!cot.selecionada && <span className="badge badge-green" style={{ fontSize: '0.72rem' }}>✓ Selecionada</span>}
-                    {isMenor && <span style={{ fontSize: '0.72rem', background: 'var(--badge-yellow-bg)', color: 'var(--badge-yellow-color)', border: '1px solid var(--badge-yellow-color)', borderRadius: 4, padding: '1px 6px', fontWeight: 700, whiteSpace: 'nowrap' }}>⭐ Menor preço</span>}
+                    {!!cot.selecionada && <span className="badge badge-green" style={{ fontSize: '0.72rem' }}>Selecionada</span>}
+                    {isMenor && <span className="badge badge-yellow" style={{ fontSize: '0.72rem' }}>Menor preço</span>}
                   </div>
-                  {cot.cnpj && <div style={{ color: 'var(--gray-400)', fontSize: '0.77rem' }}>{cot.cnpj}</div>}
-                  <div style={{ color: 'var(--gray-500)', fontSize: '0.82rem', marginTop: '0.3rem' }}>
-                    <strong style={{ color: cot.selecionada ? 'var(--badge-green-color)' : (isMenor ? 'var(--badge-yellow-color)' : 'var(--badge-green-color)') }}>{fmt(cot.valor_unitario)}</strong>/un
+                  {cot.cnpj && <div className="suprimentos-muted-line" style={{ fontSize: '0.77rem' }}>{cot.cnpj}</div>}
+                  <div className="suprimentos-quote-meta">
+                    <span className="suprimentos-money">{fmt(cot.valor_unitario)}</span>/un
                     {cot.frete > 0 && <span> · Frete: {fmt(cot.frete)}</span>}
-                    <span style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: cot.selecionada ? 'var(--badge-green-color)' : (isMenor ? 'var(--badge-yellow-color)' : 'var(--text-primary)'), marginTop: '0.2rem' }}>
+                    <span style={{ display: 'block', marginTop: 2 }}>
                       Total c/ frete: {fmt(total)}
                     </span>
                     {cot.prazo_entrega && <span> · Entrega: {cot.prazo_entrega}</span>}
@@ -897,7 +915,7 @@ function ItemCard({ item, idx, perfil, podeGestor, podeCotar, podeComprar, isSol
       )}
 
       {/* Ações */}
-      <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+      <div className="suprimentos-action-row" style={{ marginTop: '1rem' }}>
         {podeGestor && !reqFinalizada && item.status_item === 'Aguardando análise' && (
           <button className="btn btn-soft-green" style={{ padding: '6px 14px', fontSize: '0.85rem' }} onClick={onAnalisar}>
             Analisar Item

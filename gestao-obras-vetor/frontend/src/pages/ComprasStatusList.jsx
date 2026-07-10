@@ -26,14 +26,14 @@ const ACAO_MAP = {
 };
 
 const URG_ROW = {
-  Emergencial: { background: '#fee2e2', borderLeft: '3px solid #ef4444' },
-  Urgente:     { background: '#fef3c7', borderLeft: '3px solid #fbbf24' },
+  Emergencial: { background: 'var(--card-bg)', borderLeft: '3px solid #f0c4c4' },
+  Urgente:     { background: 'var(--card-bg)', borderLeft: '3px solid #ead7b5' },
   Normal:      { background: 'var(--card-bg)', borderLeft: '3px solid transparent' },
 };
 const URG_BADGE = {
-  Emergencial: { background: '#fee2e2', color: '#dc2626', fontWeight: 700 },
-  Urgente:     { background: '#fef3c7', color: '#d97706', fontWeight: 700 },
-  Normal:      { background: 'var(--bg-tertiary)', color: 'var(--text-muted)', fontWeight: 600 },
+  Emergencial: { background: '#fff4f4', color: '#c83a3a', border: '1px solid #f0c4c4', fontWeight: 700 },
+  Urgente:     { background: '#fff9ed', color: '#b76b08', border: '1px solid #ead7b5', fontWeight: 700 },
+  Normal:      { background: 'var(--bg-tertiary)', color: 'var(--text-muted)', border: '1px solid var(--border-default)', fontWeight: 600 },
 };
 
 const diasDesde = (iso) => {

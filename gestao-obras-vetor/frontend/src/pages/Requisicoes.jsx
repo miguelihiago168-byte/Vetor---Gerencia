@@ -120,8 +120,8 @@ export default function Requisicoes() {
       {projeto && <p style={{ marginTop: -8, marginBottom: 16, color: 'var(--gray-500)', fontSize: '0.88rem' }}>Projeto: <strong>{projeto.nome}</strong></p>}
 
       {/* Filtros */}
-      <div className="card" style={{ padding: '1rem 1.25rem', marginBottom: '1.25rem' }}>
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+      <div className="card suprimentos-filter-card">
+        <div className="suprimentos-filter-row">
           <select className="form-input" style={{ flex: 1, minWidth: 160 }} value={filtros.tipo_material} onChange={(e) => setFiltros({ ...filtros, tipo_material: e.target.value })}>
             <option value="">Todos os tipos</option>
             {TIPOS_MATERIAL.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -142,18 +142,18 @@ export default function Requisicoes() {
 
       {/* Lista */}
       {loading ? (
-        <div className="card" style={{ padding: '3rem', textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto 1rem' }} />Carregando...</div>
+        <div className="card suprimentos-empty-card"><div className="spinner" style={{ margin: '0 auto 1rem' }} />Carregando...</div>
       ) : requisicoes.length === 0 ? (
-        <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray-500)' }}>
+        <div className="card suprimentos-empty-card">
           <p>Nenhuma requisição encontrada.</p>
           {podeCriar && <p style={{ fontSize: '0.9rem' }}>Clique em "+ Nova Requisição" para iniciar.</p>}
         </div>
       ) : (
         <div style={{ display: 'grid', gap: '0.75rem' }}>
           {requisicoes.map((r) => (
-            <div key={r.id} className="card" style={{ padding: '1rem 1.25rem', cursor: 'pointer' }}
+            <div key={r.id} className="card suprimentos-request-card" style={{ padding: '1rem 1.25rem', cursor: 'pointer' }}
               onClick={() => irParaDetalhe(r)}
-              onMouseEnter={(e) => e.currentTarget.style.boxShadow = '0 4px 20px rgba(14,165,233,0.15)'}
+              onMouseEnter={(e) => e.currentTarget.style.boxShadow = '0 12px 28px rgba(16,21,31,0.08)'}
               onMouseLeave={(e) => e.currentTarget.style.boxShadow = ''}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
@@ -170,12 +170,12 @@ export default function Requisicoes() {
                   <span className={STATUS_BADGE[r.status_requisicao] || 'badge badge-gray'}>{r.status_requisicao}</span>
                 </div>
               </div>
-              <div style={{ marginTop: '0.65rem', display: 'flex', gap: '1.25rem', color: 'var(--gray-500)', fontSize: '0.83rem', flexWrap: 'wrap' }}>
-                <span>Solicitante: <strong>{r.solicitante_nome || '—'}</strong></span>
-                <span>Itens: <strong>{r.total_itens}</strong></span>
-                <span style={{ color: '#047857' }}>Comprados: <strong>{r.itens_comprados}</strong></span>
-                <span style={{ color: '#b91c1c' }}>Reprovados: <strong>{r.itens_reprovados}</strong></span>
-                <span>{new Date(r.criado_em).toLocaleDateString('pt-BR')}</span>
+              <div className="suprimentos-meta-grid" style={{ marginTop: '0.8rem' }}>
+                <div className="suprimentos-meta-item"><small>Solicitante</small><strong>{r.solicitante_nome || '—'}</strong></div>
+                <div className="suprimentos-meta-item"><small>Itens</small><strong>{r.total_itens}</strong></div>
+                <div className="suprimentos-meta-item"><small>Comprados</small><strong>{r.itens_comprados}</strong></div>
+                <div className="suprimentos-meta-item"><small>Reprovados</small><strong>{r.itens_reprovados}</strong></div>
+                <div className="suprimentos-meta-item"><small>Data</small><strong>{new Date(r.criado_em).toLocaleDateString('pt-BR')}</strong></div>
               </div>
             </div>
           ))}
