@@ -40,21 +40,22 @@ export default function CotacoesNegadas() {
       </p>
 
       {/* Resumo */}
-      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+      <div className="suprimentos-kpi-grid">
         {[
           { label: 'Total negados',    valor: itensFiltrados.length },
           { label: 'Reprovados',       valor: totalReprovados },
           { label: 'Cancelados',       valor: totalCancelados },
         ].map((c) => (
-          <div key={c.label} className="card" style={{ flex: '1 1 140px', padding: '1rem' }}>
-            <p style={{ margin: 0, color: 'var(--gray-400)', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{c.label}</p>
-            <p style={{ margin: '0.3rem 0 0', fontWeight: 700, fontSize: '1.25rem', color: 'var(--secondary)' }}>{c.valor}</p>
+          <div key={c.label} className="card suprimentos-kpi-card">
+            <p className="suprimentos-kpi-label">{c.label}</p>
+            <p className="suprimentos-kpi-value">{c.valor}</p>
           </div>
         ))}
       </div>
 
       {/* Filtros */}
-      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+      <div className="card suprimentos-filter-card">
+      <div className="suprimentos-filter-row">
         <input className="form-input" style={{ flex: 1, minWidth: 200 }} placeholder="Buscar por descrição..." value={busca} onChange={(e) => setBusca(e.target.value)} />
         <select className="form-input" style={{ width: 'auto' }} value={filtros.projeto_id} onChange={(e) => setFiltros({ ...filtros, projeto_id: e.target.value })}>
           <option value="">Todas as obras</option>
@@ -66,14 +67,15 @@ export default function CotacoesNegadas() {
           <option value="Cancelado">Apenas Cancelados</option>
         </select>
       </div>
+      </div>
 
       {/* Tabela */}
       {loading ? (
-        <div className="card" style={{ padding: '3rem', textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+        <div className="card suprimentos-empty-card"><div className="spinner" style={{ margin: '0 auto' }} /></div>
       ) : itensFiltrados.length === 0 ? (
-        <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray-400)' }}>Nenhum item negado encontrado.</div>
+        <div className="card suprimentos-empty-card">Nenhum item negado encontrado.</div>
       ) : (
-        <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
+        <div className="card suprimentos-table-card" style={{ overflowX: 'auto' }}>
           <table className="table" style={{ margin: 0 }}>
             <thead>
               <tr>
@@ -93,7 +95,7 @@ export default function CotacoesNegadas() {
                   </td>
                   <td style={{ maxWidth: 260 }}>
                     {i.motivo_reprovacao
-                      ? <span style={{ color: 'var(--danger)', fontSize: '0.85rem' }}>{i.motivo_reprovacao}</span>
+                      ? <span style={{ color: 'var(--sup-muted)', fontSize: '0.85rem' }}>{i.motivo_reprovacao}</span>
                       : <span style={{ color: 'var(--gray-400)' }}>—</span>}
                   </td>
                   <td><span className={i.urgencia === 'Emergencial' ? 'badge badge-red' : i.urgencia === 'Urgente' ? 'badge badge-yellow' : 'badge badge-gray'}>{i.urgencia}</span></td>

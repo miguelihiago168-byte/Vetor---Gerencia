@@ -98,8 +98,8 @@ export default function Fornecedores() {
       </p>
 
       {/* Filtros */}
-      <div className="card" style={{ padding: '1rem 1.25rem', marginBottom: '1.25rem' }}>
-        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+      <div className="card suprimentos-filter-card">
+        <div className="suprimentos-filter-row">
           <input
             type="text"
             className="form-input"
@@ -117,14 +117,14 @@ export default function Fornecedores() {
 
       {/* Tabela */}
       {loading ? (
-        <div className="card" style={{ padding: '3rem', textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto 1rem' }} />Carregando...</div>
+        <div className="card suprimentos-empty-card"><div className="spinner" style={{ margin: '0 auto 1rem' }} />Carregando...</div>
       ) : fornecedores.length === 0 ? (
-        <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray-500)' }}>
+        <div className="card suprimentos-empty-card">
           <p>Nenhum fornecedor encontrado.</p>
           {podeGerenciar && <p style={{ fontSize: '0.9rem' }}>Clique em "+ Novo Fornecedor" para cadastrar.</p>}
         </div>
       ) : (
-        <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
+        <div className="card suprimentos-table-card">
           <div style={{ overflowX: 'auto' }}>
             <table className="table" style={{ margin: 0 }}>
               <thead>

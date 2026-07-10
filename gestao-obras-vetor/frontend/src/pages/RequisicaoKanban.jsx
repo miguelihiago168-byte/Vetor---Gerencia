@@ -37,20 +37,20 @@ const TRANSICOES = {
 };
 
 const COL_CONFIG = {
-  solicitado:    { cor: '#64748b', bg: '#f1f5f9' },
-  em_cotacao:    { cor: '#0ea5e9', bg: '#e0f2fe' },
-  cot_recebidas: { cor: '#6366f1', bg: '#ede9fe' },
-  ag_aprovacao:  { cor: '#f59e0b', bg: '#fef3c7' },
-  liberado:      { cor: '#10b981', bg: '#d1fae5' },
-  comprado:      { cor: '#22c55e', bg: '#dcfce7' },
+  solicitado:    { cor: '#5b6472', bg: '#f8fafc' },
+  em_cotacao:    { cor: '#2450e3', bg: '#f3f6ff' },
+  cot_recebidas: { cor: '#42526b', bg: '#f8fafc' },
+  ag_aprovacao:  { cor: '#dc8a0e', bg: '#fff9ed' },
+  liberado:      { cor: '#0e8f5a', bg: '#f3fbf7' },
+  comprado:      { cor: '#0ea968', bg: '#f3fbf7' },
 };
 
 const WIP = { em_cotacao: 15, cot_recebidas: 20, ag_aprovacao: 10, liberado: 8 };
 
 const URG_STYLE = {
-  Normal:      { color: '#64748b', bg: '#f1f5f9', border: '#cbd5e1' },
-  Urgente:     { color: '#d97706', bg: '#fef3c7', border: '#fbbf24' },
-  Emergencial: { color: '#dc2626', bg: '#fee2e2', border: '#ef4444' },
+  Normal:      { color: '#5b6472', bg: '#f8fafc', border: '#dbe2eb' },
+  Urgente:     { color: '#b76b08', bg: '#fff9ed', border: '#ead7b5' },
+  Emergencial: { color: '#c83a3a', bg: '#fff4f4', border: '#f0c4c4' },
 };
 
 const fmt = (v) =>
@@ -80,8 +80,8 @@ function agruparCards(cards) {
     return !d || new Date(d).toDateString() !== hoje;
   });
   return [
-    { key: 'emerg',   label: 'Emergenciais', cards: emerg,   dot: '#ef4444' },
-    { key: 'hoje',    label: 'Hoje',         cards: deHoje,  dot: '#0ea5e9' },
+    { key: 'emerg',   label: 'Emergenciais', cards: emerg,   dot: '#e14848' },
+    { key: 'hoje',    label: 'Hoje',         cards: deHoje,  dot: '#2450e3' },
     { key: 'antigas', label: 'Anteriores',   cards: antigas, dot: '#94a3b8' },
   ].filter(g => g.cards.length > 0);
 }
@@ -96,8 +96,8 @@ function DroppableColumn({ id, children, isOver }) {
         minHeight: 120,
         borderRadius: 12,
         transition: 'background 0.18s',
-        background: isOver ? 'rgba(99,102,241,0.06)' : 'transparent',
-        outline: isOver ? '2px dashed #6366f1' : '2px dashed transparent',
+        background: isOver ? 'rgba(36,80,227,0.05)' : 'transparent',
+        outline: isOver ? '2px dashed #c8d2df' : '2px dashed transparent',
       }}
     >
       {children}
@@ -120,26 +120,27 @@ function DraggableCard({ req, colId, projetoId, onAprovar, canDrag }) {
       {...(canDrag ? { ...listeners, ...attributes } : {})}
       style={{
         background: '#fff',
-        borderRadius: 10,
-        border: '1px solid #e2e8f0',
-        borderLeft: `4px solid ${urg.border}`,
+        borderRadius: 12,
+        border: '1px solid #dbe2eb',
+        borderLeft: `3px solid ${urg.border}`,
         padding: '0.85rem',
         opacity: isDragging ? 0.45 : 1,
         cursor: canDrag ? 'grab' : 'default',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        boxShadow: '0 10px 28px rgba(16,21,31,0.04)',
         transition: 'box-shadow 0.15s, opacity 0.15s',
         userSelect: 'none',
       }}
-      onMouseEnter={(e) => { if (!isDragging) e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)'; }}
-      onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.06)'; }}
+      onMouseEnter={(e) => { if (!isDragging) e.currentTarget.style.boxShadow = '0 12px 26px rgba(16,21,31,0.08)'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.boxShadow = '0 10px 28px rgba(16,21,31,0.04)'; }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
         <span style={{ fontWeight: 700, fontSize: '0.82rem', color: '#1e293b', fontFamily: 'monospace' }}>
           {req.numero_requisicao}
         </span>
         <span style={{
-          fontSize: '0.68rem', fontWeight: 600, borderRadius: 99,
+          fontSize: '0.68rem', fontWeight: 700, borderRadius: 99,
           padding: '2px 8px', color: urg.color, background: urg.bg,
+          border: `1px solid ${urg.border}`,
           flexShrink: 0, marginLeft: 6,
         }}>
           {req.urgencia}
@@ -169,7 +170,7 @@ function DraggableCard({ req, colId, projetoId, onAprovar, canDrag }) {
       </div>
 
       {req.fornecedor_selecionado && (
-        <div style={{ fontSize: '0.74rem', color: '#059669', background: '#d1fae5', borderRadius: 6, padding: '3px 8px', marginBottom: 6, fontWeight: 600 }}>
+        <div style={{ fontSize: '0.74rem', color: '#0e8f5a', background: '#f3fbf7', border: '1px solid #cdebdc', borderRadius: 6, padding: '3px 8px', marginBottom: 6, fontWeight: 600 }}>
           {'\u2713'} {req.fornecedor_selecionado}
         </div>
       )}
@@ -224,7 +225,7 @@ function CompactRow({ req, colId, projetoId, onAprovar, canDrag }) {
       style={{
         display: 'flex', alignItems: 'center', gap: 6,
         padding: '4px 8px', borderRadius: 7,
-        background: '#fafafa', border: '1px solid #e2e8f0',
+        background: '#fff', border: '1px solid #dbe2eb',
         borderLeft: `3px solid ${urg.border}`,
         opacity: isDragging ? 0.4 : 1,
         cursor: canDrag ? 'grab' : 'pointer',
@@ -236,11 +237,11 @@ function CompactRow({ req, colId, projetoId, onAprovar, canDrag }) {
       <span style={{ color: '#64748b', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{req.tipo_material}</span>
       <span style={{ fontWeight: 700, color: '#1e293b', flexShrink: 0 }}>{fmt(req.valor_total)}</span>
       <span style={{ color: '#94a3b8', flexShrink: 0 }}>{req.total_itens}i</span>
-      <span style={{ fontSize: '0.66rem', fontWeight: 700, borderRadius: 99, padding: '1px 6px', color: urg.color, background: urg.bg, flexShrink: 0 }}>{urgSig}</span>
+      <span style={{ fontSize: '0.66rem', fontWeight: 700, borderRadius: 99, padding: '1px 6px', color: urg.color, background: urg.bg, border: `1px solid ${urg.border}`, flexShrink: 0 }}>{urgSig}</span>
       {colId === 'ag_aprovacao' && (
         <button
           onClick={(e) => { e.stopPropagation(); onAprovar(req.id); }}
-          style={{ flexShrink: 0, background: '#d1fae5', border: 'none', borderRadius: 5, padding: '2px 6px', fontSize: '0.65rem', color: '#059669', cursor: 'pointer', fontWeight: 700 }}
+          style={{ flexShrink: 0, background: '#f3fbf7', border: '1px solid #cdebdc', borderRadius: 5, padding: '2px 6px', fontSize: '0.65rem', color: '#0e8f5a', cursor: 'pointer', fontWeight: 700 }}
         >Aprov</button>
       )}
     </div>
@@ -251,9 +252,9 @@ const btnStyle = (color) => ({
   display: 'flex', alignItems: 'center', gap: 3,
   fontSize: '0.71rem', fontWeight: 600,
   padding: '3px 8px', borderRadius: 6,
-  border: `1px solid ${color}30`,
-  background: `${color}12`,
-  color,
+  border: '1px solid #dbe2eb',
+  background: '#f8fafc',
+  color: '#42526b',
   cursor: 'pointer',
   flex: 1, justifyContent: 'center',
 });
@@ -262,8 +263,8 @@ function GhostCard({ req }) {
   return (
     <div style={{
       width: 260, background: '#fff', borderRadius: 10,
-      border: '1px solid #6366f1', padding: '0.85rem',
-      boxShadow: '0 8px 24px rgba(99,102,241,0.25)',
+      border: '1px solid #c8d2df', padding: '0.85rem',
+      boxShadow: '0 12px 28px rgba(16,21,31,0.12)',
       opacity: 0.92,
     }}>
       <div style={{ fontWeight: 700, fontSize: '0.82rem', color: '#1e293b', fontFamily: 'monospace' }}>
@@ -287,7 +288,7 @@ function ConfirmModal({ req, colFrom, colTo, onConfirm, onCancel, loading }) {
         <p style={{ margin: 0, marginBottom: 16, fontSize: '0.88rem', color: '#475569' }}>
           <span style={{ background: '#f1f5f9', padding: '2px 8px', borderRadius: 6 }}>{colFrom}</span>
           {' \u2192 '}
-          <span style={{ background: '#d1fae5', padding: '2px 8px', borderRadius: 6, color: '#059669', fontWeight: 600 }}>{colTo}</span>
+          <span style={{ background: '#f3fbf7', border: '1px solid #cdebdc', padding: '2px 8px', borderRadius: 6, color: '#0e8f5a', fontWeight: 600 }}>{colTo}</span>
         </p>
         <p style={{ margin: 0, marginBottom: 20, fontSize: '0.82rem', color: '#64748b' }}>
           Essa acao atualizara o status dos itens no banco de dados.
@@ -299,7 +300,7 @@ function ConfirmModal({ req, colFrom, colTo, onConfirm, onCancel, loading }) {
           <button
             onClick={onConfirm}
             disabled={loading}
-            style={{ padding: '0.5rem 1.2rem', borderRadius: 8, border: 'none', background: '#6366f1', color: '#fff', cursor: loading ? 'wait' : 'pointer', fontSize: '0.88rem', fontWeight: 600, opacity: loading ? 0.7 : 1 }}
+            style={{ padding: '0.5rem 1.2rem', borderRadius: 8, border: 'none', background: '#2450e3', color: '#fff', cursor: loading ? 'wait' : 'pointer', fontSize: '0.88rem', fontWeight: 600, opacity: loading ? 0.7 : 1 }}
           >
             {loading ? 'Aguarde...' : 'Confirmar'}
           </button>
@@ -311,10 +312,10 @@ function ConfirmModal({ req, colFrom, colTo, onConfirm, onCancel, loading }) {
 
 function PainelCard({ label, count, valor, cor }) {
   return (
-    <div style={{ background: '#fff', borderRadius: 12, padding: '1rem', border: '1px solid #e2e8f0', borderLeft: `4px solid ${cor}`, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+    <div style={{ background: '#fff', borderRadius: 12, padding: '1rem', border: '1px solid #dbe2eb', borderLeft: `3px solid ${cor}`, boxShadow: '0 10px 28px rgba(16,21,31,0.04)' }}>
       <div style={{ fontSize: '0.69rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#1e293b', lineHeight: 1.1, marginBottom: 3 }}>{count}</div>
-      <div style={{ fontSize: '0.82rem', fontWeight: 600, color: cor }}>{fmt(valor)}</div>
+      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#5b6472' }}>{fmt(valor)}</div>
     </div>
   );
 }
@@ -483,10 +484,10 @@ export default function RequisicaoKanban() {
 
       {/* Painel financeiro de compras */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(155px, 1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
-        <PainelCard label="Total Solicitado"  count={totalReqs}              valor={totalValor}                      cor="#6366f1" />
-        <PainelCard label="Em Cotação"        count={gc('em_cotacao').count}  valor={gc('em_cotacao').valor_total}   cor="#0ea5e9" />
-        <PainelCard label="Aguard. Aprovação" count={gc('ag_aprovacao').count} valor={gc('ag_aprovacao').valor_total} cor="#f59e0b" />
-        <PainelCard label="Comprado"          count={gc('comprado').count}     valor={gc('comprado').valor_total}     cor="#22c55e" />
+        <PainelCard label="Total Solicitado"  count={totalReqs}              valor={totalValor}                      cor="#2450e3" />
+        <PainelCard label="Em Cotação"        count={gc('em_cotacao').count}  valor={gc('em_cotacao').valor_total}   cor="#2450e3" />
+        <PainelCard label="Aguard. Aprovação" count={gc('ag_aprovacao').count} valor={gc('ag_aprovacao').valor_total} cor="#dc8a0e" />
+        <PainelCard label="Comprado"          count={gc('comprado').count}     valor={gc('comprado').valor_total}     cor="#0ea968" />
       </div>
 
       {/* Filtros */}
@@ -496,7 +497,7 @@ export default function RequisicaoKanban() {
             <Filter size={14} />
             Filtros
             {temFiltros && (
-              <span style={{ background: '#6366f1', color: '#fff', fontSize: '0.68rem', borderRadius: 99, padding: '1px 7px', fontWeight: 700 }}>
+              <span style={{ background: '#edf1fe', color: '#2450e3', border: '1px solid #c8d2df', fontSize: '0.68rem', borderRadius: 99, padding: '1px 7px', fontWeight: 700 }}>
                 {Object.values(filtros).filter(Boolean).length}
               </span>
             )}
@@ -504,15 +505,15 @@ export default function RequisicaoKanban() {
           </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {temFiltros && (
-              <button onClick={() => setFiltros({ tipo_material: '', urgencia: '', fornecedor: '', responsavel: '', data_inicio: '', data_fim: '', valor_max: '' })} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
+              <button onClick={() => setFiltros({ tipo_material: '', urgencia: '', fornecedor: '', responsavel: '', data_inicio: '', data_fim: '', valor_max: '' })} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', color: '#5b6472', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
                 <X size={13} /> Limpar
               </button>
             )}
             <div style={{ display: 'flex', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
-              <button onClick={() => setViewMode('normal')} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', border: 'none', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', background: viewMode === 'normal' ? '#6366f1' : '#fff', color: viewMode === 'normal' ? '#fff' : '#64748b', transition: '0.15s' }}>
+              <button onClick={() => setViewMode('normal')} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', border: 'none', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', background: viewMode === 'normal' ? '#edf1fe' : '#fff', color: viewMode === 'normal' ? '#2450e3' : '#64748b', transition: '0.15s' }}>
                 <LayoutGrid size={13} /> Cards
               </button>
-              <button onClick={() => setViewMode('compacto')} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', border: 'none', borderLeft: '1px solid #e2e8f0', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', background: viewMode === 'compacto' ? '#6366f1' : '#fff', color: viewMode === 'compacto' ? '#fff' : '#64748b', transition: '0.15s' }}>
+              <button onClick={() => setViewMode('compacto')} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', border: 'none', borderLeft: '1px solid #e2e8f0', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', background: viewMode === 'compacto' ? '#edf1fe' : '#fff', color: viewMode === 'compacto' ? '#2450e3' : '#64748b', transition: '0.15s' }}>
                 <LayoutList size={13} /> Compacto
               </button>
             </div>
@@ -573,7 +574,7 @@ export default function RequisicaoKanban() {
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.6rem' }}>
             <button
               onClick={() => setMostrarFinalizadas(v => !v)}
-              style={{ display: 'flex', alignItems: 'center', gap: 5, background: mostrarFinalizadas ? '#dcfce7' : '#f8fafc', border: `1px solid ${mostrarFinalizadas ? '#22c55e' : '#e2e8f0'}`, borderRadius: 8, padding: '4px 12px', fontSize: '0.78rem', fontWeight: 600, color: mostrarFinalizadas ? '#15803d' : '#64748b', cursor: 'pointer' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, background: mostrarFinalizadas ? '#f3fbf7' : '#f8fafc', border: `1px solid ${mostrarFinalizadas ? '#cdebdc' : '#e2e8f0'}`, borderRadius: 8, padding: '4px 12px', fontSize: '0.78rem', fontWeight: 600, color: mostrarFinalizadas ? '#0e8f5a' : '#64748b', cursor: 'pointer' }}
             >
               <Package size={13} /> {mostrarFinalizadas ? 'Ocultar finalizadas' : 'Ver finalizadas'}
             </button>
@@ -583,22 +584,22 @@ export default function RequisicaoKanban() {
               const conf = COL_CONFIG[col.id] || { cor: '#64748b', bg: '#f1f5f9' };
               return (
                 <DroppableColumn key={col.id} id={col.id} isOver={overColId === col.id}>
-                  <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid #e2e8f0', background: '#fff', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+                  <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid #dbe2eb', background: '#fff', boxShadow: '0 10px 28px rgba(16,21,31,0.04)' }}>
                     {(() => {
                       const wip = WIP[col.id];
                       const wipExcedido = wip && col.count > wip;
                       const wipPct = wip ? Math.min(100, (col.count / wip) * 100) : 0;
                       return (
-                        <div style={{ padding: '0.75rem 0.9rem', borderTop: `4px solid ${conf.cor}`, background: conf.bg, borderBottom: '1px solid #e2e8f0' }}>
+                        <div style={{ padding: '0.75rem 0.9rem', borderTop: `3px solid ${conf.cor}`, background: conf.bg, borderBottom: '1px solid #dbe2eb' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                             <span style={{ fontWeight: 700, fontSize: '0.82rem', color: '#1e293b' }}>{col.label}</span>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                               {wip && wipExcedido && (
-                                <span title={`WIP excedido (m\u00e1ximo ${wip})`} style={{ fontSize: '0.65rem', background: '#fef3c7', color: '#d97706', border: '1px solid #fbbf24', borderRadius: 99, padding: '1px 5px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 2 }}>
+                                <span title={`WIP excedido (m\u00e1ximo ${wip})`} style={{ fontSize: '0.65rem', background: '#fff9ed', color: '#b76b08', border: '1px solid #ead7b5', borderRadius: 99, padding: '1px 5px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 2 }}>
                                   <AlertTriangle size={9} /> {col.count}/{wip}
                                 </span>
                               )}
-                              <span style={{ minWidth: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 99, background: wipExcedido ? '#ef4444' : conf.cor, color: '#fff', fontSize: '0.72rem', fontWeight: 700 }}>
+                              <span style={{ minWidth: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 99, background: wipExcedido ? '#fff4f4' : '#f8fafc', border: `1px solid ${wipExcedido ? '#f0c4c4' : '#dbe2eb'}`, color: wipExcedido ? '#c83a3a' : '#5b6472', fontSize: '0.72rem', fontWeight: 700 }}>
                                 {col.count || 0}
                               </span>
                             </div>
@@ -608,7 +609,7 @@ export default function RequisicaoKanban() {
                           </div>
                           {wip && (
                             <div style={{ height: 3, background: '#e2e8f0', borderRadius: 99, marginTop: 5, overflow: 'hidden' }}>
-                              <div style={{ height: '100%', width: `${wipPct}%`, background: wipExcedido ? '#ef4444' : conf.cor, borderRadius: 99, transition: 'width 0.3s' }} />
+                              <div style={{ height: '100%', width: `${wipPct}%`, background: wipExcedido ? '#e14848' : conf.cor, borderRadius: 99, transition: 'width 0.3s' }} />
                             </div>
                           )}
                         </div>

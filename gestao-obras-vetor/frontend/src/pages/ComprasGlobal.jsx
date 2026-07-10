@@ -116,7 +116,7 @@ export default function ComprasGlobal() {
       </p>
 
       {/* Cards resumo */}
-      <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+      <div className="suprimentos-kpi-grid">
         {[
           { label: 'Total',               valor: resumo.total,      cls: 'badge badge-gray' },
           { label: 'Aguard. análise',     valor: resumo.ag_analise, cls: 'badge badge-blue' },
@@ -124,15 +124,16 @@ export default function ComprasGlobal() {
           { label: 'Cotações recebidas',  valor: resumo.cotacoes_recebidas, cls: 'badge badge-yellow' },
           { label: 'Prontos p/ compra',   valor: resumo.prontos,    cls: 'badge badge-green' },
         ].map((c) => (
-          <div key={c.label} className="card" style={{ flex: '1 1 130px', padding: '1rem' }}>
-            <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{c.label}</p>
-            <p style={{ margin: '0.3rem 0 0', fontWeight: 700, fontSize: '1.4rem', color: 'var(--text-primary)' }}>{c.valor ?? 0}</p>
+          <div key={c.label} className="card suprimentos-kpi-card">
+            <p className="suprimentos-kpi-label">{c.label}</p>
+            <p className="suprimentos-kpi-value">{c.valor ?? 0}</p>
           </div>
         ))}
       </div>
 
       {/* Filtros */}
-      <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap', marginBottom: '1.25rem', alignItems: 'center' }}>
+      <div className="card suprimentos-filter-card">
+      <div className="suprimentos-filter-row">
         <input className="form-input" style={{ flex: 1, minWidth: 200 }} placeholder="Buscar requisição, obra, solicitante..." value={busca} onChange={(e) => setBusca(e.target.value)} />
         <select className="form-input" style={{ width: 'auto' }} value={filtros.status_requisicao} onChange={(e) => setFiltros({ ...filtros, status_requisicao: e.target.value })}>
           <option value="">Todos os status</option>
@@ -158,16 +159,17 @@ export default function ComprasGlobal() {
           </button>
         )}
       </div>
+      </div>
 
       {/* Tabela */}
       {loading ? (
-        <div className="card" style={{ padding: '3rem', textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+        <div className="card suprimentos-empty-card"><div className="spinner" style={{ margin: '0 auto' }} /></div>
       ) : lista.length === 0 ? (
-        <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--gray-400)' }}>
+        <div className="card suprimentos-empty-card">
           Nenhuma requisição encontrada.
         </div>
       ) : (
-        <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
+        <div className="card suprimentos-table-card" style={{ overflowX: 'auto' }}>
           <table className="table" style={{ margin: 0 }}>
             <thead>
               <tr>

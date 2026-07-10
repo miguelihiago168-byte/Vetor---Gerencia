@@ -7,6 +7,7 @@ import {
   ShoppingCart, List, CheckCircle, XCircle, Users,
   Clock, Tag, ThumbsUp, AlertCircle,
 } from 'lucide-react';
+import './ComprasLayout.css';
 
 // Configuração dos status do fluxo ativo (finalizadas ficam no Histórico)
 const STATUS_FLOW = [
@@ -66,26 +67,26 @@ function ComprasLayout({ title, children, extraHeader }) {
   return (
     <>
       <Navbar />
-      <div className="container almox-container">
+      <div className="container almox-container suprimentos-shell">
         <div className="almox-layout">
-          <aside className="almox-sidebar card">
-            <h3 className="card-header" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <ShoppingCart size={18} /> Compras
+          <aside className="almox-sidebar card suprimentos-sidebar">
+            <h3 className="card-header suprimentos-sidebar-title">
+              <ShoppingCart size={18} /> Suprimentos
             </h3>
-            <nav className="almox-nav">
+            <nav className="almox-nav suprimentos-nav">
               {/* Link para lista geral de requisições */}
               <NavLink
                 to={projetoId ? `/projeto/${projetoId}/compras` : '/compras'}
                 end
                 className={({ isActive }) => `almox-nav-link${isActive ? ' active' : ''}`}
               >
-                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span className="suprimentos-nav-row">
                   <List size={14} /> Requisições
                 </span>
               </NavLink>
 
               {/* Seção Por Status */}
-              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '10px 12px 4px', borderTop: '1px solid #e2e8f0', marginTop: 4 }}>
+              <div className="suprimentos-nav-section">
                 Por Status
               </div>
 
@@ -98,18 +99,12 @@ function ComprasLayout({ title, children, extraHeader }) {
                     to={statusLink(sf.slug)}
                     className={({ isActive }) => `almox-nav-link${isActive ? ' active' : ''}`}
                   >
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'space-between', width: '100%' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span className="suprimentos-nav-row suprimentos-nav-row-between">
+                      <span className="suprimentos-nav-row">
                         {sf.icon} {sf.label}
                       </span>
                       {count > 0 && (
-                        <span style={{
-                          fontSize: '0.68rem', fontWeight: 700, borderRadius: 99,
-                          padding: '1px 6px', minWidth: 18, textAlign: 'center',
-                          background: isDestaque ? '#ef4444' : '#e2e8f0',
-                          color: isDestaque ? '#fff' : '#64748b',
-                          flexShrink: 0,
-                        }}>
+                        <span className={`suprimentos-count-badge${isDestaque ? ' is-destaque' : ''}`}>
                           {count}
                         </span>
                       )}
@@ -119,7 +114,7 @@ function ComprasLayout({ title, children, extraHeader }) {
               })}
 
               {/* Histórico */}
-              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '10px 12px 4px', borderTop: '1px solid #e2e8f0', marginTop: 4 }}>
+              <div className="suprimentos-nav-section">
                 Histórico
               </div>
 
@@ -127,7 +122,7 @@ function ComprasLayout({ title, children, extraHeader }) {
                 to={projetoId ? `/projeto/${projetoId}/compras/finalizadas` : '/compras/finalizadas'}
                 className={({ isActive }) => `almox-nav-link${isActive ? ' active' : ''}`}
               >
-                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span className="suprimentos-nav-row">
                   <CheckCircle size={14} /> Finalizadas
                 </span>
               </NavLink>
@@ -136,7 +131,7 @@ function ComprasLayout({ title, children, extraHeader }) {
                 to={projetoId ? `/projeto/${projetoId}/compras/negadas` : '/compras/negadas'}
                 className={({ isActive }) => `almox-nav-link${isActive ? ' active' : ''}`}
               >
-                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span className="suprimentos-nav-row">
                   <XCircle size={14} /> Negadas/Canceladas
                 </span>
               </NavLink>
@@ -144,14 +139,14 @@ function ComprasLayout({ title, children, extraHeader }) {
               {/* Cadastros (ADM e Gestor Geral) */}
               {isGestorAdm && (
                 <>
-                  <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--gray-400)', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '10px 12px 4px', borderTop: '1px solid #e2e8f0', marginTop: 4 }}>
+                  <div className="suprimentos-nav-section">
                     Cadastros
                   </div>
                   <NavLink
                     to={projetoId ? `/projeto/${projetoId}/compras/fornecedores` : '/fornecedores'}
                     className={({ isActive }) => `almox-nav-link${isActive ? ' active' : ''}`}
                   >
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span className="suprimentos-nav-row">
                       <Users size={14} /> Fornecedores
                     </span>
                   </NavLink>
@@ -160,8 +155,8 @@ function ComprasLayout({ title, children, extraHeader }) {
             </nav>
           </aside>
 
-          <main className="almox-content">
-            <div className="flex-between mb-4">
+          <main className="almox-content suprimentos-content">
+            <div className="flex-between mb-4 suprimentos-page-header">
               <h1>{title}</h1>
               {extraHeader || null}
             </div>
