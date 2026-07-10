@@ -78,6 +78,9 @@ const createTransporter = (config) => {
     host: config.smtp_host,
     port: config.smtp_port,
     secure: config.smtp_port === 465,
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
     auth: {
       user: config.smtp_user,
       pass: config.smtp_pass

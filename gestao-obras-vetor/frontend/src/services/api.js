@@ -373,6 +373,10 @@ export const getEmailHistoryDetail = (id) => api.get(`/email/history/${id}`);
 export const toggleEmailFavorito = (id) => api.patch(`/email/history/${id}/favorito`);
 export const deleteEmailHistory = (id) => api.delete(`/email/history/${id}`);
 export const deleteReceivedEmail = (id) => api.delete(`/email/received/${id}`);
+export const toggleReceivedEmailFavorito = (id) => api.patch(`/email/received/${id}/favorito`);
+export const toggleReceivedEmailImportante = (id) => api.patch(`/email/received/${id}/importante`);
+export const markReceivedEmailRead = (id, isRead = 1) =>
+  api.patch(`/email/received/${id}/read`, { is_read: isRead ? 1 : 0 });
 export const syncImapEmails = () => api.post('/email/imap/sync');
 export const getReceivedEmails = () => api.get('/email/received');
 export const getEmailTemplates = () => api.get('/email/templates');

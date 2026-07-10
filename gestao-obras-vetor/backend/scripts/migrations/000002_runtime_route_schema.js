@@ -319,6 +319,8 @@ module.exports = {
         received_at DATETIME,
         is_read INTEGER DEFAULT 0,
         favorito INTEGER DEFAULT 0,
+        importante INTEGER DEFAULT 0,
+        importante_auto INTEGER DEFAULT 0,
         excluido INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
@@ -380,6 +382,8 @@ module.exports = {
       'received_at DATETIME',
       'is_read INTEGER DEFAULT 0',
       'favorito INTEGER DEFAULT 0',
+      'importante INTEGER DEFAULT 0',
+      'importante_auto INTEGER DEFAULT 0',
       'excluido INTEGER DEFAULT 0',
       'created_at DATETIME'
     ]) await addColumnIfMissing(context, 'received_emails', column);

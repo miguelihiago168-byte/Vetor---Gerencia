@@ -31,6 +31,21 @@ const EMAIL_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
 const EMAIL_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024;
 const EMAIL_ATTACHMENT_MAX_COUNT = 5;
 const IMAP_FIRST_SYNC_MAX_UID_WINDOW = 200;
+const EMAIL_IMPORTANT_KEYWORDS = [
+  'urgente',
+  'prazo',
+  'cobrança',
+  'cobranca',
+  'pagamento',
+  'segurança',
+  'seguranca',
+  'alerta',
+  'conta',
+  'senha',
+  'acesso',
+  'bloqueio',
+  'vencimento'
+];
 const EMAIL_ALLOWED_ATTACHMENT_EXTENSIONS = new Set([
   '.pdf',
   '.doc',
@@ -44,6 +59,16 @@ const EMAIL_ALLOWED_ATTACHMENT_EXTENSIONS = new Set([
 
 const getAuthUser = (req) => req.usuario || req.user || null;
 const getTenantId = (req) => req.tenantId || getAuthUser(req)?.tenant_id || null;
+
+const normalizeImportanceText = (value) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .toLowerCase();
+
+const inferEmailImportance = ({ fromEmail = '', fromName = '', subject = '', bodyText = '' } = {}) => {
+  const haystack = normalizeImportanceText(`${fromEmail} ${fromName} ${subject} ${bodyText}`).slice(0, 6000);
+  return EMAIL_IMPORTANT_KEYWORDS.some((keyword) => haystack.includes(normalizeImportanceText(keyword))) ? 1 : 0;
+};
 
 const uploadsRoot = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadsRoot)) {
@@ -214,7 +239,7 @@ const ensureEmailTables = async () => {
       email_config: ['tenant_id', 'provider', 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_pass_encrypted', 'from_name', 'from_email', 'is_active', 'created_by_user_id', 'imap_host', 'imap_port', 'imap_user', 'imap_pass_encrypted', 'imap_tls'],
       email_templates: ['tenant_id', 'name', 'subject', 'body_html', 'description', 'created_by_user_id'],
       email_history: ['tenant_id', 'sender_user_id', 'recipient_email', 'subject', 'body_html', 'template_used', 'status', 'error_message', 'sent_at', 'favorito', 'excluido'],
-      received_emails: ['tenant_id', 'imap_uid', 'from_email', 'from_name', 'to_email', 'subject', 'body_html', 'body_text', 'received_at', 'is_read', 'favorito', 'excluido']
+      received_emails: ['tenant_id', 'imap_uid', 'from_email', 'from_name', 'to_email', 'subject', 'body_html', 'body_text', 'received_at', 'is_read', 'favorito', 'importante', 'importante_auto', 'excluido']
     }
   });
 };
@@ -275,7 +300,6 @@ router.post('/config',
   body('smtp_host').trim().notEmpty().withMessage('SMTP host é obrigatório'),
   body('smtp_port').isInt({ min: 1, max: 65535 }).withMessage('SMTP port deve ser um número válido'),
   body('smtp_user').trim().notEmpty().withMessage('SMTP user é obrigatório'),
-  body('smtp_pass').trim().notEmpty().withMessage('SMTP password é obrigatório'),
   body('from_name').trim().notEmpty().withMessage('From name é obrigatório'),
   body('from_email').isEmail().withMessage('From email deve ser válido'),
   async (req, res) => {
@@ -297,11 +321,25 @@ router.post('/config',
 
       // Verificar se já existe config, se sim UPDATE, se não INSERT
       const existingConfig = await emailService.getConfigForTenant(tenantId);
-      const encryptedPass = emailService.encrypt(smtp_pass);
+      const existingRawConfig = await new Promise((resolve, reject) => {
+        db.get('SELECT smtp_pass_encrypted, imap_pass_encrypted FROM email_config WHERE tenant_id = ? AND is_active = 1', [tenantId], (err, row) => {
+          if (err) reject(err); else resolve(row || null);
+        });
+      });
+      const hasNewSmtpPass = typeof smtp_pass === 'string' && smtp_pass.trim() !== '';
+      if (!hasNewSmtpPass && !existingRawConfig?.smtp_pass_encrypted) {
+        return res.status(400).json({
+          error: 'Senha SMTP obrigatoria',
+          message: 'Informe a senha SMTP para salvar a configuracao de email.'
+        });
+      }
+      const encryptedPass = hasNewSmtpPass
+        ? emailService.encrypt(smtp_pass)
+        : existingRawConfig.smtp_pass_encrypted;
       const hasNewImapPass = typeof imap_pass === 'string' && imap_pass.trim() !== '';
       const encryptedImapPass = hasNewImapPass
         ? emailService.encrypt(imap_pass)
-        : (existingConfig?.imap_pass_encrypted || '');
+        : (existingRawConfig?.imap_pass_encrypted || existingConfig?.imap_pass_encrypted || '');
       const imapUser = String(imap_user || smtp_user || '').trim();
       const imapHost = sanitizeImapHost(imap_host) || getDefaultImapHostByProvider(provider);
       const imapPort = imap_port ? Number(imap_port) : 993;
@@ -365,7 +403,6 @@ router.post('/config/test',
   body('smtp_host').trim().notEmpty().withMessage('SMTP host é obrigatório'),
   body('smtp_port').isInt({ min: 1, max: 65535 }).withMessage('SMTP port deve ser um número válido'),
   body('smtp_user').trim().notEmpty().withMessage('SMTP user é obrigatório'),
-  body('smtp_pass').trim().notEmpty().withMessage('SMTP password é obrigatório'),
   async (req, res) => {
     try {
       const errors = validationResult(req);
@@ -374,13 +411,30 @@ router.post('/config/test',
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { smtp_host, smtp_port, smtp_user, smtp_pass } = req.body;
+      const { smtp_host, smtp_port, smtp_user } = req.body;
+      let smtpPass = req.body.smtp_pass;
+
+      if (!smtpPass) {
+        const tenantId = getTenantId(req);
+        const savedConfig = tenantId ? await emailService.getConfigForTenant(tenantId) : null;
+        if (savedConfig?.smtp_pass && savedConfig.smtp_user === smtp_user) {
+          smtpPass = savedConfig.smtp_pass;
+        }
+      }
+
+      if (!smtpPass) {
+        return res.status(400).json({
+          success: false,
+          error: 'Senha SMTP nao informada',
+          message: 'Informe a senha SMTP ou salve a configuracao novamente antes de testar a conexao.'
+        });
+      }
 
       const testConfig = {
         smtp_host,
         smtp_port: Number(smtp_port),
         smtp_user,
-        smtp_pass
+        smtp_pass: smtpPass
       };
 
       const result = await emailService.validateSmtpConfig(testConfig);
@@ -853,13 +907,14 @@ router.post('/imap/sync', auth, async (req, res) => {
           const bodyHtml = parsed.html || (parsed.text ? `<pre style="white-space:pre-wrap">${parsed.text}</pre>` : '');
           const bodyText = parsed.text || '';
           const receivedAt = (msg.envelope?.date || parsed.date || new Date()).toISOString();
+          const importanteAuto = inferEmailImportance({ fromEmail, fromName, subject, bodyText });
 
           const inserted = await new Promise((resolve, reject) => {
             db.run(
               `INSERT OR IGNORE INTO received_emails
-               (tenant_id, imap_uid, from_email, from_name, to_email, subject, body_html, body_text, received_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [tenantId, msg.uid, fromEmail, fromName, toList, subject, bodyHtml, bodyText, receivedAt],
+               (tenant_id, imap_uid, from_email, from_name, to_email, subject, body_html, body_text, received_at, importante, importante_auto)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [tenantId, msg.uid, fromEmail, fromName, toList, subject, bodyHtml, bodyText, receivedAt, importanteAuto, importanteAuto],
               function(err) { if (err) reject(err); else resolve(this.changes || 0); }
             );
           });
@@ -908,6 +963,90 @@ router.get('/received', auth, async (req, res) => {
   }
 });
 
+router.patch('/received/:id/favorito', auth, async (req, res) => {
+  try {
+    const tenantId = getTenantId(req);
+    const emailId = Number(req.params.id);
+    if (!tenantId) return res.status(400).json({ error: 'Tenant nÃ£o identificado' });
+
+    const row = await new Promise((resolve, reject) => {
+      db.get('SELECT id, favorito FROM received_emails WHERE id = ? AND tenant_id = ?', [emailId, tenantId], (err, data) => {
+        if (err) reject(err); else resolve(data || null);
+      });
+    });
+    if (!row) return res.status(404).json({ error: 'Email nÃ£o encontrado' });
+
+    const favorito = row.favorito ? 0 : 1;
+    await new Promise((resolve, reject) => {
+      db.run('UPDATE received_emails SET favorito = ? WHERE id = ? AND tenant_id = ?', [favorito, emailId, tenantId], (err) => {
+        if (err) reject(err); else resolve();
+      });
+    });
+
+    res.json({ success: true, favorito });
+  } catch (error) {
+    console.error('Erro ao favoritar email recebido:', error);
+    res.status(500).json({ error: 'Erro ao favoritar email recebido' });
+  }
+});
+
+router.patch('/received/:id/importante', auth, async (req, res) => {
+  try {
+    const tenantId = getTenantId(req);
+    const emailId = Number(req.params.id);
+    if (!tenantId) return res.status(400).json({ error: 'Tenant nÃ£o identificado' });
+
+    const row = await new Promise((resolve, reject) => {
+      db.get('SELECT id, importante FROM received_emails WHERE id = ? AND tenant_id = ?', [emailId, tenantId], (err, data) => {
+        if (err) reject(err); else resolve(data || null);
+      });
+    });
+    if (!row) return res.status(404).json({ error: 'Email nÃ£o encontrado' });
+
+    const importante = row.importante ? 0 : 1;
+    await new Promise((resolve, reject) => {
+      db.run('UPDATE received_emails SET importante = ? WHERE id = ? AND tenant_id = ?', [importante, emailId, tenantId], (err) => {
+        if (err) reject(err); else resolve();
+      });
+    });
+
+    res.json({ success: true, importante });
+  } catch (error) {
+    console.error('Erro ao marcar email recebido como importante:', error);
+    res.status(500).json({ error: 'Erro ao marcar email recebido como importante' });
+  }
+});
+
+router.patch('/received/:id/read', auth, body('is_read').optional().isInt({ min: 0, max: 1 }), async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
+    const tenantId = getTenantId(req);
+    const emailId = Number(req.params.id);
+    if (!tenantId) return res.status(400).json({ error: 'Tenant nÃ£o identificado' });
+
+    const row = await new Promise((resolve, reject) => {
+      db.get('SELECT id FROM received_emails WHERE id = ? AND tenant_id = ?', [emailId, tenantId], (err, data) => {
+        if (err) reject(err); else resolve(data || null);
+      });
+    });
+    if (!row) return res.status(404).json({ error: 'Email nÃ£o encontrado' });
+
+    const isRead = req.body.is_read === undefined ? 1 : Number(req.body.is_read);
+    await new Promise((resolve, reject) => {
+      db.run('UPDATE received_emails SET is_read = ? WHERE id = ? AND tenant_id = ?', [isRead, emailId, tenantId], (err) => {
+        if (err) reject(err); else resolve();
+      });
+    });
+
+    res.json({ success: true, is_read: isRead });
+  } catch (error) {
+    console.error('Erro ao atualizar leitura do email recebido:', error);
+    res.status(500).json({ error: 'Erro ao atualizar leitura do email recebido' });
+  }
+});
+
 /**
  * DELETE /api/email/received/:id
  * Excluir email recebido
@@ -919,19 +1058,29 @@ router.delete('/received/:id', auth, async (req, res) => {
     if (!tenantId) return res.status(400).json({ error: 'Tenant não identificado' });
 
     const existing = await new Promise((resolve, reject) => {
-      db.get('SELECT id FROM received_emails WHERE id = ? AND tenant_id = ?', [emailId, tenantId], (err, row) => {
+      db.get('SELECT id, excluido FROM received_emails WHERE id = ? AND tenant_id = ?', [emailId, tenantId], (err, row) => {
         if (err) reject(err); else resolve(row);
       });
     });
     if (!existing) return res.status(404).json({ error: 'Email não encontrado' });
 
+    if (existing.excluido) {
+      await new Promise((resolve, reject) => {
+        db.run('DELETE FROM received_emails WHERE id = ? AND tenant_id = ?', [emailId, tenantId], function(err) {
+          if (err) reject(err); else resolve();
+        });
+      });
+
+      return res.json({ success: true, permanente: true });
+    }
+
     await new Promise((resolve, reject) => {
-      db.run('DELETE FROM received_emails WHERE id = ? AND tenant_id = ?', [emailId, tenantId], function(err) {
+      db.run('UPDATE received_emails SET excluido = 1 WHERE id = ? AND tenant_id = ?', [emailId, tenantId], function(err) {
         if (err) reject(err); else resolve();
       });
     });
 
-    res.json({ success: true });
+    res.json({ success: true, excluido: 1, permanente: false });
   } catch (error) {
     console.error('Erro ao excluir email recebido:', error);
     res.status(500).json({ error: 'Erro ao excluir email recebido' });
