@@ -18,21 +18,18 @@ function PlanejamentoDashboard() {
       label: 'EAP', 
       icon: Layers,
       description: 'Estrutura Analítica do Projeto',
-      color: '#3b82f6'
     },
     { 
       id: 'curva-s', 
       label: 'Curva S', 
       icon: TrendingUp,
       description: 'Evolução planejado vs realizado',
-      color: '#10b981'
     },
     { 
       id: 'gantt', 
       label: 'Cronograma', 
       icon: Network,
       description: 'Diagrama de Gantt e dependências',
-      color: '#f59e0b'
     }
   ];
 
@@ -70,18 +67,15 @@ function PlanejamentoDashboard() {
                   key={aba.id}
                   className={`planejamento-aba ${isActive ? 'active' : ''}`}
                   onClick={() => setAbaAtiva(aba.id)}
-                  style={{
-                    borderLeftColor: isActive ? aba.color : 'transparent'
-                  }}
                 >
-                  <div className="planejamento-aba-icon" style={{ backgroundColor: `${aba.color}20` }}>
-                    <Icon size={20} style={{ color: aba.color }} />
+                  <div className="planejamento-aba-icon">
+                    <Icon size={20} />
                   </div>
                   <div className="planejamento-aba-text">
                     <p className="planejamento-aba-label">{aba.label}</p>
                     <p className="planejamento-aba-desc">{aba.description}</p>
                   </div>
-                  {isActive && <ChevronRight size={18} style={{ color: aba.color }} />}
+                  {isActive && <ChevronRight size={18} />}
                 </button>
               );
             })}
