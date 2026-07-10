@@ -246,40 +246,40 @@ function EAP({ hideNavbar = false }) {
     const descricaoExtra = (atividade.descricao && atividade.nome && atividade.descricao !== atividade.nome)
       ? atividade.descricao
       : '';
+    const percentualExecutado = Number(atividade.percentual_executado || 0);
+    const percentualVisual = percentualExecutado > 0 ? Math.max(percentualExecutado, 2) : 0;
+    const statusTone = getStatusTone(atividade.status);
 
     return (
       <div key={atividade.id}>
-        <div 
-          className="card" 
-          style={{ 
-            padding: '15px', 
-            marginBottom: '8px',
-            marginLeft: `${level * 20}px`,
-            borderLeft: `4px solid ${getStatusColor(atividade.status)}`
-          }}
+        <div
+          className={`eap-activity-card eap-activity-${statusTone}`}
+          style={{ '--eap-level': level }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+          <div className="eap-activity-main">
+            <div className="eap-activity-content">
               {hasChildren && (
                 <button
+                  type="button"
+                  className="eap-activity-toggle"
                   onClick={() => toggleExpanded(atividade.id)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}
+                  aria-label={isExpanded ? 'Recolher atividade' : 'Expandir atividade'}
                 >
                   {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                 </button>
               )}
-              {!hasChildren && <div style={{ width: '20px' }}></div>}
+              {!hasChildren && <span className="eap-activity-spacer" />}
               
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-                  <strong>{tituloAtividade}</strong>
+              <div className="eap-activity-copy">
+                <div className="eap-activity-title-row">
+                  <strong className="eap-activity-title">{tituloAtividade}</strong>
                   {descricaoExtra && (
-                    <span style={{ fontSize: '14px', color: 'var(--gray-600)' }}>
+                    <span className="eap-activity-description">
                       {descricaoExtra}
                     </span>
                   )}
                 </div>
-                <div style={{ display: 'flex', gap: '10px 15px', fontSize: '13px', color: 'var(--gray-600)', flexWrap: 'wrap' }}>
+                <div className="eap-activity-meta">
                   {/* Para atividades mãe, não exibir previsto */}
                   {!hasChildren && (
                     <span>Previsto: {atividade.quantidade_total || 0} {atividade.unidade_medida || ''}</span>
@@ -288,56 +288,59 @@ function EAP({ hideNavbar = false }) {
                   <span>
                     Planejado: <strong>{formatarDataBr(atividade.data_inicio_planejada)}</strong> até <strong>{formatarDataBr(atividade.data_fim_planejada)}</strong>
                   </span>
-                  <span>Executado: {atividade.percentual_executado || 0}%</span>
-                  <span>Status: {atividade.status}</span>
+                  <span>Executado: <strong>{percentualExecutado}%</strong></span>
+                  <span className={`eap-status-chip eap-status-${statusTone}`}>{atividade.status}</span>
                 </div>
               </div>
             </div>
             
-            <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+            <div className="eap-activity-actions">
               <button
-                className="btn btn-secondary"
+                type="button"
+                className="eap-icon-action"
                 onClick={() => navigate(`/projeto/${projetoId}/eap/${atividade.id}`)}
                 title="Editar"
+                aria-label="Editar atividade"
               >
                 <Eye size={16} />
               </button>
               {podeAdicionarFilha && (
                 <button
-                  className="btn btn-outline"
+                  type="button"
+                  className="eap-icon-action"
                   onClick={() => navigate(`/projeto/${projetoId}/eap/novo?pai=${atividade.id}`)}
                   title="Adicionar filha"
+                  aria-label="Adicionar atividade filha"
                 >
-                  +
+                  <Plus size={16} />
                 </button>
               )}
               <button
-                className="btn btn-danger"
+                type="button"
+                className="eap-icon-action eap-icon-action-danger"
                 onClick={() => handleExcluirAtividade(atividade)}
                 title="Excluir atividade"
+                aria-label="Excluir atividade"
               >
                 <Trash2 size={16} />
               </button>
             </div>
           </div>
           
-          {/* Barra de progresso */}
-          <div style={{ marginTop: '10px' }}>
-            <div className="progress-bar" style={{ height: '6px' }}>
-              <div 
-                className="progress-fill"
-                style={{ 
-                  width: `${atividade.percentual_executado || 0}%`,
-                  backgroundColor: getStatusColor(atividade.status)
-                }}
-              ></div>
-            </div>
+          <div className="eap-progress-track" aria-label={`Progresso ${percentualExecutado}%`}>
+            <div
+              className="eap-progress-fill"
+              style={{ width: `${percentualVisual}%` }}
+            />
+          </div>
+          <div className="eap-progress-meta">
+            <span>{percentualExecutado}% executado</span>
+            {hasChildren && <span>{atividade.children.length} subatividade(s)</span>}
           </div>
         </div>
         
-        {/* Renderizar filhos se expandido */}
         {hasChildren && isExpanded && (
-          <div>
+          <div className="eap-children">
             {atividade.children.map(child => renderAtividade(child, level + 1))}
           </div>
         )}
@@ -345,12 +348,16 @@ function EAP({ hideNavbar = false }) {
     );
   };
 
-  const getStatusColor = (status) => {
+  const getStatusTone = (status) => {
     switch (status) {
-      case 'Concluída': return '#4CAF50';
-      case 'Em andamento': return '#2196F3';
-      case 'Não iniciada': return '#FF9800';
-      default: return '#9E9E9E';
+      case 'Concluída':
+        return 'done';
+      case 'Em andamento':
+        return 'active';
+      case 'Não iniciada':
+        return 'idle';
+      default:
+        return 'muted';
     }
   };
 
