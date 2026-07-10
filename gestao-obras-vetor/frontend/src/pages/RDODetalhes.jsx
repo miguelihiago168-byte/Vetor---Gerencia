@@ -396,7 +396,7 @@ function RDODetalhes() {
             </div>
             <div>
               <strong>Este RDO foi impactado por um recálculo de atividade.</strong>
-              <p>{rdo.correcao_motivo || 'Revise as informações antes de reenviar.'}</p>
+              {rdo.correcao_motivo && <p>{rdo.correcao_motivo}</p>}
               <span>Revise as informações antes de reenviar para aprovação.</span>
             </div>
           </div>

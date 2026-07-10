@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { 
   getAtividadesEAP, 
+  previewRecalculoEapProjeto,
   recalcularEapProjeto, 
   deleteAtividade,
   baixarModeloEAP,
@@ -29,10 +30,15 @@ function EAP({ hideNavbar = false }) {
   const [importLoading, setImportLoading] = useState(false);
   const [importPreview, setImportPreview] = useState(null);
   const [eapActionsOpen, setEapActionsOpen] = useState(false);
+  const [recalculoModalOpen, setRecalculoModalOpen] = useState(false);
+  const [recalculoPreview, setRecalculoPreview] = useState(null);
+  const [recalculoResumo, setRecalculoResumo] = useState(null);
+  const [recalculoLoading, setRecalculoLoading] = useState(false);
 
   useEffect(() => {
     carregarAtividades();
-  }, [projetoId]);
+    if (isGestor) carregarResumoRecalculo();
+  }, [projetoId, isGestor]);
 
   const showAffectedRdosAlert = async (payload) => {
     const total = Number(payload?.affectedRDOs || 0);
@@ -176,14 +182,33 @@ function EAP({ hideNavbar = false }) {
 
   const handleRecalcularEap = async () => {
     setEapActionsOpen(false);
-    const ok = await confirm({
-      title: 'Recalcular EAP',
-      message: 'Recalcular avanço da EAP para este projeto?',
-      confirmText: 'Recalcular',
-      cancelText: 'Cancelar'
-    });
-    if (!ok) return;
     try {
+      setRecalculoModalOpen(true);
+      setRecalculoPreview(null);
+      setRecalculoLoading(true);
+      const resp = await previewRecalculoEapProjeto(projetoId);
+      setRecalculoPreview(resp.data || { atividades: [] });
+      setRecalculoResumo(resp.data || { atividades: [] });
+    } catch (err) {
+      setRecalculoModalOpen(false);
+      error('Erro ao preparar recálculo da EAP: ' + (err.response?.data?.erro || err.message), 7000);
+    } finally {
+      setRecalculoLoading(false);
+    }
+  };
+
+  const carregarResumoRecalculo = async () => {
+    try {
+      const resp = await previewRecalculoEapProjeto(projetoId);
+      setRecalculoResumo(resp.data || { atividades: [] });
+    } catch (err) {
+      setRecalculoResumo(null);
+    }
+  };
+
+  const handleConfirmarRecalculoEap = async () => {
+    try {
+      setRecalculoLoading(true);
       const resp = await recalcularEapProjeto(projetoId);
       const mostrouAfetados = await showAffectedRdosAlert(resp.data);
       success(
@@ -192,9 +217,14 @@ function EAP({ hideNavbar = false }) {
           : (resp.data?.mensagem || 'EAP recalculada.'),
         5000
       );
+      setRecalculoModalOpen(false);
+      setRecalculoPreview(null);
+      setRecalculoResumo({ total_atividades_afetadas: 0, atividades: [] });
       carregarAtividades();
     } catch (err) {
       error('Erro ao recalcular EAP: ' + (err.response?.data?.erro || err.message), 7000);
+    } finally {
+      setRecalculoLoading(false);
     }
   };
 
@@ -492,6 +522,113 @@ function EAP({ hideNavbar = false }) {
     );
   };
 
+  const renderRecalculoModal = () => {
+    if (!recalculoModalOpen) return null;
+    const atividadesPreview = recalculoPreview?.atividades || [];
+    const totalAfetadas = Number(recalculoPreview?.total_atividades_afetadas || atividadesPreview.length || 0);
+    const totalAtividades = Number(recalculoPreview?.total_atividades || 0);
+
+    return (
+      <div className="eap-modal-backdrop">
+        <div className="card eap-recalc-modal">
+          <div className="eap-recalc-modal-header">
+            <div>
+              <h2>Recalcular EAP</h2>
+              <p>Confira quais atividades terão redução de avanço antes de confirmar.</p>
+            </div>
+            <button
+              className="btn btn-secondary"
+              onClick={() => {
+                if (recalculoLoading) return;
+                setRecalculoModalOpen(false);
+                setRecalculoPreview(null);
+              }}
+              title="Fechar"
+              disabled={recalculoLoading}
+            >
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="eap-recalc-modal-body">
+            {recalculoLoading && !recalculoPreview ? (
+              <div className="eap-recalc-loading">
+                <div className="spinner"></div>
+                <span>Calculando atividades impactadas...</span>
+              </div>
+            ) : (
+              <>
+                <div className={`eap-recalc-alert${totalAfetadas > 0 ? ' warning' : ' neutral'}`}>
+                  <AlertTriangle size={18} />
+                  <div>
+                    <strong>
+                      {totalAfetadas > 0
+                        ? `${totalAfetadas} atividade${totalAfetadas === 1 ? '' : 's'} com regressão pendente`
+                        : 'Nenhuma regressão de avanço encontrada'}
+                    </strong>
+                    <p>
+                      {totalAfetadas > 0
+                        ? `Foram analisadas ${totalAtividades || totalAfetadas} atividades da EAP.`
+                        : 'Atividades concluídas ou com avanço maior não entram neste alerta.'}
+                    </p>
+                  </div>
+                </div>
+
+                {atividadesPreview.length > 0 && (
+                  <div className="eap-recalc-table-wrap">
+                    <table className="eap-recalc-table">
+                      <thead>
+                        <tr>
+                          <th>Atividade</th>
+                          <th>Atual</th>
+                          <th>Novo</th>
+                          <th>Diferença</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {atividadesPreview.map((atividade) => (
+                          <tr key={atividade.id}>
+                            <td>
+                              <strong>{atividade.codigo_eap || atividade.id_atividade || `#${atividade.id}`}</strong>
+                              <span>{atividade.nome || atividade.descricao || 'Sem nome'}</span>
+                            </td>
+                            <td>{Number(atividade.percentual_atual || 0).toFixed(2)}%</td>
+                            <td>{Number(atividade.percentual_recalculado || 0).toFixed(2)}%</td>
+                            <td className={Number(atividade.diferenca || 0) >= 0 ? 'positive' : 'negative'}>
+                              {Number(atividade.diferenca || 0) > 0 ? '+' : ''}
+                              {Number(atividade.diferenca || 0).toFixed(2)}%
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          <div className="eap-recalc-modal-footer">
+            <button
+              className="btn btn-secondary"
+              onClick={() => {
+                if (recalculoLoading) return;
+                setRecalculoModalOpen(false);
+                setRecalculoPreview(null);
+              }}
+              disabled={recalculoLoading}
+            >
+              Cancelar
+            </button>
+            <button className="btn btn-primary" onClick={handleConfirmarRecalculoEap} disabled={recalculoLoading || !recalculoPreview || totalAfetadas === 0}>
+              {recalculoLoading ? 'Recalculando...' : (totalAfetadas > 0 ? 'Confirmar regressões' : 'Sem regressões')}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <>
@@ -504,6 +641,7 @@ function EAP({ hideNavbar = false }) {
   }
 
   const hierarchy = buildHierarchy(atividades);
+  const totalRecalculoPendente = Number(recalculoResumo?.total_atividades_afetadas || 0);
 
   return (
     <>
@@ -572,6 +710,16 @@ function EAP({ hideNavbar = false }) {
           </div>
         </div>
 
+        {isGestor && totalRecalculoPendente > 0 && (
+          <div className="eap-recalc-pending">
+            <AlertTriangle size={18} />
+            <div>
+              <strong>{totalRecalculoPendente} atividade{totalRecalculoPendente === 1 ? '' : 's'} com regressão pendente</strong>
+              <p>Alterações em RDOs reduziram o avanço previsto na EAP. Use “Mais ações” para revisar e confirmar o recálculo.</p>
+            </div>
+          </div>
+        )}
+
         {hierarchy.length === 0 ? (
           <div className="card text-center" style={{ padding: '60px' }}>
             <Activity size={48} style={{ color: 'var(--gray-400)', marginBottom: '16px' }} />
@@ -587,6 +735,7 @@ function EAP({ hideNavbar = false }) {
         )}
       </div>
       {renderImportModal()}
+      {renderRecalculoModal()}
     </>
   );
 }

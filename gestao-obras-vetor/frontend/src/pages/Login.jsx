@@ -154,12 +154,15 @@ function Login() {
         tenant_id: trialExpirado.tenant_id,
         codigo: codigoRenovacao.trim(),
       });
+      const response = await loginAPI({
+        usuario: trialExpirado.login,
+        senha: trialExpirado.senha,
+        manterLogin,
+      });
       setTrialExpirado(null);
       setCodigoRenovacao('');
-      setSucesso('Trial renovado com sucesso! Acesse novamente seu sistema.');
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
+      loginAuth(response.data.token, response.data.usuario, manterLogin);
+      navigate(response.data?.usuario?.primeiro_acesso_pendente ? '/primeiro-acesso' : '/projetos');
     } catch (error) {
       setErro(normalizeAuthErrorMessage(error.response?.data?.erro || 'Erro ao renovar trial.'));
     } finally {
@@ -535,7 +538,7 @@ function Login() {
           </h2>
           <p style={{ margin: '0 0 24px', fontSize: '0.9rem', color: '#475569', lineHeight: 1.55 }}>
             Seu período de <strong>30 dias gratuitos</strong> expirou. Seus dados estão preservados.
-            Assine o serviço para continuar usando o sistema, ou cancele a conta para excluir todos os dados permanentemente.
+            Informe o código de liberação para continuar usando o sistema, assine quando a opção estiver disponível, ou encerre a conta.
           </p>
 
           {erro && <div style={{ marginBottom: 16, padding: '12px 14px', borderRadius: 10, background: '#fef2f2', border: '1px solid #fecaca', fontSize: '0.85rem', color: '#dc2626', textAlign: 'left', width: '100%' }}>{erro}</div>}
@@ -593,7 +596,7 @@ function Login() {
                   cursor: 'pointer', marginBottom: 16
                 }}
               >
-                Excluir minha conta e dados
+                Encerrar minha conta
               </button>
 
               <button
@@ -615,7 +618,7 @@ function Login() {
                   ⚠️ Atenção: esta ação é irreversível.
                 </p>
                 <p style={{ margin: '6px 0 0', fontSize: 13, color: '#7f1d1d' }}>
-                  Todos os seus projetos, RDOs, EAP, compras e demais dados serão excluídos permanentemente e não poderão ser recuperados.
+                  Todos os seus projetos, RDOs, EAP, compras e demais dados serão excluídos permanentemente, sem backup e sem possibilidade de recuperação. O e-mail poderá ser usado em uma nova conta futuramente.
                 </p>
               </div>
 
