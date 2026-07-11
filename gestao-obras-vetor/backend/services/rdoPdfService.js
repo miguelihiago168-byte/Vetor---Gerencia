@@ -154,6 +154,14 @@ const calcularHorasColaborador = (colaborador) => {
   return `${fmtNumber(Math.max(total, 0) / 60)} h`;
 };
 
+const calcularHorasColaboradorValor = (colaborador) => {
+  const horas = String(calcularHorasColaborador(colaborador))
+    .replace(',', '.')
+    .replace(' h', '');
+  const valor = Number(horas);
+  return Number.isFinite(valor) ? valor : 0;
+};
+
 const tableRows = (items, renderer, emptyText, colspan) => {
   if (!items.length) return `<tr><td colspan="${colspan}" class="empty-cell">${escapeHtml(emptyText)}</td></tr>`;
   return items.map(renderer).join('');
@@ -314,10 +322,8 @@ function renderHtml(data) {
   const diasRestantes = prazoFim && !Number.isNaN(prazoFim.getTime())
     ?Math.ceil((prazoFim - dataRdo) / 86400000)
     : null;
-  const horasTrabalhadas = rdo.horas_trabalhadas || maoObra.reduce((total, item) => {
-    const horas = Number(String(calcularHorasColaborador(item)).replace(',', '.').replace(' h', ''));
-    return Number.isFinite(horas) ?total + horas : total;
-  }, 0);
+  const horasHomem = maoObra.reduce((total, item) => total + calcularHorasColaboradorValor(item), 0);
+  const horasTrabalhadas = horasHomem || Number(rdo.horas_trabalhadas || 0);
 
   const fotoCards = fotos.map((foto) => {
     const filePath = path.join(uploadsDir, foto.caminho_arquivo || '');

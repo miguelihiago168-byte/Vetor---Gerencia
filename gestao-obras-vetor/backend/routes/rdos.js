@@ -1616,6 +1616,11 @@ router.get('/:id/pdf', auth, async (req, res) => {
       if (a1 != null && a2 != null && a2 > a1) tot = Math.max(0, tot - (a2 - a1));
       return (Math.round((tot / 60) * 100) / 100) + ' h';
     };
+    const calcHorasColabValor = (c) => {
+      const valor = Number(String(calcHorasColab(c)).replace(',', '.').replace(' h', ''));
+      return Number.isFinite(valor) ? valor : 0;
+    };
+    const horasHomem = maoObraFinal.reduce((total, c) => total + calcHorasColabValor(c), 0);
 
     // URL pública das fotos (Puppeteer acessa o próprio servidor)
     const normalizeUploadPath = (rawPath) => String(rawPath || '')
@@ -1944,7 +1949,7 @@ router.get('/:id/pdf', auth, async (req, res) => {
     <div class="kpi"><div class="kpi-val">${atividadesPdf.length}</div><div class="kpi-label">Atividades</div></div>
     <div class="kpi"><div class="kpi-val">${ocorrencias.length}</div><div class="kpi-label">Ocorrências</div></div>
     <div class="kpi"><div class="kpi-val">${fotos.length}</div><div class="kpi-label">Fotos</div></div>
-    <div class="kpi"><div class="kpi-val">${rdo.horas_trabalhadas || 0} h</div><div class="kpi-label">Horas Trabalhadas</div></div>
+    <div class="kpi"><div class="kpi-val">${formatNumber(horasHomem || rdo.horas_trabalhadas || 0)} h</div><div class="kpi-label">Horas-Homem</div></div>
   </div>
 
   ${rdo.observacoes || rdo.obs_geral ? `
