@@ -333,11 +333,15 @@ function renderHtml(data) {
           <span>Atividade: ${escapeHtml(atividade)}</span>
           <span>Data/Hora: ${fmtDateTime(foto.criado_em)}</span>
           <span>Autor: ${escapeHtml(foto.autor_nome || '-')}</span>
-          <span>Local: -</span>
         </div>
       </article>
     `;
-  }).join('');
+  });
+
+  const fotoRows = [];
+  for (let i = 0; i < fotoCards.length; i += 2) {
+    fotoRows.push(`<div class="photo-row avoid-break">${fotoCards.slice(i, i + 2).join('')}</div>`);
+  }
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -376,10 +380,18 @@ function renderHtml(data) {
     .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
     .summary div { border: 1px solid #cbd5e1; padding: 7px; text-align: center; }
     .summary strong { display: block; font-size: 13pt; color: #0b5f86; }
+    .section.photo-section { break-inside: auto; page-break-inside: auto; }
     .photo-section { break-before: auto; page-break-before: auto; }
-    .photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; }
+    .photo-grid { display: flex; flex-direction: column; gap: 10px; break-inside: auto; page-break-inside: auto; }
+    .photo-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; }
     .photo-card { border: 1px solid #cbd5e1; display: flex; flex-direction: column; align-self: start; }
-    .photo-card img { width: 100%; height: 180px; object-fit: cover; background: #f8fafc; border-bottom: 1px solid #e5e7eb; }
+    .photo-card img {
+      width: 100%;
+      height: 170px;
+      object-fit: contain;
+      background: linear-gradient(90deg, #d7dee8 0, #edf2f7 18%, #edf2f7 82%, #d7dee8 100%);
+      border-bottom: 1px solid #e5e7eb;
+    }
     .photo-missing { height: 180px; display: flex; align-items: center; justify-content: center; background: #f8fafc; color: #991b1b; border-bottom: 1px solid #e5e7eb; }
     .photo-caption { padding: 6px 7px; display: flex; flex-direction: column; gap: 1px; font-size: 7.6pt; color: #334155; }
     .comments-section { margin-top: 10px; }
@@ -530,7 +542,7 @@ function renderHtml(data) {
 
     <section class="section photo-section">
       <div class="section-title">Relatório Fotográfico (${fotos.length})</div>
-      ${fotos.length ?`<div class="photo-grid">${fotoCards}</div>` : '<div class="box empty-cell">Nenhuma foto persistida para este RDO.</div>'}
+      ${fotos.length ?`<div class="photo-grid">${fotoRows.join('')}</div>` : '<div class="box empty-cell">Nenhuma foto persistida para este RDO.</div>'}
     </section>
 
     ${(rdo.observacoes || rdo.obs_geral || rdo.comentarios || comentarios.length) ?`
