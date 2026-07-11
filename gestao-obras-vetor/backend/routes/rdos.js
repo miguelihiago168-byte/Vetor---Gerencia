@@ -1755,18 +1755,22 @@ router.get('/:id/pdf', auth, async (req, res) => {
         </table>
       </section>` : '';
 
+    const fotoCardsPdf = fotos.map((f) => {
+      const src = fotoUrl(f.caminho_arquivo);
+      return `<div class="foto-item">
+        <img src="${src}" alt="${f.nome_arquivo || 'foto'}" />
+        <p class="foto-desc">${f.atividade_descricao ? `<strong>${f.atividade_codigo ? f.atividade_codigo + ' — ' : ''}${f.atividade_descricao}</strong><br>` : (f.atividade_avulsa_descricao ? `<strong>Avulsa — ${f.atividade_avulsa_descricao}</strong><br>` : '')}${f.descricao || f.nome_arquivo || ''}</p>
+      </div>`;
+    });
+    const fotoRowsPdf = [];
+    for (let i = 0; i < fotoCardsPdf.length; i += 2) {
+      fotoRowsPdf.push(`<div class="foto-row">${fotoCardsPdf.slice(i, i + 2).join('')}</div>`);
+    }
+
     const fotosSection = fotos.length > 0 ? `
       <section>
         <h2>Fotos do RDO (${fotos.length})</h2>
-        <div class="foto-grid">
-          ${rows(fotos, f => {
-            const src = fotoUrl(f.caminho_arquivo);
-            return `<div class="foto-item">
-              <img src="${src}" alt="${f.nome_arquivo || 'foto'}" />
-              <p class="foto-desc">${f.atividade_descricao ? `<strong>${f.atividade_codigo ? f.atividade_codigo + ' — ' : ''}${f.atividade_descricao}</strong><br>` : (f.atividade_avulsa_descricao ? `<strong>Avulsa — ${f.atividade_avulsa_descricao}</strong><br>` : '')}${f.descricao || f.nome_arquivo || ''}</p>
-            </div>`;
-          })}
-        </div>
+        <div class="foto-grid">${fotoRowsPdf.join('')}</div>
       </section>` : '';
 
     const materiaisSection = materiais.length > 0 ? `
@@ -1870,7 +1874,8 @@ router.get('/:id/pdf', auth, async (req, res) => {
   .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; color: #fff; font-size: 9px; font-weight: 600; }
 
   /* FOTOS */
-  .foto-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .foto-grid { display: flex; flex-direction: column; gap: 10px; page-break-inside: auto; break-inside: auto; }
+  .foto-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; page-break-inside: avoid; break-inside: avoid; }
   .foto-item {
     border: 1px solid #e2e8f0;
     border-radius: 8px;
@@ -1880,12 +1885,11 @@ router.get('/:id/pdf', auth, async (req, res) => {
   }
   .foto-item img {
     width: 100%;
-    height: auto;
-    max-height: 240px;
+    height: 170px;
     object-fit: contain;
     object-position: center;
     display: block;
-    background: #f8fafc;
+    background: linear-gradient(90deg, #d7dee8 0, #edf2f7 18%, #edf2f7 82%, #d7dee8 100%);
   }
   .foto-desc { padding: 6px 8px; font-size: 9px; color: #475569; background: #f8fafc; }
 
