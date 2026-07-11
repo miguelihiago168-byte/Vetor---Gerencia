@@ -533,7 +533,7 @@ function RDODetalhes() {
                 return (
                   <a
                     key={foto.id || index}
-                    className={`rdo-report-photo-card ${index === 0 && fotos.length > 1 ? 'is-featured' : ''}`}
+                    className="rdo-report-photo-card"
                     href={getUploadUrl(foto.caminho_arquivo)}
                     target="_blank"
                     rel="noreferrer"

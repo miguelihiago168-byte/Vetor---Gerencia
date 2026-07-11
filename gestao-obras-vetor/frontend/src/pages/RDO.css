@@ -1663,8 +1663,8 @@
 
 .rdo-report-photo-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
 }
 
 .rdo-report-photo-card {
@@ -1684,19 +1684,12 @@
   box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
 }
 
-.rdo-report-photo-card.is-featured {
-  grid-column: span 2;
-}
-
 .rdo-report-photo-media {
   position: relative;
   width: 100%;
-  aspect-ratio: 4 / 3;
-  background: #e2e8f0;
-}
-
-.rdo-report-photo-card.is-featured .rdo-report-photo-media {
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 16 / 10;
+  background:
+    linear-gradient(90deg, #d7dee8 0, #edf2f7 18%, #edf2f7 82%, #d7dee8 100%);
 }
 
 .rdo-report-photo-media img {
@@ -1704,7 +1697,8 @@
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background: transparent;
 }
 
 .rdo-report-photo-info {
@@ -1888,10 +1882,6 @@
 
   .rdo-report-actions {
     justify-content: flex-start;
-  }
-
-  .rdo-report-photo-card.is-featured {
-    grid-column: span 1;
   }
 
   .rdo-report-activity-item {
