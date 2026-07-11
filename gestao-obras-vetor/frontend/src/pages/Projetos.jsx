@@ -5,7 +5,8 @@ import { getProjetos, createProjeto, updateProjeto, getUsuarios, arquivarProjeto
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
 import { useNotification } from '../context/NotificationContext';
-import { Plus, Edit, Users, Calendar, Building, Archive, RotateCcw, Eye, EyeOff } from 'lucide-react';
+import { Plus, Edit, Users, Calendar, Archive, RotateCcw, Eye, EyeOff, MapPin } from 'lucide-react';
+import './Projetos.css';
 
 function Projetos() {
   const { confirm } = useDialog();
@@ -218,14 +219,16 @@ function Projetos() {
   return (
     <>
       <Navbar />
-      <div className="container">
-        <div className="flex-between mb-4 projetos-header" style={{ flexWrap: 'wrap', gap: '12px' }}>
-          <h1 style={{ margin: 0 }}>Projetos</h1>
-          <div className="projetos-actions" style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+      <div className="container projetos-page">
+        <div className="projetos-header">
+          <div>
+            <h1>Projetos</h1>
+            <p>{showArquivados ? 'Projetos arquivados' : 'Obras ativas'}</p>
+          </div>
+          <div className="projetos-actions">
             <button 
               className={`btn projetos-btn-toggle ${showArquivados ? 'btn-secondary' : 'btn-outline'}`}
               onClick={() => setShowArquivados(!showArquivados)}
-              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
             >
               {showArquivados ? <Eye size={18} /> : <EyeOff size={18} />}
               {showArquivados ? 'Mostrar ativos' : 'Mostrar arquivados'}
@@ -242,114 +245,67 @@ function Projetos() {
         {sucesso && <div className="alert alert-success">{sucesso}</div>}
         {erro && <div className="alert alert-error">{erro}</div>}
 
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-          gap: '20px',
-        }}>
+        <div className="projetos-grid">
           {projetosFiltrados.map((projeto) => {
             const pct = Math.round(projeto.percentual_progresso || 0);
             const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
             const prazo = projeto.prazo_termino ? new Date(projeto.prazo_termino + 'T00:00:00') : null;
             const diasRestantes = prazo ? Math.round((prazo - hoje) / (1000 * 60 * 60 * 24)) : null;
-            const barColor = pct >= 80 ? '#22c55e' : pct >= 40 ? '#3b82f6' : '#f59e0b';
-            const prazoColor = diasRestantes === null ? '#94a3b8'
-              : diasRestantes > 30 ? '#15803d'
-              : diasRestantes > 0  ? '#d97706'
-              : '#dc2626';
-            const prazoBg = diasRestantes === null ? '#f8fafc'
-              : diasRestantes > 30 ? '#f0fdf4'
-              : diasRestantes > 0  ? '#fffbeb'
-              : '#fef2f2';
+            const prazoTone = diasRestantes === null ? 'muted'
+              : diasRestantes > 30 ? 'ok'
+              : diasRestantes > 0  ? 'soon'
+              : 'late';
+            const prazoLabel = diasRestantes === null ? 'Sem prazo'
+              : diasRestantes > 0 ? `Restam ${diasRestantes}d`
+              : diasRestantes === 0 ? 'Vence hoje'
+              : `Vencido há ${Math.abs(diasRestantes)}d`;
 
             return (
               <div
                 key={projeto.id}
                 onClick={() => navigate(perfil === 'Almoxarife' ? `/projeto/${projeto.id}/compras` : `/projeto/${projeto.id}`)}
-                style={{
-                  background: 'var(--card-bg)',
-                  borderRadius: '14px',
-                  padding: '22px 24px',
-                  boxShadow: '0 1px 6px rgba(0,0,0,0.07)',
-                  border: '1px solid var(--border-default)',
-                  cursor: 'pointer',
-                  transition: 'transform 0.15s, box-shadow 0.15s',
-                  display: 'flex',
-                  flexDirection: 'column',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.11)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)';    e.currentTarget.style.boxShadow = '0 1px 6px rgba(0,0,0,0.07)'; }}
+                className="projeto-card"
               >
-                {/* Cabeçalho */}
-                <div style={{ marginBottom: '14px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '6px' }}>
-                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3 }}>
-                      {projeto.nome}
-                    </h3>
-                    {projeto.cidade && (
-                      <span style={{
-                        flexShrink: 0, fontSize: '11px', fontWeight: 600, padding: '2px 8px',
-                        borderRadius: '999px', background: '#f1f5f9', color: '#64748b',
-                      }}>
-                        📍 {projeto.cidade}
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                    <div style={{ fontSize: '12px', color: '#64748b' }}>
-                      <span style={{ color: '#94a3b8' }}>Contratante:</span>{' '}
-                      <span style={{ fontWeight: 500 }}>{projeto.empresa_responsavel || '—'}</span>
+                <div className="projeto-card-main">
+                  <div className="projeto-card-top">
+                    <div className="projeto-title-block">
+                      <h3>{projeto.nome}</h3>
+                      {projeto.cidade && (
+                        <span className="projeto-city">
+                          <MapPin size={12} />
+                          {projeto.cidade}
+                        </span>
+                      )}
                     </div>
-                    <div style={{ fontSize: '12px', color: '#64748b' }}>
-                      <span style={{ color: '#94a3b8' }}>Executante:</span>{' '}
-                      <span style={{ fontWeight: 500 }}>{projeto.empresa_executante || '—'}</span>
-                    </div>
+                    <span className="projeto-progress-value">{pct}%</span>
+                  </div>
+
+                  <div className="projeto-meta">
+                    <span>Contratante: <strong>{projeto.empresa_responsavel || '-'}</strong></span>
+                    <span>Executante: <strong>{projeto.empresa_executante || '-'}</strong></span>
+                  </div>
+
+                  <div className="projeto-progress" aria-label={`Progresso ${pct}%`}>
+                    <div style={{ width: `${Math.min(Math.max(pct, 0), 100)}%` }} />
+                  </div>
+
+                  <div className="projeto-date-row">
+                    <span>
+                      <Calendar size={14} />
+                      {prazo ? prazo.toLocaleDateString('pt-BR') : 'Sem prazo'}
+                    </span>
+                    <strong className={`projeto-date-${prazoTone}`}>{prazoLabel}</strong>
                   </div>
                 </div>
-
-                {/* Barra de progresso */}
-                <div style={{ marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', marginBottom: '6px' }}>
-                    <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Progresso</span>
-                    <span style={{ fontWeight: 700, color: barColor }}>{pct}%</span>
-                  </div>
-                  <div style={{ background: 'var(--border-medium)', borderRadius: '999px', height: '8px', overflow: 'hidden' }}>
-                    <div style={{
-                      width: `${pct}%`, height: '100%', borderRadius: '999px',
-                      background: barColor, transition: 'width 0.4s ease',
-                    }} />
-                  </div>
-                </div>
-
-                {/* Prazo */}
-                <div style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  background: prazoBg, borderRadius: '8px', padding: '8px 12px',
-                  marginBottom: '14px',
-                }}>
-                  <span style={{ fontSize: '12px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <Calendar size={13} color="#94a3b8" />
-                    {prazo ? prazo.toLocaleDateString('pt-BR') : 'Sem prazo'}
-                  </span>
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: prazoColor }}>
-                    {diasRestantes === null ? 'Sem prazo'
-                      : diasRestantes > 0 ? `Restam ${diasRestantes}d`
-                      : diasRestantes === 0 ? 'Vence hoje'
-                      : `Vencido há ${Math.abs(diasRestantes)}d`}
-                  </span>
-                </div>
-
-                {/* Ações de gestão (interrompem propagação do clique) */}
                 {isGestor && (
                   <div
-                    style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', borderTop: '1px solid var(--border-default)', paddingTop: '12px' }}
+                    className="projeto-card-actions"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <button
                       onClick={() => abrirModal(projeto)}
                       className="btn btn-icon btn-secondary"
                       title="Editar"
-                      style={{ padding: '5px 8px' }}
                     >
                       <Edit size={14} />
                     </button>
@@ -357,7 +313,6 @@ function Projetos() {
                       onClick={() => showArquivados ? handleDesarquivar(projeto.id) : handleArquivar(projeto.id)}
                       className="btn btn-icon btn-warning"
                       title={showArquivados ? 'Restaurar' : 'Arquivar'}
-                      style={{ padding: '5px 8px' }}
                     >
                       {showArquivados ? <RotateCcw size={14} /> : <Archive size={14} />}
                     </button>
@@ -369,8 +324,8 @@ function Projetos() {
         </div>
 
         {showArquivados && (
-          <div className="alert" style={{ backgroundColor: 'var(--badge-yellow-bg)', borderLeft: '4px solid var(--badge-yellow-color)', marginBottom: '20px', color: 'var(--badge-yellow-color)' }}>
-            ⚠️ Mostrando projetos <strong>arquivados</strong>. Clique no botão acima para retornar aos projetos ativos.
+          <div className="projetos-archive-note">
+            Mostrando projetos <strong>arquivados</strong>.
           </div>
         )}
 
