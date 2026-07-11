@@ -315,8 +315,8 @@ function Usuarios() {
       await updateUsuario(id, { ativo: 0 });
       await carregarDados();
       setSucesso('Usuário desativado com sucesso.');
-    } catch {
-      setErro('Erro ao desativar usuário.');
+    } catch (error) {
+      setErro(error.response?.data?.erro || 'Erro ao desativar usuário.');
     }
   };
 
@@ -333,8 +333,8 @@ function Usuarios() {
       await updateUsuario(id, { ativo: 1 });
       await carregarDados();
       setSucesso('Usuário reativado com sucesso.');
-    } catch {
-      setErro('Erro ao reativar usuário.');
+    } catch (error) {
+      setErro(error.response?.data?.erro || 'Erro ao reativar usuário.');
     }
   };
 

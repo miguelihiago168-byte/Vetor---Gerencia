@@ -755,6 +755,37 @@ router.put('/:id', [
     const updates = [];
     const params = [];
 
+    const camposBody = Object.keys(req.body || {});
+    if (camposBody.length === 1 && req.body.ativo !== undefined) {
+      const ativoVal = req.body.ativo ? 1 : 0;
+      if (ativoVal === 0 && Number(id) === Number(req.usuario.id)) {
+        return res.status(400).json({ erro: 'Nao e permitido desativar o proprio usuario.' });
+      }
+
+      const sql = ativoVal === 1
+        ? 'UPDATE usuarios SET ativo = 1, deletado_em = NULL, deletado_por = NULL, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?'
+        : 'UPDATE usuarios SET ativo = 0, deletado_em = CURRENT_TIMESTAMP, deletado_por = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?';
+      const statusParams = ativoVal === 1 ? [id] : [req.usuario.id, id];
+
+      await runQuery(sql, statusParams);
+      await runQueryMain(sql, statusParams);
+
+      const usuarioNovo = await carregarUsuarioComProjetos(id);
+      await registrarAuditoria(
+        'usuarios',
+        id,
+        ativoVal === 1 ? 'REATIVAR' : 'DESATIVAR',
+        usuarioAnterior,
+        usuarioNovo,
+        req.usuario.id
+      );
+
+      return res.json({
+        mensagem: ativoVal === 1 ? 'Usuario reativado com sucesso.' : 'Usuario desativado com sucesso.',
+        usuario: usuarioNovo
+      });
+    }
+
     if (req.body.nome !== undefined) {
       updates.push('nome = ?');
       params.push(req.body.nome);
