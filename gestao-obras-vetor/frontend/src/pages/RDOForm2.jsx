@@ -11,7 +11,7 @@ import {
   addRdoClima, addRdoComentario, addRdoOcorrencia, addRdoMaterial,
   uploadRdoFoto, updateRdoFoto, deleteRdoFoto, reorderRdoFotos, updateStatusRDO, getExecucaoAcumulada,
   getRdoColaboradores, createRdoColaborador,
-  getRdoEquipamentos, addRdoEquipamento, deleteRdoEquipamento,
+  getRdoEquipamentosCatalogo, getRdoEquipamentos, addRdoEquipamento, deleteRdoEquipamento,
   getAnexos, uploadAnexo, deleteAnexo, getUploadUrl
 } from '../services/api';
 import { ChevronDown, Plus, Trash2, Upload, FileText, Pencil } from 'lucide-react';
@@ -128,8 +128,9 @@ function RDOForm2() {
   /* ── Novo estado ────────────────────────────────── */
   const [projeto, setProjeto] = useState(null);
   const [equipamentosLista, setEquipamentosLista] = useState([]);
+  const [equipamentosCatalogo, setEquipamentosCatalogo] = useState([]);
   const [rdoFotos, setRdoFotos] = useState([]);
-  const [fotoPendente, setFotoPendente] = useState({ file: null, atividadeId: '', descricao: '' });
+  const [fotoPendente, setFotoPendente] = useState({ files: [], atividadeId: '', descricao: '' });
   const [fotosQueue, setFotosQueue] = useState([]);
   const fotosQueueRef = useRef([]);
   const [isUploadingFoto, setIsUploadingFoto] = useState(false);
@@ -337,6 +338,13 @@ function RDOForm2() {
           setColaboradoresDisponiveis(Array.isArray(colabRes.data) ? colabRes.data : []);
         } catch {
           setColaboradoresDisponiveis([]);
+        }
+
+        try {
+          const equipRes = await getRdoEquipamentosCatalogo(projetoId);
+          setEquipamentosCatalogo(Array.isArray(equipRes.data) ? equipRes.data : []);
+        } catch {
+          setEquipamentosCatalogo([]);
         }
 
         if (rdoId) {
@@ -892,6 +900,7 @@ function RDOForm2() {
 
   /* ── Equipamentos ───────────────────────────────── */
   const [draftEquip, setDraftEquip] = useState({ nome: '', quantidade: 1, horario_inicio: '', horario_fim: '', observacao: '' });
+  const [equipamentoPickerAberto, setEquipamentoPickerAberto] = useState(false);
 
   const calcularHorasEquipamento = (inicio, fim) => {
     const toMin = (valor) => {
@@ -909,6 +918,34 @@ function RDOForm2() {
     if (horasUnitarias == null) return null;
     const qtd = Math.max(1, Number(quantidade || 1));
     return Math.round(horasUnitarias * qtd * 100) / 100;
+  };
+
+  const atualizarCatalogoEquipamento = (nome) => {
+    const nomeLimpo = String(nome || '').trim();
+    if (!nomeLimpo) return;
+    setEquipamentosCatalogo(prev => {
+      const existe = prev.some(item => String(item?.nome || '').trim().toLowerCase() === nomeLimpo.toLowerCase());
+      if (existe) return prev;
+      return [...prev, { nome: nomeLimpo, usos: 1 }].sort((a, b) =>
+        String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR')
+      );
+    });
+  };
+
+  const equipamentosCatalogoFiltrado = useMemo(() => {
+    const termo = String(draftEquip.nome || '').trim().toLowerCase();
+    return equipamentosCatalogo
+      .filter(item => {
+        const nome = String(item?.nome || '').trim();
+        if (!nome) return false;
+        return !termo || nome.toLowerCase().includes(termo);
+      })
+      .slice(0, 8);
+  }, [draftEquip.nome, equipamentosCatalogo]);
+
+  const selecionarEquipamentoCatalogo = (nome) => {
+    setDraftEquip(prev => ({ ...prev, nome }));
+    setEquipamentoPickerAberto(false);
   };
 
   const addEquip = async () => {
@@ -934,6 +971,7 @@ function RDOForm2() {
       setEquipamentosLista(prev => [...prev, item]);
       setDirty(true);
     }
+    atualizarCatalogoEquipamento(item.nome);
     setDraftEquip({ nome: '', quantidade: 1, horario_inicio: '', horario_fim: '', observacao: '' });
   };
 
@@ -1014,8 +1052,9 @@ function RDOForm2() {
 
   /* ── Fotos ──────────────────────────────────────── */
   const handleFotoUpload = async () => {
-    if (!fotoPendente.file) return;
-    const { file, atividadeId, descricao } = fotoPendente;
+    const files = Array.isArray(fotoPendente.files) ? fotoPendente.files : [];
+    if (files.length === 0) return;
+    const { atividadeId, descricao } = fotoPendente;
     const atividadeSelecionada = fotoAtividadeOptions.find((opt) => String(opt.value) === String(atividadeId))
       || (() => {
         const valor = String(atividadeId || '');
@@ -1050,26 +1089,28 @@ function RDOForm2() {
       showRdoError('Vincule a foto a uma atividade antes de enviar.');
       return;
     }
-    const arquivoFoto = await prepararFotoRdo(file);
-    const fotoParaFila = {
-      file: arquivoFoto,
-      previewUrl: URL.createObjectURL(arquivoFoto),
-      atividadeId,
-      descricao,
-      atividadeTipo: atividadeSelecionada?.tipo || null,
-      atividade_eap_id: atividadeSelecionada?.tipo === 'eap' ? atividadeSelecionada.atividade_eap_id : null,
-      atividade_avulsa_descricao: atividadeSelecionada?.tipo === 'avulsa' ? atividadeSelecionada.atividade_avulsa_descricao : null,
-      atividade_label: atividadeSelecionada?.label || ''
+
+    const criarFotoParaFila = async (file) => {
+      const arquivoFoto = await prepararFotoRdo(file);
+      return {
+        file: arquivoFoto,
+        previewUrl: URL.createObjectURL(arquivoFoto),
+        atividadeId,
+        descricao,
+        atividadeTipo: atividadeSelecionada?.tipo || null,
+        atividade_eap_id: atividadeSelecionada?.tipo === 'eap' ? atividadeSelecionada.atividade_eap_id : null,
+        atividade_avulsa_descricao: atividadeSelecionada?.tipo === 'avulsa' ? atividadeSelecionada.atividade_avulsa_descricao : null,
+        atividade_label: atividadeSelecionada?.label || ''
+      };
     };
-    if (rdoId) {
-      if (atividadeSelecionada?.tipo === 'eap' && !atividadeSelecionada?.rdo_atividade_id) {
-        setFotosQueue(prev => [...prev, fotoParaFila]);
-        notifyInfo('Foto adicionada à fila. Ela será enviada ao salvar o RDO.', 4500);
-        setFotoPendente({ file: null, atividadeId: '', descricao: '' });
-        if (fotoInputRef.current) fotoInputRef.current.value = '';
-        return;
-      }
-      setIsUploadingFoto(true);
+
+    const resetFotoPendente = () => {
+      setFotoPendente({ files: [], atividadeId: '', descricao: '' });
+      if (fotoInputRef.current) fotoInputRef.current.value = '';
+    };
+
+    const uploadFotoPersistida = async (file) => {
+      const arquivoFoto = await prepararFotoRdo(file);
       const fd = new FormData();
       fd.append('arquivo', arquivoFoto);
       if (atividadeSelecionada?.tipo === 'eap' && atividadeSelecionada?.rdo_atividade_id) {
@@ -1082,28 +1123,54 @@ function RDOForm2() {
         fd.append('atividade_avulsa_descricao', atividadeSelecionada.atividade_avulsa_descricao);
       }
       if (descricao) fd.append('descricao', descricao);
+      const resp = await uploadRdoFoto(rdoId, fd);
+      return {
+        id: resp.data?.id,
+        nome_arquivo: resp.data?.arquivo?.nome_arquivo || arquivoFoto.name || file.name,
+        caminho_arquivo: resp.data?.arquivo?.caminho_arquivo,
+        descricao: descricao || arquivoFoto.name || file.name,
+        atividade_eap_id: atividadeSelecionada?.tipo === 'eap' ? atividadeSelecionada.atividade_eap_id : null,
+        atividade_avulsa_descricao: atividadeSelecionada?.tipo === 'avulsa' ? atividadeSelecionada.atividade_avulsa_descricao : null,
+        ordem: resp.data?.ordem,
+        criado_em: new Date().toISOString()
+      };
+    };
+
+    if (rdoId) {
+      if (atividadeSelecionada?.tipo === 'eap' && !atividadeSelecionada?.rdo_atividade_id) {
+        const fotosParaFila = await Promise.all(files.map(criarFotoParaFila));
+        setFotosQueue(prev => [...prev, ...fotosParaFila]);
+        notifyInfo(`${fotosParaFila.length} foto(s) adicionada(s) à fila. Elas serão enviadas ao salvar o RDO.`, 4500);
+        resetFotoPendente();
+        return;
+      }
+
+      setIsUploadingFoto(true);
+      const enviadas = [];
+      const falhas = [];
       try {
-        const resp = await uploadRdoFoto(rdoId, fd);
-        setRdoFotos(prev => [...prev, {
-          id: resp.data?.id,
-          nome_arquivo: resp.data?.arquivo?.nome_arquivo || arquivoFoto.name || file.name,
-          caminho_arquivo: resp.data?.arquivo?.caminho_arquivo,
-          descricao: descricao || arquivoFoto.name || file.name,
-          atividade_eap_id: atividadeSelecionada?.tipo === 'eap' ? atividadeSelecionada.atividade_eap_id : null,
-          atividade_avulsa_descricao: atividadeSelecionada?.tipo === 'avulsa' ? atividadeSelecionada.atividade_avulsa_descricao : null,
-          ordem: resp.data?.ordem,
-          criado_em: new Date().toISOString()
-        }]);
-      } catch (e) {
-        showRdoError('Erro ao enviar foto: ' + (e?.response?.data?.erro || e.message));
+        for (const file of files) {
+          try {
+            const fotoSalva = await uploadFotoPersistida(file);
+            enviadas.push(fotoSalva);
+          } catch (e) {
+            falhas.push(`${file?.name || 'foto'} (${e?.response?.data?.erro || e.message})`);
+          }
+        }
+        if (enviadas.length > 0) {
+          setRdoFotos(prev => [...prev, ...enviadas]);
+        }
+        if (falhas.length > 0) {
+          showRdoError(`${falhas.length} foto(s) não foram enviadas: ${falhas.join('; ')}`, 9000);
+        }
       } finally {
         setIsUploadingFoto(false);
       }
     } else {
-      setFotosQueue(prev => [...prev, fotoParaFila]);
+      const fotosParaFila = await Promise.all(files.map(criarFotoParaFila));
+      setFotosQueue(prev => [...prev, ...fotosParaFila]);
     }
-    setFotoPendente({ file: null, atividadeId: '', descricao: '' });
-    if (fotoInputRef.current) fotoInputRef.current.value = '';
+    resetFotoPendente();
   };
 
   const startEditarFotoDescricao = (foto) => {
@@ -1746,11 +1813,29 @@ function RDOForm2() {
         {/* ══ SEÇÃO 4 — Equipamentos ═══════════════════ */}
         <Section id="equip" num="4" title="Equipamentos" badge={equipamentosLista.length || null} isOpen={openSections.equip} onToggle={toggleSection}>
           <div className="rdo-add-row">
-            <div className="form-group" style={{ flex: '3' }}>
-              <label className="form-label">Nome do equipamento</label>
-              <input className="form-input" type="text" placeholder="Ex.: Guindaste, Retroescavadeira"
+            <div className="form-group rdo-equipment-picker" style={{ flex: '3' }}>
+              <label className="form-label">Equipamento</label>
+              <input className="form-input" type="text" placeholder="Buscar ou digitar equipamento"
                 value={draftEquip.nome} onChange={(e) => setDraftEquip({ ...draftEquip, nome: e.target.value })}
+                onFocus={() => setEquipamentoPickerAberto(true)}
+                onBlur={() => window.setTimeout(() => setEquipamentoPickerAberto(false), 120)}
                 onKeyDown={(e) => e.key === 'Enter' && addEquip()} />
+              {equipamentoPickerAberto && equipamentosCatalogoFiltrado.length > 0 && (
+                <div className="rdo-equipment-options">
+                  {equipamentosCatalogoFiltrado.map((item) => (
+                    <button
+                      key={item.nome}
+                      className="rdo-equipment-option"
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => selecionarEquipamentoCatalogo(item.nome)}
+                    >
+                      <span>{item.nome}</span>
+                      {Number(item.usos || 0) > 0 && <small>{Number(item.usos)} uso(s)</small>}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="form-group" style={{ flex: '1', minWidth: '80px' }}>
               <label className="form-label">Quantidade</label>
@@ -2057,12 +2142,16 @@ function RDOForm2() {
         <Section id="fotos" num="6" title="Fotos do RDO" badge={(rdoFotos.length + fotosQueue.length) || null} isOpen={openSections.fotos} onToggle={toggleSection}>
           <div className="rdo-add-row">
             <div className="form-group" style={{ flex: '2' }}>
-              <label className="form-label">Arquivo</label>
+              <label className="form-label">Arquivos</label>
               <label className="rdo-file-picker">
-                <input ref={fotoInputRef} type="file" accept="image/*"
-                  onChange={(e) => setFotoPendente(prev => ({ ...prev, file: e.target.files?.[0] || null }))} />
-                <span className="rdo-file-picker-btn"><Upload size={15} /> Escolher foto</span>
-                <span className="rdo-file-picker-name">{fotoPendente.file?.name || 'Nenhum arquivo selecionado'}</span>
+                <input ref={fotoInputRef} type="file" accept="image/*" multiple
+                  onChange={(e) => setFotoPendente(prev => ({ ...prev, files: Array.from(e.target.files || []) }))} />
+                <span className="rdo-file-picker-btn"><Upload size={15} /> Escolher fotos</span>
+                <span className="rdo-file-picker-name">
+                  {fotoPendente.files?.length > 1
+                    ? `${fotoPendente.files.length} fotos selecionadas`
+                    : (fotoPendente.files?.[0]?.name || 'Nenhum arquivo selecionado')}
+                </span>
               </label>
             </div>
             <div className="form-group">
@@ -2082,8 +2171,8 @@ function RDOForm2() {
                 onChange={(e) => setFotoPendente(prev => ({ ...prev, descricao: e.target.value }))} />
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <button className="btn btn-primary" onClick={handleFotoUpload} disabled={!fotoPendente.file || !fotoPendente.atividadeId || isUploadingFoto}>
-                <Upload size={15} /> {isUploadingFoto ? 'Enviando...' : 'Enviar'}
+              <button className="btn btn-primary" onClick={handleFotoUpload} disabled={!fotoPendente.files?.length || !fotoPendente.atividadeId || isUploadingFoto}>
+                <Upload size={15} /> {isUploadingFoto ? 'Enviando...' : 'Adicionar fotos'}
               </button>
             </div>
           </div>

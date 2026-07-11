@@ -388,6 +388,38 @@ const garantirTabelaEquipamentos = async () => {
   });
 };
 
+// Catálogo de equipamentos já usados na obra
+router.get('/projeto/:projetoId/equipamentos-catalogo', auth, async (req, res) => {
+  try {
+    await garantirTabelaEquipamentos();
+    const { projetoId } = req.params;
+
+    const projeto = await getQuery(
+      'SELECT id, tenant_id FROM projetos WHERE id = ? LIMIT 1',
+      [projetoId]
+    );
+    if (!projeto || Number(projeto.tenant_id) !== Number(req.tenantId)) {
+      return res.status(403).json({ erro: 'Projeto fora do tenant ativo.' });
+    }
+
+    const rows = await allQuery(`
+      SELECT TRIM(e.nome) AS nome, COUNT(*) AS usos, MAX(r.data_relatorio) AS ultimo_uso
+      FROM rdo_equipamentos e
+      INNER JOIN rdos r ON r.id = e.rdo_id
+      WHERE r.projeto_id = ?
+        AND r.tenant_id = ?
+        AND TRIM(COALESCE(e.nome, '')) <> ''
+      GROUP BY LOWER(TRIM(e.nome))
+      ORDER BY LOWER(TRIM(e.nome))
+    `, [projetoId, req.tenantId]);
+
+    res.json(rows || []);
+  } catch (err) {
+    console.error('Erro ao listar catálogo de equipamentos do RDO', err);
+    res.status(500).json({ erro: 'Erro ao listar equipamentos salvos.' });
+  }
+});
+
 // Listar equipamentos de um RDO
 router.get('/:rdoId/equipamentos', auth, async (req, res) => {
   try {
