@@ -22,6 +22,72 @@ const getEapStatusByPercentual = (percentual) => {
   if (valor > 0) return 'Em andamento';
   return 'Não iniciada';
 };
+
+const isEapConcluida = (atividade) => {
+  const percentual = Number(atividade?.percentual_executado || 0);
+  const status = String(atividade?.status || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  return percentual >= 100 || status.includes('conclu');
+};
+
+const aplicarPercentualEfetivoEap = (atividades = []) => {
+  const porId = new Map();
+  const filhosPorPai = new Map();
+
+  atividades.forEach((atividade) => {
+    const copia = { ...atividade };
+    porId.set(Number(copia.id), copia);
+    if (copia.pai_id) {
+      const paiId = Number(copia.pai_id);
+      if (!filhosPorPai.has(paiId)) filhosPorPai.set(paiId, []);
+      filhosPorPai.get(paiId).push(copia);
+    }
+  });
+
+  const calcularPercentual = (atividade) => {
+    const filhos = filhosPorPai.get(Number(atividade.id)) || [];
+    if (!filhos.length) {
+      return Math.min(100, Math.max(0, Number(atividade.percentual_executado || 0)));
+    }
+
+    const percentuaisFilhos = filhos.map(calcularPercentual);
+    if (percentuaisFilhos.length && percentuaisFilhos.every((percentual) => percentual >= 100)) {
+      return 100;
+    }
+
+    let somaContribuicao = 0;
+    let somaPeso = 0;
+    let somaSimples = 0;
+
+    filhos.forEach((filho, index) => {
+      const percentual = Number(percentuaisFilhos[index] || 0);
+      const peso = Number(filho.peso_percentual_projeto || filho.percentual_previsto || 0);
+      somaSimples += percentual;
+      if (peso > 0) {
+        somaContribuicao += (percentual * peso) / 100;
+        somaPeso += peso;
+      }
+    });
+
+    const percentual = somaPeso > 0
+      ? somaContribuicao
+      : somaSimples / filhos.length;
+
+    return Math.min(Math.round(percentual * 100) / 100, 100);
+  };
+
+  atividades.forEach((atividade) => {
+    const copia = porId.get(Number(atividade.id));
+    if (!copia) return;
+    const percentual = calcularPercentual(copia);
+    copia.percentual_executado = percentual;
+    copia.status = getEapStatusByPercentual(percentual);
+  });
+
+  return atividades.map((atividade) => porId.get(Number(atividade.id)) || atividade);
+};
 const uploadExcelEap = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
@@ -1509,7 +1575,7 @@ router.get('/projeto/:projetoId/analise-cronograma', [auth, isGestor], async (re
       return res.status(404).json({ erro: 'Projeto não encontrado.' });
     }
 
-    const atividades = await allQuery(`
+    const atividadesRaw = await allQuery(`
       SELECT
         id, nome, codigo_eap, descricao, pai_id,
         data_inicio_planejada, data_fim_planejada,
@@ -1519,6 +1585,7 @@ router.get('/projeto/:projetoId/analise-cronograma', [auth, isGestor], async (re
       WHERE projeto_id = ?
       ORDER BY codigo_eap
     `, [projetoId]);
+    const atividades = aplicarPercentualEfetivoEap(atividadesRaw);
 
     const atividadesComDuracao = atividades.map((at) => ({
       ...at,
@@ -1534,8 +1601,15 @@ router.get('/projeto/:projetoId/analise-cronograma', [auth, isGestor], async (re
     const dependenciasConfirmadas = dependencias.filter((dep) => Number(dep.confirmada_usuario) === 1);
     const atividadesPorId = new Map(atividadesComDuracao.map((at) => [Number(at.id), at]));
 
-    const caminhoCriticoInfo = ganttService.calcularCaminoCritico(atividadesComDuracao, dependenciasConfirmadas);
-    const caminhoCriticoSet = new Set((caminhoCriticoInfo.caminhoCritico || []).map(Number));
+    const caminhoCriticoInfoRaw = ganttService.calcularCaminoCritico(atividadesComDuracao, dependenciasConfirmadas);
+    const caminhoCriticoOperacional = (caminhoCriticoInfoRaw.caminhoCritico || [])
+      .map(Number)
+      .filter((id) => !isEapConcluida(atividadesPorId.get(id)));
+    const caminhoCriticoInfo = {
+      ...caminhoCriticoInfoRaw,
+      caminhoCritico: caminhoCriticoOperacional
+    };
+    const caminhoCriticoSet = new Set(caminhoCriticoOperacional);
     const atrasadasIds = ganttService.detectarAtividadesAtrasadas(atividadesComDuracao, {
       folgas: caminhoCriticoInfo.folgas || {},
       caminhoCritico: caminhoCriticoInfo.caminhoCritico || [],
@@ -2118,7 +2192,7 @@ router.get('/projeto/:projetoId/gantt-data', auth, async (req, res) => {
     }
 
     // Buscar todas as atividades
-    const atividades = await allQuery(`
+    const atividadesRaw = await allQuery(`
       SELECT 
         id, nome, codigo_eap, pai_id,
         data_inicio_planejada, data_fim_planejada,
@@ -2128,6 +2202,7 @@ router.get('/projeto/:projetoId/gantt-data', auth, async (req, res) => {
       WHERE projeto_id = ?
       ORDER BY codigo_eap
     `, [projetoId]);
+    const atividades = aplicarPercentualEfetivoEap(atividadesRaw);
 
     // Buscar dependências
     const dependenciasQuery = incluirNaoConfirmadas === 'true'
@@ -2144,7 +2219,13 @@ router.get('/projeto/:projetoId/gantt-data', auth, async (req, res) => {
         'SELECT * FROM atividades_dependencias WHERE projeto_id = ? AND confirmada_usuario = 1',
         [projetoId]
       );
-      caminoCritico = ganttService.calcularCaminoCritico(atividades, dependenciasConfirmadas);
+      const caminoCriticoRaw = ganttService.calcularCaminoCritico(atividades, dependenciasConfirmadas);
+      const atividadesPorId = new Map(atividades.map((at) => [Number(at.id), at]));
+      caminoCritico = {
+        ...caminoCriticoRaw,
+        caminhoCritico: (caminoCriticoRaw.caminhoCritico || [])
+          .filter((id) => !isEapConcluida(atividadesPorId.get(Number(id))))
+      };
     }
 
     // Detectar atividades vencidas no prazo planejado. O impacto no cronograma
@@ -2167,7 +2248,7 @@ router.get('/projeto/:projetoId/gantt-data', auth, async (req, res) => {
       duracao: ganttService.calcularDuracao(at.data_inicio_planejada, at.data_fim_planejada),
       percentual_executado: at.percentual_executado || 0,
       status: at.status,
-      no_caminho_critico: caminoCritico ? caminoCritico.caminhoCritico.includes(at.id) : false,
+      no_caminho_critico: caminoCritico ? caminoCritico.caminhoCritico.map(Number).includes(Number(at.id)) : false,
       atrasado: atividadesAtrasadas.includes(at.id),
       dependencias: dependencias
         .filter(dep => dep.atividade_destino_id === at.id && (incluirNaoConfirmadas === 'true' || dep.confirmada_usuario === 1))
