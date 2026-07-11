@@ -70,7 +70,7 @@ function FinanceiroFluxoCaixa() {
     forma_pagamento: ''
   });
 
-  const canFinance = ['ADM', 'Gestor Geral'].includes(perfil);
+  const canFinance = ['ADM', 'Financeiro', 'Gestor Geral'].includes(perfil);
 
   const carregarDados = async () => {
     setErro('');
@@ -295,7 +295,7 @@ function FinanceiroFluxoCaixa() {
               />
               <button className="btn btn-primary" onClick={salvarSaldoInicial} disabled={!canFinance}>Salvar</button>
             </div>
-            {!canFinance && <p className="mt-2" style={{ color: 'var(--gray-600)' }}>Somente ADM e Gestor Geral podem alterar.</p>}
+            {!canFinance && <p className="mt-2" style={{ color: 'var(--gray-600)' }}>Somente ADM, Financeiro e Gestor Geral podem alterar.</p>}
           </div>
 
           <div className="card" style={{ marginBottom: 0 }}>

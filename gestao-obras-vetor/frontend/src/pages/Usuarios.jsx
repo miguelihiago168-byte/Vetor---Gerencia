@@ -21,9 +21,9 @@ import { hasForbiddenPasswordSequence } from '../utils/passwordPolicy';
 import { UserPlus, Trash2, RotateCcw, Search, X, Users, UserCheck, Eye, EyeOff } from 'lucide-react';
 import './Usuarios.css';
 
-const PERFIS = ['ADM', 'Gestor Geral', 'Gestor Local', 'Gestor de Qualidade', 'Almoxarife', 'Fiscal'];
+const PERFIS = ['ADM', 'Financeiro', 'Gestor Geral', 'Gestor Local', 'Gestor de Qualidade', 'Almoxarife', 'Fiscal'];
 const SETORES = ['Administrativo', 'Engenharia', 'Qualidade', 'Almoxarifado', 'Financeiro', 'Outro'];
-const FUNCOES = ['Administrativo', 'Almoxarife', 'Fiscal', 'Gestor Geral', 'Gestor Local', 'Gestor de Qualidade'];
+const FUNCOES = ['Administrativo', 'Financeiro', 'Almoxarife', 'Fiscal', 'Gestor Geral', 'Gestor Local', 'Gestor de Qualidade'];
 
 const normalizarPerfilParaApi = (perfil) => {
   if (perfil === 'Gestor Local') return 'Gestor da Obra';

@@ -331,7 +331,7 @@ export default function RequisicaoKanban() {
   const { usuario } = useAuth();
   const perfil = usuario?.perfil || '';
   const podeAprovar = ['Gestor Geral'].includes(perfil);
-  const podeComprar = perfil === 'ADM';
+  const podeComprar = ['ADM', 'Financeiro', 'Gestor Geral'].includes(perfil);
 
   const [projeto, setProjeto] = useState(null);
   const [colunas, setColunas] = useState([]);
@@ -434,7 +434,7 @@ export default function RequisicaoKanban() {
       showToast('Sem permissão para iniciar cotação.'); setConfirmacao(null); return;
     }
     if (paraId === 'liberado' && !podeAprovar) {
-      showToast('Sem permissão para aprovar compra.'); setConfirmacao(null); return;
+      showToast('Sem permissão para liberar compra.'); setConfirmacao(null); return;
     }
     if (paraId === 'comprado' && !podeComprar) {
       showToast('Sem permissão para confirmar compra.'); setConfirmacao(null); return;
@@ -459,7 +459,7 @@ export default function RequisicaoKanban() {
       showToast('Compra aprovada!');
       await carregar();
     } catch (e) {
-      showToast(e?.response?.data?.erro || 'Erro ao aprovar compra.');
+      showToast(e?.response?.data?.erro || 'Erro ao liberar compra.');
     }
   };
 

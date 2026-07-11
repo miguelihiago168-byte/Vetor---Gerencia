@@ -236,13 +236,14 @@ function Navbar() {
   const isGestorObra = perfil === 'Gestor da Obra' || perfil === 'Gestor Local';
   const isGestorQualidade = perfil === 'Gestor da Qualidade' || perfil === 'Gestor de Qualidade';
   const isAdministrativo = perfil === 'ADM';
+  const isFinanceiro = perfil === 'Financeiro';
   const isAlmoxarife = perfil === 'Almoxarife';
   const isFiscal = perfil === 'Fiscal';
 
   const canViewRdo = isGestorGeral || isGestorObra || isGestorQualidade || isFiscal;
   const canViewRnc = isGestorGeral || isGestorObra || isGestorQualidade || isFiscal;
   const canViewPlanejamento = isGestorGeral || isGestorObra || isGestorQualidade || isFiscal;
-  const canViewCompras = isGestorGeral || isGestorObra || isAdministrativo || isAlmoxarife;
+  const canViewCompras = isGestorGeral || isGestorObra || isAdministrativo || isFinanceiro || isAlmoxarife;
   const canViewAtivos = isGestorGeral || isGestorObra || isAdministrativo || isAlmoxarife;
   const canViewExecucao = isGestorGeral || isGestorObra || isGestorQualidade || isFiscal;
   const canViewQualidade = isGestorGeral || isGestorObra || isGestorQualidade || isFiscal;

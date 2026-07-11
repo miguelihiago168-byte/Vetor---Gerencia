@@ -4,6 +4,7 @@ const PERFIS = {
   GESTOR_OBRA: 'Gestor da Obra',
   GESTOR_QUALIDADE: 'Gestor da Qualidade',
   ALMOXARIFE: 'Almoxarife',
+  FINANCEIRO: 'Financeiro',
   FISCAL: 'Fiscal'
 };
 

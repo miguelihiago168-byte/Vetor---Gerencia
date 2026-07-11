@@ -235,7 +235,7 @@ router.post('/', async (req, res) => {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
 
-    const PODE_CRIAR = ['ADM', 'Gestor Geral', 'Gestor da Obra', 'Almoxarife'];
+    const PODE_CRIAR = ['ADM', 'Financeiro', 'Gestor Geral', 'Gestor da Obra', 'Almoxarife'];
     if (!PODE_CRIAR.includes(perfil)) {
       return res.status(403).json({ erro: 'Sem permissão para criar requisição.' });
     }
@@ -325,7 +325,7 @@ router.get('/finalizadas', async (req, res) => {
     const perfil = inferirPerfil(usuario);
     const { projeto_id } = req.query;
 
-    const PODE_VER = ['ADM', 'Gestor Geral', 'Gestor da Obra', 'Almoxarife'];
+    const PODE_VER = ['ADM', 'Financeiro', 'Gestor Geral', 'Gestor da Obra', 'Almoxarife'];
     if (!PODE_VER.includes(perfil)) {
       return res.status(403).json({ erro: 'Sem permissão.' });
     }
@@ -371,7 +371,7 @@ router.get('/finalizadas', async (req, res) => {
     if (projeto_id) {
       sql += ' AND r.projeto_id = ?';
       params.push(Number(projeto_id));
-    } else if (!['ADM', 'Gestor Geral'].includes(perfil)) {
+    } else if (!['ADM', 'Financeiro', 'Gestor Geral'].includes(perfil)) {
       // se não é global, filtra por projetos do usuário
       const projetosUsuario = await allQuery(
         'SELECT projeto_id FROM projeto_usuarios WHERE usuario_id = ?',
@@ -400,7 +400,7 @@ router.get('/encerradas', async (req, res) => {
     const perfil  = inferirPerfil(usuario);
     const { projeto_id } = req.query;
 
-    const PODE_VER = ['ADM', 'Gestor Geral', 'Gestor da Obra', 'Almoxarife'];
+    const PODE_VER = ['ADM', 'Financeiro', 'Gestor Geral', 'Gestor da Obra', 'Almoxarife'];
     if (!PODE_VER.includes(perfil)) {
       return res.status(403).json({ erro: 'Sem permissão.' });
     }
@@ -417,7 +417,7 @@ router.get('/encerradas', async (req, res) => {
     if (projeto_id) {
       sql += ' AND r.projeto_id = ?';
       params.push(Number(projeto_id));
-    } else if (!['ADM', 'Gestor Geral'].includes(perfil)) {
+    } else if (!['ADM', 'Financeiro', 'Gestor Geral'].includes(perfil)) {
       const projetosUsuario = await allQuery(
         'SELECT projeto_id FROM projeto_usuarios WHERE usuario_id = ?',
         [usuario.id]
@@ -444,7 +444,7 @@ router.get('/negadas', async (req, res) => {
     const perfil = inferirPerfil(usuario);
     const { projeto_id } = req.query;
 
-    const PODE_VER = ['ADM', 'Gestor Geral', 'Gestor da Obra', 'Almoxarife'];
+    const PODE_VER = ['ADM', 'Financeiro', 'Gestor Geral', 'Gestor da Obra', 'Almoxarife'];
     if (!PODE_VER.includes(perfil)) {
       return res.status(403).json({ erro: 'Sem permissão.' });
     }
@@ -481,7 +481,7 @@ router.get('/negadas', async (req, res) => {
     if (projeto_id) {
       sql += ' AND r.projeto_id = ?';
       params.push(Number(projeto_id));
-    } else if (!['ADM', 'Gestor Geral'].includes(perfil)) {
+    } else if (!['ADM', 'Financeiro', 'Gestor Geral'].includes(perfil)) {
       const projetosUsuario = await allQuery(
         'SELECT projeto_id FROM projeto_usuarios WHERE usuario_id = ?',
         [usuario.id]
@@ -556,7 +556,7 @@ router.get('/kanban', async (req, res) => {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
 
-    const PODE_VER = ['ADM', 'Gestor Geral', 'Gestor da Obra', 'Almoxarife'];
+    const PODE_VER = ['ADM', 'Financeiro', 'Gestor Geral', 'Gestor da Obra', 'Almoxarife'];
     if (!PODE_VER.includes(perfil)) {
       return res.status(403).json({ erro: 'Sem permissão.' });
     }
@@ -566,7 +566,7 @@ router.get('/kanban', async (req, res) => {
     let where = 'WHERE 1=1';
     const params = [];
 
-    if (!['ADM', 'Gestor Geral'].includes(perfil)) {
+    if (!['ADM', 'Financeiro', 'Gestor Geral'].includes(perfil)) {
       const projetosUsuario = await allQuery(
         'SELECT projeto_id FROM projeto_usuarios WHERE usuario_id = ?',
         [usuario.id]
@@ -633,7 +633,7 @@ router.get('/kanban/projeto/:projetoId', async (req, res) => {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
 
-    const PODE_VER = ['ADM', 'Gestor Geral', 'Gestor da Obra', 'Almoxarife'];
+    const PODE_VER = ['ADM', 'Financeiro', 'Gestor Geral', 'Gestor da Obra', 'Almoxarife'];
     if (!PODE_VER.includes(perfil)) {
       return res.status(403).json({ erro: 'Sem permissão.' });
     }
@@ -694,14 +694,14 @@ router.get('/badges', async (req, res) => {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
 
-    const PODE_VER = ['ADM', 'Gestor Geral', 'Gestor da Obra', 'Almoxarife', 'Gestor Local'];
+    const PODE_VER = ['ADM', 'Financeiro', 'Gestor Geral', 'Gestor da Obra', 'Almoxarife', 'Gestor Local'];
     if (!PODE_VER.includes(perfil)) return res.json([]);
 
     const { projeto_id } = req.query;
     let where = 'WHERE 1=1';
     const params = [];
 
-    if (!['ADM', 'Gestor Geral'].includes(perfil)) {
+    if (!['ADM', 'Financeiro', 'Gestor Geral'].includes(perfil)) {
       const proj = await allQuery(
         'SELECT projeto_id FROM projeto_usuarios WHERE usuario_id = ?',
         [usuario.id]
@@ -736,7 +736,7 @@ router.get('/', async (req, res) => {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
 
-    const PODE_VER = ['ADM', 'Gestor Geral', 'Gestor da Obra', 'Almoxarife'];
+    const PODE_VER = ['ADM', 'Financeiro', 'Gestor Geral', 'Gestor da Obra', 'Almoxarife'];
     if (!PODE_VER.includes(perfil)) {
       return res.status(403).json({ erro: 'Sem permissão.' });
     }
@@ -747,7 +747,7 @@ router.get('/', async (req, res) => {
     const params = [];
 
     // Filtro de acesso: ADM/Gestor Geral veem tudo; demais veem só projetos vinculados
-    if (!['ADM', 'Gestor Geral'].includes(perfil)) {
+    if (!['ADM', 'Financeiro', 'Gestor Geral'].includes(perfil)) {
       const projetosUsuario = await allQuery(
         'SELECT projeto_id FROM projeto_usuarios WHERE usuario_id = ?',
         [usuario.id]
@@ -803,7 +803,7 @@ router.get('/projeto/:projetoId', async (req, res) => {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
 
-    const PODE_VER = ['ADM', 'Gestor Geral', 'Gestor da Obra', 'Almoxarife'];
+    const PODE_VER = ['ADM', 'Financeiro', 'Gestor Geral', 'Gestor da Obra', 'Almoxarife'];
     if (!PODE_VER.includes(perfil)) {
       return res.status(403).json({ erro: 'Sem permissão.' });
     }
@@ -850,8 +850,8 @@ router.patch('/:id/concluir', async (req, res) => {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
 
-    if (!['ADM', 'Gestor Geral'].includes(perfil)) {
-      return res.status(403).json({ erro: 'Apenas ADM ou Gestor Geral pode concluir uma requisição.' });
+    if (!['ADM', 'Financeiro', 'Gestor Geral'].includes(perfil)) {
+      return res.status(403).json({ erro: 'Apenas ADM, Financeiro ou Gestor Geral pode concluir uma requisição.' });
     }
 
     const requisicao = await getQuery('SELECT * FROM requisicoes WHERE id = ?', [Number(id)]);
@@ -904,7 +904,7 @@ router.get('/:id', async (req, res) => {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
 
-    const PODE_VER = ['ADM', 'Gestor Geral', 'Gestor da Obra', 'Almoxarife'];
+    const PODE_VER = ['ADM', 'Financeiro', 'Gestor Geral', 'Gestor da Obra', 'Almoxarife'];
     if (!PODE_VER.includes(perfil)) {
       return res.status(403).json({ erro: 'Sem permissão.' });
     }
@@ -1190,8 +1190,8 @@ router.post('/:id/itens/:itemId/cotacoes', async (req, res) => {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
 
-    if (!['ADM', 'Gestor Geral', 'Gestor Local'].includes(perfil)) {
-      return res.status(403).json({ erro: 'Apenas ADM, Gestor Geral ou Gestor Local podem cadastrar cotações.' });
+    if (!['ADM', 'Financeiro', 'Gestor Geral', 'Gestor Local'].includes(perfil)) {
+      return res.status(403).json({ erro: 'Apenas ADM, Financeiro, Gestor Geral ou Gestor Local podem cadastrar cotações.' });
     }
 
     const item = await getQuery(
@@ -1304,7 +1304,7 @@ router.patch('/:id/itens/:itemId/cotacoes/:cotacaoId', async (req, res) => {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
 
-    if (!['ADM', 'Gestor Geral', 'Gestor Local'].includes(perfil)) {
+    if (!['ADM', 'Financeiro', 'Gestor Geral', 'Gestor Local'].includes(perfil)) {
       return res.status(403).json({ erro: 'Sem permissão para editar cotação.' });
     }
 
@@ -1399,7 +1399,7 @@ router.patch('/:id/itens/:itemId/finalizar-cotacao', async (req, res) => {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
 
-    if (!['ADM', 'Gestor Geral', 'Gestor Local'].includes(perfil)) {
+    if (!['ADM', 'Financeiro', 'Gestor Geral', 'Gestor Local'].includes(perfil)) {
       return res.status(403).json({ erro: 'Sem permissão para finalizar cotação.' });
     }
 
@@ -1513,14 +1513,14 @@ router.patch('/:id/itens/:itemId/cotacoes/:cotacaoId/selecionar', async (req, re
 });
 
 // ─── PATCH /:id/itens/:itemId/comprado ────────────────────────────────────
-// ADM marca item como Comprado
+// ADM, Financeiro ou Gestor Geral marca item como Comprado
 router.patch('/:id/itens/:itemId/comprado', async (req, res) => {
   try {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
 
-    if (perfil !== 'ADM') {
-      return res.status(403).json({ erro: 'Apenas ADM pode marcar item como comprado.' });
+    if (!['ADM', 'Financeiro', 'Gestor Geral'].includes(perfil)) {
+      return res.status(403).json({ erro: 'Apenas ADM, Financeiro ou Gestor Geral pode marcar item como comprado.' });
     }
 
     const item = await getQuery(
@@ -1747,13 +1747,13 @@ router.patch('/:id/itens/:itemId/alterar-quantidade', async (req, res) => {
 });
 
 // ─── PATCH /:id/itens/:itemId/cancelar ────────────────────────────────────
-// ADM ou Gestor Geral cancela item individual
+// ADM, Financeiro ou Gestor Geral cancela item individual
 router.patch('/:id/itens/:itemId/cancelar', async (req, res) => {
   try {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
 
-    if (!['ADM', 'Gestor Geral'].includes(perfil)) {
+    if (!['ADM', 'Financeiro', 'Gestor Geral'].includes(perfil)) {
       return res.status(403).json({ erro: 'Sem permissão para cancelar item.' });
     }
 
@@ -1829,7 +1829,7 @@ router.patch('/:id/itens/:itemId/devolver-cotacao', async (req, res) => {
     const ok = await assertProjectAccess(req, res, Number(req2.projeto_id));
     if (!ok) return;
 
-    // Mantém cotações existentes — ADM corrige com base no motivo informado
+    // Mantém cotações existentes — ADM/Financeiro corrige com base no motivo informado
     await runQuery(
       `UPDATE requisicao_itens
          SET aprovado_para_cotacao = 1, status_item = 'Em cotação',
@@ -1907,8 +1907,8 @@ router.patch('/:id/comprar-todos', async (req, res) => {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
 
-    if (perfil !== 'ADM') {
-      return res.status(403).json({ erro: 'Apenas ADM pode confirmar compra em lote.' });
+    if (!['ADM', 'Financeiro', 'Gestor Geral'].includes(perfil)) {
+      return res.status(403).json({ erro: 'Apenas ADM, Financeiro ou Gestor Geral pode confirmar compra em lote.' });
     }
 
     const req2 = await getQuery('SELECT projeto_id FROM requisicoes WHERE id = ?', [req.params.id]);

@@ -20,6 +20,7 @@ const STATUS_FLOW = [
 // Slugs com badge colorido (requer ação) por perfil
 const BADGE_PERFIL = {
   'ADM':            new Set(['em-cotacao', 'aprovado-compra']),
+  'Financeiro':     new Set(['em-cotacao', 'aprovado-compra']),
   'Gestor Geral':   new Set(['solicitado', 'cotacoes-recebidas']),
   'Gestor da Obra': new Set(['solicitado', 'cotacoes-recebidas']),
   'Gestor Local':   new Set(['solicitado']),
@@ -57,7 +58,7 @@ function ComprasLayout({ title, children, extraHeader }) {
   const { projetoId } = useParams();
   const { usuario } = useAuth();
   const perfil = usuario?.perfil || '';
-  const isGestorAdm = ['ADM', 'Gestor Geral'].includes(perfil);
+  const isGestorAdm = ['ADM', 'Financeiro', 'Gestor Geral'].includes(perfil);
   const badgeMap = useBadges(projetoId);
   const meusBadges = BADGE_PERFIL[perfil] || new Set();
 
@@ -136,7 +137,7 @@ function ComprasLayout({ title, children, extraHeader }) {
                 </span>
               </NavLink>
 
-              {/* Cadastros (ADM e Gestor Geral) */}
+              {/* Cadastros (ADM, Financeiro e Gestor Geral) */}
               {isGestorAdm && (
                 <>
                   <div className="suprimentos-nav-section">
