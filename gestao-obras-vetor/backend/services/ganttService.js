@@ -231,6 +231,15 @@ function calcularDuracao(dataInicio, dataFim) {
   return contarDiasUteisInclusivo(dataInicio, dataFim);
 }
 
+function isAtividadeConcluida(atividade) {
+  const percentual = Number(atividade?.percentual_executado || 0);
+  const status = String(atividade?.status || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  return percentual >= 100 || status.includes('conclu');
+}
+
 /**
  * Detecta ciclos em um grafo de dependências (DFS)
  * @param {number} novoOrigemId - ID da atividade origem da nova aresta
@@ -739,7 +748,7 @@ function detectarAtividadesAtrasadas(atividades, opcoes = {}) {
   const atrasadas = [];
 
   atividades.forEach(at => {
-    if (at.data_fim_planejada && at.percentual_executado < 100) {
+    if (at.data_fim_planejada && !isAtividadeConcluida(at)) {
       const dataFim = parseDataSemTimezone(at.data_fim_planejada);
       if (!dataFim) return;
 
