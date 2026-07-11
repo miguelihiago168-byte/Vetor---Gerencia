@@ -18,7 +18,8 @@ import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
 import { useNotification } from '../context/NotificationContext';
 import { hasForbiddenPasswordSequence } from '../utils/passwordPolicy';
-import { Shield, UserPlus, Trash2, RotateCcw, Search, X, Users, UserCheck, Eye, EyeOff } from 'lucide-react';
+import { UserPlus, Trash2, RotateCcw, Search, X, Users, UserCheck, Eye, EyeOff } from 'lucide-react';
+import './Usuarios.css';
 
 const PERFIS = ['ADM', 'Gestor Geral', 'Gestor Local', 'Gestor de Qualidade', 'Almoxarife', 'Fiscal'];
 const SETORES = ['Administrativo', 'Engenharia', 'Qualidade', 'Almoxarifado', 'Financeiro', 'Outro'];
@@ -543,78 +544,68 @@ function Usuarios() {
   return (
     <>
       <Navbar />
-      <div className="container" style={{ maxWidth: '100%' }}>
-        <div className="flex-between mb-3">
+      <div className="container usuarios-page">
+        <div className="usuarios-page-header">
           <div>
-            <p className="eyebrow">Administração</p>
-            <h1 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Shield size={24} /> Usuários
-            </h1>
+            <p>Administração</p>
+            <h1>Usuários</h1>
           </div>
         </div>
 
-        <div className="almox-layout">
-          <aside className="almox-sidebar card">
-            <h3 className="card-header" style={{ marginBottom: 12 }}>Menu</h3>
-            <nav className="almox-nav">
-              <button className={`almox-nav-link${aba === 'usuarios' ? ' active' : ''}`} onClick={() => setAba('usuarios')} type="button">Usuários do Sistema</button>
-              <button className={`almox-nav-link${aba === 'mao-obra-direta' ? ' active' : ''}`} onClick={() => setAba('mao-obra-direta')} type="button">Mão de Obra Direta</button>
+        <div className="usuarios-layout">
+          <aside className="usuarios-sidebar">
+            <span className="usuarios-sidebar-label">Menu</span>
+            <nav className="usuarios-nav">
+              <button className={`usuarios-nav-link${aba === 'usuarios' ? ' active' : ''}`} onClick={() => setAba('usuarios')} type="button">Usuários do Sistema</button>
+              <button className={`usuarios-nav-link${aba === 'mao-obra-direta' ? ' active' : ''}`} onClick={() => setAba('mao-obra-direta')} type="button">Mão de Obra Direta</button>
             </nav>
           </aside>
 
-          <main className="almox-content">
+          <main className="usuarios-content">
             {aba === 'usuarios' && (
               <>
-                {/* Barra de ações */}
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
-                  <button className="btn btn-primary" onClick={abrirNovoUsuario} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div className="usuarios-toolbar">
+                  <button className="btn btn-primary usuarios-primary-action" onClick={abrirNovoUsuario}>
                     <UserPlus size={16} /> Novo usuário
                   </button>
                   {filtrosAtivos && (
-                    <button className="btn btn-outline" onClick={limparFiltros} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-danger)' }}>
+                    <button className="btn btn-outline usuarios-clear-filter" onClick={limparFiltros}>
                       <X size={16} /> Limpar filtros
                     </button>
                   )}
-                  <span style={{ marginLeft: 'auto', color: 'var(--gray-500)', fontSize: '0.85rem' }}>
+                  <span className="usuarios-count">
                     {usuariosFiltrados.length} usuário(s)
                   </span>
                 </div>
 
-                {/* Filtros */}
-                <div className="card" style={{ marginBottom: 14, padding: '14px 16px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '10px' }}>
-                    {/* Busca por texto */}
-                    <div style={{ position: 'relative' }}>
-                      <Search size={15} style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: 'var(--gray-400)', pointerEvents: 'none' }} />
+                <div className="usuarios-filter-panel">
+                  <div className="usuarios-filter-grid">
+                    <div className="usuarios-search-field">
+                      <Search size={15} />
                       <input
                         className="form-input"
                         placeholder="Buscar por nome, e-mail ou login"
                         value={filtroTexto}
                         onChange={(e) => setFiltroTexto(e.target.value)}
-                        style={{ paddingLeft: 30 }}
                       />
                     </div>
 
-                    {/* Status */}
                     <select className="form-select" value={filtroStatus} onChange={(e) => setFiltroStatus(e.target.value)}>
                       <option value="ativos">Ativos</option>
                       <option value="desativados">Desativados</option>
                       <option value="todos">Todos os status</option>
                     </select>
 
-                    {/* Perfil */}
                     <select className="form-select" value={filtroPerfil} onChange={(e) => setFiltroPerfil(e.target.value)}>
                       <option value="">Todos os perfis</option>
                       {PERFIS.map((p) => <option key={p} value={p}>{p}</option>)}
                     </select>
 
-                    {/* Setor */}
                     <select className="form-select" value={filtroSetor} onChange={(e) => setFiltroSetor(e.target.value)}>
                       <option value="">Todos os setores</option>
                       {SETORES.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
 
-                    {/* Obra */}
                     <select className="form-select" value={filtroObra} onChange={(e) => setFiltroObra(e.target.value)}>
                       <option value="">Todas as obras</option>
                       {projetos.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
@@ -624,12 +615,8 @@ function Usuarios() {
 
                 {/* Barra de ações em lote */}
                 {selecionados.length > 0 && (
-                  <div className="card" style={{
-                    marginBottom: 14, padding: '12px 16px', background: 'var(--badge-blue-bg)',
-                    border: '1px solid var(--badge-blue-color)',
-                    display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center'
-                  }}>
-                    <span style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div className="usuarios-bulk-bar">
+                    <span>
                       <Users size={16} /> {selecionados.length} usuário(s) selecionado(s)
                     </span>
 
@@ -675,7 +662,6 @@ function Usuarios() {
                         className="btn btn-primary"
                         onClick={executarBulk}
                         disabled={bulkLoading}
-                        style={{ display: 'flex', alignItems: 'center', gap: 6 }}
                       >
                         <UserCheck size={16} /> {bulkLoading ? 'Aplicando...' : 'Aplicar'}
                       </button>
@@ -684,7 +670,6 @@ function Usuarios() {
                     <button
                       className="btn btn-outline"
                       onClick={() => { setSelecionados([]); setBulkAcao(''); setBulkValor(''); }}
-                      style={{ marginLeft: 'auto' }}
                     >
                       <X size={15} /> Cancelar
                     </button>
@@ -694,8 +679,8 @@ function Usuarios() {
                 {loading ? (
                   <div className="loading"><div className="spinner"></div></div>
                 ) : (
-                  <div style={{ overflowX: 'auto' }}>
-                    <table className="table">
+                  <div className="usuarios-table-wrap">
+                    <table className="table usuarios-table">
                       <thead>
                         <tr>
                           <th style={{ width: 36 }}>
@@ -724,7 +709,7 @@ function Usuarios() {
                             return p ? p.nome : `#${pid}`;
                           }).join(', ');
                           return (
-                            <tr key={u.id} style={{ opacity: isAtivo ? 1 : 0.6 }}>
+                            <tr key={u.id} className={isAtivo ? '' : 'is-inactive'}>
                               <td>
                                 <input
                                   type="checkbox"
@@ -732,49 +717,40 @@ function Usuarios() {
                                   onChange={() => toggleSelecionado(u.id)}
                                 />
                               </td>
-                              <td style={{ fontWeight: 500 }}>{u.nome}</td>
-                              <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{u.login}</td>
-                              <td style={{ fontSize: '0.85rem', color: 'var(--gray-500)' }}>{u.email || <span style={{ color: 'var(--gray-300)' }}>—</span>}</td>
+                              <td className="usuarios-name-cell">{u.nome}</td>
+                              <td className="usuarios-login-cell">{u.login}</td>
+                              <td className="usuarios-muted-cell">{u.email || <span>—</span>}</td>
                               <td>
-                                <span style={{
-                                  fontSize: '0.78rem', fontWeight: 600, padding: '2px 8px',
-                                  borderRadius: 12, background: 'var(--badge-blue-bg)',
-                                  color: 'var(--badge-blue-color)'
-                                }}>
+                                <span className="usuarios-chip usuarios-chip-blue">
                                   {normalizarPerfilTela(u.perfil)}
                                 </span>
                               </td>
-                              <td style={{ fontSize: '0.85rem' }}>
+                              <td className="usuarios-compact-cell">
                                 {u.setor}{u.setor === 'Outro' && u.setor_outro ? ` (${u.setor_outro})` : ''}
                               </td>
-                              <td style={{ fontSize: '0.8rem', color: 'var(--gray-500)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={obrasTitulos}>
-                                {obrasTitulos || <span style={{ color: 'var(--gray-300)' }}>—</span>}
+                              <td className="usuarios-work-cell" title={obrasTitulos}>
+                                {obrasTitulos || <span>—</span>}
                               </td>
                               <td>
-                                <span style={{
-                                  fontSize: '0.75rem', fontWeight: 700, padding: '2px 8px',
-                                  borderRadius: 12,
-                                  background: isAtivo ? 'var(--badge-green-bg)' : 'var(--badge-red-bg)',
-                                  color: isAtivo ? 'var(--badge-green-color)' : 'var(--badge-red-color)'
-                                }}>
+                                <span className={`usuarios-chip ${isAtivo ? 'usuarios-chip-green' : 'usuarios-chip-red'}`}>
                                   {isAtivo ? 'Ativo' : 'Desativado'}
                                 </span>
                               </td>
                               <td>
-                                <div style={{ display: 'flex', gap: 6 }}>
+                                <div className="usuarios-row-actions">
                                   {isAtivo ? (
                                     <>
-                                      <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.8rem' }} onClick={() => abrirEdicao(u)}>Editar</button>
-                                      <button className="btn btn-danger" style={{ padding: '4px 8px', fontSize: '0.8rem' }} onClick={() => desativar(u.id)}>
+                                      <button className="btn btn-secondary" onClick={() => abrirEdicao(u)}>Editar</button>
+                                      <button className="btn btn-danger" onClick={() => desativar(u.id)} title="Desativar">
                                         <Trash2 size={14} />
                                       </button>
                                     </>
                                   ) : (
                                     <>
-                                      <button className="btn btn-success" style={{ padding: '4px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => reativar(u.id)}>
+                                      <button className="btn btn-success" onClick={() => reativar(u.id)}>
                                         <RotateCcw size={13} /> Reativar
                                       </button>
-                                      <button className="btn btn-danger" style={{ padding: '4px 10px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => excluirPermanente(u.id)}>
+                                      <button className="btn btn-danger" onClick={() => excluirPermanente(u.id)}>
                                         <Trash2 size={13} /> Excluir
                                       </button>
                                     </>
