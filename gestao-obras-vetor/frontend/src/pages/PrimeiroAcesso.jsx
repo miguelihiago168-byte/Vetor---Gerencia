@@ -4,7 +4,7 @@ import { Briefcase, Building2, LogOut, ShieldCheck } from 'lucide-react';
 import { concluirPrimeiroAcesso } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
-const FUNCOES = ['Administrativo', 'Almoxarife', 'Fiscal', 'Gestor Geral', 'Gestor Local', 'Gestor de Qualidade'];
+const FUNCOES = ['Administrativo', 'Financeiro', 'Almoxarife', 'Fiscal', 'Gestor Geral', 'Gestor Local', 'Gestor de Qualidade'];
 const SETORES = ['Administrativo', 'Engenharia', 'Qualidade', 'Almoxarifado', 'Financeiro', 'Outro'];
 
 function PrimeiroAcesso() {

@@ -48,12 +48,12 @@ router.get('/:id', async (req, res) => {
 });
 
 // ─── Criar fornecedor ─────────────────────────────────────────────────────
-// Permitido: ADM, Gestor Geral
+// Permitido: ADM, Financeiro, Gestor Geral
 router.post('/', async (req, res) => {
   try {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
-    if (!['ADM', 'Gestor Geral'].includes(perfil)) {
+    if (!['ADM', 'Financeiro', 'Gestor Geral'].includes(perfil)) {
       return res.status(403).json({ erro: 'Sem permissão para cadastrar fornecedores.' });
     }
 
@@ -89,12 +89,12 @@ router.post('/', async (req, res) => {
 });
 
 // ─── Editar fornecedor ────────────────────────────────────────────────────
-// Permitido: ADM, Gestor Geral
+// Permitido: ADM, Financeiro, Gestor Geral
 router.patch('/:id', async (req, res) => {
   try {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
-    if (!['ADM', 'Gestor Geral'].includes(perfil)) {
+    if (!['ADM', 'Financeiro', 'Gestor Geral'].includes(perfil)) {
       return res.status(403).json({ erro: 'Sem permissão para editar fornecedores.' });
     }
 
@@ -141,13 +141,13 @@ router.patch('/:id', async (req, res) => {
 });
 
 // ─── Inativar/Reativar fornecedor ─────────────────────────────────────────
-// Apenas ADM
+// Apenas ADM ou Financeiro
 router.delete('/:id', async (req, res) => {
   try {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
     const perfil = inferirPerfil(usuario);
-    if (perfil !== 'ADM') {
-      return res.status(403).json({ erro: 'Apenas ADM pode inativar fornecedores.' });
+    if (!['ADM', 'Financeiro'].includes(perfil)) {
+      return res.status(403).json({ erro: 'Apenas ADM ou Financeiro pode inativar fornecedores.' });
     }
 
     const atual = await getQuery('SELECT * FROM fornecedores WHERE id = ?', [req.params.id]);

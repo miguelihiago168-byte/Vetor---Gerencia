@@ -59,8 +59,8 @@ const PERFIS_CURVA_S = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gesto
 const PERFIS_EAP = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade'];
 const PERFIS_GANTT = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade'];
 const PERFIS_PLANEJAMENTO = PERFIS_EAP;
-const PERFIS_COMPRAS = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'ADM', 'Almoxarife'];
-const PERFIS_GESTORES_ADM = ['Gestor Geral', 'ADM'];
+const PERFIS_COMPRAS = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'ADM', 'Financeiro', 'Almoxarife'];
+const PERFIS_GESTORES_ADM = ['Gestor Geral', 'ADM', 'Financeiro'];
 const PERFIS_ATIVOS = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'ADM', 'Almoxarife'];
 const PERFIS_USUARIOS = ['Gestor Geral', 'ADM'];
 

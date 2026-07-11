@@ -19,9 +19,9 @@ function PedidosCompra() {
   const [search, setSearch] = useState('');
   const [comparativos, setComparativos] = useState({});
 
-  const canCreatePurchase = ['Almoxarife', 'Gestor Geral', 'Gestor da Obra'].includes(perfil);
-  const canApprovePurchase = ['Gestor Geral', 'Gestor da Obra', 'ADM'].includes(perfil);
-  const canFinancePurchase = ['ADM', 'Gestor Geral'].includes(perfil);
+  const canCreatePurchase = ['Almoxarife', 'Gestor Geral', 'Gestor da Obra', 'ADM', 'Financeiro'].includes(perfil);
+  const canApprovePurchase = ['Gestor Geral', 'Gestor da Obra', 'ADM', 'Financeiro'].includes(perfil);
+  const canFinancePurchase = ['ADM', 'Financeiro', 'Gestor Geral'].includes(perfil);
 
   useEffect(() => {
     const load = async () => {

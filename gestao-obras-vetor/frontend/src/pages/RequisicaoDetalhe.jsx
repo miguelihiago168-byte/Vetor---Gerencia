@@ -318,8 +318,8 @@ export default function RequisicaoDetalhe() {
   const itensNegados = itens.filter((i) =>  ['Reprovado', 'Cancelado'].includes(i.status_item));
   const temAgAnalise = itensAtivos.some((i) => i.status_item === 'Aguardando análise');
   const podeGestor   = ['Gestor Geral'].includes(perfil);
-  const podeCotar    = ['ADM', 'Gestor Geral', 'Gestor Local'].includes(perfil);
-  const podeComprar  = perfil === 'ADM';
+  const podeCotar    = ['ADM', 'Financeiro', 'Gestor Geral', 'Gestor Local'].includes(perfil);
+  const podeComprar  = ['ADM', 'Financeiro', 'Gestor Geral'].includes(perfil);
   const isSolicitante = Number(req.solicitante_id) === Number(usuario?.id);
   const voltarLink   = projetoId ? `/projeto/${projetoId}/compras` : '/compras';
 
@@ -774,7 +774,7 @@ export default function RequisicaoDetalhe() {
           <div className="modal-card" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
             <h2 className="card-header" style={{ marginBottom: '1.25rem' }}>Devolver para Cotação</h2>
             <p style={{ marginBottom: '1rem', fontSize: '0.9rem', color: 'var(--gray-500)' }}>
-              As cotações existentes serão mantidas. O ADM verá o motivo e poderá corrigir o que for necessário.
+              As cotações existentes serão mantidas. O ADM ou Financeiro verá o motivo e poderá corrigir o que for necessário.
             </p>
             <div style={{ marginBottom: '1rem' }}>
               <label className="form-label">Motivo da Devolução *</label>
@@ -938,7 +938,7 @@ function ItemCard({ item, idx, perfil, podeGestor, podeCotar, podeComprar, isSol
         )}
         {podeComprar && !reqFinalizada && item.status_item === 'Aprovado para compra' && (
           <button className="btn btn-soft-green" style={{ padding: '6px 14px', fontSize: '0.85rem' }} onClick={onAutorizar}>
-            ✓ Autorizar Compra
+            ✓ Confirmar Compra
           </button>
         )}
         {podeGestor && !reqFinalizada && !['Comprado', 'Cancelado'].includes(item.status_item) && (

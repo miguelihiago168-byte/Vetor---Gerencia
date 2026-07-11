@@ -11,7 +11,7 @@ export default function Fornecedores() {
   const { usuario } = useAuth();
   const { confirm } = useDialog();
   const { success, error } = useNotification();
-  const podeGerenciar = ['ADM', 'Gestor Geral'].includes(usuario?.perfil || '');
+  const podeGerenciar = ['ADM', 'Financeiro', 'Gestor Geral'].includes(usuario?.perfil || '');
 
   const [fornecedores, setFornecedores] = useState([]);
   const [loading, setLoading] = useState(true);

@@ -44,7 +44,7 @@ export default function ComprasGlobal() {
   const [salvando, setSalvando]       = useState(false);
   const [erroModal, setErroModal]     = useState('');
 
-  const podeCriar = ['ADM', 'Gestor Geral', 'Gestor da Obra', 'Almoxarife'].includes(usuario?.perfil || '');
+  const podeCriar = ['ADM', 'Financeiro', 'Gestor Geral', 'Gestor da Obra', 'Almoxarife'].includes(usuario?.perfil || '');
 
   const carregar = useCallback(async () => {
     setLoading(true);

@@ -19,10 +19,10 @@ const SLUG_MAP = {
 // Botao de acao contextual por perfil + slug
 const ACAO_MAP = {
   'solicitado':         { perfis: ['Gestor Geral'], label: 'Analisar' },
-  'em-cotacao':         { perfis: ['ADM', 'Gestor Geral'],                                   label: 'Cotar' },
+  'em-cotacao':         { perfis: ['ADM', 'Financeiro', 'Gestor Geral'],                     label: 'Cotar' },
   'cotacoes-recebidas': { perfis: ['Gestor Geral'],                                          label: 'Decidir' },
-  'aprovado-compra':    { perfis: ['ADM', 'Gestor Geral'],                                   label: 'Registrar compra' },
-  'comprado':           { perfis: ['ADM', 'Gestor Geral'],                                   label: 'Finalizar entrega' },
+  'aprovado-compra':    { perfis: ['ADM', 'Financeiro', 'Gestor Geral'],                     label: 'Confirmar compra' },
+  'comprado':           { perfis: ['ADM', 'Financeiro', 'Gestor Geral'],                     label: 'Finalizar entrega' },
 };
 
 const URG_ROW = {

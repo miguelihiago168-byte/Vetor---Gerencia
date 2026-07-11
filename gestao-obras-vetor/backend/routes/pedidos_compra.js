@@ -74,9 +74,10 @@ const listarDestinatariosNotificacao = async (pedido) => {
     WHERE ativo = 1 AND deletado_em IS NULL
       AND (
         perfil = ?
+        OR perfil = ?
         OR (perfil IS NULL AND COALESCE(is_adm, 0) = 1)
       )
-  `, [PERFIS.ADM]);
+  `, [PERFIS.ADM, PERFIS.FINANCEIRO]);
 
   const gestoresObra = await allQuery(`
     SELECT DISTINCT u.id
@@ -202,7 +203,7 @@ router.patch('/:id', [auth, requirePedidoPermission(PERMISSIONS.PURCHASE_CREATE)
     const pedidoAtual = req.pedido;
     const perfil = inferirPerfil(req.usuario);
 
-    const usuarioPodeEditar = req.usuario.id === pedidoAtual.solicitante_id || [PERFIS.GESTOR_GERAL, PERFIS.GESTOR_OBRA, PERFIS.ADM].includes(perfil);
+    const usuarioPodeEditar = req.usuario.id === pedidoAtual.solicitante_id || [PERFIS.GESTOR_GERAL, PERFIS.GESTOR_OBRA, PERFIS.ADM, PERFIS.FINANCEIRO].includes(perfil);
     if (!usuarioPodeEditar) {
       return res.status(403).json({ erro: 'Sem permissão para editar este pedido.' });
     }

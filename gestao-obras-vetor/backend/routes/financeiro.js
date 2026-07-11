@@ -22,7 +22,7 @@ const router = express.Router();
 
 const canViewConsolidado = (usuario) => {
   const perfil = inferirPerfil(usuario);
-  return [PERFIS.ADM, PERFIS.GESTOR_GERAL, PERFIS.GESTOR_OBRA].includes(perfil);
+  return [PERFIS.ADM, PERFIS.FINANCEIRO, PERFIS.GESTOR_GERAL, PERFIS.GESTOR_OBRA].includes(perfil);
 };
 
 router.use(async (req, res, next) => {
