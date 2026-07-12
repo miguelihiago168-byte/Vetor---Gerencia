@@ -102,6 +102,159 @@
   color: #ffffff;
 }
 
+.eap-import-file-picker {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  border: 1px solid var(--eap-border);
+  border-radius: 12px;
+  background: var(--eap-surface);
+  padding: 9px 10px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.eap-import-file-picker.has-file {
+  border-color: color-mix(in srgb, var(--eap-accent) 36%, var(--eap-border));
+  background: color-mix(in srgb, var(--eap-accent) 5%, var(--eap-surface));
+}
+
+.eap-import-file-picker input[type='file'] {
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  position: absolute;
+  width: 1px;
+}
+
+.eap-import-file-action {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid #2f6bed;
+  border-radius: 10px;
+  background: #eef5ff;
+  color: #1d43c2;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+  padding: 0 13px;
+  white-space: nowrap;
+  opacity: 1;
+}
+
+.eap-import-file-action:hover,
+.eap-import-file-action:focus-visible {
+  background: #dbeafe;
+  border-color: #1d43c2;
+  color: #17389f;
+  outline: none;
+}
+
+.eap-import-file-action svg {
+  color: currentColor;
+  flex-shrink: 0;
+}
+
+.eap-import-file-info {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.eap-import-file-info strong {
+  color: var(--eap-text);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eap-import-file-info span {
+  color: var(--eap-muted);
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.eap-import-file-clear {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--eap-border);
+  border-radius: 9px;
+  background: var(--eap-surface);
+  color: var(--eap-muted);
+  cursor: pointer;
+}
+
+.eap-import-file-clear:hover,
+.eap-import-file-clear:focus-visible {
+  border-color: color-mix(in srgb, var(--eap-danger) 34%, var(--eap-border));
+  color: var(--eap-danger);
+  outline: none;
+}
+
+.eap-import-modal-btn {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 0 16px;
+  white-space: nowrap;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.eap-import-modal-btn-primary {
+  border: 1px solid #2f6bed;
+  background: #eef5ff;
+  color: #1d43c2;
+}
+
+.eap-import-modal-btn-primary:hover,
+.eap-import-modal-btn-primary:focus-visible {
+  background: #dbeafe;
+  border-color: #1d43c2;
+  color: #17389f;
+  outline: none;
+}
+
+.eap-import-modal-btn-secondary {
+  border: 1px solid var(--eap-border-strong);
+  background: var(--eap-surface);
+  color: var(--eap-muted);
+}
+
+.eap-import-modal-btn-secondary:hover,
+.eap-import-modal-btn-secondary:focus-visible {
+  background: var(--eap-surface-soft);
+  border-color: var(--eap-accent);
+  color: var(--eap-text);
+  outline: none;
+}
+
+.eap-import-modal-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  box-shadow: none;
+}
+
+.eap-import-modal-btn svg {
+  color: currentColor;
+  flex-shrink: 0;
+}
+
 .eap-toolbar-btn-back {
   padding-left: 10px;
 }
@@ -614,6 +767,43 @@ body.dark-mode .eap-recalc-table th {
   color: #c5d3de;
 }
 
+body.dark-mode .eap-import-file-action {
+  background: #1d3d75;
+  border-color: #74a7ff;
+  color: #ffffff;
+}
+
+body.dark-mode .eap-import-file-action:hover,
+body.dark-mode .eap-import-file-action:focus-visible {
+  background: #28518f;
+  color: #ffffff;
+}
+
+body.dark-mode .eap-import-modal-btn-primary {
+  background: #1d3d75;
+  border-color: #74a7ff;
+  color: #ffffff;
+}
+
+body.dark-mode .eap-import-modal-btn-primary:hover,
+body.dark-mode .eap-import-modal-btn-primary:focus-visible {
+  background: #28518f;
+  color: #ffffff;
+}
+
+body.dark-mode .eap-import-modal-btn-secondary {
+  background: #141d2a;
+  border-color: #40556f;
+  color: #d5e3f0;
+}
+
+body.dark-mode .eap-import-modal-btn-secondary:hover,
+body.dark-mode .eap-import-modal-btn-secondary:focus-visible {
+  background: #1b2a3c;
+  border-color: #74a7ff;
+  color: #ffffff;
+}
+
 @media (max-width: 900px) {
   .eap-list-header {
     align-items: flex-start;
@@ -639,6 +829,15 @@ body.dark-mode .eap-recalc-table th {
 @media (max-width: 560px) {
   .eap-page {
     padding-top: 10px;
+  }
+
+  .eap-import-file-picker {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .eap-import-file-action {
+    grid-column: 1 / -1;
+    width: 100%;
   }
 
   .eap-page-embedded {

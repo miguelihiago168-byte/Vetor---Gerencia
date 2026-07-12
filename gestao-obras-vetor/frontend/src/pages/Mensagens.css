@@ -44,6 +44,39 @@
   letter-spacing: 0.02em;
 }
 
+.mensagens-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 4px;
+  border: 1px solid #cfe0f2;
+  border-radius: 12px;
+  background: #f8fbff;
+}
+
+.mensagens-mode-tabs button {
+  min-width: 0;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: #47637f;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  padding: 8px 6px;
+}
+
+.mensagens-mode-tabs button.active {
+  background: #ffffff;
+  color: #0f5cb8;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.1);
+}
+
 .mensagens-minha-presenca-wrap {
   display: grid;
   gap: 6px;
@@ -154,6 +187,290 @@
 
 .mensagens-new-form select {
   width: 100%;
+}
+
+.mensagens-new-form input,
+.mensagens-meeting-form input,
+.mensagens-meeting-form select,
+.mensagens-meeting-form textarea {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid #9cc8ef;
+  background: #ffffff;
+  color: #14304c;
+  font: inherit;
+  min-height: 40px;
+  padding: 8px 10px;
+}
+
+.mensagens-meeting-form textarea {
+  resize: vertical;
+  min-height: 76px;
+}
+
+.mensagens-agenda-head {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid color-mix(in srgb, #10b981 28%, var(--border-color));
+  border-radius: 14px;
+  background: linear-gradient(145deg, #f4fffb, #f7fbff);
+  margin-bottom: 12px;
+}
+
+.mensagens-agenda-head > div {
+  display: grid;
+  gap: 3px;
+}
+
+.mensagens-agenda-head input {
+  min-height: 38px;
+  border: 1px solid #9fd5c0;
+  border-radius: 10px;
+  padding: 0 9px;
+  color: #14304c;
+}
+
+.mensagens-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+  margin-bottom: 12px;
+}
+
+.mensagens-calendar-weekday {
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.mensagens-calendar-day {
+  aspect-ratio: 1;
+  min-width: 0;
+  border: 1px solid #d8e6f4;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #1e3a56;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  position: relative;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.mensagens-calendar-day.muted {
+  opacity: 0.42;
+}
+
+.mensagens-calendar-day.active {
+  border-color: #0f7bdc;
+  background: #eaf5ff;
+  box-shadow: 0 0 0 2px rgba(15, 123, 220, 0.16);
+}
+
+.mensagens-calendar-day.has-events i {
+  position: absolute;
+  right: 4px;
+  bottom: 3px;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #0f9f6e;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.62rem;
+  font-style: normal;
+}
+
+.mensagens-meeting-form {
+  display: grid;
+  gap: 11px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, #0ea5e9 24%, var(--border-color));
+  border-radius: 14px;
+  background: linear-gradient(160deg, #ffffff, #f6fbff);
+}
+
+.mensagens-meeting-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  gap: 8px;
+}
+
+.mensagens-participants-list {
+  display: grid;
+  gap: 6px;
+  max-height: 160px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.mensagens-participant-option {
+  border: 1px solid #d8e6f4;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #334155;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 8px 9px;
+}
+
+.mensagens-participant-option.active {
+  border-color: #0ea5e9;
+  background: #edf8ff;
+}
+
+.mensagens-participant-option input {
+  width: 15px;
+  height: 15px;
+  min-height: 0;
+}
+
+.mensagens-meeting-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mensagens-agenda-panel-header {
+  border-bottom: 1px solid color-mix(in srgb, var(--border-color) 86%, #0f172a 6%);
+  padding-bottom: 12px;
+}
+
+.mensagens-agenda-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: #eaf5ff;
+  color: #0f65bf;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mensagens-meeting-list {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  overflow: auto;
+  padding: 12px 4px 4px;
+}
+
+.mensagens-meeting-card {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) auto;
+  gap: 12px;
+  border: 1px solid #d5e2f1;
+  border-radius: 14px;
+  background: linear-gradient(160deg, #ffffff, #f8fbff);
+  padding: 14px;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.07);
+}
+
+.mensagens-meeting-card.focused {
+  border-color: #0f7bdc;
+  box-shadow: 0 0 0 3px rgba(15, 123, 220, 0.14), 0 8px 18px rgba(15, 23, 42, 0.07);
+}
+
+.mensagens-meeting-card.cancelled {
+  opacity: 0.72;
+}
+
+.mensagens-meeting-time {
+  border-right: 1px solid #e1eaf4;
+  display: grid;
+  align-content: center;
+  gap: 2px;
+}
+
+.mensagens-meeting-time strong {
+  color: #0f2b46;
+  font-size: 1.05rem;
+}
+
+.mensagens-meeting-time span,
+.mensagens-meeting-meta {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.mensagens-meeting-body {
+  min-width: 0;
+}
+
+.mensagens-meeting-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.mensagens-meeting-title-row h4 {
+  color: #0f172a;
+  font-size: 0.98rem;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.mensagens-meeting-body p {
+  color: #475569;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  margin: 7px 0;
+}
+
+.mensagens-meeting-status {
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 3px 8px;
+  text-transform: uppercase;
+}
+
+.mensagens-meeting-status.status-ativa {
+  background: #e8f9f0;
+  color: #087a4b;
+}
+
+.mensagens-meeting-status.status-cancelada {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.mensagens-meeting-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+
+.mensagens-meeting-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.mensagens-meeting-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.btn-danger {
+  background: #fee2e2;
+  border-color: #fecaca;
+  color: #991b1b;
 }
 
 .mensagens-start-btn {
@@ -593,5 +910,19 @@
 
   .mensagem-bubble {
     max-width: 92%;
+  }
+
+  .mensagens-meeting-card {
+    grid-template-columns: 1fr;
+  }
+
+  .mensagens-meeting-time {
+    border-right: 0;
+    border-bottom: 1px solid #e1eaf4;
+    padding-bottom: 8px;
+  }
+
+  .mensagens-meeting-card-actions {
+    justify-content: flex-start;
   }
 }

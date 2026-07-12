@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Bell, LogOut, User, ChevronDown, Menu, X } from 'lucide-react';
+import { Bell, LogOut, User, ChevronDown, Menu, X, CalendarDays } from 'lucide-react';
 import { useLeaveGuard } from '../context/LeaveGuardContext';
 import {
   getRDOs, getRNCs, getRequisicoesBadges, getMensagensNaoLidasCount,
@@ -292,21 +292,33 @@ function Navbar() {
     return Number.isNaN(date.getTime()) ? '' : date.toLocaleString('pt-BR');
   };
 
+  const notificationBadgeCount = notificacoes.length + (canViewCompras ? pendRequisicoes : 0);
+
+  const abrirNotificacao = async (notificacao) => {
+    if (notificacao?.referencia_tipo === 'reuniao' && notificacao?.projeto_id) {
+      await marcarNotificacao(notificacao.id);
+      setNotifOpen(false);
+      navigate(`/projeto/${notificacao.projeto_id}/mensagens?tab=agenda&reuniao=${notificacao.referencia_id}`);
+      return;
+    }
+    await marcarNotificacao(notificacao.id);
+  };
+
   const renderNotificationBell = () => (
     <div className="notif-bell-wrapper">
       <button
         type="button"
         className="notif-bell-btn"
         onClick={toggleNotificacoes}
-        aria-label={pendRequisicoes > 0
-          ? `${pendRequisicoes} processo(s) de suprimentos em aberto`
+        aria-label={notificationBadgeCount > 0
+          ? `${notificationBadgeCount} notificação(ões) pendente(s)`
           : 'Abrir notificações'}
         aria-expanded={notifOpen}
         title="Notificações"
       >
         <Bell size={19} />
-        {pendRequisicoes > 0 && (
-          <span className="notif-bell-badge">{pendRequisicoes > 99 ? '99+' : pendRequisicoes}</span>
+        {notificationBadgeCount > 0 && (
+          <span className="notif-bell-badge">{notificationBadgeCount > 99 ? '99+' : notificationBadgeCount}</span>
         )}
       </button>
 
@@ -323,6 +335,7 @@ function Navbar() {
               {isMarkingNotifications ? 'Lendo...' : 'Marcar todas como lidas'}
             </button>
           </div>
+          {canViewCompras && (
           <div className="notif-supply-summary">
             <Bell size={16} aria-hidden="true" />
             <span>
@@ -331,20 +344,38 @@ function Navbar() {
                 : 'Nenhum processo de suprimentos em aberto.'}
             </span>
           </div>
+          )}
           <div className="notif-dropdown-list">
             {notificacoes.length === 0 ? (
               <div className="notif-empty">Não há notificações não lidas.</div>
             ) : notificacoes.map((notificacao) => (
-              <div className="notif-item" key={notificacao.id}>
-                <div className="notif-item-icon"><Bell size={16} aria-hidden="true" /></div>
+              <div
+                className={`notif-item${notificacao.referencia_tipo === 'reuniao' ? ' notif-item-clickable' : ''}`}
+                key={notificacao.id}
+                onClick={() => abrirNotificacao(notificacao)}
+                role={notificacao.referencia_tipo === 'reuniao' ? 'button' : undefined}
+                tabIndex={notificacao.referencia_tipo === 'reuniao' ? 0 : undefined}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') abrirNotificacao(notificacao);
+                }}
+              >
+                <div className="notif-item-icon">
+                  {notificacao.referencia_tipo === 'reuniao'
+                    ? <CalendarDays size={16} aria-hidden="true" />
+                    : <Bell size={16} aria-hidden="true" />}
+                </div>
                 <div className="notif-item-body">
+                  {notificacao.titulo && <span className="notif-item-title">{notificacao.titulo}</span>}
                   <span className="notif-item-msg">{notificacao.mensagem}</span>
                   <span className="notif-item-time">{formatarDataNotificacao(notificacao.criado_em)}</span>
                 </div>
                 <button
                   type="button"
                   className="notif-item-close"
-                  onClick={() => marcarNotificacao(notificacao.id)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    marcarNotificacao(notificacao.id);
+                  }}
                   aria-label="Marcar notificação como lida"
                   title="Marcar como lida"
                 >
@@ -478,11 +509,9 @@ function Navbar() {
             )}
           </div>
 
-          {canViewCompras && (
-            <div className="navbar-mobile-supply-bell">
-              {renderNotificationBell()}
-            </div>
-          )}
+          <div className="navbar-mobile-supply-bell">
+            {renderNotificationBell()}
+          </div>
 
           <button
             type="button"
@@ -499,9 +528,7 @@ function Navbar() {
           </button>
 
           <div className="navbar-account navbar-account-desktop">
-            {canViewCompras && (
-              renderNotificationBell()
-            )}
+            {renderNotificationBell()}
             <div className="navbar-perfil-dropdown" ref={perfilDropdownRef}>
               <button
                 className={`navbar-link navbar-perfil-btn${perfilDropdownOpen ? ' active' : ''}`}

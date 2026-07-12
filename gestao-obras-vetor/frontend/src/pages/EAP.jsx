@@ -13,7 +13,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
 import { useNotification } from '../context/NotificationContext';
-import { Activity, Plus, Eye, ChevronRight, ChevronDown, Trash2, ArrowLeft, Download, Upload, X, AlertTriangle, CheckCircle2, MoreHorizontal } from 'lucide-react';
+import { Activity, Plus, Eye, ChevronRight, ChevronDown, Trash2, ArrowLeft, Download, Upload, X, AlertTriangle, CheckCircle2, MoreHorizontal, FileSpreadsheet } from 'lucide-react';
 import './EAP.css';
 
 function EAP({ hideNavbar = false }) {
@@ -160,8 +160,8 @@ function EAP({ hideNavbar = false }) {
   const handleConfirmarImportacao = async () => {
     if (!importPreview?.valido || !Array.isArray(importPreview?.linhas)) return;
     const ok = await confirm({
-      title: 'Confirmar importacao da EAP',
-      message: 'A EAP atual sera substituida se nao houver RDO vinculado a ela. Deseja confirmar a importacao?',
+      title: 'Confirmar importação da EAP',
+      message: 'A EAP atual será substituída se não houver RDO vinculado a ela. Deseja confirmar a importação?',
       confirmText: 'Importar EAP',
       cancelText: 'Cancelar'
     });
@@ -440,6 +440,9 @@ function EAP({ hideNavbar = false }) {
     const resumo = importPreview?.resumo || {};
     const erros = importPreview?.erros || [];
     const linhas = importPreview?.linhas || [];
+    const importFileSize = importFile?.size
+      ? `${(importFile.size / 1024 / 1024).toFixed(2).replace('.', ',')} MB`
+      : '';
 
     return (
       <div style={{
@@ -467,17 +470,41 @@ function EAP({ hideNavbar = false }) {
             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 1fr) auto', gap: '12px', alignItems: 'end', marginBottom: '18px' }}>
               <div>
                 <label style={{ display: 'block', fontWeight: 600, marginBottom: '8px' }}>Arquivo Excel</label>
-                <input
-                  type="file"
-                  accept=".xlsx,.xls"
-                  onChange={(event) => {
-                    setImportFile(event.target.files?.[0] || null);
-                    setImportPreview(null);
-                  }}
-                  style={{ width: '100%' }}
-                />
+                <div className={`eap-import-file-picker${importFile ? ' has-file' : ''}`}>
+                  <input
+                    id="eap-import-file"
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={(event) => {
+                      setImportFile(event.target.files?.[0] || null);
+                      setImportPreview(null);
+                    }}
+                  />
+                  <label htmlFor="eap-import-file" className="eap-import-file-action">
+                    <FileSpreadsheet size={18} />
+                    Selecionar arquivo Excel
+                  </label>
+                  <div className="eap-import-file-info">
+                    <strong>{importFile?.name || 'Nenhum arquivo selecionado'}</strong>
+                    <span>{importFile ? `${importFileSize} - formatos .xlsx ou .xls` : 'Use a planilha modelo ou um arquivo Excel compatível.'}</span>
+                  </div>
+                  {importFile && (
+                    <button
+                      type="button"
+                      className="eap-import-file-clear"
+                      onClick={() => {
+                        setImportFile(null);
+                        setImportPreview(null);
+                      }}
+                      title="Remover arquivo"
+                      aria-label="Remover arquivo selecionado"
+                    >
+                      <X size={15} />
+                    </button>
+                  )}
+                </div>
               </div>
-              <button className="btn btn-primary" onClick={handlePreviewImportacao} disabled={importLoading || !importFile}>
+              <button className="eap-import-modal-btn eap-import-modal-btn-primary" onClick={handlePreviewImportacao} disabled={importLoading || !importFile}>
                 <Upload size={16} />
                 {importLoading ? 'Validando...' : 'Validar Planilha'}
               </button>
@@ -502,7 +529,7 @@ function EAP({ hideNavbar = false }) {
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px', borderRadius: '8px', background: importPreview.valido ? '#ecfdf5' : '#fef2f2', color: importPreview.valido ? '#065f46' : '#991b1b', marginBottom: '16px' }}>
                   {importPreview.valido ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
-                  <strong>{importPreview.valido ? 'Planilha valida. Confira o preview antes de confirmar.' : 'Planilha com erros. Nada foi salvo.'}</strong>
+                  <strong>{importPreview.valido ? 'Planilha válida. Confira o preview antes de confirmar.' : 'Planilha com erros. Nada foi salvo.'}</strong>
                 </div>
 
                 {erros.length > 0 && (
@@ -525,7 +552,7 @@ function EAP({ hideNavbar = false }) {
                       <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '920px' }}>
                         <thead>
                           <tr style={{ background: 'var(--gray-50)' }}>
-                            {['Codigo', 'Nome', 'Pai', 'Nivel', 'Qtd.', 'Un.', 'Inicio', 'Fim', 'Peso', 'Predecessora'].map((header) => (
+                            {['Código', 'Nome', 'Pai', 'Nível', 'Qtd.', 'Un.', 'Início', 'Fim', 'Peso', 'Predecessora'].map((header) => (
                               <th key={header} style={{ textAlign: 'left', padding: '10px', borderBottom: '1px solid var(--gray-200)' }}>{header}</th>
                             ))}
                           </tr>
@@ -555,9 +582,9 @@ function EAP({ hideNavbar = false }) {
             )}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '22px' }}>
-              <button className="btn btn-secondary" onClick={handleCloseImportModal}>Cancelar</button>
-              <button className="btn btn-primary" onClick={handleConfirmarImportacao} disabled={importLoading || !importPreview?.valido}>
-                Confirmar Importacao
+              <button className="eap-import-modal-btn eap-import-modal-btn-secondary" onClick={handleCloseImportModal}>Cancelar</button>
+              <button className="eap-import-modal-btn eap-import-modal-btn-primary" onClick={handleConfirmarImportacao} disabled={importLoading || !importPreview?.valido}>
+                Confirmar Importação
               </button>
             </div>
           </div>

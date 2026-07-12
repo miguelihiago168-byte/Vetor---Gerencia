@@ -3,8 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import {
   getProjeto, getRDOStats, getRDOs, getDashboardGaleriaRdos,
-  getDashboardAlmoxarifado, getCurvaS, kanbanRequisicoes, getRNCs, getUploadUrl
+  getDashboardAlmoxarifado, getCurvaS, kanbanRequisicoes, getRNCs, getUploadUrl,
+  listarReunioesHoje
 } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 import {
   FileText, AlertTriangle, Image as ImageIcon, Activity,
   TrendingUp, ShoppingCart, Wrench, BarChart2, Calendar, List, Layers, Download,
@@ -119,6 +121,7 @@ function QuickTile({ icon: Icon, title, description, onClick }) {
 function ProjetoDetalhes() {
   const { projetoId } = useParams();
   const navigate = useNavigate();
+  const { usuario } = useAuth();
   const [projeto, setProjeto] = useState(null);
   const [stats, setStats] = useState(null);
   const [almox, setAlmox] = useState(null);
@@ -127,6 +130,8 @@ function ProjetoDetalhes() {
   const [curvaS, setCurvaS] = useState(null);
   const [kanban, setKanban] = useState(null);
   const [rncs, setRncs] = useState([]);
+  const [reunioesHoje, setReunioesHoje] = useState([]);
+  const [bannerReunioesVisivel, setBannerReunioesVisivel] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -162,6 +167,18 @@ function ProjetoDetalhes() {
         setKanban(kanbanRes.data);
       } catch {
         setKanban(null);
+      }
+
+      try {
+        const reunioesRes = await listarReunioesHoje({ projeto_id: projetoId });
+        const listaReunioes = reunioesRes.data || [];
+        setReunioesHoje(listaReunioes);
+        const hojeKey = new Date().toISOString().slice(0, 10);
+        const storageKey = `vetor_reunioes_banner_${usuario?.id || 'u'}_${projetoId}_${hojeKey}`;
+        setBannerReunioesVisivel(listaReunioes.length > 0 && localStorage.getItem(storageKey) !== 'dismissed');
+      } catch {
+        setReunioesHoje([]);
+        setBannerReunioesVisivel(false);
       }
 
       if (galeriaRes.status === 'fulfilled') {
@@ -216,6 +233,17 @@ function ProjetoDetalhes() {
 
   const rncsAbertas = rncs.filter(r => r.status !== 'Encerrada').length;
   const ativosProblema = (almox?.ferramentas_atrasadas || 0) + (almox?.ferramentas_manutencao || 0);
+  const proximaReuniaoHoje = reunioesHoje[0] || null;
+  const formatHoraReuniao = (value) => {
+    const date = new Date(String(value || '').replace(' ', 'T'));
+    return Number.isNaN(date.getTime()) ? '--:--' : date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  };
+  const dispensarBannerReunioes = () => {
+    const hojeKey = new Date().toISOString().slice(0, 10);
+    const storageKey = `vetor_reunioes_banner_${usuario?.id || 'u'}_${projetoId}_${hojeKey}`;
+    localStorage.setItem(storageKey, 'dismissed');
+    setBannerReunioesVisivel(false);
+  };
 
   const getKanbanColumnCount = (col) => {
     if (!col) return 0;
@@ -337,6 +365,28 @@ function ProjetoDetalhes() {
               </div>
             )}
           </section>
+
+          {bannerReunioesVisivel && proximaReuniaoHoje && (
+            <section className="project-meeting-banner">
+              <div className="project-meeting-banner-main">
+                <span className="project-meeting-kicker">Agenda de hoje</span>
+                <strong>{formatHoraReuniao(proximaReuniaoHoje.inicio_em)} - {proximaReuniaoHoje.assunto}</strong>
+                <small>
+                  {reunioesHoje.length > 1
+                    ? `${reunioesHoje.length} reuniões hoje: ${reunioesHoje.map((r) => formatHoraReuniao(r.inicio_em)).join(', ')}`
+                    : 'Você tem uma reunião marcada neste projeto.'}
+                </small>
+              </div>
+              <div className="project-meeting-banner-actions">
+                <button type="button" onClick={() => navigate(`/projeto/${projetoId}/mensagens?tab=agenda&reuniao=${proximaReuniaoHoje.id}`)}>
+                  Ver agenda
+                </button>
+                <button type="button" className="ghost" onClick={dispensarBannerReunioes}>
+                  Dispensar
+                </button>
+              </div>
+            </section>
+          )}
 
           <SectionTitle icon={Activity}>Status da obra</SectionTitle>
           <div className="project-dashboard-grid grid-2">

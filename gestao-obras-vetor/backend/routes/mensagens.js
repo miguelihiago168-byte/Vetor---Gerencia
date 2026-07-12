@@ -34,6 +34,8 @@ const upload = multer({
 
 const JANELA_EDICAO_EXCLUSAO_MINUTOS = 10;
 const JANELA_EDICAO_EXCLUSAO_SQL = `+${JANELA_EDICAO_EXCLUSAO_MINUTOS} minutes`;
+const DURACAO_REUNIAO_MIN = 15;
+const DURACAO_REUNIAO_MAX = 12 * 60;
 
 const initializedTenants = new Set();
 
@@ -55,6 +57,19 @@ const ensureMensageriaSchema = async (tenantId) => {
   initializedTenants.add(tenantKey);
 };
 
+const ensureReunioesSchema = async (tenantId) => {
+  const tenantKey = Number(tenantId);
+  if (!tenantKey) return;
+
+  await ensureSchemaReady({ getQuery, allQuery }, {
+    tables: ['mensagem_reunioes', 'mensagem_reuniao_participantes'],
+    columns: {
+      mensagem_reunioes: ['tenant_id', 'projeto_id', 'criada_por', 'assunto', 'descricao', 'inicio_em', 'fim_em', 'status', 'criado_em', 'atualizado_em', 'cancelado_em', 'cancelado_por'],
+      mensagem_reuniao_participantes: ['tenant_id', 'reuniao_id', 'usuario_id', 'criado_em']
+    }
+  });
+};
+
 const buildConversaKey = (projetoAId, projetoBId, usuarioAId, usuarioBId) => {
   const p = [Number(projetoAId), Number(projetoBId)].sort((a, b) => a - b);
   const u = [Number(usuarioAId), Number(usuarioBId)].sort((a, b) => a - b);
@@ -70,11 +85,111 @@ const getOutroUsuarioId = (conversa, usuarioId) => {
 const requireMensagemSchema = async (req, res, next) => {
   try {
     await ensureMensageriaSchema(req.tenantId);
+    await ensureReunioesSchema(req.tenantId);
     next();
   } catch (error) {
     console.error('Erro ao garantir schema de mensageria:', error);
     if (sendSchemaOutdated(res, error, 'Schema de mensageria desatualizado. Execute as migrations pendentes.')) return;
     res.status(500).json({ erro: 'Erro ao preparar mensageria.' });
+  }
+};
+
+const parseDateTimeValue = (value) => {
+  if (!value) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  const parsed = new Date(text.length === 16 ? `${text}:00` : text);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+};
+
+const toSqlDateTime = (date) => {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+};
+
+const toDateOnly = (date) => {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+};
+
+const parseDateOnly = (value) => {
+  const text = String(value || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
+  return text;
+};
+
+const getReuniaoComParticipantes = async (reuniaoId, tenantId) => {
+  const reuniao = await getQuery(
+    `SELECT mr.*, p.nome AS projeto_nome, u.nome AS criador_nome
+     FROM mensagem_reunioes mr
+     INNER JOIN projetos p ON p.id = mr.projeto_id
+     INNER JOIN usuarios u ON u.id = mr.criada_por
+     WHERE mr.id = ? AND mr.tenant_id = ?
+     LIMIT 1`,
+    [reuniaoId, tenantId]
+  );
+  if (!reuniao) return null;
+
+  const participantes = await allQuery(
+    `SELECT mrp.usuario_id AS id, u.nome, u.avatar, COALESCE(u.presenca_status, 'disponivel') AS presenca_status
+     FROM mensagem_reuniao_participantes mrp
+     INNER JOIN usuarios u ON u.id = mrp.usuario_id
+     WHERE mrp.reuniao_id = ? AND mrp.tenant_id = ?
+     ORDER BY u.nome COLLATE NOCASE ASC`,
+    [reuniaoId, tenantId]
+  );
+
+  return { ...reuniao, participantes: participantes || [] };
+};
+
+const assertReuniaoVisible = (reuniao, usuarioId) => {
+  if (!reuniao) return false;
+  if (Number(reuniao.criada_por) === Number(usuarioId)) return true;
+  return (reuniao.participantes || []).some((p) => Number(p.id) === Number(usuarioId));
+};
+
+const validateProjetoForReuniao = async (req, projetoId) => {
+  const acesso = await hasProjectAccess(req.usuario, projetoId);
+  if (!acesso) return { ok: false, status: 403, erro: 'Sem acesso ao projeto da reunião.' };
+
+  const projeto = await getQuery(
+    'SELECT id, nome, tenant_id FROM projetos WHERE id = ? AND ativo = 1 LIMIT 1',
+    [projetoId]
+  );
+  if (!projeto) return { ok: false, status: 400, erro: 'Projeto inválido.' };
+  if (projeto.tenant_id !== null && projeto.tenant_id !== undefined && Number(projeto.tenant_id) !== Number(req.tenantId)) {
+    return { ok: false, status: 400, erro: 'Projeto não pertence ao tenant ativo.' };
+  }
+
+  return { ok: true, projeto };
+};
+
+const getParticipantesValidos = async (usuarioIds, projetoId) => {
+  const ids = Array.from(new Set((usuarioIds || []).map(Number).filter((id) => Number.isInteger(id) && id > 0)));
+  if (!ids.length) return [];
+
+  const placeholders = ids.map(() => '?').join(', ');
+  return allQuery(
+    `SELECT DISTINCT u.id, u.nome, u.email
+     FROM usuarios u
+     INNER JOIN projeto_usuarios pu ON pu.usuario_id = u.id
+     WHERE u.id IN (${placeholders})
+       AND pu.projeto_id = ?
+       AND COALESCE(u.ativo, 1) = 1
+       AND u.deletado_em IS NULL`,
+    [...ids, projetoId]
+  );
+};
+
+const notificarParticipantesReuniao = async ({ participantes, tipo, mensagem, reuniaoId, ignorarUsuarioId }) => {
+  for (const participante of participantes || []) {
+    if (ignorarUsuarioId && Number(participante.id) === Number(ignorarUsuarioId)) continue;
+    await runQuery(
+      `INSERT OR IGNORE INTO notificacoes (usuario_id, tipo, titulo, mensagem, referencia_tipo, referencia_id)
+       VALUES (?, ?, ?, ?, 'reuniao', ?)`,
+      [participante.id, tipo, 'Reunião', mensagem, reuniaoId]
+    );
   }
 };
 
@@ -810,6 +925,281 @@ router.post('/mensagens/:mensagemId/anexos', upload.single('arquivo'), async (re
   } catch (error) {
     console.error('Erro ao anexar arquivo na mensagem:', error);
     res.status(500).json({ erro: 'Erro ao anexar arquivo.' });
+  }
+});
+
+router.get('/reunioes/hoje', async (req, res) => {
+  try {
+    const projetoId = Number(req.query.projeto_id || 0);
+    if (!projetoId) return res.status(400).json({ erro: 'Projeto é obrigatório.' });
+
+    const projetoCheck = await validateProjetoForReuniao(req, projetoId);
+    if (!projetoCheck.ok) return res.status(projetoCheck.status).json({ erro: projetoCheck.erro });
+
+    const hoje = new Date();
+    const data = toDateOnly(hoje);
+    const rows = await allQuery(
+      `SELECT DISTINCT mr.*, p.nome AS projeto_nome, u.nome AS criador_nome
+       FROM mensagem_reunioes mr
+       INNER JOIN projetos p ON p.id = mr.projeto_id
+       INNER JOIN usuarios u ON u.id = mr.criada_por
+       LEFT JOIN mensagem_reuniao_participantes mrp ON mrp.reuniao_id = mr.id AND mrp.tenant_id = mr.tenant_id
+       WHERE mr.tenant_id = ?
+         AND mr.projeto_id = ?
+         AND mr.status = 'ativa'
+         AND date(mr.inicio_em) = date(?)
+         AND (mr.criada_por = ? OR mrp.usuario_id = ?)
+       ORDER BY mr.inicio_em ASC`,
+      [req.tenantId, projetoId, data, req.usuario.id, req.usuario.id]
+    );
+
+    const reunioes = [];
+    for (const row of rows || []) {
+      const detalhada = await getReuniaoComParticipantes(row.id, req.tenantId);
+      if (detalhada && assertReuniaoVisible(detalhada, req.usuario.id)) reunioes.push(detalhada);
+    }
+
+    res.json(reunioes);
+  } catch (error) {
+    console.error('Erro ao listar reuniões de hoje:', error);
+    res.status(500).json({ erro: 'Erro ao listar reuniões de hoje.' });
+  }
+});
+
+router.get('/reunioes', async (req, res) => {
+  try {
+    const projetoId = Number(req.query.projeto_id || 0);
+    const dataInicio = parseDateOnly(req.query.data_inicio);
+    const dataFim = parseDateOnly(req.query.data_fim);
+
+    if (!projetoId) return res.status(400).json({ erro: 'Projeto é obrigatório.' });
+    const projetoCheck = await validateProjetoForReuniao(req, projetoId);
+    if (!projetoCheck.ok) return res.status(projetoCheck.status).json({ erro: projetoCheck.erro });
+
+    const filtros = [
+      req.tenantId,
+      projetoId,
+      req.usuario.id,
+      req.usuario.id
+    ];
+    let filtroDatas = '';
+    if (dataInicio) {
+      filtroDatas += ' AND date(mr.inicio_em) >= date(?)';
+      filtros.push(dataInicio);
+    }
+    if (dataFim) {
+      filtroDatas += ' AND date(mr.inicio_em) <= date(?)';
+      filtros.push(dataFim);
+    }
+
+    const rows = await allQuery(
+      `SELECT DISTINCT mr.*, p.nome AS projeto_nome, u.nome AS criador_nome
+       FROM mensagem_reunioes mr
+       INNER JOIN projetos p ON p.id = mr.projeto_id
+       INNER JOIN usuarios u ON u.id = mr.criada_por
+       LEFT JOIN mensagem_reuniao_participantes mrp ON mrp.reuniao_id = mr.id AND mrp.tenant_id = mr.tenant_id
+       WHERE mr.tenant_id = ?
+         AND mr.projeto_id = ?
+         AND (mr.criada_por = ? OR mrp.usuario_id = ?)
+         ${filtroDatas}
+       ORDER BY mr.inicio_em ASC`,
+      filtros
+    );
+
+    const reunioes = [];
+    for (const row of rows || []) {
+      const detalhada = await getReuniaoComParticipantes(row.id, req.tenantId);
+      if (detalhada && assertReuniaoVisible(detalhada, req.usuario.id)) reunioes.push(detalhada);
+    }
+
+    res.json(reunioes);
+  } catch (error) {
+    console.error('Erro ao listar reuniões:', error);
+    res.status(500).json({ erro: 'Erro ao listar reuniões.' });
+  }
+});
+
+router.post(
+  '/reunioes',
+  [
+    body('projeto_id').isInt({ min: 1 }),
+    body('assunto').isString().trim().isLength({ min: 3, max: 160 }),
+    body('descricao').optional({ nullable: true }).isString().trim().isLength({ max: 1000 }),
+    body('inicio_em').isString().trim().isLength({ min: 10, max: 40 }),
+    body('duracao_minutos').isInt({ min: DURACAO_REUNIAO_MIN, max: DURACAO_REUNIAO_MAX }),
+    body('participantes_ids').isArray({ min: 1 })
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) return res.status(400).json({ erro: 'Dados inválidos.', detalhes: errors.array() });
+
+      const projetoId = Number(req.body.projeto_id);
+      const projetoCheck = await validateProjetoForReuniao(req, projetoId);
+      if (!projetoCheck.ok) return res.status(projetoCheck.status).json({ erro: projetoCheck.erro });
+
+      const inicio = parseDateTimeValue(req.body.inicio_em);
+      if (!inicio) return res.status(400).json({ erro: 'Data e hora da reunião são inválidas.' });
+
+      const duracao = Number(req.body.duracao_minutos);
+      const fim = new Date(inicio.getTime() + duracao * 60 * 1000);
+      const participantesSolicitados = Array.from(new Set([...(req.body.participantes_ids || []), req.usuario.id].map(Number)));
+      const participantes = await getParticipantesValidos(participantesSolicitados, projetoId);
+      const idsValidos = new Set((participantes || []).map((p) => Number(p.id)));
+      const faltando = participantesSolicitados.some((id) => !idsValidos.has(Number(id)));
+      if (faltando) return res.status(400).json({ erro: 'Todos os participantes devem estar ativos e vinculados ao projeto.' });
+
+      const insert = await runQuery(
+        `INSERT INTO mensagem_reunioes
+         (tenant_id, projeto_id, criada_por, assunto, descricao, inicio_em, fim_em)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          req.tenantId,
+          projetoId,
+          req.usuario.id,
+          req.body.assunto.trim(),
+          String(req.body.descricao || '').trim() || null,
+          toSqlDateTime(inicio),
+          toSqlDateTime(fim)
+        ]
+      );
+
+      for (const participante of participantes) {
+        await runQuery(
+          `INSERT OR IGNORE INTO mensagem_reuniao_participantes (tenant_id, reuniao_id, usuario_id)
+           VALUES (?, ?, ?)`,
+          [req.tenantId, insert.lastID, participante.id]
+        );
+      }
+
+      const reuniao = await getReuniaoComParticipantes(insert.lastID, req.tenantId);
+      const horario = inicio.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      await notificarParticipantesReuniao({
+        participantes,
+        tipo: 'reuniao_marcada',
+        mensagem: `Reunião marcada: ${req.body.assunto.trim()} em ${horario}`,
+        reuniaoId: insert.lastID,
+        ignorarUsuarioId: req.usuario.id
+      });
+
+      res.status(201).json(reuniao);
+    } catch (error) {
+      console.error('Erro ao criar reunião:', error);
+      res.status(500).json({ erro: 'Erro ao criar reunião.' });
+    }
+  }
+);
+
+router.patch(
+  '/reunioes/:id',
+  [
+    body('assunto').isString().trim().isLength({ min: 3, max: 160 }),
+    body('descricao').optional({ nullable: true }).isString().trim().isLength({ max: 1000 }),
+    body('inicio_em').isString().trim().isLength({ min: 10, max: 40 }),
+    body('duracao_minutos').isInt({ min: DURACAO_REUNIAO_MIN, max: DURACAO_REUNIAO_MAX }),
+    body('participantes_ids').isArray({ min: 1 })
+  ],
+  async (req, res) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) return res.status(400).json({ erro: 'Dados inválidos.', detalhes: errors.array() });
+
+      const reuniaoId = Number(req.params.id);
+      const reuniaoAtual = await getReuniaoComParticipantes(reuniaoId, req.tenantId);
+      if (!reuniaoAtual || !assertReuniaoVisible(reuniaoAtual, req.usuario.id)) {
+        return res.status(404).json({ erro: 'Reunião não encontrada.' });
+      }
+      if (Number(reuniaoAtual.criada_por) !== Number(req.usuario.id)) {
+        return res.status(403).json({ erro: 'Apenas o criador pode editar a reunião.' });
+      }
+      if (reuniaoAtual.status === 'cancelada') {
+        return res.status(400).json({ erro: 'Reunião cancelada não pode ser editada.' });
+      }
+
+      const inicio = parseDateTimeValue(req.body.inicio_em);
+      if (!inicio) return res.status(400).json({ erro: 'Data e hora da reunião são inválidas.' });
+      const duracao = Number(req.body.duracao_minutos);
+      const fim = new Date(inicio.getTime() + duracao * 60 * 1000);
+      const participantesSolicitados = Array.from(new Set([...(req.body.participantes_ids || []), req.usuario.id].map(Number)));
+      const participantes = await getParticipantesValidos(participantesSolicitados, Number(reuniaoAtual.projeto_id));
+      const idsValidos = new Set((participantes || []).map((p) => Number(p.id)));
+      const faltando = participantesSolicitados.some((id) => !idsValidos.has(Number(id)));
+      if (faltando) return res.status(400).json({ erro: 'Todos os participantes devem estar ativos e vinculados ao projeto.' });
+
+      await runQuery(
+        `UPDATE mensagem_reunioes
+         SET assunto = ?, descricao = ?, inicio_em = ?, fim_em = ?, atualizado_em = CURRENT_TIMESTAMP
+         WHERE id = ? AND tenant_id = ?`,
+        [
+          req.body.assunto.trim(),
+          String(req.body.descricao || '').trim() || null,
+          toSqlDateTime(inicio),
+          toSqlDateTime(fim),
+          reuniaoId,
+          req.tenantId
+        ]
+      );
+      await runQuery('DELETE FROM mensagem_reuniao_participantes WHERE reuniao_id = ? AND tenant_id = ?', [reuniaoId, req.tenantId]);
+      for (const participante of participantes) {
+        await runQuery(
+          `INSERT OR IGNORE INTO mensagem_reuniao_participantes (tenant_id, reuniao_id, usuario_id)
+           VALUES (?, ?, ?)`,
+          [req.tenantId, reuniaoId, participante.id]
+        );
+      }
+
+      const horario = inicio.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      await notificarParticipantesReuniao({
+        participantes,
+        tipo: 'reuniao_atualizada',
+        mensagem: `Reunião atualizada: ${req.body.assunto.trim()} em ${horario}`,
+        reuniaoId,
+        ignorarUsuarioId: req.usuario.id
+      });
+
+      const reuniao = await getReuniaoComParticipantes(reuniaoId, req.tenantId);
+      res.json(reuniao);
+    } catch (error) {
+      console.error('Erro ao editar reunião:', error);
+      res.status(500).json({ erro: 'Erro ao editar reunião.' });
+    }
+  }
+);
+
+router.patch('/reunioes/:id/cancelar', async (req, res) => {
+  try {
+    const reuniaoId = Number(req.params.id);
+    const reuniaoAtual = await getReuniaoComParticipantes(reuniaoId, req.tenantId);
+    if (!reuniaoAtual || !assertReuniaoVisible(reuniaoAtual, req.usuario.id)) {
+      return res.status(404).json({ erro: 'Reunião não encontrada.' });
+    }
+    if (Number(reuniaoAtual.criada_por) !== Number(req.usuario.id)) {
+      return res.status(403).json({ erro: 'Apenas o criador pode cancelar a reunião.' });
+    }
+    if (reuniaoAtual.status === 'cancelada') {
+      return res.json(reuniaoAtual);
+    }
+
+    await runQuery(
+      `UPDATE mensagem_reunioes
+       SET status = 'cancelada', cancelado_em = CURRENT_TIMESTAMP, cancelado_por = ?, atualizado_em = CURRENT_TIMESTAMP
+       WHERE id = ? AND tenant_id = ?`,
+      [req.usuario.id, reuniaoId, req.tenantId]
+    );
+
+    await notificarParticipantesReuniao({
+      participantes: reuniaoAtual.participantes || [],
+      tipo: 'reuniao_cancelada',
+      mensagem: `Reunião cancelada: ${reuniaoAtual.assunto}`,
+      reuniaoId,
+      ignorarUsuarioId: req.usuario.id
+    });
+
+    const reuniao = await getReuniaoComParticipantes(reuniaoId, req.tenantId);
+    res.json(reuniao);
+  } catch (error) {
+    console.error('Erro ao cancelar reunião:', error);
+    res.status(500).json({ erro: 'Erro ao cancelar reunião.' });
   }
 });
 

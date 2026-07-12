@@ -32,6 +32,35 @@ const isEapConcluida = (atividade) => {
   return percentual >= 100 || status.includes('conclu');
 };
 
+const parseCodigoEapPartes = (codigo) => String(codigo || '')
+  .split('.')
+  .map((parte) => {
+    const numero = Number(parte);
+    return Number.isFinite(numero) ? numero : parte.toLowerCase();
+  });
+
+const compararCodigoEap = (a, b) => {
+  const partesA = parseCodigoEapPartes(a?.codigo_eap);
+  const partesB = parseCodigoEapPartes(b?.codigo_eap);
+  const tamanho = Math.max(partesA.length, partesB.length);
+
+  for (let i = 0; i < tamanho; i += 1) {
+    const valorA = partesA[i];
+    const valorB = partesB[i];
+    if (valorA === undefined) return -1;
+    if (valorB === undefined) return 1;
+    if (valorA === valorB) continue;
+
+    if (typeof valorA === 'number' && typeof valorB === 'number') {
+      return valorA - valorB;
+    }
+
+    return String(valorA).localeCompare(String(valorB), 'pt-BR', { numeric: true, sensitivity: 'base' });
+  }
+
+  return 0;
+};
+
 const aplicarPercentualEfetivoEap = (atividades = []) => {
   const porId = new Map();
   const filhosPorPai = new Map();
@@ -1585,7 +1614,7 @@ router.get('/projeto/:projetoId/analise-cronograma', [auth, isGestor], async (re
       WHERE projeto_id = ?
       ORDER BY codigo_eap
     `, [projetoId]);
-    const atividades = aplicarPercentualEfetivoEap(atividadesRaw);
+    const atividades = aplicarPercentualEfetivoEap(atividadesRaw).sort(compararCodigoEap);
 
     const atividadesComDuracao = atividades.map((at) => ({
       ...at,
@@ -2202,7 +2231,7 @@ router.get('/projeto/:projetoId/gantt-data', auth, async (req, res) => {
       WHERE projeto_id = ?
       ORDER BY codigo_eap
     `, [projetoId]);
-    const atividades = aplicarPercentualEfetivoEap(atividadesRaw);
+    const atividades = aplicarPercentualEfetivoEap(atividadesRaw).sort(compararCodigoEap);
 
     // Buscar dependências
     const dependenciasQuery = incluirNaoConfirmadas === 'true'
