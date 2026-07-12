@@ -249,6 +249,11 @@ export const anexarArquivoMensagem = (mensagemId, formData) =>
   api.post(`/mensagens/mensagens/${mensagemId}/anexos`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   });
+export const listarReunioesMensagens = (params) => api.get('/mensagens/reunioes', { params });
+export const listarReunioesHoje = (params) => api.get('/mensagens/reunioes/hoje', { params });
+export const criarReuniaoMensagem = (data) => api.post('/mensagens/reunioes', data);
+export const editarReuniaoMensagem = (id, data) => api.patch(`/mensagens/reunioes/${id}`, data);
+export const cancelarReuniaoMensagem = (id) => api.patch(`/mensagens/reunioes/${id}/cancelar`);
 
 // ─── Fornecedores ─────────────────────────────────────────────────────────
 export const listarFornecedores = (params) => api.get('/fornecedores', { params });

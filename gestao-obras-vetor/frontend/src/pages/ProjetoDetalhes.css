@@ -51,6 +51,69 @@
   margin-bottom: 28px;
 }
 
+.project-meeting-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border: 1px solid color-mix(in srgb, var(--project-accent) 24%, var(--project-border));
+  border-radius: 14px;
+  background: linear-gradient(135deg, #ffffff, #f4fbff);
+  box-shadow: var(--project-shadow);
+  margin: -12px 0 28px;
+  padding: 16px 18px;
+}
+
+.project-meeting-banner-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.project-meeting-kicker {
+  color: var(--project-accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.project-meeting-banner-main strong {
+  color: var(--project-text);
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.project-meeting-banner-main small {
+  color: var(--project-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.project-meeting-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.project-meeting-banner-actions button {
+  border: 1px solid var(--project-accent);
+  border-radius: 10px;
+  background: var(--project-accent);
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 800;
+  min-height: 38px;
+  padding: 0 13px;
+}
+
+.project-meeting-banner-actions button.ghost {
+  background: #ffffff;
+  color: var(--project-accent);
+}
+
 .project-hero-grid {
   position: absolute;
   inset: 0;
@@ -765,6 +828,15 @@ body.dark-mode .project-photo-download:hover {
 
   .project-deadline-panel {
     align-self: stretch;
+  }
+
+  .project-meeting-banner {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .project-meeting-banner-actions {
+    justify-content: flex-start;
   }
 
   .project-dashboard-grid.grid-2,

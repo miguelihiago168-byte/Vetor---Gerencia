@@ -1440,6 +1440,10 @@ code {
   background: var(--bg-tertiary);
 }
 
+.notif-item-clickable {
+  cursor: pointer;
+}
+
 .notif-item--lida {
   opacity: 0.55;
 }
@@ -1455,6 +1459,13 @@ code {
   flex-direction: column;
   gap: 3px;
   min-width: 0;
+}
+
+.notif-item-title {
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.2;
 }
 
 .notif-item-msg {
