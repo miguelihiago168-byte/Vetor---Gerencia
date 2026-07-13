@@ -42,55 +42,57 @@ function EAPForm() {
       const paiId = searchParams.get('pai');
       if (paiId) {
         setFormData(prev => ({ ...prev, pai_id: paiId }));
-        // Gerar código EAP automaticamente para atividade filha
-        gerarCodigoEAPFilha(paiId);
       }
     }
   }, [projetoId, atividadeId, searchParams]);
 
-  const gerarCodigoEAPFilha = (paiId) => {
-    if (!paiId || !atividades.length) return;
+  const gerarCodigoEAPFilha = (paiId, lista = atividades) => {
+    if (!paiId || !lista.length) return '';
 
-    const atividadePai = atividades.find(a => a.id == paiId);
-    if (!atividadePai) return;
+    const atividadePai = lista.find(a => String(a.id) === String(paiId));
+    if (!atividadePai) return '';
 
     // Encontrar todas as atividades filhas do pai
-    const atividadesFilhas = atividades.filter(a => a.pai_id == paiId);
+    const atividadesFilhas = lista.filter(a => String(a.pai_id) === String(paiId));
 
     // Extrair os códigos EAP das filhas e converter para números
     const codigoPai = String(atividadePai.codigo_eap || '').trim();
+    const prefixo = `${codigoPai}.`;
     const codigosFilhas = atividadesFilhas
-      .map(a => String(a.codigo_eap || '').replace(`${codigoPai}.`, ''))
-      .map(segmento => Number(segmento.split('.')[0]))
-      .filter(num => Number.isInteger(num))
-      .sort((a, b) => a - b);
+      .map(a => String(a.codigo_eap || '').trim())
+      .map(codigo => {
+        if (!codigo.startsWith(prefixo)) return null;
+        const sufixo = codigo.slice(prefixo.length);
+        return /^\d+$/.test(sufixo) ? Number(sufixo) : null;
+      })
+      .filter(num => Number.isInteger(num) && num > 0);
 
     // Encontrar o próximo número disponível
-    let proximoNumero = 1;
-    for (let i = 0; i < codigosFilhas.length; i++) {
-      if (codigosFilhas[i] === proximoNumero) {
-        proximoNumero++;
-      } else {
-        break;
-      }
-    }
+    const proximoNumero = codigosFilhas.length ? Math.max(...codigosFilhas) + 1 : 1;
 
     // Gerar código EAP baseado no pai
-    const novoCodigo = `${codigoPai}.${proximoNumero}`;
-
-    setFormData(prev => ({ ...prev, codigo_eap: novoCodigo }));
+    return `${codigoPai}.${proximoNumero}`;
   };
+
+  useEffect(() => {
+    if (atividadeId || !atividades.length) return;
+
+    const paiId = searchParams.get('pai');
+    if (!paiId) return;
+
+    const novoCodigo = gerarCodigoEAPFilha(paiId, atividades);
+    setFormData(prev => ({
+      ...prev,
+      pai_id: paiId,
+      codigo_eap: novoCodigo || prev.codigo_eap
+    }));
+  }, [atividades, atividadeId, searchParams]);
 
   const carregarAtividades = async () => {
     try {
       const response = await getAtividadesEAP(projetoId);
       setAtividades(response.data || []);
 
-      // Após carregar atividades, verificar se há pai_id para gerar código EAP
-      const paiId = searchParams.get('pai');
-      if (paiId && !atividadeId) {
-        setTimeout(() => gerarCodigoEAPFilha(paiId), 100);
-      }
     } catch (error) {
       console.error('Erro ao carregar atividades:', error);
     }
@@ -205,9 +207,13 @@ function EAPForm() {
       };
 
       // Se mudou a atividade pai, gerar novo código EAP
-      if (name === 'pai_id' && value && !atividadeId) {
-        // Usar setTimeout para garantir que o estado foi atualizado
-        setTimeout(() => gerarCodigoEAPFilha(value), 0);
+      if (name === 'pai_id' && !atividadeId) {
+        if (value) {
+          const novoCodigo = gerarCodigoEAPFilha(value, atividades);
+          newData.codigo_eap = novoCodigo || newData.codigo_eap;
+        } else {
+          newData.codigo_eap = '';
+        }
       }
 
       return newData;
@@ -272,6 +278,12 @@ function EAPForm() {
   const atividadesPredecessoras = ordenarPorCodigoEap(
     atividades.filter(a => String(a.id) !== String(atividadeId))
   );
+  const atividadePaiSelecionada = atividades.find(
+    atividade => String(atividade.id) === String(formData.pai_id)
+  );
+  const proximoCodigoFilho = formData.pai_id
+    ? gerarCodigoEAPFilha(formData.pai_id, atividades)
+    : '';
   const isAtividadePai = !formData.pai_id;
 
   return (
@@ -279,10 +291,18 @@ function EAPForm() {
       <Navbar />
       <div className="container eap-form-page">
         <div className="eap-form-header">
-          <button className="btn btn-secondary" onClick={() => navigate(`/projeto/${projetoId}/eap`)}>
+          <button
+            className="btn btn-secondary eap-back-button"
+            onClick={() => navigate(`/projeto/${projetoId}/eap`)}
+            aria-label="Voltar para a EAP"
+            title="Voltar para a EAP"
+          >
             <ArrowLeft size={16} />
           </button>
-          <h1>{atividadeId ? 'Editar Atividade' : 'Nova Atividade'} - EAP</h1>
+          <div>
+            <span className="eap-form-eyebrow">Estrutura analítica do projeto</span>
+            <h1>{atividadeId ? 'Editar atividade' : 'Nova atividade'} <span>na EAP</span></h1>
+          </div>
         </div>
 
         <div className="eap-form-layout">
@@ -324,6 +344,14 @@ function EAPForm() {
             </div>
 
             <form onSubmit={handleSubmit}>
+              <div className="eap-section-heading">
+                <span className="eap-section-index">01</span>
+                <div>
+                  <strong>Identificação</strong>
+                  <span>Defina o código e o nome que aparecerão no cronograma.</span>
+                </div>
+              </div>
+
               <div className="eap-field">
                 <label className="eap-label">
                   Código EAP e Nome da Atividade
@@ -349,6 +377,11 @@ function EAPForm() {
                   />
                 </div>
               </div>
+              {formData.pai_id && (
+                <small className="eap-field-help eap-code-help">
+                  Código sugerido a partir da atividade pai. Você ainda pode ajustá-lo, se necessário.
+                </small>
+              )}
 
               <div className="eap-field">
                 <label className="eap-label">
@@ -361,6 +394,14 @@ function EAPForm() {
                   rows={3}
                   className="eap-input eap-textarea"
                 />
+              </div>
+
+              <div className="eap-section-heading eap-section-heading-wide">
+                <span className="eap-section-index">02</span>
+                <div>
+                  <strong>Planejamento e medição</strong>
+                  <span>Datas, unidade, quantidade e peso da atividade.</span>
+                </div>
               </div>
 
               <div className="eap-grid-2">
@@ -404,12 +445,22 @@ function EAPForm() {
                   className="eap-input"
                 >
                   <option value="">Nenhuma (atividade raiz)</option>
-                  {atividadesPai.map(atividade => (
-                    <option key={atividade.id} value={atividade.id}>
-                      {formatarOpcaoAtividade(atividade)}
-                    </option>
-                  ))}
+                {atividadesPai.map(atividade => (
+                  <option key={atividade.id} value={atividade.id}>
+                    {formatarOpcaoAtividade(atividade)}
+                  </option>
+                ))}
                 </select>
+                {atividadePaiSelecionada && (
+                  <div className="eap-parent-context" role="status">
+                    <GitBranchPlus size={16} />
+                    <div>
+                      <span>Vínculo definido com</span>
+                      <strong>{formatarOpcaoAtividade(atividadePaiSelecionada)}</strong>
+                    </div>
+                    <b>{formData.codigo_eap || proximoCodigoFilho}</b>
+                  </div>
+                )}
               </div>
 
               <div className="eap-dependency-box">
@@ -565,39 +616,33 @@ function EAPForm() {
           <aside className="card eap-info-card">
             <div className="eap-info-header">
               <Info size={18} />
-              <h2>Como montar sua EAP</h2>
+              <div>
+                <span className="eap-form-eyebrow">Resumo da estrutura</span>
+                <h2>{isAtividadePai ? 'Atividade raiz' : 'Atividade filha'}</h2>
+              </div>
             </div>
             <p className="eap-info-intro">
-              Use este guia rápido para criar a estrutura corretamente e manter o cronograma organizado.
+              Confira o vínculo e a numeração antes de salvar.
             </p>
 
-            <div className="eap-info-block">
-              <div className="eap-info-block-title">
-                <Layers3 size={16} />
-                <strong>Atividade pai (raiz)</strong>
+            <div className="eap-summary-list">
+              <div className="eap-summary-row">
+                <span>Hierarquia</span>
+                <strong>{isAtividadePai ? 'Raiz do projeto' : 'Filha vinculada'}</strong>
               </div>
-              <ol>
-                <li>Deixe o campo Atividade Pai como Nenhuma (atividade raiz).</li>
-                <li>Cadastre o Código EAP principal (ex.: 2.1) e um nome claro.</li>
-                <li>Se quiser, deixe datas e peso para detalhar nas atividades filhas.</li>
-              </ol>
-            </div>
-
-            <div className="eap-info-block">
-              <div className="eap-info-block-title">
-                <GitBranchPlus size={16} />
-                <strong>Atividade filha</strong>
+              <div className="eap-summary-row">
+                <span>Atividade pai</span>
+                <strong>{atividadePaiSelecionada ? formatarOpcaoAtividade(atividadePaiSelecionada) : 'Nenhuma'}</strong>
               </div>
-              <ol>
-                <li>Selecione a Atividade Pai no campo correspondente.</li>
-                <li>O código da filha é sugerido automaticamente (ex.: 2.1.1).</li>
-                <li>Preencha datas, peso e, se necessário, a predecessora para controlar a sequência.</li>
-              </ol>
+              <div className="eap-summary-row eap-summary-code">
+                <span>Próximo código</span>
+                <strong>{formData.codigo_eap || (isAtividadePai ? 'Informe o código' : proximoCodigoFilho || 'Carregando...')}</strong>
+              </div>
+              <div className="eap-summary-row">
+                <span>Dependência</span>
+                <strong>{formData.predecessora_id ? 'Configurada' : 'Opcional'}</strong>
+              </div>
             </div>
-
-            <p className="eap-info-tip">
-              Dica: use a predecessora para definir a sequência manualmente no cronograma, sem depender só das sugestões automáticas.
-            </p>
           </aside>
         </div>
       </div>

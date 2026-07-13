@@ -383,3 +383,221 @@ body.dark-mode .eap-input::-webkit-calendar-picker-indicator {
     grid-template-columns: 1fr;
   }
 }
+
+.eap-form-header {
+  gap: 12px;
+  margin-bottom: 26px;
+}
+
+.eap-form-header h1 {
+  color: var(--text-primary);
+  font-size: 2rem;
+  letter-spacing: 0;
+}
+
+.eap-form-header h1 span {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.eap-form-eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.eap-back-button {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.eap-form-card,
+.eap-info-card {
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.07);
+}
+
+.eap-form-card {
+  padding: 26px;
+}
+
+.eap-form-mode {
+  border-left: 3px solid var(--primary);
+  background: color-mix(in srgb, var(--primary) 6%, var(--card-bg));
+}
+
+.eap-mode-badge {
+  border-radius: 6px;
+}
+
+.eap-section-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 22px 0 14px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-default);
+}
+
+.eap-section-heading:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.eap-section-index {
+  display: grid;
+  flex: 0 0 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary) 12%, var(--card-bg));
+  color: var(--primary);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.eap-section-heading strong,
+.eap-section-heading span:last-child {
+  display: block;
+}
+
+.eap-section-heading strong {
+  color: var(--text-primary);
+  font-size: 0.96rem;
+}
+
+.eap-section-heading span:last-child {
+  margin-top: 3px;
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+}
+
+.eap-code-help {
+  margin: -7px 0 14px;
+}
+
+.eap-parent-context {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--badge-green-color) 28%, var(--border-default));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--badge-green-bg) 65%, var(--card-bg));
+  color: var(--badge-green-color);
+}
+
+.eap-parent-context div {
+  min-width: 0;
+}
+
+.eap-parent-context span,
+.eap-parent-context strong {
+  display: block;
+}
+
+.eap-parent-context span {
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.eap-parent-context strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eap-parent-context b {
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: var(--card-bg);
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.eap-info-card {
+  background: var(--card-bg);
+}
+
+.eap-info-header {
+  align-items: flex-start;
+}
+
+.eap-info-header h2 {
+  font-size: 1.15rem;
+}
+
+.eap-info-intro {
+  margin-bottom: 18px;
+  font-size: 0.9rem;
+}
+
+.eap-summary-list {
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+}
+
+.eap-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 48px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.eap-summary-row:last-child {
+  border-bottom: 0;
+}
+
+.eap-summary-row span {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.eap-summary-row strong {
+  max-width: 62%;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 0.84rem;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.eap-summary-code strong {
+  color: var(--primary);
+  font-size: 1rem;
+}
+
+@media (max-width: 640px) {
+  .eap-form-card {
+    padding: 18px;
+  }
+
+  .eap-form-header h1 {
+    font-size: 1.65rem;
+  }
+
+  .eap-parent-context {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .eap-parent-context b {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
