@@ -9,7 +9,7 @@ const { auth } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
 const { PERMISSIONS, requirePermission } = require('../middleware/rbac');
 const { PERFIS, PERFIS_LISTA, SETORES, SETORES_LISTA, normalizarPerfil, mapPerfilParaLegado } = require('../constants/access');
-const { hasForbiddenPasswordSequence } = require('../services/passwordPolicy');
+const { getPasswordStrength, hasForbiddenPasswordSequence } = require('../services/passwordPolicy');
 
 const router = express.Router();
 
@@ -26,6 +26,20 @@ const uploadAvatar = multer({
   fileFilter: (req, file, cb) => {
     if (/jpeg|jpg|png|webp/.test(path.extname(file.originalname).toLowerCase())) return cb(null, true);
     cb(new Error('Somente imagens (jpg, png, webp) são permitidas.'));
+  }
+});
+
+const assinaturaStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadsDir),
+  filename: (req, file, cb) => cb(null, `assinatura-${req.params.id}-${Date.now()}.png`)
+});
+const uploadAssinatura = multer({
+  storage: assinaturaStorage,
+  limits: { fileSize: 2 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ext === '.png' && file.mimetype === 'image/png') return cb(null, true);
+    cb(new Error('A assinatura deve ser um arquivo PNG.'));
   }
 });
 
@@ -1018,6 +1032,12 @@ router.patch('/:id/senha', [auth], async (req, res) => {
       return res.status(400).json({ erro: 'Nova senha deve ter no maximo 72 caracteres.' });
     }
 
+    if (getPasswordStrength(novaSenha).level === 'fraca') {
+      return res.status(400).json({
+        erro: 'Nova senha precisa ter no mínimo nível Médio de segurança. Use letras, números e caracteres especiais.'
+      });
+    }
+
     if (hasForbiddenPasswordSequence(novaSenha)) {
       return res.status(400).json({
         erro: 'Nova senha não pode conter sequência crescente ou decrescente de letras/números (ex: abcd, 1234, 9876).'
@@ -1085,6 +1105,54 @@ router.patch('/:id/avatar', auth, uploadAvatar.single('avatar'), async (req, res
 });
 
 // Atualizar informações de perfil do próprio usuário (nome, email, telefone)
+router.patch('/:id/assinatura', auth, uploadAssinatura.single('assinatura'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (Number(id) !== Number(req.usuario.id)) {
+      return res.status(403).json({ erro: 'Você só pode atualizar sua própria assinatura.' });
+    }
+    if (!req.file) return res.status(400).json({ erro: 'Envie uma assinatura em PNG.' });
+
+    const atual = await getQuery('SELECT assinatura_png FROM usuarios WHERE id = ?', [id]);
+    const assinaturaFilename = req.file.filename;
+    await runQuery('UPDATE usuarios SET assinatura_png = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?', [assinaturaFilename, id]);
+
+    if (atual?.assinatura_png) {
+      const oldPath = path.resolve(uploadsDir, String(atual.assinatura_png).replace(/\\/g, '/'));
+      const uploadsRoot = path.resolve(uploadsDir);
+      if (oldPath.startsWith(uploadsRoot + path.sep) && fs.existsSync(oldPath)) fs.unlink(oldPath, () => {});
+    }
+
+    res.json({ mensagem: 'Assinatura atualizada.', assinatura_png: assinaturaFilename });
+  } catch (error) {
+    if (req.file?.path && fs.existsSync(req.file.path)) fs.unlink(req.file.path, () => {});
+    console.error('Erro ao atualizar assinatura:', error);
+    res.status(500).json({ erro: error?.message || 'Erro ao atualizar assinatura.' });
+  }
+});
+
+router.delete('/:id/assinatura', auth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (Number(id) !== Number(req.usuario.id)) {
+      return res.status(403).json({ erro: 'Você só pode remover sua própria assinatura.' });
+    }
+
+    const atual = await getQuery('SELECT assinatura_png FROM usuarios WHERE id = ?', [id]);
+    await runQuery('UPDATE usuarios SET assinatura_png = NULL, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?', [id]);
+    if (atual?.assinatura_png) {
+      const oldPath = path.resolve(uploadsDir, String(atual.assinatura_png).replace(/\\/g, '/'));
+      const uploadsRoot = path.resolve(uploadsDir);
+      if (oldPath.startsWith(uploadsRoot + path.sep) && fs.existsSync(oldPath)) fs.unlink(oldPath, () => {});
+    }
+
+    res.json({ mensagem: 'Assinatura removida.', assinatura_png: null });
+  } catch (error) {
+    console.error('Erro ao remover assinatura:', error);
+    res.status(500).json({ erro: error?.message || 'Erro ao remover assinatura.' });
+  }
+});
+
 router.patch('/:id/info', [auth], async (req, res) => {
   try {
     const { id } = req.params;
@@ -1125,7 +1193,7 @@ router.patch('/:id/info', [auth], async (req, res) => {
     valores.push(id);
     await runQuery(`UPDATE usuarios SET ${campos.join(', ')} WHERE id = ?`, valores);
     const atualizado = await getQuery(
-      `SELECT id, nome, email, telefone, login, perfil, funcao, avatar,
+      `SELECT id, nome, email, telefone, login, perfil, funcao, avatar, assinatura_png,
               COALESCE(presenca_status, 'disponivel') AS presenca_status, presenca_atualizado_em
        FROM usuarios WHERE id = ?`,
       [id]

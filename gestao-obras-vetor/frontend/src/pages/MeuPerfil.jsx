@@ -2,10 +2,10 @@ import React, { useState, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
 import { useNavigate, Navigate } from 'react-router-dom';
-import { ArrowLeft, KeyRound, User, Mail, Phone, Pencil, Check, X, Camera } from 'lucide-react';
+import { ArrowLeft, KeyRound, User, Mail, Pencil, Check, X, Briefcase, ShieldCheck, AtSign, Upload, Trash2 } from 'lucide-react';
 import Navbar from '../components/Navbar';
-import { hasForbiddenPasswordSequence } from '../utils/passwordPolicy';
-import { patchUsuarioInfo, patchUsuarioAvatar, patchUsuarioPresenca, getUploadUrl } from '../services/api';
+import { getPasswordStrength, hasForbiddenPasswordSequence } from '../utils/passwordPolicy';
+import { patchUsuarioInfo, patchUsuarioAssinatura, deleteUsuarioAssinatura, patchUsuarioPresenca, getUploadUrl } from '../services/api';
 import './MeuPerfil.css';
 
 const PRESENCA_OPTIONS = [
@@ -27,12 +27,11 @@ function MeuPerfil() {
   const [editando, setEditando] = useState(false);
   const [editNome, setEditNome] = useState('');
   const [editEmail, setEditEmail] = useState('');
-  const [editTelefone, setEditTelefone] = useState('');
   const [salvandoInfo, setSalvandoInfo] = useState(false);
 
-  // Avatar
-  const avatarInputRef = useRef(null);
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const assinaturaInputRef = useRef(null);
+  const [uploadingAssinatura, setUploadingAssinatura] = useState(false);
+  const [removendoAssinatura, setRemovendoAssinatura] = useState(false);
   const [atualizandoPresenca, setAtualizandoPresenca] = useState(false);
 
   const cleanText = (value) => {
@@ -51,40 +50,56 @@ function MeuPerfil() {
   const iniciarEdicao = () => {
     setEditNome(usuario?.nome || '');
     setEditEmail(usuario?.email || '');
-    setEditTelefone(usuario?.telefone || '');
     setEditando(true);
   };
 
   const cancelarEdicao = () => setEditando(false);
 
-  const handleAvatarChange = async (e) => {
-    const file = e.target.files?.[0];
+  const handleAssinaturaChange = async (event) => {
+    const file = event.target.files?.[0];
     if (!file) return;
-    setUploadingAvatar(true);
+    if (file.type !== 'image/png') {
+      await alert({ title: 'Formato inválido', message: 'A assinatura deve ser enviada em PNG.' });
+      event.target.value = '';
+      return;
+    }
+
+    setUploadingAssinatura(true);
     try {
-      const fd = new FormData();
-      fd.append('avatar', file);
-      const res = await patchUsuarioAvatar(usuario.id, fd);
-      const novoAvatar = res?.data?.avatar;
-      if (novoAvatar && typeof atualizarUsuarioLogado === 'function') {
-        atualizarUsuarioLogado({ avatar: novoAvatar });
-      }
-    } catch (err) {
-      await alert({ title: 'Erro', message: err.response?.data?.erro || 'Erro ao enviar foto.' });
+      const formData = new FormData();
+      formData.append('assinatura', file);
+      const response = await patchUsuarioAssinatura(usuario.id, formData);
+      atualizarUsuarioLogado?.({ assinatura_png: response?.data?.assinatura_png || null });
+      await alert({ title: 'Sucesso', message: 'Assinatura atualizada.' });
+    } catch (error) {
+      await alert({ title: 'Erro', message: error.response?.data?.erro || 'Erro ao enviar assinatura.' });
     } finally {
-      setUploadingAvatar(false);
-      e.target.value = '';
+      setUploadingAssinatura(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleRemoverAssinatura = async () => {
+    if (!usuario?.assinatura_png || removendoAssinatura) return;
+    setRemovendoAssinatura(true);
+    try {
+      await deleteUsuarioAssinatura(usuario.id);
+      atualizarUsuarioLogado?.({ assinatura_png: null });
+      await alert({ title: 'Sucesso', message: 'Assinatura removida.' });
+    } catch (error) {
+      await alert({ title: 'Erro', message: error.response?.data?.erro || 'Erro ao remover assinatura.' });
+    } finally {
+      setRemovendoAssinatura(false);
     }
   };
 
   const handleSalvarInfo = async () => {
     setSalvandoInfo(true);
     try {
-      const res = await patchUsuarioInfo(usuario.id, { nome: editNome, email: editEmail, telefone: editTelefone });
+      const res = await patchUsuarioInfo(usuario.id, { nome: editNome, email: editEmail });
       const usuarioAtualizado = res?.data?.usuario || {
         nome: editNome,
         email: editEmail,
-        telefone: editTelefone,
       };
       if (typeof atualizarUsuarioLogado === 'function') atualizarUsuarioLogado(usuarioAtualizado);
       setEditando(false);
@@ -119,8 +134,13 @@ function MeuPerfil() {
 
   const handleTrocarSenha = async (e) => {
     e.preventDefault();
-    if (novaSenha.length !== 6 || !/^\d{6}$/.test(novaSenha)) {
-      await alert({ title: 'Erro', message: 'A nova senha deve ter 6 dígitos numéricos.' });
+    if (novaSenha.length > 72) {
+      await alert({ title: 'Erro', message: 'A nova senha deve ter no máximo 72 caracteres.' });
+      return;
+    }
+    const senhaStrength = getPasswordStrength(novaSenha);
+    if (senhaStrength.level === 'fraca') {
+      await alert({ title: 'Erro', message: 'A nova senha precisa ter no mínimo nível Médio de segurança. Use letras, números e caracteres especiais.' });
       return;
     }
     if (hasForbiddenPasswordSequence(novaSenha)) {
@@ -152,14 +172,6 @@ function MeuPerfil() {
     }
   };
 
-  // Avatar com iniciais
-  const getInitials = (nome) => {
-    if (!nome) return '';
-    const partes = nome.trim().split(' ');
-    if (partes.length === 1) return partes[0][0].toUpperCase();
-    return (partes[0][0] + partes[partes.length - 1][0]).toUpperCase();
-  };
-
   const nomeExibicao = usuario?.nome || usuario?.login;
   const perfilExibicao = usuario?.perfil || 'Sem perfil';
   const funcaoExibicao = usuario?.funcao || 'Não informada';
@@ -180,33 +192,37 @@ function MeuPerfil() {
       <div className="perfil-page container">
         <div className="perfil-header-bar">
           <div>
+            <p className="perfil-header-kicker">Conta e acesso</p>
             <h1 className="perfil-page-title">Meu perfil</h1>
             <p className="perfil-page-subtitle">Consulte seus dados de acesso e altere sua senha.</p>
           </div>
 
-          <button className="btn btn-secondary perfil-back-btn" onClick={() => navigate(rotaVoltar)} title={tituloVoltar}>
-            <ArrowLeft size={18} />
-            Voltar
-          </button>
+          <div className="perfil-header-actions">
+            <span className="perfil-header-status"><span /> Sessão ativa</span>
+            <button className="btn btn-secondary perfil-back-btn" onClick={() => navigate(rotaVoltar)} title={tituloVoltar}>
+              <ArrowLeft size={18} />
+              Voltar
+            </button>
+          </div>
         </div>
 
         <div className="perfil-grid">
           {/* Informações do usuário */}
-          <section className="card perfil-section-card">
+          <section className="card perfil-section-card perfil-profile-card">
             <div className="perfil-user-card">
-              <div className="perfil-avatar perfil-avatar-clickable" onClick={() => avatarInputRef.current?.click()} title="Clique para trocar a foto">
-                {usuario?.avatar
-                  ? <img src={getUploadUrl(usuario.avatar)} alt="avatar" className="perfil-avatar-image" />
-                  : <span className="perfil-avatar-iniciais">{getInitials(nomeExibicao)}</span>
-                }
-                <div className="perfil-avatar-camera-badge">
-                  {uploadingAvatar ? <span style={{ fontSize: 10, color: '#fff' }}>...</span> : <Camera size={12} color="#fff" />}
+              <div className="perfil-user-main">
+                <div className="perfil-user-heading">
+                  <div>
+                    <p className="perfil-user-kicker">Perfil pessoal</p>
+                    <h2 className="perfil-user-name">{nomeExibicao}</h2>
+                  </div>
+                  <span className="perfil-active-badge"><span /> Ativo</span>
                 </div>
-                <input ref={avatarInputRef} type="file" accept="image/jpeg,image/jpg,image/png,image/webp" style={{ display: 'none' }} onChange={handleAvatarChange} />
-              </div>
-
-              <div className="perfil-user-main" style={{ flex: 1 }}>
-                <h2 className="perfil-user-name">{nomeExibicao}</h2>
+                <div className="perfil-user-context">
+                  <span><Briefcase size={14} /> {funcaoExibicao}</span>
+                  <span><AtSign size={14} /> {usuario?.login}</span>
+                </div>
+                <p className="perfil-presenca-label">Como você está disponível hoje?</p>
                 <div className="perfil-presenca-wrap">
                   {PRESENCA_OPTIONS.map((option) => {
                     const ativo = String(usuario?.presenca_status || 'disponivel') === option.value;
@@ -242,7 +258,7 @@ function MeuPerfil() {
             </div>
 
             {/* Dados pessoais editáveis */}
-            <div className="perfil-section-header" style={{ marginTop: 24 }}>
+            <div className="perfil-section-header perfil-contact-header">
               <div>
                 <p className="perfil-section-eyebrow">Dados pessoais</p>
                 <h2 className="card-title">Informações de contato</h2>
@@ -253,16 +269,11 @@ function MeuPerfil() {
             </div>
 
             {!editando ? (
-              <div style={{ marginTop: 12 }}>
+              <div className="perfil-contact-list">
                 <div className="perfil-info-row">
                   <Mail size={14} style={{ opacity: 0.6 }} />
                   <span className="perfil-meta-label">E-mail:</span>
                   <span>{cleanText(usuario?.email) || <em style={{ opacity: 0.5 }}>Não informado</em>}</span>
-                </div>
-                <div className="perfil-info-row">
-                  <Phone size={14} style={{ opacity: 0.6 }} />
-                  <span className="perfil-meta-label">Telefone:</span>
-                  <span>{cleanText(usuario?.telefone) || <em style={{ opacity: 0.5 }}>Não informado</em>}</span>
                 </div>
                 <button className="btn btn-secondary perfil-inline-btn" onClick={iniciarEdicao}>
                   <Pencil size={14} /> Editar informações
@@ -278,10 +289,6 @@ function MeuPerfil() {
                   <label className="form-label">E-mail</label>
                   <input className="form-input" type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder="seuemail@exemplo.com" />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Telefone</label>
-                  <input className="form-input" type="tel" value={editTelefone} onChange={e => setEditTelefone(e.target.value)} placeholder="(99) 99999-9999" />
-                </div>
                 <div className="perfil-edit-actions">
                   <button className="btn btn-primary perfil-inline-btn" disabled={salvandoInfo} onClick={handleSalvarInfo}>
                     <Check size={14} /> {salvandoInfo ? 'Salvando...' : 'Salvar'}
@@ -292,22 +299,56 @@ function MeuPerfil() {
                 </div>
               </div>
             )}
+
+            <div className="perfil-signature-section">
+              <div className="perfil-section-header">
+                <div>
+                  <p className="perfil-section-eyebrow">Documentos</p>
+                  <h2 className="card-title">Assinatura digital</h2>
+                </div>
+                <div className="perfil-section-icon perfil-section-icon-signature">
+                  <Pencil size={18} />
+                </div>
+              </div>
+              <p className="perfil-signature-copy">Adicione sua assinatura em PNG para aparecer nos PDFs de RDO e RNC gerados por você.</p>
+
+              {usuario?.assinatura_png ? (
+                <div className="perfil-signature-preview">
+                  <div className="perfil-signature-image-wrap">
+                    <img src={getUploadUrl(usuario.assinatura_png)} alt="Assinatura cadastrada" />
+                  </div>
+                  <button className="btn btn-secondary perfil-signature-remove" type="button" onClick={handleRemoverAssinatura} disabled={removendoAssinatura}>
+                    <Trash2 size={14} /> {removendoAssinatura ? 'Removendo...' : 'Remover assinatura'}
+                  </button>
+                </div>
+              ) : (
+                <label className="perfil-signature-upload">
+                  <Upload size={18} />
+                  <span>
+                    <strong>{uploadingAssinatura ? 'Enviando...' : 'Adicionar assinatura PNG'}</strong>
+                    <small>Use uma imagem com fundo transparente, se possível.</small>
+                  </span>
+                  <input ref={assinaturaInputRef} type="file" accept="image/png" onChange={handleAssinaturaChange} disabled={uploadingAssinatura} />
+                </label>
+              )}
+            </div>
           </section>
 
-          <section className="card perfil-section-card">
+          <section className="card perfil-section-card perfil-security-card">
             <div className="perfil-section-header">
               <div>
                 <p className="perfil-section-eyebrow">Segurança</p>
                 <h2 className="card-title">Alterar senha</h2>
               </div>
-              <div className="perfil-section-icon">
+              <div className="perfil-section-icon perfil-section-icon-security">
                 <KeyRound size={18} />
               </div>
             </div>
 
-            <p className="perfil-section-copy">
-              Sua senha deve conter 6 dígitos numéricos, seguindo o padrão operacional do sistema.
-            </p>
+            <div className="perfil-security-note">
+              <ShieldCheck size={18} />
+              <p>Use uma senha com no mínimo nível Médio de segurança, combinando letras, números e caracteres especiais.</p>
+            </div>
 
             <form className="perfil-form" onSubmit={handleTrocarSenha} autoComplete="off">
               <div className="form-group">
@@ -335,9 +376,18 @@ function MeuPerfil() {
                     onChange={(e) => setNovaSenha(e.target.value)}
                     required
                     autoComplete="new-password"
-                    placeholder="6 dígitos"
-                    inputMode="numeric"
+                    placeholder="Digite uma senha forte"
                   />
+                  {novaSenha && (
+                    <div className="perfil-password-strength" aria-live="polite">
+                      <div className="perfil-password-strength-track">
+                        <span style={{ width: getPasswordStrength(novaSenha).width, backgroundColor: getPasswordStrength(novaSenha).color }} />
+                      </div>
+                      <span style={{ color: getPasswordStrength(novaSenha).color }}>
+                        Nível da senha: {getPasswordStrength(novaSenha).label}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="form-group">
@@ -351,7 +401,6 @@ function MeuPerfil() {
                     required
                     autoComplete="new-password"
                     placeholder="Repita a nova senha"
-                    inputMode="numeric"
                   />
                 </div>
               </div>
