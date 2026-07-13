@@ -76,6 +76,7 @@
   --link-hover-bg:    #e2e8f0;
   --link-active-bg:   #dbeafe;
   --link-active-color: #0f172a;
+  --link-active-indicator: #2563eb;
 
   --badge-yellow-bg: #fff7ed;  --badge-yellow-color: #c2410c;
   --badge-blue-bg:   #e0f2fe;  --badge-blue-color:   #075985;
@@ -635,14 +636,30 @@ code {
   font-weight: 600;
   padding: 10px 12px;
   border-radius: var(--radius-md);
-  transition: all 0.2s ease;
+  transition: color 0.2s ease, background 0.2s ease;
   display: flex;
   align-items: center;
   gap: 6px;
+  position: relative;
 }
 
 .navbar-link:hover { color: var(--text-primary); background: var(--link-hover-bg); }
-.navbar-link.active { color: var(--link-active-color); background: var(--link-active-bg); box-shadow: var(--shadow-soft); }
+.navbar-link.active {
+  color: var(--link-active-color);
+  background: transparent;
+  box-shadow: none;
+}
+
+.navbar-link.active::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 4px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--link-active-indicator);
+}
 
 .navbar-perfil-dropdown {
   position: relative;
@@ -1564,6 +1581,7 @@ body.dark-mode {
   --link-hover-bg:     #1f3044;
   --link-active-bg:    rgba(37, 99, 235, 0.15);
   --link-active-color: #7eb6eb;
+  --link-active-indicator: #60a5fa;
 
   /* Escala gray invertida — componentes que usam --gray-* adaptam automaticamente */
   --gray-25:  #162030;
