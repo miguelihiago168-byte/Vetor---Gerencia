@@ -62,6 +62,13 @@ const MODULOS: Modulo[] = [
     cor: '#00897B',
   },
   {
+    key: 'Conversas',
+    label: 'Conversas',
+    descricao: 'Mensagens da equipe da obra',
+    icon: 'message-text-outline',
+    cor: '#0277BD',
+  },
+  {
     key: 'AlmoxDashboard',
     label: 'Almoxarifado',
     descricao: 'Ferramentas e retiradas',

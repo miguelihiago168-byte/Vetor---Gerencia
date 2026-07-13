@@ -39,7 +39,7 @@ export default function LoginScreen() {
       const msg =
         (e as { response?: { data?: { erro?: string; error?: string } } })?.response?.data?.erro ??
         (e as { response?: { data?: { erro?: string; error?: string } } })?.response?.data?.error ??
-        'Erro ao fazer login. Verifique o servidor.';
+        'Erro ao fazer login. Verifique sua conexão e tente novamente.';
       error(msg);
     } finally {
       setCarregando(false);
@@ -53,20 +53,16 @@ export default function LoginScreen() {
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header */}
         <View style={styles.header}>
-          <View style={styles.logoContainer}>
-            <Image
-              source={require('../../../assets/icon.png')}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-          </View>
+          <Image
+            source={require('../../../assets/icon.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
           <Text style={styles.titulo}>Vetor Obras</Text>
           <Text style={styles.subtitulo}>Gestão de Obras</Text>
         </View>
 
-        {/* Card */}
         <View style={styles.card}>
           <Text style={styles.cardTitulo}>Entrar no sistema</Text>
 
@@ -109,7 +105,6 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.rodape}>Vetor — Uso interno</Text>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -129,19 +124,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 32,
   },
-  logoContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#FFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-    elevation: 4,
-  },
   logoImage: {
-    width: 64,
-    height: 64,
+    width: 112,
+    height: 112,
+    marginBottom: 14,
+    borderRadius: 24,
   },
   titulo: {
     fontSize: 28,
@@ -205,11 +192,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     letterSpacing: 1,
-  },
-  rodape: {
-    textAlign: 'center',
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 12,
-    marginTop: 24,
   },
 });

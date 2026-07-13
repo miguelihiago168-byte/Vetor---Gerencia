@@ -1,16 +1,31 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 'axios';
-import { API_URL } from '../utils/constants';
+import { API_URL, normalizeApiUrl } from '../utils/constants';
 import { storage } from '../utils/storage';
 import { withCache } from '../utils/cache';
 
 let logoutCallback: (() => void) | null = null;
+
+const isLoopbackApiUrl = (value?: string | null) =>
+  Boolean(
+    value &&
+      /\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(:|\/|$)/i.test(value),
+  );
+
+const getConfiguredApiUrl = async () => {
+  const stored = await storage.getApiUrl();
+  if (isLoopbackApiUrl(stored)) {
+    await storage.removeApiUrl();
+    return API_URL;
+  }
+  return stored || API_URL;
+};
 
 export function setLogoutCallback(cb: () => void) {
   logoutCallback = cb;
 }
 
 const api: AxiosInstance = axios.create({
-  baseURL: API_URL,
+  baseURL: API_URL || undefined,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -19,6 +34,11 @@ const api: AxiosInstance = axios.create({
 
 api.interceptors.request.use(
   async (config: InternalAxiosRequestConfig) => {
+    const baseURL = await getConfiguredApiUrl();
+    if (!baseURL) {
+      throw new Error('Configure a URL pública do servidor antes de continuar.');
+    }
+    config.baseURL = baseURL;
     const token = await storage.getToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -40,6 +60,30 @@ api.interceptors.response.use(
 );
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
+export const getActiveApiUrl = getConfiguredApiUrl;
+
+export const setActiveApiUrl = async (apiUrl: string) => {
+  const normalized = normalizeApiUrl(apiUrl);
+  if (!normalized) throw new Error('Informe um endereço de API válido.');
+  await storage.setApiUrl(normalized);
+  api.defaults.baseURL = normalized;
+  return normalized;
+};
+
+export const resetActiveApiUrl = async () => {
+  await storage.removeApiUrl();
+  api.defaults.baseURL = API_URL;
+  return API_URL;
+};
+
+export const testarConexaoApi = async (apiUrl?: string) => {
+  const baseURL = normalizeApiUrl(apiUrl) || (await getActiveApiUrl());
+  if (!baseURL) throw new Error('Configure a URL pública do servidor.');
+  const healthUrl = `${baseURL.replace(/\/api$/, '')}/api/health`;
+  const resp = await axios.get(healthUrl, { timeout: 8000 });
+  return { apiUrl: baseURL, data: resp.data };
+};
+
 export const login = (credentials: { usuario?: string; login?: string; senha: string }) =>
   api.post('/auth/login', credentials);
 
@@ -248,6 +292,30 @@ export const marcarTodasNotificacoesLidas = () =>
   api.patch('/notificacoes/marcar-todas-lidas');
 
 // ─── Usuários ────────────────────────────────────────────────────────────────
+export const getMensagensNaoLidasCount = () => api.get('/mensagens/nao-lidas/count');
+export const criarConversaDireta = (data: Record<string, unknown>) =>
+  api.post('/mensagens/conversas/direta', data);
+export const listarConversas = (params?: Record<string, unknown>) =>
+  api.get('/mensagens/conversas', { params });
+export const listarMensagensConversa = (
+  conversaId: number,
+  params?: Record<string, unknown>,
+) => api.get(`/mensagens/conversas/${conversaId}/mensagens`, { params });
+export const enviarMensagemConversa = (conversaId: number, data: Record<string, unknown>) =>
+  api.post(`/mensagens/conversas/${conversaId}/mensagens`, data);
+export const marcarConversaComoLida = (conversaId: number) =>
+  api.patch(`/mensagens/conversas/${conversaId}/marcar-lidas`);
+export const listarReunioesMensagens = (params?: Record<string, unknown>) =>
+  api.get('/mensagens/reunioes', { params });
+export const listarReunioesHoje = (params?: Record<string, unknown>) =>
+  api.get('/mensagens/reunioes/hoje', { params });
+export const criarReuniaoMensagem = (data: Record<string, unknown>) =>
+  api.post('/mensagens/reunioes', data);
+export const editarReuniaoMensagem = (id: number, data: Record<string, unknown>) =>
+  api.patch(`/mensagens/reunioes/${id}`, data);
+export const cancelarReuniaoMensagem = (id: number) =>
+  api.patch(`/mensagens/reunioes/${id}/cancelar`);
+
 export const getUsuarios = (params?: Record<string, unknown>) =>
   api.get('/usuarios', { params });
 

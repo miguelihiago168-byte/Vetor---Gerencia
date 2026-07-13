@@ -5,6 +5,7 @@ const KEYS = {
   token: 'vetor_token',
   usuario: 'vetor_usuario',
   appVersion: 'vetor_app_version',
+  apiUrl: 'vetor_api_url',
 };
 
 export const storage = {
@@ -44,6 +45,18 @@ export const storage = {
 
   setAppVersion: async (): Promise<void> => {
     await SecureStore.setItemAsync(KEYS.appVersion, APP_VERSION);
+  },
+
+  getApiUrl: async (): Promise<string | null> => {
+    return SecureStore.getItemAsync(KEYS.apiUrl);
+  },
+
+  setApiUrl: async (apiUrl: string): Promise<void> => {
+    await SecureStore.setItemAsync(KEYS.apiUrl, apiUrl);
+  },
+
+  removeApiUrl: async (): Promise<void> => {
+    await SecureStore.deleteItemAsync(KEYS.apiUrl);
   },
 
   clearAll: async (): Promise<void> => {

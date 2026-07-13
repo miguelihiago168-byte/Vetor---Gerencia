@@ -274,8 +274,8 @@ const provisionTrialTenant = async ({
 
   try {
     const tenantInsert = await runQueryMain(
-      'INSERT INTO tenants (nome, slug, ativo, trial_expires_at, trial_ativo) VALUES (?, ?, 0, ?, 1)',
-      [tenantName, tenantSlug, trialExpiresAt]
+      'INSERT INTO tenants (nome, slug, ativo, trial_expires_at, trial_ativo) VALUES (?, ?, 0, ?, ?)',
+      [tenantName, tenantSlug, trialExpiresAt || null, trialExpiresAt ? 1 : 0]
     );
     tenantId = Number(tenantInsert.lastID);
     tenantPath = ensureTenantTargetAvailable(tenantId);

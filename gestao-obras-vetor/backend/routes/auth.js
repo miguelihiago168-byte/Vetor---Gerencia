@@ -15,6 +15,7 @@ const router = express.Router();
 const GLOBAL_SIGNUP_CODE = process.env.GLOBAL_SIGNUP_CODE || '052298';
 const TRIAL_RENEWAL_CODE = process.env.TRIAL_RENEWAL_CODE || '050398';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '30d';
+const TRIAL_ENFORCEMENT_ENABLED = process.env.TRIAL_ENFORCEMENT_ENABLED === 'true';
 
 const normalizeLogin = (value) => String(value || '')
   .trim()
@@ -70,6 +71,7 @@ const ensurePasswordResetSchema = async () => {
 };
 
 const isTrialExpiredOrBlocked = (tenant) => {
+  if (!TRIAL_ENFORCEMENT_ENABLED) return false;
   if (!tenant?.trial_expires_at) return false;
   if (Number(tenant.ativo) === 0) return true;
   return new Date(tenant.trial_expires_at) <= new Date();
@@ -161,6 +163,7 @@ const purgeTenantData = async (tenantId) => {
 };
 
 const cleanupExpiredTrials = async () => {
+  if (!TRIAL_ENFORCEMENT_ENABLED) return;
   await ensureTenantTrialColumns();
   const expired = await allQuery(
     `SELECT id FROM tenants
@@ -262,6 +265,12 @@ router.post('/login', [
         await runQuery('UPDATE tenants SET trial_ativo = 0, ativo = 0 WHERE id = ?', [tenantIdAtivo]);
       }
       return sendTrialExpired(res, tenantIdAtivo);
+    }
+
+    if (!TRIAL_ENFORCEMENT_ENABLED && Number(tenant.ativo) === 0) {
+      await runQuery('UPDATE tenants SET ativo = 1, trial_ativo = 0 WHERE id = ?', [tenantIdAtivo]);
+      tenant.ativo = 1;
+      tenant.trial_ativo = 0;
     }
 
     if (Number(tenant.ativo) === 0) {
@@ -401,7 +410,7 @@ router.post('/register', [
       return res.status(409).json({ erro: 'Usuário já existe. Tente novamente para gerar outro.' });
     }
 
-    const trialExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    const trialExpiresAt = null;
     const tenantNome = String(empresa || '').trim();
     const tenantSlug = generateSlug(tenantNome);
 
@@ -417,11 +426,11 @@ router.post('/register', [
     });
 
     return res.status(201).json({
-      mensagem: 'Conta de teste criada com sucesso.',
+      mensagem: 'Conta criada com sucesso.',
       usuario: usuarioLimpo,
       tenant_id: provisioned.tenantId,
-      trial_expires_at: trialExpiresAt,
-      dias_teste: 30
+      trial_expires_at: null,
+      dias_teste: null
     });
   } catch (error) {
     console.error('Erro no cadastro público:', error);
@@ -431,7 +440,7 @@ router.post('/register', [
         erro: 'Banco tenant ja existe. A criacao foi interrompida para evitar sobrescrita.'
       });
     }
-    return res.status(500).json({ erro: 'Erro ao criar conta de teste.' });
+    return res.status(500).json({ erro: 'Erro ao criar conta.' });
   }
 });
 

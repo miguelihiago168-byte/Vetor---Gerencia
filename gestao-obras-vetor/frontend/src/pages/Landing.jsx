@@ -184,13 +184,13 @@ function Landing({ initialAccess = false }) {
       });
 
       const loginCriado = response.data?.usuario || usuario;
-      setSucesso(`Conta criada com 30 dias de teste. Usuário: ${loginCriado}`);
+      setSucesso(`Conta criada com sucesso. Usuário: ${loginCriado}`);
       setAccessMode('login');
       setLoginForm((prev) => ({ ...prev, usuario: loginCriado }));
       setCadastroForm({ nome: '', empresa: '', email: '', usuario: '', senha: '', codigo_acesso: '' });
       setUsuarioManual(false);
     } catch (error) {
-      setErro(normalizeAuthErrorMessage(error.response?.data?.erro || 'Erro ao criar conta de teste.'));
+      setErro(normalizeAuthErrorMessage(error.response?.data?.erro || 'Erro ao criar conta.'));
     } finally {
       setLoading(false);
     }
@@ -382,16 +382,16 @@ function Landing({ initialAccess = false }) {
                   className={accessMode === 'cadastro' ? 'active' : ''}
                   onClick={() => { setAccessMode('cadastro'); setForgotOpen(false); setErro(''); setSucesso(''); }}
                 >
-                  Criar conta (30 dias)
+                  Criar conta
                 </button>
               </div>
 
-              <h2>{forgotOpen ? 'Recuperar senha' : accessMode === 'cadastro' ? 'Criar conta de teste' : 'Entrar no sistema'}</h2>
+              <h2>{forgotOpen ? 'Recuperar senha' : accessMode === 'cadastro' ? 'Criar conta' : 'Entrar no sistema'}</h2>
               <p>
                 {forgotOpen
                   ? 'Informe seu login ou e-mail cadastrado para receber as instruções.'
                   : accessMode === 'cadastro'
-                    ? 'Preencha os dados para iniciar o período de teste de 30 dias.'
+                    ? 'Preencha os dados para criar sua conta e acessar seus projetos.'
                   : 'Use seu usuário ou e-mail e a senha cadastrada para acessar seus projetos.'}
               </p>
 
@@ -520,7 +520,7 @@ function Landing({ initialAccess = false }) {
                   </label>
 
                   <button className="landing-access-submit" type="submit" disabled={loading}>
-                    {loading ? 'Criando conta...' : 'Criar conta teste (30 dias)'}
+                    {loading ? 'Criando conta...' : 'Criar conta'}
                     <ArrowRight size={18} />
                   </button>
                 </form>

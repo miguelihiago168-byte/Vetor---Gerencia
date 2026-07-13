@@ -1,43 +1,60 @@
 // Configurações globais do app
-// Altere "apiUrl" em app.json > extra para o IP atual da máquina na rede local
-// Exemplo: "http://192.168.1.100:3001/api"
+// Configure "apiUrl" em app.json > extra com a URL pública do servidor.
+// Exemplo: "https://sistema.suaempresa.com.br/api"
 import Constants from 'expo-constants';
 
+const PRODUCTION_API_URL = 'http://161.97.136.203/api';
 const extra = Constants.expoConfig?.extra as { apiUrl?: string } | undefined;
-const hostUri =
-  Constants.expoConfig?.hostUri ??
-  (Constants.manifest2 as { extra?: { expoGo?: { debuggerHost?: string } } } | null)?.extra?.expoGo?.debuggerHost;
 
-const hostIp = hostUri?.split(':')[0];
-const runtimeApiUrl = hostIp ? `http://${hostIp}:3001/api` : undefined;
+const cleanApiUrl = (value?: string) => {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  return trimmed.endsWith('/api')
+    ? trimmed.replace(/\/+$/, '')
+    : `${trimmed.replace(/\/+$/, '')}/api`;
+};
+
+const isLoopbackUrl = (value?: string) =>
+  Boolean(
+    value &&
+      /\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(:|\/|$)/i.test(value),
+  );
+
+const envApiUrl = cleanApiUrl(process.env.EXPO_PUBLIC_API_URL as string | undefined);
+const extraApiUrl = cleanApiUrl(extra?.apiUrl);
 
 export const API_URL: string =
-  (process.env.EXPO_PUBLIC_API_URL as string | undefined) ??
-  extra?.apiUrl ??
-  runtimeApiUrl ??
-  'http://localhost:3001/api';
+  (!isLoopbackUrl(envApiUrl) ? envApiUrl : undefined) ??
+  (!isLoopbackUrl(extraApiUrl) ? extraApiUrl : undefined) ??
+  PRODUCTION_API_URL;
+
+export const normalizeApiUrl = cleanApiUrl;
 
 export const CORES = {
-  primaria: '#1565C0',
-  primariaClara: '#1976D2',
-  primariaMuitoClara: '#E3F2FD',
-  secundaria: '#FF6F00',
-  sucesso: '#2E7D32',
-  sucessoClaro: '#E8F5E9',
-  alerta: '#F57F17',
-  alertaClaro: '#FFFDE7',
+  primaria: '#155EA8',
+  primariaClara: '#1F7BD7',
+  primariaEscura: '#0D3764',
+  primariaMuitoClara: '#E7F1FC',
+  secundaria: '#F28C28',
+  secundariaClara: '#FFF2E3',
+  sucesso: '#2F7D45',
+  sucessoClaro: '#E9F7EE',
+  alerta: '#D98216',
+  alertaClaro: '#FFF4DF',
   aviso: '#F57F17',
   avisoClaro: '#FFFDE7',
   erro: '#C62828',
   erroClaro: '#FFEBEE',
   info: '#0277BD',
   infoClaro: '#E1F5FE',
-  fundo: '#F5F5F5',
+  fundo: '#F3F6FA',
   superficie: '#FFFFFF',
-  texto: '#212121',
-  textoSecundario: '#757575',
-  borda: '#E0E0E0',
-  desabilitado: '#BDBDBD',
+  texto: '#172033',
+  textoSecundario: '#637083',
+  borda: '#DCE4EE',
+  bordaForte: '#B8C6D8',
+  desabilitado: '#AEB9C7',
+  trilho: '#E8EDF4',
 };
 
 export const STATUS_RDO = {

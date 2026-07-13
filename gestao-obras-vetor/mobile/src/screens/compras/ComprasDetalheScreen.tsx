@@ -58,6 +58,15 @@ const statusItemToSlug = (status?: string): string => {
   return s;
 };
 
+const etapaIndex = (status: string) => {
+  if (status === 'pendente' || status === 'reprovado') return 0;
+  if (status === 'em_cotacao') return 1;
+  if (status === 'cotado' || status === 'aprovado') return 2;
+  if (status === 'comprado') return 3;
+  if (status === 'cancelado') return -1;
+  return 0;
+};
+
 export default function ComprasDetalheScreen() {
   const route = useRoute<Route>();
   const { requisicaoId, projetoId } = route.params;
@@ -270,6 +279,24 @@ export default function ComprasDetalheScreen() {
               {item.quantidade} {item.unidade ?? 'un'}
             </Text>
 
+            <View style={styles.processCard}>
+              {['Análise', 'Cotação', 'Aprovação', 'Compra'].map((label, idx) => {
+                const atual = etapaIndex(status);
+                const done = atual >= idx;
+                const active = atual === idx;
+                return (
+                  <View key={label} style={styles.processStep}>
+                    <View style={[styles.processDot, done && styles.processDotDone, active && styles.processDotActive]}>
+                      {done ? <MaterialCommunityIcons name="check" size={12} color="#FFF" /> : null}
+                    </View>
+                    <Text style={[styles.processText, active && styles.processTextActive]} numberOfLines={1}>
+                      {label}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+
             {/* Cotações */}
             {item.cotacoes && item.cotacoes.length > 0 && (
               <View style={styles.cotacoesContainer}>
@@ -430,6 +457,28 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, flexShrink: 0 },
   badgeTexto: { fontSize: 11, fontWeight: '600' },
   itemQtd: { fontSize: 13, color: CORES.textoSecundario, marginBottom: 8 },
+  processCard: {
+    flexDirection: 'row',
+    backgroundColor: CORES.fundo,
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: CORES.borda,
+  },
+  processStep: { flex: 1, alignItems: 'center', gap: 5 },
+  processDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: CORES.bordaForte,
+  },
+  processDotDone: { backgroundColor: CORES.primaria },
+  processDotActive: { backgroundColor: CORES.secundaria },
+  processText: { fontSize: 10, color: CORES.textoSecundario, fontWeight: '700' },
+  processTextActive: { color: CORES.texto },
   cotacoesContainer: {
     backgroundColor: CORES.fundo,
     borderRadius: 8,

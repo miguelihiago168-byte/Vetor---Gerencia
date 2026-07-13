@@ -164,6 +164,17 @@ export default function PlanejamentoScreen() {
         />
       }
     >
+      <View style={styles.hero}>
+        <View>
+          <Text style={styles.heroKicker}>Planejamento</Text>
+          <Text style={styles.heroTitle}>Curva S e caminho crítico</Text>
+        </View>
+        <View style={styles.heroBadge}>
+          <Text style={styles.heroBadgeValue}>{Number(indicadores.spi || 0).toFixed(2)}</Text>
+          <Text style={styles.heroBadgeLabel}>SPI</Text>
+        </View>
+      </View>
+
       <Text style={styles.sectionTitle}>Curva S</Text>
 
       <View style={styles.kpiGrid}>
@@ -200,7 +211,7 @@ export default function PlanejamentoScreen() {
             ],
             legend: ['Planejado', 'Real'],
           }}
-          width={screenWidth - 32}
+          width={screenWidth - 58}
           height={220}
           yAxisSuffix="%"
           fromZero
@@ -250,6 +261,27 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: CORES.fundo },
   content: { padding: 16, paddingBottom: 28 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  hero: {
+    backgroundColor: CORES.primariaEscura,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  heroKicker: { color: 'rgba(255,255,255,0.72)', fontSize: 12, fontWeight: '800', textTransform: 'uppercase' },
+  heroTitle: { color: '#FFF', fontSize: 20, fontWeight: '900', marginTop: 4, maxWidth: 210 },
+  heroBadge: {
+    width: 72,
+    height: 72,
+    borderRadius: 18,
+    backgroundColor: CORES.secundaria,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroBadgeValue: { color: '#FFF', fontSize: 20, fontWeight: '900' },
+  heroBadgeLabel: { color: 'rgba(255,255,255,0.82)', fontSize: 11, fontWeight: '800' },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
@@ -286,6 +318,7 @@ const styles = StyleSheet.create({
     padding: 10,
     marginBottom: 18,
     elevation: 2,
+    overflow: 'hidden',
   },
   chart: {
     borderRadius: 8,

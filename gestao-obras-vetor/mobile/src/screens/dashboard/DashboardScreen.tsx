@@ -143,6 +143,7 @@ export default function DashboardScreen() {
 
   const previsto = avanco?.percentual_previsto ?? 0;
   const executado = avanco?.percentual_executado ?? 0;
+  const desvio = executado - previsto;
 
   return (
     <ScrollView
@@ -159,6 +160,37 @@ export default function DashboardScreen() {
         />
       }
     >
+      <View style={styles.hero}>
+        <View style={styles.heroTop}>
+          <View>
+            <Text style={styles.heroKicker}>Dashboard da obra</Text>
+            <Text style={styles.heroTitle}>Avanço físico</Text>
+          </View>
+          <View style={[styles.deltaBadge, { backgroundColor: desvio >= 0 ? CORES.sucessoClaro : CORES.erroClaro }]}>
+            <Text style={[styles.deltaText, { color: desvio >= 0 ? CORES.sucesso : CORES.erro }]}>
+              {desvio >= 0 ? '+' : ''}{desvio.toFixed(1)}%
+            </Text>
+          </View>
+        </View>
+        <View style={styles.heroProgress}>
+          <View style={[styles.heroProgressFill, { width: `${Math.min(Math.max(executado, 0), 100)}%` }]} />
+        </View>
+        <View style={styles.heroMetrics}>
+          <View>
+            <Text style={styles.heroMetricLabel}>Previsto</Text>
+            <Text style={styles.heroMetricValue}>{previsto.toFixed(1)}%</Text>
+          </View>
+          <View>
+            <Text style={styles.heroMetricLabel}>Executado</Text>
+            <Text style={styles.heroMetricValue}>{executado.toFixed(1)}%</Text>
+          </View>
+          <View>
+            <Text style={styles.heroMetricLabel}>Atividades</Text>
+            <Text style={styles.heroMetricValue}>{avanco?.atividades_total ?? 0}</Text>
+          </View>
+        </View>
+      </View>
+
       {/* Avanço físico */}
       <View style={styles.secao}>
         <Text style={styles.secaoTitulo}>Avanço Físico</Text>
@@ -211,7 +243,7 @@ export default function DashboardScreen() {
               labels: ['Previsto', 'Executado'],
               datasets: [{ data: [Math.max(previsto, 0.01), Math.max(executado, 0.01)] }],
             }}
-            width={screenWidth - 32}
+            width={screenWidth - 58}
             height={180}
             yAxisLabel=""
             yAxisSuffix="%"
@@ -296,6 +328,38 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: CORES.fundo },
   content: { padding: 16, gap: 0, paddingBottom: 32 },
   centro: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  hero: {
+    backgroundColor: CORES.primariaEscura,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 18,
+    elevation: 2,
+  },
+  heroTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  heroKicker: { color: 'rgba(255,255,255,0.72)', fontSize: 12, fontWeight: '800', textTransform: 'uppercase' },
+  heroTitle: { color: '#FFF', fontSize: 24, fontWeight: '900', marginTop: 4 },
+  deltaBadge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  deltaText: { fontSize: 13, fontWeight: '900' },
+  heroProgress: {
+    height: 10,
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    marginTop: 18,
+  },
+  heroProgressFill: { height: '100%', borderRadius: 999, backgroundColor: CORES.secundaria },
+  heroMetrics: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+  },
+  heroMetricLabel: { color: 'rgba(255,255,255,0.68)', fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
+  heroMetricValue: { color: '#FFF', fontSize: 20, fontWeight: '900', marginTop: 3 },
   secao: { marginBottom: 20 },
   secaoTitulo: {
     fontSize: 16,
@@ -309,6 +373,8 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 16,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: CORES.borda,
   },
   avancoItem: {},
   avancoLabel: {
@@ -348,6 +414,8 @@ const styles = StyleSheet.create({
     minWidth: '45%',
     borderTopWidth: 3,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: CORES.borda,
     gap: 4,
   },
   statValor: {

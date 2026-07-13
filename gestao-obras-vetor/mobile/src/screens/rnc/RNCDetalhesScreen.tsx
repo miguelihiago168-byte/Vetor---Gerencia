@@ -13,7 +13,7 @@ import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { AppStackParamList } from '../../navigation/AppNavigator';
-import { getRNC, updateStatusRNC, enviarRncParaAprovacao } from '../../services/api';
+import { getRNC, getRNCs, updateStatusRNC, enviarRncParaAprovacao } from '../../services/api';
 import { useNotification } from '../../context/NotificationContext';
 import { useAuth } from '../../context/AuthContext';
 import { CORES, STATUS_RNC } from '../../utils/constants';
@@ -39,13 +39,25 @@ export default function RNCDetalhesScreen() {
     try {
       const resp = await getRNC(rncId);
       setRnc(resp.data);
-    } catch {
-      error('Erro ao carregar RNC.');
+    } catch (err: any) {
+      try {
+        const listaResp = await getRNCs(projetoId);
+        const fallback = (listaResp.data || []).find((item: Record<string, unknown>) => Number(item.id) === Number(rncId));
+        if (fallback) {
+          setRnc(fallback);
+          error('Não foi possível carregar todos os detalhes da RNC. Exibindo o resumo disponível.');
+          return;
+        }
+      } catch {
+        // Mantém o erro original abaixo.
+      }
+      setRnc(null);
+      error(`Erro ao carregar RNC: ${err?.response?.data?.erro || err?.message || 'falha inesperada'}`);
     } finally {
       setCarregando(false);
       setRefresh(false);
     }
-  }, [rncId, error]);
+  }, [error, projetoId, rncId]);
 
   useEffect(() => {
     carregar();
@@ -110,7 +122,30 @@ export default function RNCDetalhesScreen() {
     );
   }
 
-  if (!rnc) return null;
+  if (!rnc) {
+    return (
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refresh}
+            onRefresh={() => {
+              setRefresh(true);
+              carregar();
+            }}
+            colors={[CORES.primaria]}
+          />
+        }
+      >
+        <View style={styles.emptyCard}>
+          <MaterialCommunityIcons name="alert-circle-outline" size={38} color={CORES.erro} />
+          <Text style={styles.emptyTitle}>RNC não carregada</Text>
+          <Text style={styles.emptyText}>Puxe para atualizar ou volte para a lista de RNCs do projeto.</Text>
+        </View>
+      </ScrollView>
+    );
+  }
 
   const status = (rnc.status as string) ?? 'aberto';
   const statusInfo = STATUS_RNC[status as keyof typeof STATUS_RNC] ?? {
@@ -311,4 +346,14 @@ const styles = StyleSheet.create({
   infoLabel: { fontSize: 13, color: CORES.textoSecundario, flex: 1 },
   infoValue: { fontSize: 13, color: CORES.texto, fontWeight: '500', flex: 2, textAlign: 'right' },
   textoDesc: { fontSize: 14, color: CORES.texto, lineHeight: 20 },
+  emptyCard: {
+    backgroundColor: CORES.superficie,
+    borderRadius: 16,
+    padding: 22,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: CORES.borda,
+  },
+  emptyTitle: { fontSize: 17, fontWeight: '800', color: CORES.texto, marginTop: 10 },
+  emptyText: { fontSize: 13, color: CORES.textoSecundario, textAlign: 'center', marginTop: 6, lineHeight: 19 },
 });

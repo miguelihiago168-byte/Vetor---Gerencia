@@ -245,13 +245,13 @@ function Login() {
       });
 
       const loginCriado = response.data?.usuario || usuario;
-      setSucesso(`Conta criada com 30 dias de teste. Usuário: ${loginCriado}`);
+      setSucesso(`Conta criada com sucesso. Usuário: ${loginCriado}`);
       setModo('login');
       setLoginForm((prev) => ({ ...prev, usuario: loginCriado }));
       setCadastroForm({ nome: '', empresa: '', email: '', usuario: '', senha: '', codigo_acesso: '' });
       setUsuarioManual(false);
     } catch (error) {
-      setErro(normalizeAuthErrorMessage(error.response?.data?.erro || 'Erro ao criar conta de teste.'));
+      setErro(normalizeAuthErrorMessage(error.response?.data?.erro || 'Erro ao criar conta.'));
     } finally {
       setLoading(false);
     }
@@ -288,7 +288,7 @@ function Login() {
             className={`login-tab-btn ${modo === 'cadastro' ? 'active' : ''}`}
             onClick={() => { setModo('cadastro'); setErro(''); setSucesso(''); }}
           >
-            Criar conta (30 dias)
+            Criar conta
           </button>
         </div>
 
@@ -504,7 +504,7 @@ function Login() {
             </div>
 
             <button type="submit" className="login-btn" disabled={loading}>
-              {loading ? 'Criando conta...' : 'Criar conta teste (30 dias)'}
+              {loading ? 'Criando conta...' : 'Criar conta'}
               <ArrowRight size={18} />
             </button>
           </form>
