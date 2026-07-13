@@ -258,10 +258,12 @@ router.patch('/:id/status', auth, async (req, res) => {
     }
 
     const resolvidoEm = status === 'Encerrada' ? new Date().toISOString() : null;
+    const aprovadoPor = status === 'Encerrada' ? req.usuario.id : null;
+    const aprovadoEm = status === 'Encerrada' ? new Date().toISOString() : null;
 
     await runQuery(
-      'UPDATE rnc SET status = ?, resolvido_em = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
-      [status, resolvidoEm, id]
+      'UPDATE rnc SET status = ?, resolvido_em = ?, aprovado_por = ?, aprovado_em = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
+      [status, resolvidoEm, aprovadoPor, aprovadoEm, id]
     );
 
     await registrarAuditoria('rnc', id, 'STATUS_CHANGE', rncAtual, { status }, req.usuario.id);

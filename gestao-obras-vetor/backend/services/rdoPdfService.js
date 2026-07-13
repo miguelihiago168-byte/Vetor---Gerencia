@@ -176,10 +176,14 @@ async function loadRdoPdfData(id) {
            p.empresa_executante AS projeto_executante,
            p.prazo_termino AS projeto_prazo_termino,
            p.criado_em AS projeto_criado_em,
-           u.nome AS criado_por_nome
+           u.nome AS criado_por_nome,
+           u.assinatura_png AS criado_por_assinatura_png,
+           g.nome AS aprovado_por_nome,
+           g.assinatura_png AS aprovado_por_assinatura_png
     FROM rdos r
     JOIN projetos p ON r.projeto_id = p.id
     LEFT JOIN usuarios u ON r.criado_por = u.id
+    LEFT JOIN usuarios g ON r.aprovado_por = g.id
     WHERE r.id = ?
   `, [id]);
 
@@ -314,6 +318,19 @@ function renderHtml(data) {
   const { rdo, responsavelNome, atividadesPdf, maoObra, fotos, anexos, materiaisRecebidos, equipamentos, clima, ocorrencias, comentarios } = data;
   const displayId = displayRdoNumber(rdo);
   const logo = getLogoDataUri();
+  const assinaturaPath = rdo.criado_por_assinatura_png
+    ? path.resolve(uploadsDir, String(rdo.criado_por_assinatura_png).replace(/\\/g, '/'))
+    : null;
+  const uploadsRoot = path.resolve(uploadsDir);
+  const assinatura = assinaturaPath && assinaturaPath.startsWith(uploadsRoot + path.sep)
+    ? toDataUri(assinaturaPath, 'image/png')
+    : null;
+  const aprovacaoPath = rdo.status === 'Aprovado' && rdo.aprovado_por_assinatura_png
+    ? path.resolve(uploadsDir, String(rdo.aprovado_por_assinatura_png).replace(/\\/g, '/'))
+    : null;
+  const assinaturaAprovacao = aprovacaoPath && aprovacaoPath.startsWith(uploadsRoot + path.sep)
+    ? toDataUri(aprovacaoPath, 'image/png')
+    : null;
   const dataRelatorio = fmtDate(rdo.data_relatorio);
   const statusStyle = statusInlineStyle(rdo.status || 'Em preenchimento');
   const totalEquipe = Number(rdo.mao_obra_direta || 0) + Number(rdo.mao_obra_indireta || 0) + Number(rdo.mao_obra_terceiros || 0);
@@ -409,6 +426,8 @@ function renderHtml(data) {
     .signature-section { display: flex; flex-direction: column; justify-content: flex-end; margin-bottom: 0; break-inside: avoid; page-break-inside: avoid; }
     .signature-footer { padding-top: 8mm; break-inside: avoid; page-break-inside: avoid; }
     .signatures { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 36px; }
+    .signature-box { min-height: 38mm; display: flex; flex-direction: column; justify-content: flex-end; text-align: center; }
+    .signature-image { width: 100%; height: 22mm; object-fit: contain; margin-bottom: 2mm; }
     .signature-line { border-top: 1px solid #111827; padding-top: 6px; text-align: center; color: #334155; }
     .avoid-break { break-inside: avoid; page-break-inside: avoid; }
     @page { size: A4 portrait; margin: 12mm 10mm 14mm 10mm; }
@@ -589,8 +608,14 @@ function renderHtml(data) {
     <section class="section signature-section avoid-break">
       <div class="signature-footer">
         <div class="signatures">
-          <div class="signature-line">Responsável pelo preenchimento</div>
-          <div class="signature-line">Aprovação / Fiscalização</div>
+          <div class="signature-box">
+            ${assinatura ? `<img class="signature-image" src="${assinatura}" alt="Assinatura de ${escapeHtml(rdo.criado_por_nome || responsavelNome)}">` : ''}
+            <div class="signature-line">${escapeHtml(rdo.criado_por_nome || responsavelNome)}<br><small>Responsável pelo preenchimento</small></div>
+          </div>
+          <div class="signature-box">
+            ${assinaturaAprovacao ? `<img class="signature-image" src="${assinaturaAprovacao}" alt="Assinatura de ${escapeHtml(rdo.aprovado_por_nome || 'Aprovador')}">` : ''}
+            <div class="signature-line">${escapeHtml(rdo.status === 'Aprovado' && rdo.aprovado_por_nome ? rdo.aprovado_por_nome : 'Aprovação / Fiscalização')}<br><small>Responsável pela aprovação</small></div>
+          </div>
         </div>
       </div>
     </section>
@@ -708,6 +733,23 @@ async function renderFallbackPdf(data, reason) {
   doc.font('Helvetica').fontSize(10).text(`Data: ${fmtDate(data.rdo.data_relatorio)}`);
   doc.text(`Status: ${data.rdo.status || '-'}`);
   doc.text(`Responsável: ${data.responsavelNome || '-'}`);
+  const assinaturaFallbackPath = data.rdo.criado_por_assinatura_png
+    ? path.resolve(uploadsDir, String(data.rdo.criado_por_assinatura_png).replace(/\\/g, '/'))
+    : null;
+  const uploadsRoot = path.resolve(uploadsDir);
+  if (assinaturaFallbackPath && assinaturaFallbackPath.startsWith(uploadsRoot + path.sep) && fs.existsSync(assinaturaFallbackPath)) {
+    doc.moveDown(0.5);
+    doc.image(assinaturaFallbackPath, { fit: [180, 55], align: 'center' });
+    doc.font('Helvetica').fontSize(9).text(`Assinatura: ${data.rdo.criado_por_nome || data.responsavelNome || '-'}`, { align: 'center' });
+  }
+  const aprovacaoFallbackPath = data.rdo.status === 'Aprovado' && data.rdo.aprovado_por_assinatura_png
+    ? path.resolve(uploadsDir, String(data.rdo.aprovado_por_assinatura_png).replace(/\\/g, '/'))
+    : null;
+  if (aprovacaoFallbackPath && aprovacaoFallbackPath.startsWith(uploadsRoot + path.sep) && fs.existsSync(aprovacaoFallbackPath)) {
+    doc.moveDown(0.5);
+    doc.image(aprovacaoFallbackPath, { fit: [180, 55], align: 'center' });
+    doc.font('Helvetica').fontSize(9).text(`Aprovacao: ${data.rdo.aprovado_por_nome || 'Aprovador'}`, { align: 'center' });
+  }
   doc.moveDown();
   doc.font('Helvetica-Bold').fontSize(11).text(`Atividades (${data.atividadesPdf.length})`);
   doc.font('Helvetica').fontSize(9);

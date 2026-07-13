@@ -312,13 +312,16 @@ const initDatabase = async () => {
           descricao_correcao_em DATETIME,
           responsavel_id INTEGER,
           criado_por INTEGER NOT NULL,
+          aprovado_por INTEGER,
+          aprovado_em DATETIME,
           criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
           atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
           resolvido_em DATETIME,
           FOREIGN KEY (projeto_id) REFERENCES projetos(id) ON DELETE CASCADE,
           FOREIGN KEY (rdo_id) REFERENCES rdos(id),
           FOREIGN KEY (responsavel_id) REFERENCES usuarios(id),
-          FOREIGN KEY (criado_por) REFERENCES usuarios(id)
+          FOREIGN KEY (criado_por) REFERENCES usuarios(id),
+          FOREIGN KEY (aprovado_por) REFERENCES usuarios(id)
         )
       `, (err) => {
         if (err) reject(err);

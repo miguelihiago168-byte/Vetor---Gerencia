@@ -160,13 +160,17 @@ const loadRncPdfData = async (id) => {
            p.nome AS projeto_nome,
            p.cidade AS projeto_cidade,
            u.nome AS criado_por_nome,
+           u.assinatura_png AS criado_por_assinatura_png,
            g.nome AS responsavel_nome,
+           a.nome AS aprovado_por_nome,
+           a.assinatura_png AS aprovado_por_assinatura_png,
            rd.data_relatorio AS rdo_data,
            rd.numero_rdo AS rdo_numero
     FROM rnc r
     LEFT JOIN projetos p ON r.projeto_id = p.id
     LEFT JOIN usuarios u ON r.criado_por = u.id
     LEFT JOIN usuarios g ON r.responsavel_id = g.id
+    LEFT JOIN usuarios a ON r.aprovado_por = a.id
     LEFT JOIN rdos rd ON r.rdo_id = rd.id
     WHERE r.id = ?
   `, [id]);
@@ -288,6 +292,12 @@ const historySection = (rnc, status) => {
 const buildHtml = ({ rnc, imagensRegistro, imagensCorrecao, anexosComplementares }) => {
   const status = statusMeta(rnc.status);
   const gravidadeClass = gravityClass(rnc.gravidade);
+  const assinatura = rnc.criado_por_assinatura_png
+    ? imageDataUri({ caminho_arquivo: rnc.criado_por_assinatura_png, tipo: 'image/png', nome_arquivo: 'assinatura.png' })
+    : null;
+  const assinaturaAprovacao = status.cls === 'done' && rnc.aprovado_por_assinatura_png
+    ? imageDataUri({ caminho_arquivo: rnc.aprovado_por_assinatura_png, tipo: 'image/png', nome_arquivo: 'assinatura-aprovacao.png' })
+    : null;
   const rdoLabel = rnc.rdo_id
     ? `RDO #${rnc.rdo_numero || rnc.rdo_id}${rnc.rdo_data ? ` - ${fmtDate(rnc.rdo_data)}` : ''}`
     : 'Não vinculado';
@@ -369,6 +379,12 @@ const buildHtml = ({ rnc, imagensRegistro, imagensCorrecao, anexosComplementares
   .timeline-row small { display: block; color: #94a3b8; margin-top: 1px; }
   .timeline-row p { margin: 2px 0 0; color: #64748b; font-size: 10px; }
   .footer { margin-top: 16px; color: #94a3b8; font-size: 9px; text-align: center; }
+  .signature-section { break-inside: avoid; page-break-inside: avoid; }
+  .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+  .signature-box { min-width: 0; }
+  .signature-content { min-height: 38mm; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
+  .signature-image { width: 240px; height: 22mm; object-fit: contain; margin-bottom: 2mm; }
+  .signature-line { width: 100%; padding-top: 6px; border-top: 1px solid #111827; color: #334155; text-align: center; }
   @page { size: A4; margin: 9mm 8mm 12mm; }
 </style>
 </head>
@@ -437,6 +453,23 @@ const buildHtml = ({ rnc, imagensRegistro, imagensCorrecao, anexosComplementares
 
     ${attachmentsSection(anexosComplementares)}
     ${historySection(rnc, status)}
+
+    <section class="section signature-section">
+      <div class="section-head">
+        <span class="section-icon blue">SIG</span>
+        <h2>Assinaturas</h2>
+      </div>
+      <div class="content signatures">
+        <div class="signature-box signature-content">
+          ${assinatura ? `<img class="signature-image" src="${assinatura}" alt="Assinatura de ${escapeHtml(rnc.criado_por_nome || 'Responsável')}">` : ''}
+          <div class="signature-line">${escapeHtml(rnc.criado_por_nome || 'Responsável não informado')}<br><small>Responsável pelo preenchimento</small></div>
+        </div>
+        <div class="signature-box signature-content">
+          ${assinaturaAprovacao ? `<img class="signature-image" src="${assinaturaAprovacao}" alt="Assinatura de ${escapeHtml(rnc.aprovado_por_nome || 'Aprovador')}">` : ''}
+          <div class="signature-line">${escapeHtml(status.cls === 'done' && rnc.aprovado_por_nome ? rnc.aprovado_por_nome : 'Responsável pela aprovação')}<br><small>Responsável pela aprovação</small></div>
+        </div>
+      </div>
+    </section>
 
     <div class="footer">
       Gerado em ${escapeHtml(fmtDateTime(new Date()))} · RNC ${String(rnc.id).padStart(3, '0')} · ${escapeHtml(safeText(rnc.projeto_nome))}
@@ -520,6 +553,22 @@ const renderFallbackPdf = ({ rnc, imagensRegistro, imagensCorrecao, anexosComple
     doc.font('Helvetica').fontSize(10).fillColor('#334155').text(`Status: ${statusMeta(rnc.status).label}`);
     doc.text(`Gravidade: ${safeText(rnc.gravidade)}`);
     doc.text(`Responsavel: ${safeText(rnc.responsavel_nome, 'Nao definido')}`);
+    const assinaturaFallbackPath = rnc.criado_por_assinatura_png
+      ? uploadFilePath(rnc.criado_por_assinatura_png)
+      : null;
+    if (assinaturaFallbackPath) {
+      doc.moveDown(0.5);
+      doc.image(assinaturaFallbackPath, { fit: [180, 55], align: 'center' });
+      doc.font('Helvetica').fontSize(9).text(`Assinatura: ${safeText(rnc.criado_por_nome, 'Responsavel nao informado')}`, { align: 'center' });
+    }
+    const aprovacaoFallbackPath = rnc.status === 'Encerrada' && rnc.aprovado_por_assinatura_png
+      ? uploadFilePath(rnc.aprovado_por_assinatura_png)
+      : null;
+    if (aprovacaoFallbackPath) {
+      doc.moveDown(0.5);
+      doc.image(aprovacaoFallbackPath, { fit: [180, 55], align: 'center' });
+      doc.font('Helvetica').fontSize(9).text(`Aprovacao: ${safeText(rnc.aprovado_por_nome, 'Aprovador')}`, { align: 'center' });
+    }
     doc.text(`Prazo: ${rnc.data_prevista_encerramento ? fmtDate(rnc.data_prevista_encerramento) : 'Nao definido'}`);
     doc.moveDown();
     doc.font('Helvetica-Bold').fontSize(11).fillColor('#0f172a').text('Nao conformidade');

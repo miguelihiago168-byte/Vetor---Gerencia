@@ -116,6 +116,8 @@ export const updateUsuarioGestor = (id, isGestor) => api.patch(`/usuarios/${id}/
 export const updateUsuarioAdm = (id, isAdm) => api.patch(`/usuarios/${id}/adm`, { is_adm: isAdm });
 export const patchUsuarioInfo = (id, data) => api.patch(`/usuarios/${id}/info`, data);
 export const patchUsuarioAvatar = (id, formData) => api.patch(`/usuarios/${id}/avatar`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+export const patchUsuarioAssinatura = (id, formData) => api.patch(`/usuarios/${id}/assinatura`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+export const deleteUsuarioAssinatura = (id) => api.delete(`/usuarios/${id}/assinatura`);
 export const patchUsuarioPresenca = (id, presenca_status) => api.patch(`/usuarios/${id}/presenca`, { presenca_status });
 export const deleteUsuario = (id) => api.delete(`/usuarios/${id}`);
 export const deleteUsuarioPermanente = (id) => api.delete(`/usuarios/${id}/permanente`);
