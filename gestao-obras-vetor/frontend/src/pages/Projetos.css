@@ -178,14 +178,6 @@
   border-top: 1px solid var(--border-default);
 }
 
-.projeto-card-actions .btn-icon {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border-radius: 8px;
-  background: transparent;
-}
-
 .projetos-archive-note {
   margin-top: 16px;
   color: var(--text-muted);
