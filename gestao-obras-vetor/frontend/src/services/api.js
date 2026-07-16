@@ -211,6 +211,7 @@ export const getAnexosRNC = (rncId, categoria) => api.get(`/anexos/rnc/${rncId}`
 
 // Dashboard
 export const getDashboardAvanco = (projetoId) => api.get(`/dashboard/projeto/${projetoId}/avanco`);
+export const getProjectCockpit = (projetoId) => api.get(`/dashboard/projeto/${projetoId}/cockpit`);
 export const getRDOStats = (projetoId) => api.get(`/dashboard/projeto/${projetoId}/rdos-stats`);
 export const getDashboardGaleriaRdos = (projetoId) => api.get(`/dashboard/projeto/${projetoId}/galeria-rdos`);
 export const getCurvaS = (projetoId) => api.get(`/dashboard/projeto/${projetoId}/curva-s`);

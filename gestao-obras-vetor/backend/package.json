@@ -20,6 +20,7 @@
     "db:integrity": "node scripts/checkDatabaseIntegrity.js",
     "db:backup": "node scripts/backupDatabase.js",
     "test:tenant": "node tests/tenantProvisioning.test.js",
+    "test:cockpit": "node tests/cockpitService.test.js",
     "migrate-curva-s": "node scripts/migrate_add_curva_s_fields.js"
   },
   "keywords": [

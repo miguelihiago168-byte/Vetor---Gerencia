@@ -1,7 +1,9 @@
 const express = require('express');
 const { allQuery, runQuery, getQuery } = require('../config/database');
 const { auth } = require('../middleware/auth');
+const { PERMISSIONS, hasPermission, assertProjectAccess } = require('../middleware/rbac');
 const ganttService = require('../services/ganttService');
+const { loadCockpit } = require('../services/cockpitService');
 
 const router = express.Router();
 
@@ -34,6 +36,39 @@ const isDiaUtil = (dateOnly) => {
   const dow = d.getDay(); // 0=domingo, 6=sábado
   return dow >= 1 && dow <= 5;
 };
+
+// Cockpit da Obra - camada consolidada estritamente de leitura.
+router.get('/projeto/:projetoId/cockpit', auth, async (req, res) => {
+  try {
+    const projectId = Number(req.params.projetoId);
+    const tenantId = Number(req.tenantId);
+    if (!tenantId) return res.status(400).json({ erro: 'Tenant não definido.' });
+    if (!Number.isInteger(projectId) || projectId <= 0) return res.status(400).json({ erro: 'Projeto inválido.' });
+
+    const project = await getQuery(`
+      SELECT id, nome, empresa_responsavel, empresa_executante, cidade, prazo_termino,
+             ativo, arquivado, criado_em, atualizado_em, tenant_id
+      FROM projetos WHERE id = ? AND tenant_id = ? AND ativo = 1
+    `, [projectId, tenantId]);
+    if (!project) return res.status(404).json({ erro: 'Projeto não encontrado.' });
+    if (!(await assertProjectAccess(req, res, projectId))) return;
+
+    const permissions = {
+      rdo: hasPermission(req.usuario, PERMISSIONS.RDO_VIEW),
+      quality: hasPermission(req.usuario, PERMISSIONS.RNC_VIEW),
+      curve_s: hasPermission(req.usuario, PERMISSIONS.CURVE_S_VIEW),
+      eap: hasPermission(req.usuario, PERMISSIONS.EAP_VIEW),
+      procurement: hasPermission(req.usuario, PERMISSIONS.REQUISICAO_VIEW),
+      assets: hasPermission(req.usuario, PERMISSIONS.ASSETS_VIEW)
+    };
+
+    const payload = await loadCockpit({ project, permissions, allQuery });
+    res.json(payload);
+  } catch (error) {
+    console.error('Erro ao obter Cockpit da Obra:', error);
+    res.status(500).json({ erro: 'Erro ao obter dados do Cockpit da Obra.' });
+  }
+});
 
 // Dashboard - Avanço físico do projeto
 router.get('/projeto/:projetoId/avanco', auth, async (req, res) => {
