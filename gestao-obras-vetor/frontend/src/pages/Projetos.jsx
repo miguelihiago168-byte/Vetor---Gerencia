@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
 import { useNotification } from '../context/NotificationContext';
 import { Plus, Edit, Users, Calendar, Archive, RotateCcw, Eye, EyeOff, MapPin } from 'lucide-react';
+import { IconButton } from '../components/ui/Button';
 import './Projetos.css';
 
 function Projetos() {
@@ -302,20 +303,22 @@ function Projetos() {
                     className="projeto-card-actions"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <button
+                    <IconButton
                       onClick={() => abrirModal(projeto)}
-                      className="btn btn-icon btn-secondary"
-                      title="Editar"
-                    >
-                      <Edit size={14} />
-                    </button>
-                    <button
+                      icon={Edit}
+                      label={`Editar ${projeto.nome}`}
+                      size="sm"
+                      tone="neutral"
+                      variant="outline"
+                    />
+                    <IconButton
                       onClick={() => showArquivados ? handleDesarquivar(projeto.id) : handleArquivar(projeto.id)}
-                      className="btn btn-icon btn-warning"
-                      title={showArquivados ? 'Restaurar' : 'Arquivar'}
-                    >
-                      {showArquivados ? <RotateCcw size={14} /> : <Archive size={14} />}
-                    </button>
+                      icon={showArquivados ? RotateCcw : Archive}
+                      label={`${showArquivados ? 'Restaurar' : 'Arquivar'} ${projeto.nome}`}
+                      size="sm"
+                      tone="warning"
+                      variant="outline"
+                    />
                   </div>
                 )}
               </div>
