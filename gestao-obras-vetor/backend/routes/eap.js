@@ -2270,6 +2270,7 @@ router.get('/projeto/:projetoId/gantt-data', auth, async (req, res) => {
     // Estruturar dados para Gantt
     const dadosGantt = atividades.map(at => ({
       id: at.id,
+      pai_id: at.pai_id || null,
       nome: at.nome || at.codigo_eap,
       codigo_eap: at.codigo_eap,
       data_inicio: at.data_inicio_planejada,
