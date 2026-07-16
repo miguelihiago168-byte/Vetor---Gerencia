@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { Line, LineChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Scatter, ReferenceLine } from 'recharts';
-import { Activity, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { Activity, AlertTriangle } from 'lucide-react';
 import Navbar from '../components/Navbar';
+import CockpitReturnButton from '../components/CockpitReturnButton';
 import { getCurvaS } from '../services/api';
 
 const fmtPercent = (value) => `${Number(value || 0).toFixed(2)}%`;
@@ -18,7 +19,6 @@ const formatarDataBr = (valor) => {
 
 function CurvaS({ hideNavbar = false }) {
   const { projetoId } = useParams();
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState('');
   const [dados, setDados] = useState(null);
@@ -117,10 +117,7 @@ function CurvaS({ hideNavbar = false }) {
               <Activity size={24} /> Curva S
             </h1>
             {!hideNavbar && (
-              <button className="btn btn-secondary" onClick={() => navigate(`/projeto/${projetoId}/planejamento`)}>
-                <ArrowLeft size={16} />
-                Voltar ao Planejamento
-              </button>
+              <CockpitReturnButton fallbackTo={`/projeto/${projetoId}/planejamento`} fallbackLabel="Voltar ao Planejamento" />
             )}
           </div>
           <p style={{ color: 'var(--gray-600)', marginTop: '8px' }}>

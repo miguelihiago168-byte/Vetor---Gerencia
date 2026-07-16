@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import CockpitReturnButton from '../components/CockpitReturnButton';
 import {
   getRDO,
   listRdoMaoObra,
@@ -13,7 +14,6 @@ import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
 import {
   AlertTriangle,
-  ArrowLeft,
   Building2,
   Calendar,
   CloudSun,
@@ -132,7 +132,6 @@ const EmptyState = ({ children }) => (
 
 function RDODetalhes() {
   const { projetoId, rdoId } = useParams();
-  const navigate = useNavigate();
   const { isGestor, perfil } = useAuth();
   const { alert } = useDialog();
 
@@ -277,9 +276,7 @@ function RDODetalhes() {
         <div className="container">
           <div className="alert alert-error">{erro || 'RDO não encontrado'}</div>
           <div className="rdo-report-inline-actions">
-            <button className="btn btn-secondary" onClick={() => navigate(`/projeto/${projetoId}/rdos`)}>
-              <ArrowLeft size={16} /> Voltar
-            </button>
+            <CockpitReturnButton fallbackTo={`/projeto/${projetoId}/rdos`} />
             <button className="btn btn-primary" onClick={carregarDados}>
               Recarregar
             </button>
@@ -311,10 +308,7 @@ function RDODetalhes() {
       <main className="container rdo-report-page">
         <div className="rdo-report-hero">
           <div className="rdo-report-hero-main">
-            <button className="btn rdo-report-back-btn" onClick={() => navigate(`/projeto/${projetoId}/rdos`)}>
-              <ArrowLeft size={16} />
-              <span>Voltar</span>
-            </button>
+            <CockpitReturnButton fallbackTo={`/projeto/${projetoId}/rdos`} className="btn rdo-report-back-btn" />
             <div className="rdo-report-title-block">
               <div className="rdo-report-eyebrow">Relatório diário de obra</div>
               <div className="rdo-report-title-row">

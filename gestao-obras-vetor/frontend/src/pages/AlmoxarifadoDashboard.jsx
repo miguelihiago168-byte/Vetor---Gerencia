@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import AlmoxarifadoLayout from '../components/AlmoxarifadoLayout';
+import CockpitReturnButton from '../components/CockpitReturnButton';
 import { getDashboardAlmoxarifado } from '../services/api';
 import { useNotification } from '../context/NotificationContext';
 import { formatMoneyBR } from '../utils/currency';
@@ -9,7 +10,6 @@ const formatBRL = formatMoneyBR;
 
 function AlmoxarifadoDashboard() {
   const { projetoId } = useParams();
-  const navigate = useNavigate();
   const { error } = useNotification();
   const [dados, setDados] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -34,9 +34,7 @@ function AlmoxarifadoDashboard() {
     <AlmoxarifadoLayout
       title="Dashboard"
       extraHeader={(
-        <button className="btn btn-secondary" onClick={() => navigate(`/projeto/${projetoId}`)}>
-          Voltar para obra
-        </button>
+        <CockpitReturnButton fallbackTo={`/projeto/${projetoId}`} fallbackLabel="Voltar para obra" />
       )}
     >
 

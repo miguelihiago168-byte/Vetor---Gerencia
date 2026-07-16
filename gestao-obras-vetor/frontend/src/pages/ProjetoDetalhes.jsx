@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { BarChart3, Boxes, HardHat, LayoutDashboard, ShieldCheck } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import {
   getProjectCockpit, getCurvaS, obterDadosGantt, kanbanRequisicoes,
@@ -26,19 +27,20 @@ import '../components/cockpit/Cockpit.css';
 import '../components/cockpit/CockpitExtras.css';
 
 const TAB_DEFINITIONS = [
-  { id: 'overview', label: 'Visão Geral' },
-  { id: 'planning', label: 'Planejamento', permission: 'eap' },
-  { id: 'operation', label: 'Operação', permission: 'rdo' },
-  { id: 'quality', label: 'Qualidade e Suprimentos', anyPermission: ['quality', 'procurement'] },
-  { id: 'resources', label: 'Recursos', anyPermission: ['rdo', 'assets'] }
+  { id: 'overview', label: 'Visão Geral', icon: LayoutDashboard },
+  { id: 'planning', label: 'Planejamento', icon: BarChart3, permission: 'eap' },
+  { id: 'operation', label: 'Operação', icon: HardHat, permission: 'rdo' },
+  { id: 'quality', label: 'Qualidade e Suprimentos', icon: ShieldCheck, anyPermission: ['quality', 'procurement'] },
+  { id: 'resources', label: 'Recursos', icon: Boxes, anyPermission: ['rdo', 'assets'] }
 ];
 const COCKPIT_INTERNAL_SOURCES = new Set(['eap_meta', 'rdos', 'workforce', 'equipment', 'quality']);
 
 function ProjetoDetalhes() {
   const { projetoId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { perfil, usuario } = useAuth();
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'overview');
   const [cockpit, setCockpit] = useState(null);
   const [curve, setCurve] = useState(null);
   const [gantt, setGantt] = useState(null);
@@ -187,8 +189,14 @@ function ProjetoDetalhes() {
   const [meetingDismissed, setMeetingDismissed] = useState(() => localStorage.getItem(meetingStorageKey) === 'dismissed');
   const dismissMeetings = () => { localStorage.setItem(meetingStorageKey, 'dismissed'); setMeetingDismissed(true); };
 
-  const openModule = (suffix) => navigate(`/projeto/${projetoId}/${suffix}`);
-  const openActivity = (item) => navigate(`/projeto/${projetoId}/eap/${item.id}`);
+  const cockpitNavigationState = {
+    cockpitReturn: {
+      to: `/projeto/${projetoId}?tab=${activeTab}`,
+      tab: activeTab
+    }
+  };
+  const openModule = (suffix) => navigate(`/projeto/${projetoId}/${suffix}`, { state: cockpitNavigationState });
+  const openActivity = (item) => navigate(`/projeto/${projetoId}/eap/${item.id}`, { state: cockpitNavigationState });
   const curveIndicators = curve?.indicadores;
   const kpis = [
     { label: 'Progresso físico', value: curveIndicators ? Number(curveIndicators.avanco_real || 0).toFixed(2) : '—', unit: curveIndicators ? '%' : '', state: curveIndicators?.spi_status === 'vermelho' ? 'attention' : curveIndicators?.spi_status === 'verde' ? 'ok' : 'neutral', reference: curve?.data_atual ? `Ref. ${formatDate(curve.data_atual)}` : 'Fonte: Curva S', tooltip: 'Avanço realizado oficial da Curva S.', onClick: permissions.curve_s ? () => openModule('curva-s') : null },

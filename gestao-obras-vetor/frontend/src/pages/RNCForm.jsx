@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import CockpitReturnButton, { forwardCockpitNavigationState } from '../components/CockpitReturnButton';
 import { createRNC, getUsuarios, getProjeto, getRDOs, uploadAnexoRNC } from '../services/api';
-import { ArrowLeft, Save, X, AlertTriangle, Camera, Wrench, Users, Calendar, Upload, CheckCircle } from 'lucide-react';
+import { Save, X, AlertTriangle, Camera, Wrench, Users, Calendar, Upload, CheckCircle } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import './RNCForm.css';
 
 function RNCForm() {
   const { projetoId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { success, error: notifyError } = useNotification();
   const [loading, setLoading] = useState(false);
   const [usuarios, setUsuarios] = useState([]);
@@ -119,7 +121,7 @@ function RNCForm() {
 
       success(dataToSend.responsavel_id ? 'RNC criada e responsável notificado!' : 'RNC criada com sucesso!');
       if (fotosComFalha.length > 0) notifyError(`Fotos não enviadas: ${fotosComFalha.join(', ')}`);
-      navigate(`/projeto/${projetoId}/rnc`);
+      navigate(`/projeto/${projetoId}/rnc`, { state: forwardCockpitNavigationState(location) });
     } catch (err) {
       const msg = err.response?.data?.erro || err.message || 'Erro ao criar RNC.';
       setErro(msg);
@@ -157,15 +159,13 @@ function RNCForm() {
 
         {/* Top bar */}
         <div className="rnc-form-topbar">
-          <button className="rnc-form-back" onClick={() => navigate(`/projeto/${projetoId}/rnc`)}>
-            <ArrowLeft size={16} /> Voltar
-          </button>
+          <CockpitReturnButton fallbackTo={`/projeto/${projetoId}/rnc`} className="rnc-form-back" />
           <div className="rnc-form-topbar-title">
             <span className="rnc-form-breadcrumb">Qualidade / Não Conformidades / <strong>Nova RNC</strong></span>
             <h1>Abrir Não Conformidade</h1>
           </div>
           <div className="rnc-form-topbar-actions">
-            <button type="button" className="btn btn-ghost" onClick={() => navigate(`/projeto/${projetoId}/rnc`)}>
+            <button type="button" className="btn btn-ghost" onClick={() => navigate(`/projeto/${projetoId}/rnc`, { state: forwardCockpitNavigationState(location) })}>
               Cancelar
             </button>
             <button type="submit" form="rnc-form-main" className="btn btn-primary" disabled={loading}>

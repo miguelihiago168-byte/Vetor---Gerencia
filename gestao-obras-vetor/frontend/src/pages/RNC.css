@@ -6,6 +6,7 @@
 
 /* Header */
 .rnc-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 24px; gap: 16px; flex-wrap: wrap; }
+.rnc-header-context { display: flex; align-items: flex-start; gap: 12px; }
 .rnc-header-text h1 { font-size: 21px; font-weight: 700; color: var(--text-primary, #0f172a); margin: 0; letter-spacing: -0.02em; }
 .rnc-header-text p { font-size: 13px; color: var(--text-secondary, #94a3b8); margin: 4px 0 0; }
 

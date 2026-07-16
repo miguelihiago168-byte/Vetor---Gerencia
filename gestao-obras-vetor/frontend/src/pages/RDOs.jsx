@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import CockpitReturnButton, { forwardCockpitNavigationState, getCockpitReturnContext } from '../components/CockpitReturnButton';
 import { getRDOs, updateStatusRDO } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { FileText, Plus, Eye, MoreHorizontal, CheckCircle, XCircle, RotateCcw, AlertTriangle } from 'lucide-react';
@@ -13,6 +14,8 @@ import Modal from '../components/Modal';
 function RDOs() {
   const { projetoId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const cockpitReturn = getCockpitReturnContext(location);
   const { isGestor, perfil } = useAuth();
 
   // Controle de permissões para ações nos RDOs
@@ -229,14 +232,17 @@ function RDOs() {
       <div className="container" style={{ paddingTop: '28px', paddingBottom: '48px' }}>
 
         {/* ── Cabeçalho ── */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
-          <div>
-            <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.02em' }}>
-              Relatórios Diários de Obra
-            </h1>
-            <p style={{ fontSize: '13px', color: '#94a3b8', margin: '4px 0 0', fontWeight: 400 }}>
-              {rdos.length} {rdos.length === 1 ? 'relatório' : 'relatórios'} neste projeto
-            </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', gap: 16, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            {cockpitReturn && <CockpitReturnButton fallbackTo={`/projeto/${projetoId}`} fallbackLabel="Voltar ao Cockpit" />}
+            <div>
+              <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.02em' }}>
+                Relatórios Diários de Obra
+              </h1>
+              <p style={{ fontSize: '13px', color: '#94a3b8', margin: '4px 0 0', fontWeight: 400 }}>
+                {rdos.length} {rdos.length === 1 ? 'relatório' : 'relatórios'} neste projeto
+              </p>
+            </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
             <button className="btn btn-primary" onClick={handleNovoRDO}>
@@ -308,7 +314,7 @@ function RDOs() {
                         onClick={() => {
                           if (isVisualizacao) {
                             if (!isGestor) info('RDO em modo de visualização.', 4500);
-                            navigate(`/projeto/${projetoId}/rdos/${rdo.id}`);
+                            navigate(`/projeto/${projetoId}/rdos/${rdo.id}`, { state: forwardCockpitNavigationState(location) });
                             return;
                           }
                           navigate(`/projeto/${projetoId}/rdos/${rdo.id}/editar`);
@@ -391,7 +397,7 @@ function RDOs() {
                                   className="rdo-dropdown-item"
                                   onClick={() => {
                                     setOpenDropdown(null);
-                                    navigate(`/projeto/${projetoId}/rdos/${rdo.id}`);
+                                    navigate(`/projeto/${projetoId}/rdos/${rdo.id}`, { state: forwardCockpitNavigationState(location) });
                                   }}
                                 >
                                   <Eye size={14} />

@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, Building2, CalendarDays, MapPin, RefreshCw } from 'lucide-react';
+import { AlertCircle, ArrowUpRight, Building2, CalendarDays, Clock3, Gauge, MapPin, RefreshCw } from 'lucide-react';
 import { formatDate } from './cockpitTransforms';
 
 export function CockpitSkeleton() {
@@ -27,8 +27,12 @@ export function CockpitCard({ title, icon: Icon, action, children, className = '
 
 export function CockpitHeader({ project, updatedAt, refreshing, onRefresh, deadline }) {
   return <section className="cockpit-header">
+    <span className="cockpit-header-glow" aria-hidden="true" />
     <div className="cockpit-header-main">
-      <span className="cockpit-eyebrow">Cockpit da Obra</span>
+      <div className="cockpit-header-topline">
+        <span className="cockpit-eyebrow"><Gauge size={14} /> Cockpit da Obra</span>
+        <span className="cockpit-live-status"><i /> Visão consolidada</span>
+      </div>
       <h1>{project?.nome || 'Projeto'}</h1>
       <div className="cockpit-meta">
         {project?.empresa_responsavel && <span><Building2 size={14} /> Contratante: {project.empresa_responsavel}</span>}
@@ -40,16 +44,19 @@ export function CockpitHeader({ project, updatedAt, refreshing, onRefresh, deadl
       {Number(project?.arquivado) === 1 && <span className="cockpit-archived">Projeto arquivado</span>}
     </div>
     <div className="cockpit-header-side">
-      {deadline?.days !== null && <div className={`cockpit-deadline ${deadline.overdue ? 'is-critical' : ''}`}><strong>{Math.abs(deadline.days)}</strong><span>{deadline.overdue ? 'dias vencido' : 'dias restantes'}</span></div>}
-      <small>Atualizado em {updatedAt ? new Date(updatedAt).toLocaleString('pt-BR') : '—'}</small>
-      <button type="button" className="cockpit-refresh" onClick={onRefresh} disabled={refreshing}><RefreshCw size={15} className={refreshing ? 'spin' : ''} /> Atualizar dados</button>
+      {deadline?.days !== null && <div className={`cockpit-deadline ${deadline.overdue ? 'is-critical' : ''}`}><small>Prazo contratual</small><div><strong>{Math.abs(deadline.days)}</strong><span>{deadline.overdue ? 'dias vencido' : 'dias restantes'}</span></div></div>}
+      <small className="cockpit-updated"><Clock3 size={13} /> Atualizado em {updatedAt ? new Date(updatedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</small>
+      <button type="button" className="cockpit-refresh" onClick={onRefresh} disabled={refreshing}><RefreshCw size={15} className={refreshing ? 'spin' : ''} /> Atualizar</button>
     </div>
   </section>;
 }
 
 export function CockpitTabs({ value, onChange, tabs }) {
   return <div className="cockpit-tabs" role="tablist" aria-label="Seções do Cockpit">
-    {tabs.map((tab) => <button key={tab.id} type="button" role="tab" aria-selected={value === tab.id} className={value === tab.id ? 'active' : ''} onClick={() => onChange(tab.id)}>{tab.label}</button>)}
+    {tabs.map((tab) => {
+      const Icon = tab.icon;
+      return <button key={tab.id} type="button" role="tab" aria-selected={value === tab.id} className={value === tab.id ? 'active' : ''} onClick={() => onChange(tab.id)}>{Icon && <Icon size={15} />}{tab.label}</button>;
+    })}
   </div>;
 }
 
@@ -61,8 +68,8 @@ export function DomainStatusStrip({ items }) {
 
 export function KpiGrid({ items }) {
   return <section className="cockpit-kpi-grid">
-    {items.filter((item) => item.visible !== false).map((item) => <button type="button" key={item.label} className={`cockpit-kpi kpi-${item.state || 'neutral'}`} onClick={item.onClick} disabled={!item.onClick} title={item.tooltip || ''}>
-      <span>{item.label}</span><strong>{item.value ?? '—'}{item.unit && <small>{item.unit}</small>}</strong><em>{item.reference || 'Sem referência'}</em>
+    {items.filter((item) => item.visible !== false).map((item) => <button type="button" key={item.label} className={`cockpit-kpi kpi-${item.state || 'neutral'} ${item.onClick ? 'is-interactive' : ''}`} onClick={item.onClick} disabled={!item.onClick} title={item.tooltip || ''}>
+      <span>{item.label}</span>{item.onClick && <ArrowUpRight className="cockpit-kpi-arrow" size={15} />}<strong>{item.value ?? '—'}{item.unit && <small>{item.unit}</small>}</strong><em>{item.reference || 'Sem referência'}</em>
     </button>)}
   </section>;
 }

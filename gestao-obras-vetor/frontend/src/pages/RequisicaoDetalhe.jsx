@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useLocation, Link } from 'react-router-dom';
 import ComprasLayout from '../components/ComprasLayout';
+import { getCockpitReturnContext } from '../components/CockpitReturnButton';
 import { useAuth } from '../context/AuthContext';
 import { fmtTs, fmtData } from '../utils/date';
 import {
@@ -36,7 +37,8 @@ const SLOT_VAZIO = { fornecedor_nome: '', cnpj: '', telefone: '', email: '', val
 
 export default function RequisicaoDetalhe() {
   const { projetoId, id } = useParams();
-  const navigate = useNavigate();
+  const location = useLocation();
+  const cockpitReturn = getCockpitReturnContext(location);
   const { usuario } = useAuth();
   const perfil = usuario?.perfil || '';
 
@@ -321,13 +323,14 @@ export default function RequisicaoDetalhe() {
   const podeCotar    = ['ADM', 'Financeiro', 'Gestor Geral', 'Gestor Local'].includes(perfil);
   const podeComprar  = ['ADM', 'Financeiro', 'Gestor Geral'].includes(perfil);
   const isSolicitante = Number(req.solicitante_id) === Number(usuario?.id);
-  const voltarLink   = projetoId ? `/projeto/${projetoId}/compras` : '/compras';
+  const voltarLink   = cockpitReturn?.to || (projetoId ? `/projeto/${projetoId}/compras` : '/compras');
+  const voltarLabel  = cockpitReturn ? 'Cockpit' : 'Requisições';
 
   return (
     <ComprasLayout title={req.numero_requisicao}>
       {/* Breadcrumb */}
       <p style={{ marginTop: -8, marginBottom: 16, fontSize: '0.85rem', color: 'var(--gray-500)' }}>
-        <Link to={voltarLink} style={{ color: 'var(--primary)', textDecoration: 'none' }}>Requisições</Link>
+        <Link to={voltarLink} style={{ color: 'var(--primary)', textDecoration: 'none' }}>{voltarLabel}</Link>
         {' / '}{req.numero_requisicao}
       </p>
 

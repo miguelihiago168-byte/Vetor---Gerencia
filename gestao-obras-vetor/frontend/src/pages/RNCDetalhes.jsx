@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import CockpitReturnButton from '../components/CockpitReturnButton';
 import {
   getRNCs,
   updateStatusRNC,
@@ -14,7 +15,6 @@ import {
 import { useAuth } from '../context/AuthContext';
 import {
   AlertTriangle,
-  ArrowLeft,
   FileText,
   CheckCircle2,
   XCircle,
@@ -106,7 +106,6 @@ const stepIndex = (status) => {
 
 function RNCDetalhes() {
   const { projetoId, rncId } = useParams();
-  const navigate = useNavigate();
   const { isGestor, perfil } = useAuth();
   const canAprovarRnc = isGestor || ['Gestor da Qualidade', 'Gestor de Qualidade'].includes(perfil);
   const { success, error } = useNotification();
@@ -295,9 +294,7 @@ function RNCDetalhes() {
           <div className="rdet-empty-state">
             <AlertTriangle size={40} />
             <p>{erro || 'RNC não encontrada.'}</p>
-            <button className="btn btn-secondary" onClick={() => navigate(`/projeto/${projetoId}/rnc`)}>
-              <ArrowLeft size={15} /> Voltar
-            </button>
+            <CockpitReturnButton fallbackTo={`/projeto/${projetoId}/rnc`} />
           </div>
         </div>
       </>
@@ -333,9 +330,7 @@ function RNCDetalhes() {
       <Navbar />
       <div className="container rdet-page">
         <div className="rdet-header">
-          <button className="rdet-back" onClick={() => navigate(`/projeto/${projetoId}/rnc`)}>
-            <ArrowLeft size={15} />
-          </button>
+          <CockpitReturnButton fallbackTo={`/projeto/${projetoId}/rnc`} className="rdet-back" iconOnly />
           <div className="rdet-header-main">
             <div className="rdet-header-breadcrumb">
               Qualidade / RNC / <strong>#{rnc.id}</strong>

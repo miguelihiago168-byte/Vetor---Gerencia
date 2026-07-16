@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import ComprasLayout from '../components/ComprasLayout';
+import CockpitReturnButton, { forwardCockpitNavigationState, getCockpitReturnContext } from '../components/CockpitReturnButton';
 import { useAuth } from '../context/AuthContext';
 import { listarRequisicoesProjeto, listarRequisicoes, criarRequisicao, getProjeto, getProjetos } from '../services/api';
 
@@ -21,6 +22,8 @@ const ITEM_VAZIO = { descricao: '', quantidade: '', unidade: 'un', especificacao
 export default function Requisicoes() {
   const { projetoId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const cockpitReturn = getCockpitReturnContext(location);
   const { usuario } = useAuth();
 
   const [projeto, setProjeto] = useState(null);
@@ -108,14 +111,19 @@ export default function Requisicoes() {
   };
 
   const irParaDetalhe = (r) => {
-    if (projetoId) navigate(`/projeto/${projetoId}/compras/${r.id}`);
+    if (projetoId) navigate(`/projeto/${projetoId}/compras/${r.id}`, { state: forwardCockpitNavigationState(location) });
     else navigate(`/compras/${r.id}`);
   };
 
   return (
     <ComprasLayout
       title="Requisições de Compra"
-      extraHeader={podeCriar ? <button className="btn btn-primary" onClick={() => { setForm({ projeto_id: projetoId || '', tipo_material: '', urgencia: 'Normal', observacao_geral: '' }); setItens([{ ...ITEM_VAZIO }]); setStep(1); setErro(''); setModalAberto(true); }}>+ Nova Requisição</button> : null}
+      extraHeader={(
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {cockpitReturn && <CockpitReturnButton fallbackTo={`/projeto/${projetoId}`} />}
+          {podeCriar && <button className="btn btn-primary" onClick={() => { setForm({ projeto_id: projetoId || '', tipo_material: '', urgencia: 'Normal', observacao_geral: '' }); setItens([{ ...ITEM_VAZIO }]); setStep(1); setErro(''); setModalAberto(true); }}>+ Nova Requisição</button>}
+        </div>
+      )}
     >
       {projeto && <p style={{ marginTop: -8, marginBottom: 16, color: 'var(--gray-500)', fontSize: '0.88rem' }}>Projeto: <strong>{projeto.nome}</strong></p>}
 

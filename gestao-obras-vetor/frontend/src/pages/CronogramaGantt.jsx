@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import GanttSidebar from '../components/GanttSidebar';
+import CockpitReturnButton from '../components/CockpitReturnButton';
 import {
   getAtividadesEAP,
   analisarCronograma,
@@ -9,7 +10,7 @@ import {
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
-import { Zap, RefreshCw, CalendarDays, AlertTriangle, ArrowLeft, X } from 'lucide-react';
+import { Zap, RefreshCw, CalendarDays, AlertTriangle, X } from 'lucide-react';
 import './CronogramaGantt.css';
 
 const fmtPercent = (value) => `${Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
@@ -29,7 +30,6 @@ const severityStyle = (severity) => {
 
 function CronogramaGantt({ hideNavbar = false }) {
   const { projetoId } = useParams();
-  const navigate = useNavigate();
   const { isGestor } = useAuth();
   const { success, error } = useNotification();
 
@@ -112,10 +112,7 @@ function CronogramaGantt({ hideNavbar = false }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 10, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             {!hideNavbar && (
-              <button className="btn btn-secondary" onClick={() => navigate(`/projeto/${projetoId}/planejamento`)}>
-                <ArrowLeft size={16} />
-                Voltar ao Planejamento
-              </button>
+              <CockpitReturnButton fallbackTo={`/projeto/${projetoId}/planejamento`} fallbackLabel="Voltar ao Planejamento" />
             )}
             <h1 style={{ margin: 0 }}>Cronograma (Gantt)</h1>
           </div>

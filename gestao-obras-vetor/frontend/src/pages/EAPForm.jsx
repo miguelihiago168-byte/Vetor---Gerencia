@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import CockpitReturnButton, { getCockpitReturnContext } from '../components/CockpitReturnButton';
 import { getAtividadesEAP, createAtividade, updateAtividade, getUnidadesEAP, getHistoricoAtividade } from '../services/api';
 import { useDialog } from '../context/DialogContext';
-import { ArrowLeft, Save, Info, Layers3, GitBranchPlus, History, TrendingDown, TrendingUp, Activity } from 'lucide-react';
+import { Save, Info, Layers3, GitBranchPlus, History, TrendingDown, TrendingUp, Activity } from 'lucide-react';
 import './EAPForm.css';
 
 function EAPForm() {
   const { projetoId, atividadeId } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const cockpitReturn = getCockpitReturnContext(location);
   const { confirm, alert } = useDialog();
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState('');
@@ -291,14 +294,12 @@ function EAPForm() {
       <Navbar />
       <div className="container eap-form-page">
         <div className="eap-form-header">
-          <button
+          <CockpitReturnButton
+            fallbackTo={`/projeto/${projetoId}/eap`}
+            fallbackLabel="Voltar para a EAP"
             className="btn btn-secondary eap-back-button"
-            onClick={() => navigate(`/projeto/${projetoId}/eap`)}
-            aria-label="Voltar para a EAP"
-            title="Voltar para a EAP"
-          >
-            <ArrowLeft size={16} />
-          </button>
+            iconOnly={!cockpitReturn}
+          />
           <div>
             <span className="eap-form-eyebrow">Estrutura analítica do projeto</span>
             <h1>{atividadeId ? 'Editar atividade' : 'Nova atividade'} <span>na EAP</span></h1>
@@ -572,7 +573,7 @@ function EAPForm() {
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={() => navigate(`/projeto/${projetoId}/eap`)}
+                  onClick={() => navigate(cockpitReturn?.to || `/projeto/${projetoId}/eap`)}
                 >
                   Cancelar
                 </button>

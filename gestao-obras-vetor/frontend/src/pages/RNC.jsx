@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import CockpitReturnButton, { forwardCockpitNavigationState, getCockpitReturnContext } from '../components/CockpitReturnButton';
 import { getRNCs, deleteRNC, getRNCPDF } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
@@ -18,6 +19,8 @@ const FILTER_TABS = [
 function RNC() {
   const { projetoId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const cockpitReturn = getCockpitReturnContext(location);
   const { isGestor } = useAuth();
   const { confirm } = useDialog();
   const [rncs, setRncs] = useState([]);
@@ -181,11 +184,14 @@ function RNC() {
       <div className="container rnc-container">
 
         <div className="rnc-header">
-          <div className="rnc-header-text">
-            <h1>Não Conformidades</h1>
-            <p>{rncs.length} {rncs.length === 1 ? 'registro' : 'registros'} neste projeto</p>
+          <div className="rnc-header-context">
+            {cockpitReturn && <CockpitReturnButton fallbackTo={`/projeto/${projetoId}`} />}
+            <div className="rnc-header-text">
+              <h1>Não Conformidades</h1>
+              <p>{rncs.length} {rncs.length === 1 ? 'registro' : 'registros'} neste projeto</p>
+            </div>
           </div>
-          <button className="btn btn-primary" onClick={() => navigate(`/projeto/${projetoId}/rnc/novo`)}>
+          <button className="btn btn-primary" onClick={() => navigate(`/projeto/${projetoId}/rnc/novo`, { state: forwardCockpitNavigationState(location) })}>
             <Plus size={15} />
             Nova RNC
           </button>
@@ -237,7 +243,7 @@ function RNC() {
                 <div
                   key={rnc.id}
                   className={`rnc-card ${cardStatusClass(rnc.status)}`}
-                  onClick={() => navigate(`/projeto/${projetoId}/rnc/${rnc.id}`)}
+                  onClick={() => navigate(`/projeto/${projetoId}/rnc/${rnc.id}`, { state: forwardCockpitNavigationState(location) })}
                 >
                   <div className="rnc-card-top">
                     <div className="rnc-card-badges">
