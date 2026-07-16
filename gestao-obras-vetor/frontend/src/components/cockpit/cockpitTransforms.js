@@ -36,31 +36,39 @@ export const projectDeadline = (project, today = new Date()) => {
 export const buildActivityView = (payload, today = new Date()) => {
   if (payload == null) return null;
   const activities = payload?.atividades || [];
+  const parentIds = new Set(
+    activities
+      .map((item) => Number(item.pai_id))
+      .filter((id) => Number.isFinite(id) && id > 0)
+  );
+  // Pais da EAP sao agrupadores: datas, status e progresso apenas consolidam
+  // as atividades filhas e nao representam trabalho executavel no cockpit.
+  const executableActivities = activities.filter((item) => !parentIds.has(Number(item.id)));
   const todayKey = toDateKey(today);
   const end = new Date(`${todayKey}T12:00:00`);
   end.setDate(end.getDate() + 14);
   const endKey = toDateKey(end);
   const counts = { completed: 0, inProgress: 0, notStarted: 0, critical: 0 };
-  activities.forEach((item) => {
+  executableActivities.forEach((item) => {
     const pct = Number(item.percentual_executado || 0);
     if (pct >= 100 || item.status === 'Concluída') counts.completed += 1;
     else if (pct > 0 || item.status === 'Em andamento') counts.inProgress += 1;
     else counts.notStarted += 1;
     if (item.no_caminho_critico) counts.critical += 1;
   });
-  const critical = activities
+  const critical = executableActivities
     .filter((item) => item.no_caminho_critico)
     .sort((a, b) => String(a.data_fim || '').localeCompare(String(b.data_fim || '')))
     .slice(0, 5);
-  const continuity = activities
+  const continuity = executableActivities
     .filter((item) => Number(item.percentual_executado || 0) > 0 && Number(item.percentual_executado || 0) < 100)
     .sort((a, b) => String(a.data_fim || '').localeCompare(String(b.data_fim || '')))
     .slice(0, 6);
-  const starting = activities
+  const starting = executableActivities
     .filter((item) => Number(item.percentual_executado || 0) === 0 && item.data_inicio >= todayKey && item.data_inicio <= endKey)
     .sort((a, b) => String(a.data_inicio || '').localeCompare(String(b.data_inicio || '')))
     .slice(0, 6);
-  return { counts, critical, continuity, starting, total: activities.length, window: { from: todayKey, to: endKey } };
+  return { counts, critical, continuity, starting, total: executableActivities.length, window: { from: todayKey, to: endKey } };
 };
 
 const cardsFromKanban = (kanban) => (kanban || []).flatMap((column) => column.requisicoes || column.itens || []);
