@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import CockpitReturnButton from '../components/CockpitReturnButton';
+import Button from '../components/ui/Button';
 import {
   getRDO,
   listRdoMaoObra,
@@ -19,6 +20,9 @@ import {
   CloudSun,
   ClipboardList,
   Download,
+  CheckCircle2,
+  XCircle,
+  RotateCcw,
   File,
   FileImage,
   FileText,
@@ -322,27 +326,22 @@ function RDODetalhes() {
           </div>
 
           <div className="rdo-report-actions">
-            <button className="btn rdo-view-action-btn rdo-report-action-pill rdo-report-action-pill-primary" onClick={handleDownloadPDF}>
-              <Download size={16} /> PDF
-            </button>
+            <Button tone="primary" variant="outline" startIcon={Download} className="rdo-view-action-btn" onClick={handleDownloadPDF}>PDF</Button>
             {canAprovarRdo && rdo.status === 'Em análise' && (
-              <button className="btn rdo-view-action-btn rdo-report-action-pill rdo-report-action-pill-success" onClick={aprovarRDO}>
-                Aprovar
-              </button>
+              <Button tone="success" variant="solid" startIcon={CheckCircle2} className="rdo-view-action-btn" onClick={aprovarRDO}>Aprovar</Button>
             )}
             {canReprovarRdo && rdo.status === 'Em análise' && (
-              <button className="btn rdo-view-action-btn rdo-report-action-pill rdo-report-action-pill-danger" onClick={reprovarRDO}>
-                Reprovar
-              </button>
+              <Button tone="danger" variant="solid" startIcon={XCircle} className="rdo-view-action-btn" onClick={reprovarRDO}>Reprovar</Button>
             )}
             {canReprovarRdo && rdo.status === 'Em análise' && (
-              <button className="btn rdo-view-action-btn rdo-report-action-pill rdo-report-action-pill-warning" onClick={() => setShowSolicitarCorrecaoModal(true)}>
-                Solicitar correção
-              </button>
+              <Button tone="warning" variant="soft" startIcon={RotateCcw} className="rdo-view-action-btn" onClick={() => setShowSolicitarCorrecaoModal(true)}>Solicitar correção</Button>
             )}
             {isGestor && rdo.status === 'Aprovado' && (
-              <button
-                className="btn rdo-view-action-btn rdo-view-action-btn-wide rdo-report-action-pill rdo-report-action-pill-warning"
+              <Button
+                tone="warning"
+                variant="soft"
+                startIcon={RotateCcw}
+                className="rdo-view-action-btn rdo-view-action-btn-wide"
                 onClick={async () => {
                   try {
                     await updateStatusRDO(rdoId, 'Em preenchimento');
@@ -353,7 +352,7 @@ function RDODetalhes() {
                 }}
               >
                 Permitir edição
-              </button>
+              </Button>
             )}
           </div>
 

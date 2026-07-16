@@ -57,22 +57,6 @@
   color: #666;
 }
 
-.gantt-close {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #999;
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.2s;
-}
-
-.gantt-close:hover {
-  color: #333;
-}
-
 .gantt-content {
   flex: 1;
   overflow-y: auto;
@@ -412,9 +396,6 @@ body.dark-mode .gantt-header {
 
 body.dark-mode .gantt-titulo h3 { color: #e8edf3; }
 body.dark-mode .gantt-titulo p  { color: #8fa3b9; }
-body.dark-mode .gantt-close     { color: #607080; }
-body.dark-mode .gantt-close:hover { color: #e8edf3; }
-
 body.dark-mode .gantt-legenda {
   background: #162030;
   border-radius: 4px;

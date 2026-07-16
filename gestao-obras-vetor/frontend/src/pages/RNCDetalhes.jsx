@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import CockpitReturnButton from '../components/CockpitReturnButton';
+import Button, { IconButton } from '../components/ui/Button';
 import {
   getRNCs,
   updateStatusRNC,
@@ -343,9 +344,7 @@ function RNCDetalhes() {
             </div>
           </div>
           <div className="rdet-header-actions">
-            <button className="btn btn-secondary" onClick={handleOpenPdf}>
-              <FileText size={14} /> PDF
-            </button>
+            <Button tone="primary" variant="outline" startIcon={FileText} onClick={handleOpenPdf}>PDF</Button>
           </div>
         </div>
 
@@ -468,19 +467,14 @@ function RNCDetalhes() {
                       {previewCorrecao.map((preview, index) => (
                         <div key={`${preview.name}-${index}`} className="rdet-preview-thumb">
                           <img src={preview.src} alt={preview.name} />
-                          <button type="button" className="rdet-preview-remove" onClick={() => removerFotoCorrecao(index)}>
-                            <X size={11} />
-                          </button>
+                          <IconButton label={`Remover ${preview.name}`} icon={X} tone="danger" variant="solid" size="sm" className="rdet-preview-remove" onClick={() => removerFotoCorrecao(index)} />
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
                 <div className="rdet-correction-actions">
-                  <button className="btn btn-primary rdet-send-btn" disabled={enviando || !correcaoTexto.trim()} onClick={enviarCorrecao}>
-                    <Send size={15} />
-                    {enviando ? 'Enviando...' : 'Enviar para aprovação'}
-                  </button>
+                  <Button tone="primary" variant="solid" startIcon={Send} loading={enviando} className="rdet-send-btn" disabled={!correcaoTexto.trim()} onClick={enviarCorrecao}>Enviar para aprovação</Button>
                 </div>
               </div>
             )}
@@ -514,12 +508,8 @@ function RNCDetalhes() {
                   </>
                 )}
                 <div className="rdet-approval-btns">
-                  <button className="btn btn-success rdet-approve-btn" onClick={aprovarRNC}>
-                    <CheckCircle2 size={15} /> Aprovar e Encerrar
-                  </button>
-                  <button className="btn btn-danger rdet-reprove-btn" onClick={reprovarRNC}>
-                    <XCircle size={15} /> Reprovar
-                  </button>
+                  <Button tone="success" variant="solid" startIcon={CheckCircle2} className="rdet-approve-btn" onClick={aprovarRNC}>Aprovar e Encerrar</Button>
+                  <Button tone="danger" variant="solid" startIcon={XCircle} className="rdet-reprove-btn" onClick={reprovarRNC}>Reprovar</Button>
                 </div>
               </div>
             )}

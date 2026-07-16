@@ -68,19 +68,6 @@
   position: absolute;
   top: 12px;
   right: 12px;
-  background: none;
-  border: none;
-  color: white;
-  cursor: pointer;
-  padding: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.2s;
-}
-
-.confirm-close:hover {
-  transform: rotate(90deg);
 }
 
 .confirm-content {
@@ -316,47 +303,6 @@
   justify-content: flex-end;
 }
 
-.btn-cancelar,
-.btn-confirmar-final {
-  padding: 10px 20px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  transition: all 0.2s;
-}
-
-.btn-cancelar {
-  background: #e0e0e0;
-  color: #333;
-}
-
-.btn-cancelar:hover:not(:disabled) {
-  background: #d0d0d0;
-}
-
-.btn-cancelar:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-confirmar-final {
-  background: #4caf50;
-  color: white;
-}
-
-.btn-confirmar-final:hover:not(:disabled) {
-  background: #45a049;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 6px rgba(76, 175, 80, 0.4);
-}
-
-.btn-confirmar-final:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 /* Scrollbar customizado */
 .confirm-content::-webkit-scrollbar,
 .alteracoes-lista::-webkit-scrollbar {
@@ -399,8 +345,7 @@
     flex-direction: column;
   }
 
-  .btn-cancelar,
-  .btn-confirmar-final {
+  .confirm-footer .ui-button {
     width: 100%;
   }
 }

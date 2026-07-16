@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import Button, { IconButton } from '../components/ui/Button';
 import { useNotification } from '../context/NotificationContext';
 import { useAuth } from '../context/AuthContext';
 import { listarPedidosPorProjeto, criarPedidoCompra, aprovarInicialPedido, inserirCotacao, selecionarCotacao, marcarComprado, detalharPedido, reprovarPedido } from '../services/api';
 import { formatMoneyBR, parseMoneyBR, formatMoneyInputBR } from '../utils/currency';
+import { CheckCircle2, Eye, FileText, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 
 const formatBRL = formatMoneyBR;
 
@@ -299,7 +301,7 @@ function PedidosCompra() {
               placeholder="Buscar por #id, descrição ou aplicação"
             />
             {canCreatePurchase && (
-              <button className="btn btn-primary" onClick={() => setShowNovaModal(true)}>Nova Solicitação</button>
+              <Button tone="primary" variant="solid" startIcon={Plus} onClick={() => setShowNovaModal(true)}>Nova Solicitação</Button>
             )}
           </div>
         </div>
@@ -343,24 +345,24 @@ function PedidosCompra() {
                 )}
                 <div className="flex" style={{ gap: '8px', marginTop: '10px' }}>
                   {canApprovePurchase && p.status === 'SOLICITADO' && (
-                    <button className="btn btn-secondary" onClick={() => aprovarInicial(p.id)}>Aprovar Inicial</button>
+                    <Button tone="success" variant="solid" startIcon={CheckCircle2} onClick={() => aprovarInicial(p.id)}>Aprovar Inicial</Button>
                   )}
                   {canFinancePurchase && (p.status === 'EM_COTACAO' || p.status === 'APROVADO_GESTOR_INICIAL') && (
-                    <button className="btn btn-secondary" onClick={() => abrirModalCotacoes(p.id)}>Inserir 3 Cotações</button>
+                    <Button startIcon={Pencil} onClick={() => abrirModalCotacoes(p.id)}>Inserir 3 Cotações</Button>
                   )}
                   {canApprovePurchase && p.status === 'COTADO' && (
-                    <button className="btn btn-secondary" onClick={() => escolher(p.id)}>Escolher Cotação</button>
+                    <Button startIcon={CheckCircle2} onClick={() => escolher(p.id)}>Escolher Cotação</Button>
                   )}
                   {canFinancePurchase && p.status === 'APROVADO_PARA_COMPRA' && (
-                    <button className="btn btn-success" onClick={() => finalizarCompra(p.id)}>Marcar como Comprado</button>
+                    <Button tone="success" variant="solid" startIcon={CheckCircle2} onClick={() => finalizarCompra(p.id)}>Marcar como Comprado</Button>
                   )}
                   {canApprovePurchase && p.status !== 'REPROVADO' && podeReprovar(p.status) && (
-                    <button className="btn btn-danger" onClick={() => abrirReprovar(p.id)}>Reprovar</button>
+                    <Button tone="danger" variant="ghost" startIcon={X} onClick={() => abrirReprovar(p.id)}>Reprovar</Button>
                   )}
                   {(p.status === 'COTADO' || p.status === 'APROVADO_PARA_COMPRA' || p.status === 'COMPRADO') && (
-                    <button className="btn btn-outline" onClick={() => toggleComparativo(p.id)}>
+                    <Button tone="primary" variant="outline" startIcon={Eye} onClick={() => toggleComparativo(p.id)}>
                       {cotas ? 'Ocultar Comparativo' : 'Ver Comparativo'}
-                    </button>
+                    </Button>
                   )}
                 </div>
                 {p.status === 'REPROVADO' && p.reprovado_motivo && (
@@ -399,7 +401,7 @@ function PedidosCompra() {
                           {c.garantia && <p>Garantia: {c.garantia}</p>}
                           {c.frete && <p>Frete: {c.frete}</p>}
                           {c.observacoes && <p>Obs.: {c.observacoes}</p>}
-                          {c.pdf_path && <a className="btn btn-outline" href={c.pdf_path} target="_blank" rel="noreferrer">Ver PDF</a>}
+                          {c.pdf_path && <Button as="a" tone="primary" variant="outline" startIcon={FileText} href={c.pdf_path} target="_blank" rel="noreferrer">Ver PDF</Button>}
                         </div>
                       );})}
                     </div>
@@ -422,7 +424,7 @@ function PedidosCompra() {
           <div className="modal-card" style={{ width: '100vw', height: '100vh', maxWidth: '100vw', maxHeight: '100vh', borderRadius: 0, padding: 16, display: 'flex', flexDirection: 'column' }}>
             <div className="flex-between mb-2">
               <h2>Inserir 3 Cotações</h2>
-              <button className="btn btn-secondary" onClick={() => { setShowCotacaoModal(false); setCotacoesPedidoId(null); }}>Fechar</button>
+              <IconButton variant="ghost" icon={X} label="Fechar cotações" onClick={() => { setShowCotacaoModal(false); setCotacoesPedidoId(null); }} />
             </div>
             {cotacoesPedidoInfo && (
               <div className="card" style={{ padding: 12, marginBottom: 12, background: 'var(--gray-50)' }}>
@@ -507,8 +509,8 @@ function PedidosCompra() {
               </div>
             </div>
             <div className="flex-between mt-2">
-              <button className="btn btn-secondary" onClick={() => { setShowCotacaoModal(false); setCotacoesPedidoId(null); }}>Cancelar</button>
-              <button className="btn btn-primary" onClick={salvarCotacoes}>Salvar 3 Cotações</button>
+              <Button startIcon={X} onClick={() => { setShowCotacaoModal(false); setCotacoesPedidoId(null); }}>Cancelar</Button>
+              <Button tone="primary" variant="solid" startIcon={Save} onClick={salvarCotacoes}>Salvar 3 Cotações</Button>
             </div>
           </div>
         </div>
@@ -519,7 +521,7 @@ function PedidosCompra() {
           <div className="modal-card" style={{ maxWidth: '560px' }} onClick={(e) => e.stopPropagation()}>
             <div className="flex-between mb-2">
               <h2>Escolher Cotação</h2>
-              <button className="btn btn-secondary" onClick={() => { setShowSelecionarModal(false); setSelecionarPedidoId(null); setSelecionarLista([]); setSelecionarEscolha(''); }}>Fechar</button>
+              <IconButton variant="ghost" icon={X} label="Fechar seleção de cotação" onClick={() => { setShowSelecionarModal(false); setSelecionarPedidoId(null); setSelecionarLista([]); setSelecionarEscolha(''); }} />
             </div>
             {erro && <div className="alert alert-error">{erro}</div>}
             <div className="card" style={{ padding: '16px' }}>
@@ -534,8 +536,8 @@ function PedidosCompra() {
               </div>
             </div>
             <div className="flex-between mt-2">
-              <button className="btn btn-secondary" onClick={() => { setShowSelecionarModal(false); setSelecionarPedidoId(null); setSelecionarLista([]); setSelecionarEscolha(''); }}>Cancelar</button>
-              <button className="btn btn-primary" onClick={confirmarSelecionarCotacao}>Confirmar Seleção</button>
+              <Button startIcon={X} onClick={() => { setShowSelecionarModal(false); setSelecionarPedidoId(null); setSelecionarLista([]); setSelecionarEscolha(''); }}>Cancelar</Button>
+              <Button tone="primary" variant="solid" startIcon={CheckCircle2} onClick={confirmarSelecionarCotacao}>Confirmar Seleção</Button>
             </div>
           </div>
         </div>
@@ -546,7 +548,7 @@ function PedidosCompra() {
           <div className="modal-card" style={{ maxWidth: '560px' }} onClick={(e) => e.stopPropagation()}>
             <div className="flex-between mb-2">
               <h2>Nova Solicitação de Compra</h2>
-              <button className="btn btn-secondary" onClick={() => { setShowNovaModal(false); }}>Fechar</button>
+              <IconButton variant="ghost" icon={X} label="Fechar nova solicitação" onClick={() => { setShowNovaModal(false); }} />
             </div>
             {erro && <div className="alert alert-error">{erro}</div>}
             <div className="card" style={{ padding: '16px' }}>
@@ -599,8 +601,8 @@ function PedidosCompra() {
               </div>
             </div>
             <div className="flex-between mt-2">
-              <button className="btn btn-secondary" onClick={() => setShowNovaModal(false)}>Cancelar</button>
-              <button className="btn btn-primary" onClick={salvarNova}>Salvar Solicitação</button>
+              <Button startIcon={X} onClick={() => setShowNovaModal(false)}>Cancelar</Button>
+              <Button tone="primary" variant="solid" startIcon={Save} onClick={salvarNova}>Salvar Solicitação</Button>
             </div>
           </div>
         </div>
@@ -611,7 +613,7 @@ function PedidosCompra() {
           <div className="modal-card" style={{ maxWidth: '560px' }} onClick={(e) => e.stopPropagation()}>
             <div className="flex-between mb-2">
               <h2>Reprovar Pedido</h2>
-              <button className="btn btn-secondary" onClick={() => { setShowReprovarModal(false); setReprovarForm({ id: null, motivo: '' }); }}>Fechar</button>
+              <IconButton variant="ghost" icon={X} label="Fechar reprovação" onClick={() => { setShowReprovarModal(false); setReprovarForm({ id: null, motivo: '' }); }} />
             </div>
             {erro && <div className="alert alert-error">{erro}</div>}
             <div className="card" style={{ padding: '16px' }}>
@@ -628,8 +630,8 @@ function PedidosCompra() {
               </div>
             </div>
             <div className="flex-between mt-2">
-              <button className="btn btn-secondary" onClick={() => { setShowReprovarModal(false); setReprovarForm({ id: null, motivo: '' }); }}>Cancelar</button>
-              <button className="btn btn-danger" onClick={salvarReprovar}>Reprovar Pedido</button>
+              <Button startIcon={X} onClick={() => { setShowReprovarModal(false); setReprovarForm({ id: null, motivo: '' }); }}>Cancelar</Button>
+              <Button tone="danger" variant="solid" startIcon={Trash2} onClick={salvarReprovar}>Reprovar Pedido</Button>
             </div>
           </div>
         </div>

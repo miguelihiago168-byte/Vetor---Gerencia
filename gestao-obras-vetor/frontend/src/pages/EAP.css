@@ -850,6 +850,8 @@ body.dark-mode .eap-import-modal-btn-secondary:focus-visible {
   }
 
   .eap-toolbar-btn,
+  .eap-toolbar > .ui-button,
+  .eap-actions-menu > .ui-button,
   .eap-actions-menu {
     min-width: 0;
     width: 100%;
@@ -873,6 +875,11 @@ body.dark-mode .eap-import-modal-btn-secondary:focus-visible {
   }
 
   .eap-icon-action {
+    flex: 1;
+    width: auto;
+  }
+
+  .eap-activity-actions .ui-button {
     flex: 1;
     width: auto;
   }

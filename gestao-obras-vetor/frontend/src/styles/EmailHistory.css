@@ -195,26 +195,6 @@
   text-align: center;
 }
 
-.btn-view-details {
-  padding: 6px 10px;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary, #666);
-}
-
-.btn-view-details:hover {
-  border-color: var(--primary-color, #0066cc);
-  color: var(--primary-color, #0066cc);
-  background: var(--primary-color, #0066cc);
-  color: white;
-}
-
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -337,19 +317,6 @@
 .modal-header h2 {
   margin: 0;
   font-size: 18px;
-  color: var(--text-primary, #333);
-}
-
-.btn-close {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  color: var(--text-secondary, #666);
-  transition: color 0.2s ease;
-}
-
-.btn-close:hover {
   color: var(--text-primary, #333);
 }
 

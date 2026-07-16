@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import CockpitReturnButton, { getCockpitReturnContext } from '../components/CockpitReturnButton';
+import Button from '../components/ui/Button';
 import { getAtividadesEAP, createAtividade, updateAtividade, getUnidadesEAP, getHistoricoAtividade } from '../services/api';
 import { useDialog } from '../context/DialogContext';
-import { Save, Info, Layers3, GitBranchPlus, History, TrendingDown, TrendingUp, Activity } from 'lucide-react';
+import { Save, X, Info, Layers3, GitBranchPlus, History, TrendingDown, TrendingUp, Activity } from 'lucide-react';
 import './EAPForm.css';
 
 function EAPForm() {
@@ -566,17 +567,15 @@ function EAPForm() {
               </div>
 
               <div className="eap-actions">
-                <button type="submit" className="btn btn-primary" disabled={loading}>
-                  <Save size={16} />
-                  {loading ? 'Salvando...' : 'Salvar'}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
+                <Button type="submit" tone="primary" variant="solid" startIcon={Save} loading={loading}>
+                  Salvar
+                </Button>
+                <Button
+                  startIcon={X}
                   onClick={() => navigate(cockpitReturn?.to || `/projeto/${projetoId}/eap`)}
                 >
                   Cancelar
-                </button>
+                </Button>
               </div>
             </form>
               </>

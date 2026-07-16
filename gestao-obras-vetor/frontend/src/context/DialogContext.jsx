@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useMemo, useState } from 'react';
+import { Check, Trash2, X } from 'lucide-react';
+import Button from '../components/ui/Button';
 
 const DialogContext = createContext(null);
 
@@ -24,7 +26,7 @@ export function DialogProvider({ children }) {
     })
   );
 
-  const showConfirm = ({ title = 'Confirmação', message = '', confirmText = 'Confirmar', cancelText = 'Cancelar' } = {}) => (
+  const showConfirm = ({ title = 'Confirmação', message = '', confirmText = 'Confirmar', cancelText = 'Cancelar', confirmTone } = {}) => (
     new Promise((resolve) => {
       setDialog({
         type: 'confirm',
@@ -32,6 +34,7 @@ export function DialogProvider({ children }) {
         message,
         confirmText,
         cancelText,
+        confirmTone,
         resolve
       });
     })
@@ -93,12 +96,14 @@ export function DialogProvider({ children }) {
 
             <div className="dialog-actions" style={{ marginTop: 18 }}>
               {dialog.type !== 'alert' && (
-                <button className="btn btn-secondary" onClick={() => closeWith(dialog.type === 'confirm' ? false : null)}>
+                <Button tone="neutral" variant="outline" startIcon={X} onClick={() => closeWith(dialog.type === 'confirm' ? false : null)}>
                   {dialog.cancelText || 'Cancelar'}
-                </button>
+                </Button>
               )}
-              <button
-                className="btn btn-primary"
+              <Button
+                tone={dialog.confirmTone || (/excluir|remover|apagar|reprovar|cancelar conta/i.test(`${dialog.title} ${dialog.confirmText}`) ? 'danger' : 'primary')}
+                variant="solid"
+                startIcon={/excluir|remover|apagar/i.test(`${dialog.title} ${dialog.confirmText}`) ? Trash2 : Check}
                 onClick={() => {
                   if (dialog.type === 'confirm') return closeWith(true);
                   if (dialog.type === 'prompt') return closeWith(inputValue);
@@ -106,7 +111,7 @@ export function DialogProvider({ children }) {
                 }}
               >
                 {dialog.confirmText || 'OK'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

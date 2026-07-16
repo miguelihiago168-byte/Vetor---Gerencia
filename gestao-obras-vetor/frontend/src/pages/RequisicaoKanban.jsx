@@ -10,6 +10,7 @@ import {
   useDraggable,
 } from '@dnd-kit/core';
 import ComprasLayout from '../components/ComprasLayout';
+import Button from '../components/ui/Button';
 import { useAuth } from '../context/AuthContext';
 import {
   kanbanRequisicoesV2,
@@ -189,23 +190,27 @@ function DraggableCard({ req, colId, projetoId, onAprovar, canDrag }) {
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
       >
-        <button
+        <Button
+          size="sm"
+          tone="primary"
+          variant="ghost"
+          startIcon={Eye}
           onClick={() => navigate(projetoId ? `/projeto/${projetoId}/compras/${req.id}` : `/compras/${req.id}`)}
-          style={btnStyle('#0ea5e9')}
         >
-          <Eye size={11} /> Ver
-        </button>
+          Ver
+        </Button>
         {colId === 'ag_aprovacao' && (
-          <button onClick={() => onAprovar(req.id)} style={btnStyle('#10b981')}>
-            <ThumbsUp size={11} /> Aprovar
-          </button>
+          <Button size="sm" tone="success" variant="soft" startIcon={ThumbsUp} onClick={() => onAprovar(req.id)}>Aprovar</Button>
         )}
-        <button
+        <Button
+          size="sm"
+          tone="primary"
+          variant="soft"
+          startIcon={Tag}
           onClick={() => navigate(projetoId ? `/projeto/${projetoId}/compras/${req.id}` : `/compras/${req.id}`)}
-          style={btnStyle('#6366f1')}
         >
-          <Tag size={11} /> Cotacoes
-        </button>
+          Cotações
+        </Button>
       </div>
     </div>
   );
@@ -239,25 +244,18 @@ function CompactRow({ req, colId, projetoId, onAprovar, canDrag }) {
       <span style={{ color: '#94a3b8', flexShrink: 0 }}>{req.total_itens}i</span>
       <span style={{ fontSize: '0.66rem', fontWeight: 700, borderRadius: 99, padding: '1px 6px', color: urg.color, background: urg.bg, border: `1px solid ${urg.border}`, flexShrink: 0 }}>{urgSig}</span>
       {colId === 'ag_aprovacao' && (
-        <button
+        <Button
+          size="sm"
+          tone="success"
+          variant="ghost"
+          startIcon={ThumbsUp}
           onClick={(e) => { e.stopPropagation(); onAprovar(req.id); }}
-          style={{ flexShrink: 0, background: '#f3fbf7', border: '1px solid #cdebdc', borderRadius: 5, padding: '2px 6px', fontSize: '0.65rem', color: '#0e8f5a', cursor: 'pointer', fontWeight: 700 }}
-        >Aprov</button>
+          style={{ flexShrink: 0 }}
+        >Aprovar</Button>
       )}
     </div>
   );
 }
-
-const btnStyle = (color) => ({
-  display: 'flex', alignItems: 'center', gap: 3,
-  fontSize: '0.71rem', fontWeight: 600,
-  padding: '3px 8px', borderRadius: 6,
-  border: '1px solid #dbe2eb',
-  background: '#f8fafc',
-  color: '#42526b',
-  cursor: 'pointer',
-  flex: 1, justifyContent: 'center',
-});
 
 function GhostCard({ req }) {
   return (
@@ -294,16 +292,18 @@ function ConfirmModal({ req, colFrom, colTo, onConfirm, onCancel, loading }) {
           Essa acao atualizara o status dos itens no banco de dados.
         </p>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button onClick={onCancel} style={{ padding: '0.5rem 1.2rem', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontSize: '0.88rem' }}>
+          <Button startIcon={X} onClick={onCancel}>
             Cancelar
-          </button>
-          <button
+          </Button>
+          <Button
+            tone="primary"
+            variant="solid"
+            startIcon={ThumbsUp}
             onClick={onConfirm}
-            disabled={loading}
-            style={{ padding: '0.5rem 1.2rem', borderRadius: 8, border: 'none', background: '#2450e3', color: '#fff', cursor: loading ? 'wait' : 'pointer', fontSize: '0.88rem', fontWeight: 600, opacity: loading ? 0.7 : 1 }}
+            loading={loading}
           >
-            {loading ? 'Aguarde...' : 'Confirmar'}
-          </button>
+            Confirmar
+          </Button>
         </div>
       </div>
     </div>
@@ -493,21 +493,17 @@ export default function RequisicaoKanban() {
       {/* Filtros */}
       <div className="card" style={{ padding: '0.75rem 1rem', marginBottom: '1.25rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <button onClick={() => setFiltrosAbertos((v) => !v)} style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, color: '#475569', padding: 0 }}>
-            <Filter size={14} />
+          <Button size="sm" variant="ghost" startIcon={Filter} endIcon={ChevronDown} onClick={() => setFiltrosAbertos((v) => !v)}>
             Filtros
             {temFiltros && (
               <span style={{ background: '#edf1fe', color: '#2450e3', border: '1px solid #c8d2df', fontSize: '0.68rem', borderRadius: 99, padding: '1px 7px', fontWeight: 700 }}>
                 {Object.values(filtros).filter(Boolean).length}
               </span>
             )}
-            <ChevronDown size={14} style={{ transform: filtrosAbertos ? 'rotate(180deg)' : 'none', transition: '0.2s' }} />
-          </button>
+          </Button>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {temFiltros && (
-              <button onClick={() => setFiltros({ tipo_material: '', urgencia: '', fornecedor: '', responsavel: '', data_inicio: '', data_fim: '', valor_max: '' })} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', color: '#5b6472', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
-                <X size={13} /> Limpar
-              </button>
+              <Button size="sm" variant="ghost" startIcon={X} onClick={() => setFiltros({ tipo_material: '', urgencia: '', fornecedor: '', responsavel: '', data_inicio: '', data_fim: '', valor_max: '' })}>Limpar</Button>
             )}
             <div style={{ display: 'flex', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
               <button onClick={() => setViewMode('normal')} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 10px', border: 'none', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', background: viewMode === 'normal' ? '#edf1fe' : '#fff', color: viewMode === 'normal' ? '#2450e3' : '#64748b', transition: '0.15s' }}>
@@ -572,12 +568,15 @@ export default function RequisicaoKanban() {
         <DndContext sensors={sensors} onDragStart={onDragStart} onDragOver={onDragOver} onDragEnd={onDragEnd}>
           {/* Toggle para exibir requisições finalizadas/compradas */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.6rem' }}>
-            <button
+            <Button
+              size="sm"
+              tone={mostrarFinalizadas ? 'success' : 'neutral'}
+              variant="soft"
+              startIcon={Package}
               onClick={() => setMostrarFinalizadas(v => !v)}
-              style={{ display: 'flex', alignItems: 'center', gap: 5, background: mostrarFinalizadas ? '#f3fbf7' : '#f8fafc', border: `1px solid ${mostrarFinalizadas ? '#cdebdc' : '#e2e8f0'}`, borderRadius: 8, padding: '4px 12px', fontSize: '0.78rem', fontWeight: 600, color: mostrarFinalizadas ? '#0e8f5a' : '#64748b', cursor: 'pointer' }}
             >
-              <Package size={13} /> {mostrarFinalizadas ? 'Ocultar finalizadas' : 'Ver finalizadas'}
-            </button>
+              {mostrarFinalizadas ? 'Ocultar finalizadas' : 'Ver finalizadas'}
+            </Button>
           </div>
           <div style={{ display: 'flex', gap: '0.9rem', overflowX: 'auto', paddingBottom: '2rem', alignItems: 'flex-start', minHeight: 400 }}>
             {colunas.filter(col => mostrarFinalizadas || col.id !== 'comprado').map((col) => {

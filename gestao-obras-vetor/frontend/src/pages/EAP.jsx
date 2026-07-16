@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import Button, { IconButton } from '../components/ui/Button';
 import { 
   getAtividadesEAP, 
   previewRecalculoEapProjeto,
@@ -369,35 +370,28 @@ function EAP({ hideNavbar = false }) {
             </div>
             
             <div className="eap-activity-actions">
-              <button
-                type="button"
-                className="eap-icon-action"
+              <IconButton
+                variant="ghost"
+                icon={Eye}
+                label="Editar atividade"
                 onClick={() => navigate(`/projeto/${projetoId}/eap/${atividade.id}`)}
-                title="Editar"
-                aria-label="Editar atividade"
-              >
-                <Eye size={16} />
-              </button>
+              />
               {podeAdicionarFilha && (
-                <button
-                  type="button"
-                  className="eap-icon-action"
+                <IconButton
+                  tone="primary"
+                  variant="ghost"
+                  icon={Plus}
+                  label="Adicionar atividade filha"
                   onClick={() => navigate(`/projeto/${projetoId}/eap/novo?pai=${atividade.id}`)}
-                  title="Adicionar filha"
-                  aria-label="Adicionar atividade filha"
-                >
-                  <Plus size={16} />
-                </button>
+                />
               )}
-              <button
-                type="button"
-                className="eap-icon-action eap-icon-action-danger"
+              <IconButton
+                tone="danger"
+                variant="ghost"
+                icon={Trash2}
+                label="Excluir atividade"
                 onClick={() => handleExcluirAtividade(atividade)}
-                title="Excluir atividade"
-                aria-label="Excluir atividade"
-              >
-                <Trash2 size={16} />
-              </button>
+              />
             </div>
           </div>
           
@@ -461,9 +455,7 @@ function EAP({ hideNavbar = false }) {
               <h2 style={{ margin: 0 }}>Importar EAP por Excel</h2>
               <p style={{ margin: '4px 0 0', color: 'var(--gray-600)' }}>Valide a planilha antes de salvar a estrutura no projeto.</p>
             </div>
-            <button className="btn btn-secondary" onClick={handleCloseImportModal} title="Fechar">
-              <X size={16} />
-            </button>
+            <IconButton variant="ghost" icon={X} label="Fechar importação" onClick={handleCloseImportModal} />
           </div>
 
           <div style={{ padding: '22px', overflow: 'auto', maxHeight: 'calc(90vh - 88px)' }}>
@@ -489,25 +481,23 @@ function EAP({ hideNavbar = false }) {
                     <span>{importFile ? `${importFileSize} - formatos .xlsx ou .xls` : 'Use a planilha modelo ou um arquivo Excel compatível.'}</span>
                   </div>
                   {importFile && (
-                    <button
-                      type="button"
-                      className="eap-import-file-clear"
+                    <IconButton
+                      tone="danger"
+                      variant="ghost"
+                      size="sm"
+                      icon={X}
+                      label="Remover arquivo selecionado"
                       onClick={() => {
                         setImportFile(null);
                         setImportPreview(null);
                       }}
-                      title="Remover arquivo"
-                      aria-label="Remover arquivo selecionado"
-                    >
-                      <X size={15} />
-                    </button>
+                    />
                   )}
                 </div>
               </div>
-              <button className="eap-import-modal-btn eap-import-modal-btn-primary" onClick={handlePreviewImportacao} disabled={importLoading || !importFile}>
-                <Upload size={16} />
-                {importLoading ? 'Validando...' : 'Validar Planilha'}
-              </button>
+              <Button tone="primary" variant="outline" startIcon={Upload} onClick={handlePreviewImportacao} loading={importLoading} disabled={!importFile}>
+                Validar Planilha
+              </Button>
             </div>
 
             {importPreview && (
@@ -582,10 +572,10 @@ function EAP({ hideNavbar = false }) {
             )}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '22px' }}>
-              <button className="eap-import-modal-btn eap-import-modal-btn-secondary" onClick={handleCloseImportModal}>Cancelar</button>
-              <button className="eap-import-modal-btn eap-import-modal-btn-primary" onClick={handleConfirmarImportacao} disabled={importLoading || !importPreview?.valido}>
+              <Button startIcon={X} onClick={handleCloseImportModal}>Cancelar</Button>
+              <Button tone="primary" variant="solid" startIcon={CheckCircle2} onClick={handleConfirmarImportacao} loading={importLoading} disabled={!importPreview?.valido}>
                 Confirmar Importação
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -607,18 +597,17 @@ function EAP({ hideNavbar = false }) {
               <h2>Recalcular EAP</h2>
               <p>Confira quais atividades terão redução de avanço antes de confirmar.</p>
             </div>
-            <button
-              className="btn btn-secondary"
+            <IconButton
+              variant="ghost"
+              icon={X}
+              label="Fechar recálculo da EAP"
               onClick={() => {
                 if (recalculoLoading) return;
                 setRecalculoModalOpen(false);
                 setRecalculoPreview(null);
               }}
-              title="Fechar"
               disabled={recalculoLoading}
-            >
-              <X size={16} />
-            </button>
+            />
           </div>
 
           <div className="eap-recalc-modal-body">
@@ -680,8 +669,8 @@ function EAP({ hideNavbar = false }) {
           </div>
 
           <div className="eap-recalc-modal-footer">
-            <button
-              className="btn btn-secondary"
+            <Button
+              startIcon={X}
               onClick={() => {
                 if (recalculoLoading) return;
                 setRecalculoModalOpen(false);
@@ -690,10 +679,10 @@ function EAP({ hideNavbar = false }) {
               disabled={recalculoLoading}
             >
               Cancelar
-            </button>
-            <button className="btn btn-primary" onClick={handleConfirmarRecalculoEap} disabled={recalculoLoading || !recalculoPreview || totalAfetadas === 0}>
-              {recalculoLoading ? 'Recalculando...' : (totalAfetadas > 0 ? 'Confirmar regressões' : 'Sem regressões')}
-            </button>
+            </Button>
+            <Button tone="warning" variant="soft" startIcon={Activity} onClick={handleConfirmarRecalculoEap} loading={recalculoLoading} disabled={!recalculoPreview || totalAfetadas === 0}>
+              {totalAfetadas > 0 ? 'Confirmar regressões' : 'Sem regressões'}
+            </Button>
           </div>
         </div>
       </div>
@@ -721,28 +710,22 @@ function EAP({ hideNavbar = false }) {
         <div className="eap-list-header">
           <div className="eap-list-title-wrap">
             {!hideNavbar && (
-              <button className="eap-toolbar-btn eap-toolbar-btn-back" onClick={() => navigate(`/projeto/${projetoId}/planejamento`)}>
-                <ArrowLeft size={16} />
-                <span>Planejamento</span>
-              </button>
+              <Button startIcon={ArrowLeft} onClick={() => navigate(`/projeto/${projetoId}/planejamento`)}>Planejamento</Button>
             )}
             <h1 className="eap-list-title">EAP do Projeto</h1>
           </div>
           <div className="eap-toolbar" aria-label="Acoes da EAP">
-            <button className="eap-toolbar-btn eap-toolbar-btn-primary" onClick={() => navigate(`/projeto/${projetoId}/eap/novo`)}>
-              <Plus size={16} />
-              <span>Nova Atividade</span>
-            </button>
+            <Button tone="primary" variant="solid" startIcon={Plus} onClick={() => navigate(`/projeto/${projetoId}/eap/novo`)}>Nova Atividade</Button>
             <div className="eap-actions-menu">
-              <button
-                className="eap-toolbar-btn eap-toolbar-btn-menu"
+              <Button
+                variant="ghost"
+                startIcon={MoreHorizontal}
                 onClick={() => setEapActionsOpen((open) => !open)}
                 aria-expanded={eapActionsOpen}
                 aria-haspopup="menu"
               >
-                <MoreHorizontal size={16} />
-                <span>Mais ações</span>
-              </button>
+                Mais ações
+              </Button>
               {eapActionsOpen && (
                 <div className="eap-actions-dropdown" role="menu">
                   <button

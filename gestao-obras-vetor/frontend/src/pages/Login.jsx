@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { login as loginAPI, registerTrialAccount, esqueciSenha, cancelarConta, renovarTrial } from '../services/api';
-import { ArrowRight, Eye, EyeOff, CalendarX } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Eye, EyeOff, CalendarX, RotateCw, Trash2, X } from 'lucide-react';
+import { Button, IconButton } from '../components/ui/Button';
 import './Login.css';
 
 const getPasswordStrength = (value) => {
@@ -322,16 +323,23 @@ function Login() {
                   placeholder="Insira sua senha"
                   required
                 />
-                <button type="button" className="password-toggle" onClick={() => setShowLoginSenha((v) => !v)}>
+                <IconButton
+                  className="password-toggle"
+                  tone="neutral"
+                  variant="ghost"
+                  size="sm"
+                  aria-label={showLoginSenha ? 'Ocultar senha' : 'Mostrar senha'}
+                  onClick={() => setShowLoginSenha((v) => !v)}
+                >
                   {showLoginSenha ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
+                </IconButton>
               </div>
             </div>
 
-            <button type="submit" className="login-btn" disabled={loading}>
+            <Button type="submit" className="login-btn" fullWidth size="lg" loading={loading}>
               {loading ? 'Entrando...' : 'Entrar'}
               <ArrowRight size={18} />
-            </button>
+            </Button>
 
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, cursor: 'pointer', fontSize: '0.85rem', color: 'var(--text-secondary, #6b7280)' }}>
               <input
@@ -375,10 +383,10 @@ function Login() {
               />
             </div>
 
-            <button type="submit" className="login-btn" disabled={loading}>
+            <Button type="submit" className="login-btn" fullWidth size="lg" loading={loading}>
               {loading ? 'Enviando...' : 'Enviar instruções'}
               <ArrowRight size={18} />
-            </button>
+            </Button>
 
             <div style={{ textAlign: 'center', marginTop: 16 }}>
               <button
@@ -468,9 +476,16 @@ function Login() {
                   placeholder="Digite sua senha"
                   required
                 />
-                <button type="button" className="password-toggle" onClick={() => setShowCadastroSenha((v) => !v)}>
+                <IconButton
+                  className="password-toggle"
+                  tone="neutral"
+                  variant="ghost"
+                  size="sm"
+                  aria-label={showCadastroSenha ? 'Ocultar senha' : 'Mostrar senha'}
+                  onClick={() => setShowCadastroSenha((v) => !v)}
+                >
                   {showCadastroSenha ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
+                </IconButton>
               </div>
               {(() => {
                 const strength = getPasswordStrength(cadastroForm.senha);
@@ -503,10 +518,10 @@ function Login() {
               />
             </div>
 
-            <button type="submit" className="login-btn" disabled={loading}>
+            <Button type="submit" className="login-btn" fullWidth size="lg" loading={loading}>
               {loading ? 'Criando conta...' : 'Criar conta'}
               <ArrowRight size={18} />
-            </button>
+            </Button>
           </form>
         )}
       </div>
@@ -557,56 +572,55 @@ function Login() {
                     fontFamily: 'inherit'
                   }}
                 />
-                <button
+                <Button
                   type="submit"
                   disabled={tentandoRenovar || !codigoRenovacao.trim()}
-                  style={{
-                    width: '100%', height: 44, borderRadius: 12, border: 'none',
-                    background: tentandoRenovar || !codigoRenovacao.trim() ? '#cbd5e1' : '#10b981',
-                    color: tentandoRenovar || !codigoRenovacao.trim() ? '#64748b' : '#fff',
-                    fontWeight: 600, fontSize: 14, cursor: tentandoRenovar || !codigoRenovacao.trim() ? 'not-allowed' : 'pointer',
-                    marginBottom: 12
-                  }}
+                  tone="success"
+                  fullWidth
+                  loading={tentandoRenovar}
+                  startIcon={<RotateCw size={16} />}
+                  style={{ marginBottom: 12 }}
                 >
                   {tentandoRenovar ? 'Renovando...' : 'Renovar trial'}
-                </button>
+                </Button>
               </form>
 
-              <button
+              <Button
                 disabled
-                style={{
-                  width: '100%', height: 48, borderRadius: 12, border: 'none',
-                  background: '#e2e8f0', color: '#94a3b8', fontWeight: 700, fontSize: 15,
-                  cursor: 'not-allowed', marginBottom: 12, display: 'flex',
-                  alignItems: 'center', justifyContent: 'center', gap: 8
-                }}
+                tone="neutral"
+                variant="soft"
+                fullWidth
+                style={{ marginBottom: 12 }}
               >
                 Assinar serviço
                 <span style={{
                   background: '#0ea5e9', color: '#fff', fontSize: 10, fontWeight: 700,
                   borderRadius: 99, padding: '2px 8px', letterSpacing: '0.05em'
                 }}>EM BREVE</span>
-              </button>
+              </Button>
 
-              <button
+              <Button
+                type="button"
                 onClick={() => setConfirmarExclusao(true)}
-                style={{
-                  width: '100%', height: 44, borderRadius: 12, border: '1.5px solid #fecaca',
-                  background: '#fff', color: '#dc2626', fontWeight: 600, fontSize: 14,
-                  cursor: 'pointer', marginBottom: 16
-                }}
+                tone="danger"
+                variant="outline"
+                fullWidth
+                startIcon={<Trash2 size={16} />}
+                style={{ marginBottom: 16 }}
               >
                 Encerrar minha conta
-              </button>
+              </Button>
 
-              <button
+              <Button
                 type="button"
-                className="login-link-btn"
+                tone="neutral"
+                variant="ghost"
+                size="sm"
+                startIcon={<X size={15} />}
                 onClick={() => { setTrialExpirado(null); setCodigoRenovacao(''); setErro(''); }}
-                style={{ fontSize: 13, color: '#94a3b8' }}
               >
                 Fechar
-              </button>
+              </Button>
             </>
           ) : (
             <>
@@ -622,27 +636,28 @@ function Login() {
                 </p>
               </div>
 
-              <button
+              <Button
+                type="button"
                 onClick={handleCancelarConta}
-                disabled={cancelandoConta}
-                style={{
-                  width: '100%', height: 48, borderRadius: 12, border: 'none',
-                  background: cancelandoConta ? '#e2e8f0' : '#dc2626',
-                  color: cancelandoConta ? '#94a3b8' : '#fff',
-                  fontWeight: 700, fontSize: 15, cursor: cancelandoConta ? 'not-allowed' : 'pointer',
-                  marginBottom: 12
-                }}
+                tone="danger"
+                fullWidth
+                loading={cancelandoConta}
+                startIcon={<Trash2 size={16} />}
+                style={{ marginBottom: 12 }}
               >
                 {cancelandoConta ? 'Excluindo...' : 'Confirmar exclusão definitiva'}
-              </button>
+              </Button>
 
-              <button
+              <Button
                 type="button"
-                className="login-link-btn"
+                tone="neutral"
+                variant="ghost"
+                size="sm"
+                startIcon={<ArrowLeft size={15} />}
                 onClick={() => { setConfirmarExclusao(false); setErro(''); }}
               >
                 ← Voltar
-              </button>
+              </Button>
             </>
           )}
         </div>

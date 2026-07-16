@@ -2,6 +2,7 @@
 import { useParams, useLocation, Link } from 'react-router-dom';
 import ComprasLayout from '../components/ComprasLayout';
 import { getCockpitReturnContext } from '../components/CockpitReturnButton';
+import Button from '../components/ui/Button';
 import { useAuth } from '../context/AuthContext';
 import { fmtTs, fmtData } from '../utils/date';
 import {
@@ -11,6 +12,7 @@ import {
   finalizarCotacaoItem, alterarQuantidadeItem, editarRequisicaoHeader, editarItemRequisicao,
   aprovarTodosItens,
 } from '../services/api';
+import { ArrowLeft, CheckCircle2, Pencil, Plus, RotateCcw, Save, ShoppingCart, X } from 'lucide-react';
 
 const URGENCIA_BADGE  = { Normal: 'badge badge-gray', Urgente: 'badge badge-yellow', Emergencial: 'badge badge-red' };
 const STATUS_ITEM_BADGE = {
@@ -348,14 +350,10 @@ export default function RequisicaoDetalhe() {
             <span className={URGENCIA_BADGE[req.urgencia] || 'badge badge-gray'} style={{ color: URGENCIA_COLOR[req.urgencia] || undefined }}>{req.urgencia}</span>
             <span className={STATUS_REQ_BADGE[req.status_requisicao] || 'badge badge-gray'}>{req.status_requisicao}</span>
             {podeGestor && temAgAnalise && (
-              <button className="btn btn-soft-green" style={{ padding: '5px 14px', fontSize: '0.83rem' }} onClick={aprovarTodos}>
-                ✓ Aprovar Todos
-              </button>
+              <Button size="sm" tone="success" variant="soft" startIcon={CheckCircle2} onClick={aprovarTodos}>Aprovar Todos</Button>
             )}
             {podeGestor && !['Finalizada', 'Encerrada sem compra'].includes(req.status_requisicao) && (
-              <button className="btn btn-soft-yellow" style={{ padding: '5px 14px', fontSize: '0.83rem' }} onClick={abrirEditarReq}>
-                ✎ Editar Requisição
-              </button>
+              <Button size="sm" tone="warning" variant="soft" startIcon={Pencil} onClick={abrirEditarReq}>Editar Requisição</Button>
             )}
           </div>
         </div>
@@ -521,14 +519,12 @@ export default function RequisicaoDetalhe() {
           <div className="modal-card" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
             <h2 className="card-header" style={{ marginBottom: '1.25rem' }}>Analisar Item</h2>
             <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
-              <button type="button" onClick={() => setFormAnalise({ ...formAnalise, aprovado: true })}
-                className="btn btn-soft-green"
+              <Button tone="success" variant="soft" startIcon={CheckCircle2} onClick={() => setFormAnalise({ ...formAnalise, aprovado: true })}
                 style={{ flex: 1, padding: '0.9rem', fontWeight: formAnalise.aprovado === true ? 700 : 500, opacity: formAnalise.aprovado === false ? 0.55 : 1 }}>
-                ✓ Aprovar para Cotação</button>
-              <button type="button" onClick={() => setFormAnalise({ ...formAnalise, aprovado: false })}
-                className="btn btn-soft-red"
+                Aprovar para Cotação</Button>
+              <Button tone="danger" variant="soft" startIcon={X} onClick={() => setFormAnalise({ ...formAnalise, aprovado: false })}
                 style={{ flex: 1, padding: '0.9rem', fontWeight: formAnalise.aprovado === false ? 700 : 500, opacity: formAnalise.aprovado === true ? 0.55 : 1 }}>
-                ✕ Reprovar Item</button>
+                Reprovar Item</Button>
             </div>
             {formAnalise.aprovado === false && (
               <div style={{ marginBottom: '1rem' }}>
@@ -538,8 +534,8 @@ export default function RequisicaoDetalhe() {
             )}
             {erro && <p className="alert alert-error" style={{ marginBottom: '1rem' }}>{erro}</p>}
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-              <button className="btn btn-outline" onClick={() => setModalAnalise(null)}>Cancelar</button>
-              <button className="btn btn-primary" onClick={analisar} disabled={salvando}>{salvando ? 'Salvando...' : 'Confirmar'}</button>
+              <Button startIcon={X} onClick={() => setModalAnalise(null)}>Cancelar</Button>
+              <Button tone={formAnalise.aprovado === false ? 'danger' : 'success'} variant="solid" startIcon={CheckCircle2} onClick={analisar} loading={salvando}>Confirmar</Button>
             </div>
           </div>
         </div>
@@ -566,8 +562,8 @@ export default function RequisicaoDetalhe() {
             </div>
             {erro && <p className="alert alert-error" style={{ marginBottom: '1rem' }}>{erro}</p>}
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary" onClick={() => setModalCorrecao(null)}>Voltar</button>
-              <button className="btn btn-primary" onClick={solicitarCorrecao} disabled={salvando}>{salvando ? 'Enviando...' : 'Solicitar Alteração'}</button>
+              <Button startIcon={ArrowLeft} onClick={() => setModalCorrecao(null)}>Voltar</Button>
+              <Button tone="warning" variant="soft" startIcon={RotateCcw} onClick={solicitarCorrecao} loading={salvando}>Solicitar Alteração</Button>
             </div>
           </div>
         </div>
@@ -635,8 +631,8 @@ export default function RequisicaoDetalhe() {
               </div>
               {erro && <p className="alert alert-error" style={{ marginTop: '1rem' }}>{erro}</p>}
               <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1.25rem' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setModalCotacao(null)}>Cancelar</button>
-                <button type="submit" className="btn btn-primary" disabled={salvando}>{salvando ? 'Salvando...' : 'Finalizar Cotação'}</button>
+                <Button startIcon={X} onClick={() => setModalCotacao(null)}>Cancelar</Button>
+                <Button type="submit" tone="primary" variant="solid" startIcon={CheckCircle2} loading={salvando}>Finalizar Cotação</Button>
               </div>
             </form>
           </div>
@@ -676,8 +672,8 @@ export default function RequisicaoDetalhe() {
             </div>
             {erro && <p className="alert alert-error" style={{ marginBottom: '1rem' }}>{erro}</p>}
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary" onClick={() => setModalEditarReq(false)}>Voltar</button>
-              <button className="btn btn-primary" onClick={salvarEdicaoReq} disabled={salvando}>{salvando ? 'Salvando...' : 'Confirmar Edição'}</button>
+              <Button startIcon={ArrowLeft} onClick={() => setModalEditarReq(false)}>Voltar</Button>
+              <Button tone="primary" variant="solid" startIcon={Save} onClick={salvarEdicaoReq} loading={salvando}>Confirmar Edição</Button>
             </div>
           </div>
         </div>
@@ -720,8 +716,8 @@ export default function RequisicaoDetalhe() {
             </div>
             {erro && <p className="alert alert-error" style={{ marginBottom: '1rem' }}>{erro}</p>}
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary" onClick={() => setModalEditarItem(null)}>Voltar</button>
-              <button className="btn btn-primary" onClick={salvarEdicaoItem} disabled={salvando}>{salvando ? 'Salvando...' : 'Confirmar Edição'}</button>
+              <Button startIcon={ArrowLeft} onClick={() => setModalEditarItem(null)}>Voltar</Button>
+              <Button tone="primary" variant="solid" startIcon={Save} onClick={salvarEdicaoItem} loading={salvando}>Confirmar Edição</Button>
             </div>
           </div>
         </div>
@@ -749,8 +745,8 @@ export default function RequisicaoDetalhe() {
             </div>
             {erro && <p className="alert alert-error" style={{ marginBottom: '1rem' }}>{erro}</p>}
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary" onClick={() => setModalAlterar(null)}>Voltar</button>
-              <button className="btn btn-primary" onClick={salvarAlteracao} disabled={salvando}>{salvando ? 'Salvando...' : 'Confirmar Alteração'}</button>
+              <Button startIcon={ArrowLeft} onClick={() => setModalAlterar(null)}>Voltar</Button>
+              <Button tone="primary" variant="solid" startIcon={Save} onClick={salvarAlteracao} loading={salvando}>Confirmar Alteração</Button>
             </div>
           </div>
         </div>
@@ -764,8 +760,8 @@ export default function RequisicaoDetalhe() {
             <div style={{ marginBottom: '1rem' }}><label className="form-label">Motivo (opcional)</label><textarea className="form-input" rows={3} style={{ resize: 'vertical' }} value={motivoCancelar} onChange={(e) => setMotivoCancelar(e.target.value)} /></div>
             {erro && <p className="alert alert-error" style={{ marginBottom: '1rem' }}>{erro}</p>}
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary" onClick={() => setModalCancelar(null)}>Voltar</button>
-              <button className="btn btn-danger" onClick={cancelarItem} disabled={salvando}>{salvando ? 'Cancelando...' : 'Confirmar Cancelamento'}</button>
+              <Button startIcon={ArrowLeft} onClick={() => setModalCancelar(null)}>Voltar</Button>
+              <Button tone="danger" variant="solid" startIcon={X} onClick={cancelarItem} loading={salvando}>Confirmar Cancelamento</Button>
             </div>
           </div>
         </div>
@@ -787,8 +783,8 @@ export default function RequisicaoDetalhe() {
             </div>
             {erro && <p className="alert alert-error" style={{ marginBottom: '1rem' }}>{erro}</p>}
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary" onClick={() => setModalDevolver(null)}>Voltar</button>
-              <button className="btn btn-danger" onClick={devolverCotacao} disabled={salvando}>{salvando ? 'Devolvendo...' : 'Confirmar Devolução'}</button>
+              <Button startIcon={ArrowLeft} onClick={() => setModalDevolver(null)}>Voltar</Button>
+              <Button tone="warning" variant="soft" startIcon={RotateCcw} onClick={devolverCotacao} loading={salvando}>Confirmar Devolução</Button>
             </div>
           </div>
         </div>
@@ -801,8 +797,8 @@ export default function RequisicaoDetalhe() {
             <h2 className="card-header" style={{ marginBottom: '1rem', fontSize: '1.05rem' }}>Confirmar ação</h2>
             <p style={{ color: 'var(--gray-600)', marginBottom: '1.5rem', fontSize: '0.95rem' }}>{modalConfirm.mensagem}</p>
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-              <button className="btn btn-secondary" onClick={() => setModalConfirm(null)}>Cancelar</button>
-              <button className="btn btn-primary" onClick={() => { modalConfirm.onConfirm(); setModalConfirm(null); }}>Confirmar</button>
+              <Button startIcon={X} onClick={() => setModalConfirm(null)}>Cancelar</Button>
+              <Button tone="primary" variant="solid" startIcon={CheckCircle2} onClick={() => { modalConfirm.onConfirm(); setModalConfirm(null); }}>Confirmar</Button>
             </div>
           </div>
         </div>
@@ -904,10 +900,10 @@ function ItemCard({ item, idx, perfil, podeGestor, podeCotar, podeComprar, isSol
                     {cot.prazo_entrega && <span> · Entrega: {cot.prazo_entrega}</span>}
                   </div>
                   {perfil === 'Gestor Geral' && item.status_item === 'Cotação finalizada' && !cot.selecionada && (
-                    <button className="btn btn-primary" style={{ marginTop: '0.5rem', padding: '5px 12px', fontSize: '0.8rem', width: '100%' }}
+                    <Button size="sm" fullWidth tone="primary" variant="solid" startIcon={CheckCircle2} style={{ marginTop: '0.5rem' }}
                       onClick={() => onSelecionar(reqId, item.id, cot.id)}>
                       Selecionar
-                    </button>
+                    </Button>
                   )}
                 </div>
               );
@@ -920,39 +916,33 @@ function ItemCard({ item, idx, perfil, podeGestor, podeCotar, podeComprar, isSol
       {/* Ações */}
       <div className="suprimentos-action-row" style={{ marginTop: '1rem' }}>
         {podeGestor && !reqFinalizada && item.status_item === 'Aguardando análise' && (
-          <button className="btn btn-soft-green" style={{ padding: '6px 14px', fontSize: '0.85rem' }} onClick={onAnalisar}>
+          <Button size="sm" tone="success" variant="soft" startIcon={CheckCircle2} onClick={onAnalisar}>
             Analisar Item
-          </button>
+          </Button>
         )}
         {podeGestor && !reqFinalizada && item.status_item === 'Aguardando análise' && (
-          <button className="btn btn-soft-yellow" style={{ padding: '6px 14px', fontSize: '0.85rem' }} onClick={onSolicitarCorrecao}>
+          <Button size="sm" tone="warning" variant="soft" startIcon={RotateCcw} onClick={onSolicitarCorrecao}>
             Solicitar Alteração
-          </button>
+          </Button>
         )}
         {podeCorrigir && !reqFinalizada && (
-          <button className="btn btn-soft-yellow" style={{ padding: '6px 14px', fontSize: '0.85rem' }} onClick={onEditar}>
+          <Button size="sm" tone="warning" variant="soft" startIcon={Pencil} onClick={onEditar}>
             Corrigir Item
-          </button>
+          </Button>
         )}
         {podeCotar && !reqFinalizada && ['Em cotação', 'Cotação finalizada'].includes(item.status_item) && (
-          <button className="btn btn-soft-blue" style={{ padding: '6px 14px', fontSize: '0.85rem' }} onClick={onCotacoes}>
-            {cotCompletas ? '✎ Editar Cotações' : `+ Cotações (${item.cotacoes?.length || 0}/3)`}
-          </button>
+          <Button size="sm" tone="primary" variant="soft" startIcon={cotCompletas ? Pencil : Plus} onClick={onCotacoes}>
+            {cotCompletas ? 'Editar Cotações' : `Cotações (${item.cotacoes?.length || 0}/3)`}
+          </Button>
         )}
         {podeComprar && !reqFinalizada && item.status_item === 'Aprovado para compra' && (
-          <button className="btn btn-soft-green" style={{ padding: '6px 14px', fontSize: '0.85rem' }} onClick={onAutorizar}>
-            ✓ Confirmar Compra
-          </button>
+          <Button size="sm" tone="success" variant="solid" startIcon={ShoppingCart} onClick={onAutorizar}>Confirmar Compra</Button>
         )}
         {podeGestor && !reqFinalizada && !['Comprado', 'Cancelado'].includes(item.status_item) && (
-          <button className="btn btn-soft-yellow" style={{ padding: '6px 14px', fontSize: '0.85rem' }} onClick={onEditar}>
-            ✎ Editar Item
-          </button>
+          <Button size="sm" tone="warning" variant="soft" startIcon={Pencil} onClick={onEditar}>Editar Item</Button>
         )}
         {podeGestor && !reqFinalizada && item.status_item === 'Cotação finalizada' && (
-          <button className="btn btn-soft-red" style={{ padding: '6px 14px', fontSize: '0.85rem' }} onClick={onDevolver}>
-            ↩ Devolver Cotação
-          </button>
+          <Button size="sm" tone="warning" variant="soft" startIcon={RotateCcw} onClick={onDevolver}>Devolver Cotação</Button>
         )}
       </div>
     </div>

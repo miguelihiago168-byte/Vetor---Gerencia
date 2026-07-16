@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import Button, { IconButton } from '../components/ui/Button';
 import { useAuth } from '../context/AuthContext';
 import { useLeaveGuard } from '../context/LeaveGuardContext';
 import { useDialog } from '../context/DialogContext';
@@ -14,7 +15,7 @@ import {
   getRdoEquipamentosCatalogo, getRdoEquipamentos, addRdoEquipamento, deleteRdoEquipamento,
   getAnexos, uploadAnexo, deleteAnexo, getUploadUrl
 } from '../services/api';
-import { ChevronDown, Plus, Trash2, Upload, FileText, Pencil } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Plus, Save, Send, Trash2, Upload, FileText, Pencil, X } from 'lucide-react';
 import './RDO.css';
 import Modal from '../components/Modal';
 import { getRdoLogs } from '../services/api';
@@ -1695,7 +1696,7 @@ function RDOForm2() {
                 onChange={(e) => setDraftClima({ ...draftClima, pluviometria_mm: e.target.value })} />
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <button className="btn btn-primary" onClick={addClimaRegistro}><Plus size={15} /> Registrar</button>
+              <Button tone="primary" variant="solid" startIcon={Plus} onClick={addClimaRegistro}>Registrar</Button>
             </div>
           </div>
           {formData.climaRegistros.length === 0 ? (
@@ -1716,9 +1717,7 @@ function RDOForm2() {
                     </td>
                     <td>{Number(c.pluviometria_mm || 0)} mm</td>
                     <td className="td-actions">
-                      <button className="btn btn-danger" style={{ padding: '4px 8px' }} onClick={() => removeClimaRegistro(c.periodo)}>
-                        <Trash2 size={14} />
-                      </button>
+                      <IconButton size="sm" tone="danger" variant="ghost" icon={Trash2} label={`Remover clima de ${c.periodo}`} onClick={() => removeClimaRegistro(c.periodo)} />
                     </td>
                   </tr>
                 ))}
@@ -1778,7 +1777,7 @@ function RDOForm2() {
                 onChange={(e) => setDraftColab({ ...draftColab, saida_final: e.target.value })} />
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <button className="btn btn-primary" onClick={addColab}><Plus size={15} /> Adicionar</button>
+              <Button tone="primary" variant="solid" startIcon={Plus} onClick={addColab}>Adicionar</Button>
             </div>
           </div>
           {formData.mao_obra_detalhada.length === 0 ? (
@@ -1799,9 +1798,7 @@ function RDOForm2() {
                     <td>{c.entrada}</td><td>{c.saida_almoco}</td><td>{c.retorno_almoco}</td><td>{c.saida_final}</td>
                     <td><strong>{calcHorasColab(c)}h</strong></td>
                     <td className="td-actions">
-                      <button className="btn btn-danger" style={{ padding: '4px 8px' }} onClick={() => removeColab(idx)}>
-                        <Trash2 size={14} />
-                      </button>
+                      <IconButton size="sm" tone="danger" variant="ghost" icon={Trash2} label={`Remover ${c.nome}`} onClick={() => removeColab(idx)} />
                     </td>
                   </tr>
                 ))}
@@ -1866,7 +1863,7 @@ function RDOForm2() {
                 onChange={(e) => setDraftEquip({ ...draftEquip, observacao: e.target.value })} />
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <button className="btn btn-primary" onClick={addEquip}><Plus size={15} /> Adicionar</button>
+              <Button tone="primary" variant="solid" startIcon={Plus} onClick={addEquip}>Adicionar</Button>
             </div>
           </div>
           {equipamentosLista.length === 0 ? (
@@ -1883,9 +1880,7 @@ function RDOForm2() {
                     <td>{eq.horas_utilizadas != null ? `${Number(eq.horas_utilizadas).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} h` : '—'}</td>
                     <td>{eq.observacao || '—'}</td>
                     <td className="td-actions">
-                      <button className="btn btn-danger" style={{ padding: '4px 8px' }} onClick={() => removeEquip(idx)}>
-                        <Trash2 size={14} />
-                      </button>
+                      <IconButton size="sm" tone="danger" variant="ghost" icon={Trash2} label={`Remover ${eq.nome}`} onClick={() => removeEquip(idx)} />
                     </td>
                   </tr>
                 ))}
@@ -2034,11 +2029,11 @@ function RDOForm2() {
             ) : <div />}
             <div style={{ display: 'flex', gap: '8px' }}>
               {editAtividade && (
-                <button className="btn btn-secondary" onClick={resetDraftAtividade}>Cancelar edição</button>
+                <Button startIcon={X} onClick={resetDraftAtividade}>Cancelar edição</Button>
               )}
-              <button className="btn btn-primary" onClick={handleAddAtividade}>
-                <Plus size={15} /> {editAtividade ? 'Salvar edição' : 'Adicionar atividade'}
-              </button>
+              <Button tone="primary" variant="solid" startIcon={editAtividade ? Save : Plus} onClick={handleAddAtividade}>
+                {editAtividade ? 'Salvar edição' : 'Adicionar atividade'}
+              </Button>
             </div>
           </div>
           {(formData.atividades.length + formData.atividades_avulsas.length) === 0 ? (
@@ -2084,12 +2079,8 @@ function RDOForm2() {
                         <td><span className="rdo-activity-value">{formatPerc(percAcum)}</span></td>
                         <td><span className={`rdo-badge ${statusCls}`}>{statusLabel}</span></td>
                         <td className="td-actions">
-                          <button className="btn btn-secondary" style={{ padding: '4px 8px', marginRight: '6px' }} onClick={(e) => { e.stopPropagation(); startEditAtividadeEap(a); }}>
-                            <Pencil size={14} />
-                          </button>
-                          <button className="btn btn-danger" style={{ padding: '4px 8px' }} onClick={(e) => { e.stopPropagation(); removerAtividade(a.atividade_eap_id); }}>
-                            <Trash2 size={14} />
-                          </button>
+                          <IconButton size="sm" variant="ghost" icon={Pencil} label={`Editar ${a.nome || a.descricao}`} style={{ marginRight: '6px' }} onClick={(e) => { e.stopPropagation(); startEditAtividadeEap(a); }} />
+                          <IconButton size="sm" tone="danger" variant="ghost" icon={Trash2} label={`Remover ${a.nome || a.descricao}`} onClick={(e) => { e.stopPropagation(); removerAtividade(a.atividade_eap_id); }} />
                         </td>
                       </tr>
                     </React.Fragment>
@@ -2122,12 +2113,8 @@ function RDOForm2() {
                         <td><span className="rdo-activity-value">{formatPerc(perc)}</span></td>
                         <td><span className={`rdo-badge ${statusCls}`}>{statusLabel}</span></td>
                         <td className="td-actions">
-                          <button className="btn btn-secondary" style={{ padding: '4px 8px', marginRight: '6px' }} onClick={(e) => { e.stopPropagation(); startEditAtividadeAvulsa(a, idx); }}>
-                            <Pencil size={14} />
-                          </button>
-                          <button className="btn btn-danger" style={{ padding: '4px 8px' }} onClick={(e) => { e.stopPropagation(); removerAtividadeAvulsa(idx); }}>
-                            <Trash2 size={14} />
-                          </button>
+                          <IconButton size="sm" variant="ghost" icon={Pencil} label={`Editar ${a.descricao}`} style={{ marginRight: '6px' }} onClick={(e) => { e.stopPropagation(); startEditAtividadeAvulsa(a, idx); }} />
+                          <IconButton size="sm" tone="danger" variant="ghost" icon={Trash2} label={`Remover ${a.descricao}`} onClick={(e) => { e.stopPropagation(); removerAtividadeAvulsa(idx); }} />
                         </td>
                       </tr>
                     </React.Fragment>
@@ -2171,9 +2158,9 @@ function RDOForm2() {
                 onChange={(e) => setFotoPendente(prev => ({ ...prev, descricao: e.target.value }))} />
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <button className="btn btn-primary" onClick={handleFotoUpload} disabled={!fotoPendente.files?.length || !fotoPendente.atividadeId || isUploadingFoto}>
-                <Upload size={15} /> {isUploadingFoto ? 'Enviando...' : 'Adicionar fotos'}
-              </button>
+              <Button tone="primary" variant="solid" startIcon={Upload} onClick={handleFotoUpload} loading={isUploadingFoto} disabled={!fotoPendente.files?.length || !fotoPendente.atividadeId}>
+                Adicionar fotos
+              </Button>
             </div>
           </div>
           {fotosQueue.length > 0 && (
@@ -2201,14 +2188,15 @@ function RDOForm2() {
                         onDrop={() => onDropFoto(idx)}
                         style={{ border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden', background: '#fff', cursor: 'move', position: 'relative' }}
                       >
-                        <button
-                          type="button"
+                        <IconButton
                           className="rdo-photo-delete-btn"
-                          title="Remover foto"
+                          tone="danger"
+                          variant="solid"
+                          size="sm"
+                          icon={Trash2}
+                          label={`Remover ${f.nome_arquivo || 'foto'}`}
                           onClick={(e) => { e.preventDefault(); e.stopPropagation(); removerFotoPersistida(f); }}
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        />
                         <a href={getUploadUrl(f.caminho_arquivo)} target="_blank" rel="noreferrer" style={{ display: 'block', textDecoration: 'none' }}>
                           <div className="rdo-photo-card-preview" style={{ position: 'relative', width: '100%', paddingTop: '70%', background: '#f8fafc' }}>
                             <img
@@ -2230,10 +2218,8 @@ function RDOForm2() {
                                 placeholder="Descrição da foto"
                               />
                               <div style={{ display: 'flex', gap: '6px' }}>
-                                <button className="btn btn-primary" style={{ padding: '4px 8px' }} disabled={isSavingFotoDescricao} onClick={() => salvarFotoDescricao(f.id)}>
-                                  {isSavingFotoDescricao ? 'Salvando...' : 'Salvar'}
-                                </button>
-                                <button className="btn btn-secondary" style={{ padding: '4px 8px' }} onClick={cancelarEditarFotoDescricao}>Cancelar</button>
+                                <Button size="sm" tone="primary" variant="solid" startIcon={Save} loading={isSavingFotoDescricao} onClick={() => salvarFotoDescricao(f.id)}>Salvar</Button>
+                                <Button size="sm" startIcon={X} onClick={cancelarEditarFotoDescricao}>Cancelar</Button>
                               </div>
                             </div>
                           ) : (
@@ -2264,14 +2250,15 @@ function RDOForm2() {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: '12px' }}>
                     {fotosQueue.map((f, i) => (
                       <div key={`q-${i}`} className="rdo-photo-card-edit" style={{ border: '1px solid #fde68a', borderRadius: '10px', overflow: 'hidden', background: '#fffbeb', position: 'relative' }}>
-                        <button
-                          type="button"
+                        <IconButton
                           className="rdo-photo-delete-btn"
-                          title="Remover foto"
+                          tone="danger"
+                          variant="solid"
+                          size="sm"
+                          icon={Trash2}
+                          label={`Remover ${f.file?.name || 'foto pendente'}`}
                           onClick={(e) => { e.preventDefault(); e.stopPropagation(); removerFotoFila(i); }}
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        />
                         <div className="rdo-photo-card-preview" style={{ position: 'relative', width: '100%', paddingTop: '70%', background: '#f8fafc' }}>
                           <img
                             src={f.previewUrl}
@@ -2318,7 +2305,7 @@ function RDOForm2() {
                 onChange={(e) => setDraftMaterial({ ...draftMaterial, numero_nf: e.target.value })} />
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <button className="btn btn-primary" onClick={addMaterial}><Plus size={15} /> Adicionar</button>
+              <Button tone="primary" variant="solid" startIcon={Plus} onClick={addMaterial}>Adicionar</Button>
             </div>
           </div>
           {formData.materiais_lista.length === 0 ? (
@@ -2334,9 +2321,7 @@ function RDOForm2() {
                     <td>{m.unidade || '—'}</td>
                     <td>{m.numero_nf || '—'}</td>
                     <td className="td-actions">
-                      <button className="btn btn-danger" style={{ padding: '4px 8px' }} onClick={() => removeMaterial(idx)}>
-                        <Trash2 size={14} />
-                      </button>
+                      <IconButton size="sm" tone="danger" variant="ghost" icon={Trash2} label={`Remover ${m.nome || m.descricao || 'material'}`} onClick={() => removeMaterial(idx)} />
                     </td>
                   </tr>
                 ))}
@@ -2366,7 +2351,7 @@ function RDOForm2() {
               </select>
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <button className="btn btn-primary" onClick={addOcorrencia}><Plus size={15} /> Adicionar</button>
+              <Button tone="primary" variant="solid" startIcon={Plus} onClick={addOcorrencia}>Adicionar</Button>
             </div>
           </div>
           {formData.ocorrencias_lista.length === 0 ? (
@@ -2382,9 +2367,7 @@ function RDOForm2() {
                     </div>
                     <div className="ocorr-desc">{o.descricao}</div>
                   </div>
-                  <button className="btn btn-danger" style={{ padding: '4px 8px', flexShrink: 0 }} onClick={() => removeOcorrencia(idx)}>
-                    <Trash2 size={14} />
-                  </button>
+                  <IconButton size="sm" tone="danger" variant="ghost" icon={Trash2} label={`Remover ocorrência ${o.titulo || idx + 1}`} style={{ flexShrink: 0 }} onClick={() => removeOcorrencia(idx)} />
                 </div>
               ))}
             </div>
@@ -2403,7 +2386,7 @@ function RDOForm2() {
                 onKeyDown={(e) => e.key === 'Enter' && addComentario()} />
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <button className="btn btn-primary" onClick={addComentario}><Plus size={15} /> Adicionar</button>
+              <Button tone="primary" variant="solid" startIcon={Plus} onClick={addComentario}>Adicionar</Button>
             </div>
           </div>
           {(() => {
@@ -2421,9 +2404,7 @@ function RDOForm2() {
                       <td style={{ color: '#64748b' }}>{c.autor_nome || '—'}</td>
                       <td style={{ color: '#94a3b8', fontSize: '12px' }}>{new Date(c.criado_em).toLocaleString('pt-BR')}</td>
                       <td className="td-actions">
-                        <button className="btn btn-danger" style={{ padding: '4px 8px' }} onClick={() => removeComentario(idx)}>
-                          <Trash2 size={14} />
-                        </button>
+                        <IconButton size="sm" tone="danger" variant="ghost" icon={Trash2} label={`Remover comentário ${idx + 1}`} onClick={() => removeComentario(idx)} />
                       </td>
                     </tr>
                   ))}
@@ -2457,10 +2438,8 @@ function RDOForm2() {
                     <div className="anexo-nome">{f.name}</div>
                     <div className="anexo-meta" style={{ color: '#f59e0b' }}>Na fila — será enviado ao salvar</div>
                   </div>
-                  <button className="btn btn-danger" style={{ padding: '4px 8px', flexShrink: 0 }}
-                    onClick={() => setAnexosQueue(prev => prev.filter((_, idx) => idx !== i))}>
-                    <Trash2 size={14} />
-                  </button>
+                  <IconButton size="sm" tone="danger" variant="ghost" icon={Trash2} label={`Remover anexo ${f.name}`} style={{ flexShrink: 0 }}
+                    onClick={() => setAnexosQueue(prev => prev.filter((_, idx) => idx !== i))} />
                 </div>
               ))}
             </div>
@@ -2481,10 +2460,8 @@ function RDOForm2() {
                       Abrir
                     </a>
                   )}
-                  <button className="btn btn-danger" style={{ padding: '4px 8px', flexShrink: 0 }}
-                    onClick={() => handleRemoveAnexo(a.id)}>
-                    <Trash2 size={14} />
-                  </button>
+                  <IconButton size="sm" tone="danger" variant="ghost" icon={Trash2} label={`Excluir anexo ${a.nome_arquivo || a.nome || a.id}`} style={{ flexShrink: 0 }}
+                    onClick={() => handleRemoveAnexo(a.id)} />
                 </div>
               ))}
             </div>
@@ -2519,22 +2496,22 @@ function RDOForm2() {
               </>
             )}
             <div className="rdo-actions-buttons">
-              <button className="btn rdo-action-btn rdo-form-action-pill rdo-form-action-pill-neutral" onClick={() => navigate(`/projeto/${projetoId}/rdos`)}>
+              <Button className="rdo-action-btn" startIcon={ArrowLeft} onClick={() => navigate(`/projeto/${projetoId}/rdos`)}>
                 <span className="rdo-action-label-desktop">Voltar</span>
                 <span className="rdo-action-label-mobile">Voltar</span>
-              </button>
+              </Button>
               {canEditRdo && (
                 <>
-                  <button className="btn rdo-action-btn rdo-form-action-pill rdo-form-action-pill-draft" onClick={() => salvar('rascunho')}
-                    disabled={isSaving || !formData.data_relatorio}>
-                    <span className="rdo-action-label-desktop">{isSaving ? 'Salvando...' : 'Salvar RDO'}</span>
-                    <span className="rdo-action-label-mobile">{isSaving ? 'Salvando...' : 'Salvar'}</span>
-                  </button>
-                  <button className="btn rdo-action-btn rdo-form-action-pill rdo-form-action-pill-success" onClick={() => salvar('analise')}
-                    disabled={isSaving || !formData.data_relatorio}>
-                    <span className="rdo-action-label-desktop">{isSaving ? 'Enviando...' : 'Enviar para aprovação'}</span>
-                    <span className="rdo-action-label-mobile">{isSaving ? 'Enviando...' : 'Enviar'}</span>
-                  </button>
+                  <Button className="rdo-action-btn" tone="primary" variant="solid" startIcon={Save} onClick={() => salvar('rascunho')}
+                    loading={isSaving} disabled={!formData.data_relatorio}>
+                    <span className="rdo-action-label-desktop">Salvar RDO</span>
+                    <span className="rdo-action-label-mobile">Salvar</span>
+                  </Button>
+                  <Button className="rdo-action-btn" tone="primary" variant="outline" startIcon={Send} onClick={() => salvar('analise')}
+                    loading={isSaving} disabled={!formData.data_relatorio}>
+                    <span className="rdo-action-label-desktop">Enviar para aprovação</span>
+                    <span className="rdo-action-label-mobile">Enviar</span>
+                  </Button>
                 </>
               )}
             </div>

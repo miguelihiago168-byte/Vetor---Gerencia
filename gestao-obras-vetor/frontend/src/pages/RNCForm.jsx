@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import CockpitReturnButton, { forwardCockpitNavigationState } from '../components/CockpitReturnButton';
+import Button, { IconButton } from '../components/ui/Button';
 import { createRNC, getUsuarios, getProjeto, getRDOs, uploadAnexoRNC } from '../services/api';
 import { Save, X, AlertTriangle, Camera, Wrench, Users, Calendar, Upload, CheckCircle } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
@@ -159,19 +160,18 @@ function RNCForm() {
 
         {/* Top bar */}
         <div className="rnc-form-topbar">
-          <CockpitReturnButton fallbackTo={`/projeto/${projetoId}/rnc`} className="rnc-form-back" />
+          <CockpitReturnButton fallbackTo={`/projeto/${projetoId}/rnc`} className="rnc-form-back" variant="inverse" />
           <div className="rnc-form-topbar-title">
             <span className="rnc-form-breadcrumb">Qualidade / Não Conformidades / <strong>Nova RNC</strong></span>
             <h1>Abrir Não Conformidade</h1>
           </div>
           <div className="rnc-form-topbar-actions">
-            <button type="button" className="btn btn-ghost" onClick={() => navigate(`/projeto/${projetoId}/rnc`, { state: forwardCockpitNavigationState(location) })}>
+            <Button variant="inverse" startIcon={X} onClick={() => navigate(`/projeto/${projetoId}/rnc`, { state: forwardCockpitNavigationState(location) })}>
               Cancelar
-            </button>
-            <button type="submit" form="rnc-form-main" className="btn btn-primary" disabled={loading}>
-              <Save size={15} />
-              {loading ? 'Salvando...' : 'Registrar RNC'}
-            </button>
+            </Button>
+            <Button type="submit" form="rnc-form-main" tone="primary" variant="solid" startIcon={Save} loading={loading}>
+              Registrar RNC
+            </Button>
           </div>
         </div>
 
@@ -411,9 +411,15 @@ function RNCForm() {
                   {fotoPreviews.map((p, i) => (
                     <div key={i} className="rnc-photo-thumb">
                       <img src={p.src} alt={p.name} />
-                      <button type="button" className="rnc-photo-remove" onClick={() => removerFoto(i)}>
-                        <X size={12} />
-                      </button>
+                      <IconButton
+                        className="rnc-photo-remove"
+                        tone="danger"
+                        variant="solid"
+                        size="sm"
+                        icon={X}
+                        label={`Remover foto ${p.name}`}
+                        onClick={() => removerFoto(i)}
+                      />
                     </div>
                   ))}
                 </div>
@@ -421,10 +427,9 @@ function RNCForm() {
             </section>
 
             <div className="rnc-form-submit-row">
-              <button type="submit" className="btn btn-primary btn-lg" disabled={loading}>
-                <Save size={16} />
-                {loading ? 'Registrando...' : 'Registrar RNC'}
-              </button>
+              <Button type="submit" size="lg" tone="primary" variant="solid" startIcon={Save} loading={loading}>
+                Registrar RNC
+              </Button>
             </div>
           </form>
 

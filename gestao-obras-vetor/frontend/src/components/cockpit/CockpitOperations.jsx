@@ -1,7 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import { AlertTriangle, Boxes, Camera, ChevronLeft, ChevronRight, ClipboardList, FileText, HardHat, ShieldCheck, Wrench } from 'lucide-react';
+import { AlertTriangle, ArrowUpRight, Boxes, Camera, ChevronLeft, ChevronRight, ClipboardList, FileText, HardHat, ShieldCheck, Wrench } from 'lucide-react';
 import { CockpitCard, EmptyState, MetricGrid } from './CockpitPrimitives';
+import Button from '../ui/Button';
 import { formatDate } from './cockpitTransforms';
+
+const CockpitLinkButton = ({ children, onClick }) => (
+  <Button size="sm" tone="primary" variant="ghost" endIcon={ArrowUpRight} onClick={onClick}>{children}</Button>
+);
 
 export function AttentionPointsCard({ items, onOpen }) {
   return <CockpitCard title="Pontos de atenção" icon={AlertTriangle} className="cockpit-card-wide">
@@ -12,7 +17,7 @@ export function AttentionPointsCard({ items, onOpen }) {
 }
 
 export function RecentExecutionCard({ data, onOpen }) {
-  return <CockpitCard title="Execução recente" icon={FileText} className="cockpit-card-wide" action={<button type="button" className="cockpit-link" onClick={() => onOpen('rdos')}>Ver RDOs</button>}>
+  return <CockpitCard title="Execução recente" icon={FileText} className="cockpit-card-wide" action={<CockpitLinkButton onClick={() => onOpen('rdos')}>Ver RDOs</CockpitLinkButton>}>
     {!data ? <EmptyState>Dados de RDO indisponíveis.</EmptyState> : <>
       <MetricGrid items={[
         { label: 'RDOs em 7 dias', value: data.totals.rdos }, { label: 'Atividades registradas', value: data.totals.activities },
@@ -36,13 +41,13 @@ export function WorkforceSummaryCard({ data }) {
 
 export function EquipmentSummaryCard({ data, onOpen }) {
   const items = data?.items || [];
-  return <CockpitCard title="Equipamentos nos RDOs" icon={Wrench} action={<button type="button" className="cockpit-link" onClick={() => onOpen('almoxarifado')}>Ver Ativos</button>}>
+  return <CockpitCard title="Equipamentos nos RDOs" icon={Wrench} action={<CockpitLinkButton onClick={() => onOpen('almoxarifado')}>Ver Ativos</CockpitLinkButton>}>
     {!data ? <EmptyState>Dados de equipamentos indisponíveis.</EmptyState> : items.length ? <div className="cockpit-list compact">{items.slice(0, 7).map((item) => <div className="cockpit-list-row static" key={item.name}><div><strong>{item.name}</strong><span>Último uso: {formatDate(item.last_used)}</span></div><div className="cockpit-row-end"><strong>máx. {item.max_quantity}</strong><span>{item.days_used} dia(s)</span></div></div>)}</div> : <EmptyState>Nenhum equipamento registrado nos RDOs.</EmptyState>}
   </CockpitCard>;
 }
 
 export function QualitySummaryCard({ data, onOpen }) {
-  return <CockpitCard title="Qualidade" icon={ShieldCheck} action={<button type="button" className="cockpit-link" onClick={() => onOpen('rnc')}>Ver Qualidade</button>}>
+  return <CockpitCard title="Qualidade" icon={ShieldCheck} action={<CockpitLinkButton onClick={() => onOpen('rnc')}>Ver Qualidade</CockpitLinkButton>}>
     {!data ? <EmptyState>Dados de Qualidade indisponíveis.</EmptyState> : <><MetricGrid items={[
       { label: 'Abertas', value: data.open, state: data.open ? 'attention' : 'ok' }, { label: 'Críticas abertas', value: data.critical_open, state: data.critical_open ? 'attention' : 'ok' },
       { label: 'Em aprovação', value: data.awaiting_approval }, { label: 'Encerradas em 7d', value: data.recently_closed, state: 'ok' }
@@ -51,7 +56,7 @@ export function QualitySummaryCard({ data, onOpen }) {
 }
 
 export function ProcurementSummaryCard({ data, onOpen }) {
-  return <CockpitCard title="Suprimentos" icon={ClipboardList} action={<button type="button" className="cockpit-link" onClick={() => onOpen('compras')}>Ver Suprimentos</button>}>
+  return <CockpitCard title="Suprimentos" icon={ClipboardList} action={<CockpitLinkButton onClick={() => onOpen('compras')}>Ver Suprimentos</CockpitLinkButton>}>
     {!data ? <EmptyState>Resumo indisponível para este perfil ou fonte.</EmptyState> : <MetricGrid items={[
       { label: 'Em análise', value: data.analysis, state: data.analysis ? 'attention' : 'ok' }, { label: 'Em cotação', value: data.quotation },
       { label: 'Autorizadas', value: data.authorized }, { label: 'Compradas', value: data.bought, state: 'ok' }, { label: 'Urgentes', value: data.urgent.length, state: data.urgent.length ? 'attention' : 'ok' }
@@ -60,7 +65,7 @@ export function ProcurementSummaryCard({ data, onOpen }) {
 }
 
 export function AssetsSummaryCard({ data, onOpen }) {
-  return <CockpitCard title="Ativos" icon={Boxes} action={<button type="button" className="cockpit-link" onClick={() => onOpen('almoxarifado')}>Ver Ativos</button>}>
+  return <CockpitCard title="Ativos" icon={Boxes} action={<CockpitLinkButton onClick={() => onOpen('almoxarifado')}>Ver Ativos</CockpitLinkButton>}>
     {!data ? <EmptyState>Resumo de Ativos indisponível para este perfil ou fonte.</EmptyState> : <MetricGrid items={[
       { label: 'Total', value: data.total_ferramentas || 0 }, { label: 'Disponíveis', value: data.ferramentas_disponiveis || 0, state: 'ok' },
       { label: 'Alocados', value: data.ferramentas_alocadas || 0, state: 'info' }, { label: 'Em manutenção', value: data.ferramentas_manutencao || 0, state: data.ferramentas_manutencao ? 'attention' : 'ok' },
@@ -82,7 +87,7 @@ export function PhotoAlbumCard({ album, getUrl, loading, onOpen }) {
 
   return <CockpitCard title={`Álbum da obra${photos.length ? ` · ${photos.length} foto(s)` : ''}`} icon={Camera} className="cockpit-card-wide">
     {loading ? <EmptyState>Carregando álbum da obra...</EmptyState> : photos.length ? <div className="cockpit-album">{(album.rdos || []).map((group) => <section className="cockpit-album-group" key={group.rdo_id}>
-      <header><div><strong>{group.numero_rdo}</strong><span>{formatDate(group.data_relatorio)} · {group.status}</span></div><button type="button" className="cockpit-link" onClick={() => onOpen(`rdo/${group.rdo_id}`)}>Abrir RDO</button></header>
+      <header><div><strong>{group.numero_rdo}</strong><span>{formatDate(group.data_relatorio)} · {group.status}</span></div><CockpitLinkButton onClick={() => onOpen(`rdo/${group.rdo_id}`)}>Abrir RDO</CockpitLinkButton></header>
       <div className="cockpit-photo-grid">{group.fotos.map((photo) => {
         const index = photoIndexes.get(photo.id);
         return <button type="button" key={photo.id} className="cockpit-photo" onClick={() => setSelectedIndex(index)}><img src={getUrl(photo.caminho_arquivo)} loading="lazy" alt={photo.descricao || photo.nome_arquivo || 'Foto do RDO'} /><span><strong>{photo.atividade_codigo ? `${photo.atividade_codigo} · ` : ''}{photo.atividade_descricao || photo.atividade_avulsa_descricao || 'Sem atividade'}</strong><small>{photo.descricao || photo.nome_arquivo || 'Foto do RDO'}</small></span></button>;
@@ -93,7 +98,7 @@ export function PhotoAlbumCard({ album, getUrl, loading, onOpen }) {
       {photos.length > 1 && <button type="button" className="cockpit-lightbox-nav previous" aria-label="Foto anterior" onClick={(event) => { event.stopPropagation(); move(-1); }}><ChevronLeft /></button>}
       <img onClick={(event) => event.stopPropagation()} src={getUrl(selected.caminho_arquivo)} alt={selected.descricao || selected.nome_arquivo || 'Foto do RDO'} />
       {photos.length > 1 && <button type="button" className="cockpit-lightbox-nav next" aria-label="Próxima foto" onClick={(event) => { event.stopPropagation(); move(1); }}><ChevronRight /></button>}
-      <div onClick={(event) => event.stopPropagation()}><span><strong>{selected.numero_rdo} · {formatDate(selected.data_relatorio)}</strong><small>{selected.descricao || selected.atividade_descricao || selected.nome_arquivo || 'Foto do RDO'} · {selectedIndex + 1} de {photos.length}</small></span><button type="button" className="cockpit-link" onClick={() => onOpen(`rdo/${selected.rdo_id}`)}>Abrir RDO</button></div>
+      <div onClick={(event) => event.stopPropagation()}><span><strong>{selected.numero_rdo} · {formatDate(selected.data_relatorio)}</strong><small>{selected.descricao || selected.atividade_descricao || selected.nome_arquivo || 'Foto do RDO'} · {selectedIndex + 1} de {photos.length}</small></span><CockpitLinkButton onClick={() => onOpen(`rdo/${selected.rdo_id}`)}>Abrir RDO</CockpitLinkButton></div>
     </div>}
   </CockpitCard>;
 }
