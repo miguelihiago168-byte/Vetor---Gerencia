@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { X, AlertCircle } from 'lucide-react';
+import { IconButton } from './ui/Button';
 import './GanttSidebar.css';
 
 /**
@@ -185,9 +186,7 @@ const GanttSidebar = ({ isOpen, onClose, dadosGantt, caminhoCritico, folgas, emb
           <p>Visualização de dependências e caminho crítico</p>
         </div>
         {!embedded && (
-          <button className="gantt-close" onClick={onClose}>
-            <X size={20} />
-          </button>
+          <IconButton className="gantt-close" variant="ghost" icon={X} label="Fechar cronograma" onClick={onClose} />
         )}
       </div>
 

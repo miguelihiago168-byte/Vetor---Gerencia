@@ -7,23 +7,7 @@
 }
 
 .cronograma-analise-close {
-  width: 34px;
-  height: 34px;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
-  color: #ffffff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.15s ease, transform 0.15s ease;
-}
-
-.cronograma-analise-close:hover {
-  background: rgba(255, 255, 255, 0.24);
-  transform: translateY(-1px);
 }
 
 body.dark-mode .cronograma-analise-modal {

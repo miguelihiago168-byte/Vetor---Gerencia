@@ -1,6 +1,7 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import Button from './ui/Button';
 
 export const getCockpitReturnContext = (location) => location?.state?.cockpitReturn || null;
 
@@ -9,7 +10,15 @@ export const forwardCockpitNavigationState = (location, state = {}) => {
   return cockpitReturn ? { ...state, cockpitReturn } : state;
 };
 
-function CockpitReturnButton({ fallbackTo, fallbackLabel = 'Voltar', className = 'btn btn-secondary', iconOnly = false }) {
+function CockpitReturnButton({
+  fallbackTo,
+  fallbackLabel = 'Voltar',
+  className = '',
+  iconOnly = false,
+  tone = 'neutral',
+  variant = 'outline',
+  ...buttonProps
+}) {
   const location = useLocation();
   const navigate = useNavigate();
   const cockpitReturn = getCockpitReturnContext(location);
@@ -17,16 +26,19 @@ function CockpitReturnButton({ fallbackTo, fallbackLabel = 'Voltar', className =
   const label = cockpitReturn ? 'Voltar ao Cockpit' : fallbackLabel;
 
   return (
-    <button
-      type="button"
+    <Button
+      tone={tone}
+      variant={variant}
       className={className}
       onClick={() => navigate(target)}
       aria-label={label}
       title={label}
+      startIcon={ArrowLeft}
+      iconOnly={iconOnly}
+      {...buttonProps}
     >
-      <ArrowLeft size={16} />
-      {!iconOnly && label}
-    </button>
+      {label}
+    </Button>
   );
 }
 

@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import Navbar from '../components/Navbar';
+import Button, { IconButton } from '../components/ui/Button';
 import { useAuth } from '../context/AuthContext';
 import {
   getEmailHistory
 } from '../services/api';
-import { Mail, Loader, Filter, Eye, XCircle, CheckCircle } from 'lucide-react';
+import { Mail, Loader, Filter, Eye, X, ChevronLeft, ChevronRight, XCircle, CheckCircle } from 'lucide-react';
 import '../styles/EmailHistory.css';
 
 function EmailHistory() {
@@ -173,13 +174,12 @@ function EmailHistory() {
                       </span>
                     </td>
                     <td className="cell-actions">
-                      <button
-                        className="btn-view-details"
+                      <IconButton
+                        variant="ghost"
+                        icon={Eye}
+                        label="Ver detalhes"
                         onClick={() => handleViewDetails(email)}
-                        title="Ver detalhes"
-                      >
-                        <Eye size={18} />
-                      </button>
+                      />
                     </td>
                   </tr>
                 ))}
@@ -197,21 +197,25 @@ function EmailHistory() {
         {/* Paginação */}
         {total > filters.limit && (
           <div className="pagination">
-            <button
+            <Button
+              size="sm"
+              startIcon={ChevronLeft}
               disabled={filters.offset === 0}
               onClick={() => setFilters(prev => ({ ...prev, offset: Math.max(0, prev.offset - prev.limit) }))}
             >
               Anterior
-            </button>
+            </Button>
             <span>
               Mostrando {filters.offset + 1} a {Math.min(filters.offset + filters.limit, total)} de {total}
             </span>
-            <button
+            <Button
+              size="sm"
+              endIcon={ChevronRight}
               disabled={filters.offset + filters.limit >= total}
               onClick={() => setFilters(prev => ({ ...prev, offset: prev.offset + prev.limit }))}
             >
               Próximo
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -222,9 +226,7 @@ function EmailHistory() {
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Detalhes do Email</h2>
-              <button className="btn-close" onClick={handleCloseModal}>
-                ✕
-              </button>
+              <IconButton variant="ghost" icon={X} label="Fechar detalhes do e-mail" onClick={handleCloseModal} />
             </div>
 
             <div className="modal-body">
@@ -276,9 +278,9 @@ function EmailHistory() {
             </div>
 
             <div className="modal-actions">
-              <button className="btn-secondary" onClick={handleCloseModal}>
+              <Button startIcon={X} onClick={handleCloseModal}>
                 Fechar
-              </button>
+              </Button>
             </div>
           </div>
         </div>

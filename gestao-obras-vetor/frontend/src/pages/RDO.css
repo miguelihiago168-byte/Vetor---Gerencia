@@ -695,66 +695,6 @@
   gap: 10px;
 }
 
-.rdo-form-action-pill {
-  min-height: 40px;
-  padding: 0 15px;
-  border-radius: 999px;
-  box-shadow: none;
-  font-size: 14px;
-  font-weight: 800;
-  border: 1px solid transparent;
-  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
-}
-
-.rdo-form-action-pill:hover:not(:disabled),
-.rdo-form-action-pill:focus-visible:not(:disabled) {
-  transform: translateY(-1px);
-  opacity: 1;
-}
-
-.rdo-form-action-pill:disabled {
-  transform: none;
-}
-
-.rdo-form-action-pill-neutral {
-  background: rgba(255, 255, 255, 0.72);
-  border-color: #dbe4ef;
-  color: #475569;
-}
-
-.rdo-form-action-pill-neutral:hover:not(:disabled),
-.rdo-form-action-pill-neutral:focus-visible:not(:disabled) {
-  background: #f0f9ff;
-  border-color: #bae6fd;
-  color: #075985;
-}
-
-.rdo-form-action-pill-draft {
-  background: #f8fafc;
-  border-color: #dbe4ef;
-  color: #334155;
-}
-
-.rdo-form-action-pill-draft:hover:not(:disabled),
-.rdo-form-action-pill-draft:focus-visible:not(:disabled) {
-  background: #ffffff;
-  border-color: #cbd5e1;
-  color: #0f172a;
-}
-
-.rdo-form-action-pill-success {
-  background: #ecfdf5;
-  border-color: #86efac;
-  color: #166534;
-}
-
-.rdo-form-action-pill-success:hover:not(:disabled),
-.rdo-form-action-pill-success:focus-visible:not(:disabled) {
-  background: #dcfce7;
-  border-color: #4ade80;
-  color: #14532d;
-}
-
 /* ── Visualização do RDO (detalhes) ─────────────────────── */
 .rdo-view-header {
   display: flex;
@@ -799,7 +739,6 @@
 }
 
 .rdo-view-action-btn {
-  min-height: 40px;
   visibility: visible !important;
   opacity: 1 !important;
   pointer-events: auto !important;
@@ -993,15 +932,13 @@
 
   .rdo-action-btn {
     width: 100%;
-    min-height: 34px;
+    min-height: var(--button-height-sm);
+    height: auto;
     padding: 6px 8px;
-    font-size: 12px;
+    font-size: var(--button-font-sm);
     line-height: 1.1;
     justify-content: center;
-    border-radius: 999px;
-    box-shadow: none !important;
-    border-width: 1px;
-    font-weight: 800;
+    border-radius: var(--button-radius);
   }
 
   .rdo-action-label-desktop {
@@ -1013,10 +950,6 @@
     white-space: nowrap;
   }
 
-  .rdo-form-action-pill:hover:not(:disabled),
-  .rdo-form-action-pill:focus-visible:not(:disabled) {
-    transform: none;
-  }
 }
 
 /* ── Progresso bar ─────────────────────────────────────────── */
@@ -1138,22 +1071,6 @@
   top: 8px;
   right: 8px;
   z-index: 2;
-  width: 30px;
-  height: 30px;
-  border: 1px solid rgba(248, 113, 113, 0.45);
-  border-radius: 999px;
-  background: rgba(127, 29, 29, 0.88);
-  color: #ffffff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.22);
-}
-
-.rdo-photo-delete-btn:hover {
-  background: #dc2626;
-  border-color: #fca5a5;
 }
 
 /* RDO detalhes como relatorio operacional */
@@ -1306,70 +1223,6 @@
   justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
-}
-
-.rdo-report-actions .rdo-report-action-pill {
-  min-height: 40px;
-  padding: 0 15px;
-  border-radius: 999px;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 800;
-  border: 1px solid transparent;
-  box-shadow: none;
-  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
-}
-
-.rdo-report-actions .rdo-report-action-pill:hover {
-  transform: translateY(-1px);
-}
-
-.rdo-report-action-pill-primary {
-  color: #075985;
-  border-color: #bae6fd;
-  background: #e0f2fe;
-}
-
-.rdo-report-action-pill-primary:hover {
-  color: #0369a1;
-  border-color: #7dd3fc;
-  background: #f0f9ff;
-}
-
-.rdo-report-action-pill-warning {
-  color: #9a3412;
-  border-color: #fed7aa;
-  background: #fff7ed;
-}
-
-.rdo-report-action-pill-warning:hover {
-  color: #c2410c;
-  border-color: #fdba74;
-  background: #fffbeb;
-}
-
-.rdo-report-action-pill-success {
-  color: #166534;
-  border-color: #86efac;
-  background: #ecfdf5;
-}
-
-.rdo-report-action-pill-success:hover {
-  color: #14532d;
-  border-color: #4ade80;
-  background: #dcfce7;
-}
-
-.rdo-report-action-pill-danger {
-  color: #991b1b;
-  border-color: #fecaca;
-  background: #fff1f2;
-}
-
-.rdo-report-action-pill-danger:hover {
-  color: #b91c1c;
-  border-color: #fca5a5;
-  background: #fee2e2;
 }
 
 .rdo-report-meta-grid {
@@ -2482,17 +2335,6 @@
 .rdo-page .rdo-photo-delete-btn {
   top: 7px;
   right: 7px;
-  width: 28px;
-  height: 28px;
-  border-color: rgba(254, 202, 202, 0.9);
-  background: rgba(255, 255, 255, 0.92);
-  color: #b91c1c;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
-}
-
-.rdo-page .rdo-photo-delete-btn:hover {
-  background: #fee2e2;
-  color: #991b1b;
 }
 
 .rdo-page .rdo-ocorrencia-item,
@@ -2536,31 +2378,6 @@
 
 .rdo-page .rdo-actions-links a:hover {
   text-decoration: underline !important;
-}
-
-.rdo-page .rdo-form-action-pill {
-  min-height: 38px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 750;
-}
-
-.rdo-page .rdo-form-action-pill:hover:not(:disabled),
-.rdo-page .rdo-form-action-pill:focus-visible:not(:disabled) {
-  transform: none;
-}
-
-.rdo-page .rdo-form-action-pill-success {
-  background: #047857;
-  border-color: #047857;
-  color: #ffffff;
-}
-
-.rdo-page .rdo-form-action-pill-success:hover:not(:disabled),
-.rdo-page .rdo-form-action-pill-success:focus-visible:not(:disabled) {
-  background: #065f46;
-  border-color: #065f46;
-  color: #ffffff;
 }
 
 @media (max-width: 900px) {
@@ -2824,12 +2641,6 @@ body.dark-mode .rdo-page .rdo-photo-card-preview {
   background: #0d1b2a !important;
 }
 
-body.dark-mode .rdo-page .rdo-photo-delete-btn {
-  background: rgba(27, 40, 54, 0.94);
-  border-color: rgba(248, 113, 113, 0.36);
-  color: #fca5a5;
-}
-
 body.dark-mode .rdo-page .rdo-ocorrencia-item .ocorr-titulo,
 body.dark-mode .rdo-page .rdo-anexo-item .anexo-nome {
   color: #e8edf3;
@@ -2851,17 +2662,13 @@ body.dark-mode .rdo-page .btn-primary:hover {
   border-color: #0369a1;
 }
 
-body.dark-mode .rdo-page .btn-secondary,
-body.dark-mode .rdo-page .rdo-form-action-pill-neutral,
-body.dark-mode .rdo-page .rdo-form-action-pill-draft {
+body.dark-mode .rdo-page .btn-secondary {
   background: #243650;
   border-color: #35506d;
   color: #d8e3ec;
 }
 
-body.dark-mode .rdo-page .btn-secondary:hover,
-body.dark-mode .rdo-page .rdo-form-action-pill-neutral:hover:not(:disabled),
-body.dark-mode .rdo-page .rdo-form-action-pill-draft:hover:not(:disabled) {
+body.dark-mode .rdo-page .btn-secondary:hover {
   background: #2a4060;
   border-color: #45627d;
   color: #ffffff;

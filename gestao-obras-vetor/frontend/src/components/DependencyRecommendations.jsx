@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AlertCircle, Check, X, ChevronDown, Zap } from 'lucide-react';
+import Button, { IconButton } from './ui/Button';
 import './DependencyRecommendations.css';
 
 /**
@@ -129,13 +130,15 @@ const DependencyRecommendations = ({
                 {selecionadasCount}/{totalSugestoes})
               </span>
             </label>
-            <button
-              className="btn-confirmar"
+            <Button
+              tone="primary"
+              variant="solid"
+              startIcon={Check}
               onClick={handleConfirmarSelecionadas}
               disabled={selecionadasCount === 0}
             >
               Confirmar {selecionadasCount > 0 ? `${selecionadasCount} selecionad${selecionadasCount === 1 ? 'a' : 'as'}` : 'nenhuma'}
-            </button>
+            </Button>
           </div>
 
           {/* Lista de Sugestões */}
@@ -179,13 +182,12 @@ const DependencyRecommendations = ({
 
                     {/* Botões de Ação */}
                     <div className="dep-acoes">
-                      <button
-                        className="btn-expandir"
+                      <IconButton
+                        variant="ghost"
+                        icon={<ChevronDown size={16} style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }} />}
+                        label={isExpanded ? 'Recolher sugestão' : 'Expandir sugestão'}
                         onClick={() => toggleExpandida(id)}
-                        title={isExpanded ? 'Colapsar' : 'Expandir'}
-                      >
-                        <ChevronDown size={16} style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }} />
-                      </button>
+                      />
                     </div>
                   </div>
 
@@ -226,23 +228,25 @@ const DependencyRecommendations = ({
 
                       {/* Botões de Aceitação */}
                       <div className="dep-card-footer">
-                        <button
-                          className="btn-aceitar"
+                        <Button
+                          tone="success"
+                          variant="soft"
+                          startIcon={Check}
                           onClick={() => {
                             toggleSelecionada(id);
                             onAceitar(sugestao);
                           }}
                         >
-                          <Check size={16} />
                           Aceitar
-                        </button>
-                        <button
-                          className="btn-rejeitar"
+                        </Button>
+                        <Button
+                          tone="danger"
+                          variant="ghost"
+                          startIcon={X}
                           onClick={() => onRejeitar(sugestao)}
                         >
-                          <X size={16} />
                           Rejeitar
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -257,9 +261,9 @@ const DependencyRecommendations = ({
               <p>
                 <strong>{selecionadasCount}</strong> dependência(s) selecionada(s) para confirmação
               </p>
-              <button className="btn-confirmar-principal" onClick={handleConfirmarSelecionadas}>
+              <Button tone="primary" variant="solid" startIcon={Check} onClick={handleConfirmarSelecionadas}>
                 Prosseguir com Confirmação
-              </button>
+              </Button>
             </div>
           )}
         </>

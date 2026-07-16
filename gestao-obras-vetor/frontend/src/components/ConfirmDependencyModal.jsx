@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, AlertCircle, ChevronDown, CheckCircle } from 'lucide-react';
+import Button, { IconButton } from './ui/Button';
 import './ConfirmDependencyModal.css';
 
 /**
@@ -35,9 +36,7 @@ const ConfirmDependencyModal = ({
         <div className="confirm-header">
           <h2>Confirmação de Cronograma</h2>
           <p>Revise as alterações antes de aplicar</p>
-          <button className="confirm-close" onClick={onClose}>
-            <X size={20} />
-          </button>
+          <IconButton className="confirm-close" variant="inverse" icon={X} label="Fechar" onClick={onClose} />
         </div>
 
         {/* Conteúdo */}
@@ -160,16 +159,18 @@ const ConfirmDependencyModal = ({
 
         {/* Footer */}
         <div className="confirm-footer">
-          <button className="btn-cancelar" onClick={onClose} disabled={carregando}>
+          <Button startIcon={X} onClick={onClose} disabled={carregando}>
             Cancelar
-          </button>
-          <button
-            className="btn-confirmar-final"
+          </Button>
+          <Button
+            tone="primary"
+            variant="solid"
+            startIcon={CheckCircle}
             onClick={onConfirm}
-            disabled={carregando}
+            loading={carregando}
           >
-            {carregando ? 'Processando...' : 'Aplicar Alterações'}
-          </button>
+            Aplicar Alterações
+          </Button>
         </div>
       </div>
     </div>

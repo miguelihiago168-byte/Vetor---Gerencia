@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import GanttSidebar from '../components/GanttSidebar';
 import CockpitReturnButton from '../components/CockpitReturnButton';
+import Button, { IconButton } from '../components/ui/Button';
 import {
   getAtividadesEAP,
   analisarCronograma,
@@ -10,7 +11,7 @@ import {
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
-import { Zap, RefreshCw, CalendarDays, AlertTriangle, X } from 'lucide-react';
+import { Zap, RefreshCw, CalendarDays, AlertTriangle, Eye, X } from 'lucide-react';
 import './CronogramaGantt.css';
 
 const fmtPercent = (value) => `${Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
@@ -117,13 +118,11 @@ function CronogramaGantt({ hideNavbar = false }) {
             <h1 style={{ margin: 0 }}>Cronograma (Gantt)</h1>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-secondary" onClick={carregarTudo} disabled={carregando}>
-              <RefreshCw size={16} /> Atualizar
-            </button>
+            <Button startIcon={RefreshCw} onClick={carregarTudo} loading={carregando}>Atualizar</Button>
             {isGestor && (
-              <button className="btn btn-warning" onClick={handleAnalisarCronograma} disabled={carregando}>
-                <Zap size={16} /> {carregando ? 'Processando...' : 'Analisar Cronograma'}
-              </button>
+              <Button tone="warning" variant="soft" startIcon={Zap} onClick={handleAnalisarCronograma} loading={carregando}>
+                Analisar Cronograma
+              </Button>
             )}
           </div>
         </div>
@@ -202,9 +201,13 @@ function CronogramaGantt({ hideNavbar = false }) {
                 Diagnóstico de atrasos, impacto nas sucessoras e plano de recuperação.
               </p>
               </div>
-              <button type="button" className="cronograma-analise-close" onClick={() => setAnalise(null)} aria-label="Fechar análise do cronograma">
-                <X size={18} />
-              </button>
+              <IconButton
+                className="cronograma-analise-close"
+                variant="inverse"
+                icon={X}
+                label="Fechar análise do cronograma"
+                onClick={() => setAnalise(null)}
+              />
             </div>
 
             <div style={{ padding: 20, display: 'grid', gap: 16 }}>
@@ -320,9 +323,9 @@ function CronogramaGantt({ hideNavbar = false }) {
                       {analise.resumo?.total_sugestoes_dependencias || 0} sugestão(ões) detectada(s) pelo algoritmo atual.
                     </p>
                   </div>
-                  <button className="btn btn-secondary" onClick={() => setMostrarSugestoes(v => !v)}>
+                  <Button startIcon={Eye} onClick={() => setMostrarSugestoes(v => !v)}>
                     {mostrarSugestoes ? 'Ocultar sugestões' : 'Ver sugestões de dependências'}
-                  </button>
+                  </Button>
                 </div>
                 {mostrarSugestoes && (
                   <div style={{ marginTop: 12, display: 'grid', gap: 8 }}>
@@ -344,7 +347,7 @@ function CronogramaGantt({ hideNavbar = false }) {
             </div>
 
             <div style={{ padding: '12px 20px', textAlign: 'right', borderTop: '1px solid var(--cronograma-modal-border)' }}>
-              <button className="btn btn-outline" onClick={() => setAnalise(null)}>Fechar</button>
+              <Button startIcon={X} onClick={() => setAnalise(null)}>Fechar</Button>
             </div>
           </div>
         </div>

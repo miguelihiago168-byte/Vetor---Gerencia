@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertCircle, ArrowUpRight, Building2, CalendarDays, Clock3, Gauge, MapPin, RefreshCw } from 'lucide-react';
+import Button from '../ui/Button';
 import { formatDate } from './cockpitTransforms';
 
 export function CockpitSkeleton() {
@@ -7,7 +8,7 @@ export function CockpitSkeleton() {
 }
 
 export function CockpitError({ message, onRetry }) {
-  return <div className="cockpit-error"><AlertCircle size={20} /><span>{message}</span>{onRetry && <button type="button" onClick={onRetry}>Tentar novamente</button>}</div>;
+  return <div className="cockpit-error"><AlertCircle size={20} /><span>{message}</span>{onRetry && <Button size="sm" tone="primary" startIcon={RefreshCw} onClick={onRetry}>Tentar novamente</Button>}</div>;
 }
 
 export function EmptyState({ children = 'Sem dados para exibir.' }) {
@@ -46,7 +47,7 @@ export function CockpitHeader({ project, updatedAt, refreshing, onRefresh, deadl
     <div className="cockpit-header-side">
       {deadline?.days !== null && <div className={`cockpit-deadline ${deadline.overdue ? 'is-critical' : ''}`}><small>Prazo contratual</small><div><strong>{Math.abs(deadline.days)}</strong><span>{deadline.overdue ? 'dias vencido' : 'dias restantes'}</span></div></div>}
       <small className="cockpit-updated"><Clock3 size={13} /> Atualizado em {updatedAt ? new Date(updatedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</small>
-      <button type="button" className="cockpit-refresh" onClick={onRefresh} disabled={refreshing}><RefreshCw size={15} className={refreshing ? 'spin' : ''} /> Atualizar</button>
+      <Button className="cockpit-refresh" variant="inverse" startIcon={RefreshCw} loading={refreshing} fullWidth onClick={onRefresh}>Atualizar dados</Button>
     </div>
   </section>;
 }

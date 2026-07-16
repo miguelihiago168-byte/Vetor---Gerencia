@@ -399,15 +399,7 @@
 .rdet-preview-remove {
   position: absolute;
   top: 3px; right: 3px;
-  width: 18px; height: 18px;
-  border-radius: 50%;
-  background: rgba(0,0,0,0.6);
-  color: #fff;
-  border: 0;
-  display: flex; align-items: center; justify-content: center;
-  cursor: pointer;
 }
-.rdet-preview-remove:hover { background: #dc2626; }
 
 .rdet-correction-actions {
   display: flex;
@@ -416,14 +408,8 @@
   padding-top: 12px;
 }
 .rdet-send-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 14px;
-  padding: 10px 24px;
+  min-width: 190px;
 }
-.rdet-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
 /* Approval */
 .rdet-correcao-display {
   background: #fff;
@@ -456,27 +442,7 @@
 .rdet-approve-btn,
 .rdet-reprove-btn {
   flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  font-size: 14px;
-  padding: 10px 20px;
 }
-
-.btn-success {
-  background: #16a34a; color: #fff; border: none;
-  font-weight: 700; border-radius: 8px; cursor: pointer;
-  transition: background 0.15s; font-family: inherit;
-}
-.btn-success:hover { background: #15803d; }
-
-.btn-danger {
-  background: #dc2626; color: #fff; border: none;
-  font-weight: 700; border-radius: 8px; cursor: pointer;
-  transition: background 0.15s; font-family: inherit;
-}
-.btn-danger:hover { background: #b91c1c; }
 
 /* Sidebar */
 .rdet-sidebar {

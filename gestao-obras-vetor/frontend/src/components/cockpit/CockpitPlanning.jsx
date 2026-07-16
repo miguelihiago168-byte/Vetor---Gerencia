@@ -1,6 +1,7 @@
 import React from 'react';
-import { Activity, CalendarClock, GitBranch, TrendingUp } from 'lucide-react';
+import { Activity, ArrowUpRight, CalendarClock, GitBranch, TrendingUp } from 'lucide-react';
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import Button from '../ui/Button';
 import { CockpitCard, EmptyState, MetricGrid } from './CockpitPrimitives';
 import { formatDate } from './cockpitTransforms';
 
@@ -14,7 +15,7 @@ const ActivityList = ({ items, empty, onOpen }) => items.length ? <div className
 export function CurvaSCard({ data, onOpen }) {
   const indicators = data?.indicadores;
   const series = data?.serie || [];
-  return <CockpitCard title="Curva S" icon={TrendingUp} className="cockpit-card-wide" action={<button type="button" className="cockpit-link" onClick={onOpen}>Abrir Curva S</button>}>
+  return <CockpitCard title="Curva S" icon={TrendingUp} className="cockpit-card-wide" action={<Button size="sm" tone="primary" variant="ghost" endIcon={ArrowUpRight} onClick={onOpen}>Abrir Curva S</Button>}>
     {!data ? <EmptyState>Curva S indisponível ou sem EAP configurada.</EmptyState> : <>
       <MetricGrid items={[
         { label: 'Planejado', value: `${Number(indicators?.avanco_planejado || 0).toFixed(2)}%`, state: 'info' },
@@ -39,7 +40,7 @@ export function ActivityStatusCard({ view }) {
 }
 
 export function CriticalActivitiesCard({ view, onOpen, onOpenAll }) {
-  return <CockpitCard title="Atividades críticas" icon={GitBranch} action={<button type="button" className="cockpit-link" onClick={onOpenAll}>Ver todas no Gantt</button>}>
+  return <CockpitCard title="Atividades críticas" icon={GitBranch} action={<Button size="sm" tone="primary" variant="ghost" endIcon={ArrowUpRight} onClick={onOpenAll}>Ver todas no Gantt</Button>}>
     {!view ? <EmptyState>Dados do Gantt indisponíveis.</EmptyState> : <ActivityList items={view.critical || []} empty="Nenhuma atividade no caminho crítico." onOpen={onOpen} />}
   </CockpitCard>;
 }

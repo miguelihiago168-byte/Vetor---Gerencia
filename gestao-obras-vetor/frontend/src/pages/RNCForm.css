@@ -21,22 +21,9 @@
 }
 
 .rnc-form-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border-radius: 9px;
-  background: rgba(255,255,255,0.15);
-  border: 1.5px solid rgba(255,255,255,0.25);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
   white-space: nowrap;
   flex-shrink: 0;
 }
-.rnc-form-back:hover { background: rgba(255,255,255,0.28); }
 
 .rnc-form-topbar-title { flex: 1; min-width: 0; }
 
@@ -62,20 +49,6 @@
   align-items: center;
   flex-shrink: 0;
 }
-.rnc-form-topbar-actions .btn {
-  font-size: 13px;
-}
-.btn-ghost {
-  background: rgba(255,255,255,0.15);
-  border: 1.5px solid rgba(255,255,255,0.3);
-  color: #fff;
-  border-radius: 9px;
-  padding: 8px 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.btn-ghost:hover { background: rgba(255,255,255,0.25); }
 
 /* ── Progress bar ─────────────────────────────── */
 .rnc-progress-bar {
@@ -290,18 +263,7 @@
   position: absolute;
   top: 3px;
   right: 3px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: rgba(0,0,0,0.6);
-  color: #fff;
-  border: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
 }
-.rnc-photo-remove:hover { background: #dc2626; }
 
 /* Submit row */
 .rnc-form-submit-row {
@@ -309,8 +271,6 @@
   justify-content: flex-end;
   padding: 4px 0;
 }
-.btn-lg { padding: 12px 28px !important; font-size: 15px !important; }
-
 /* ── Sidebar ──────────────────────────────────── */
 .rnc-form-sidebar {
   display: flex;
