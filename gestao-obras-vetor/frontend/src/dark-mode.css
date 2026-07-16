@@ -838,6 +838,237 @@ body.dark-mode .rdo-tl-tag.tag-danger   { background: rgba(239, 68, 68, 0.12);  
 body.dark-mode .rdo-tl-tag.tag-ok       { background: rgba(16, 185, 129, 0.12); color: #34d399; }
 body.dark-mode .rdo-tl-tag.tag-info     { background: rgba(37, 99, 235, 0.12);  color: #60a5fa; }
 
+/* -- RDO detalhes: relatorio operacional ----------------- */
+body.dark-mode .rdo-report-hero {
+  background: linear-gradient(135deg, #1b2836 0%, #172b3e 58%, #2a2929 100%);
+  border-color: #2a4060;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
+}
+
+body.dark-mode .rdo-report-back-btn,
+body.dark-mode .rdo-report-status-row,
+body.dark-mode .rdo-report-meta-item {
+  background: rgba(17, 24, 39, 0.72);
+  border-color: #2a4060;
+}
+
+body.dark-mode .rdo-report-back-btn {
+  color: #a9bac9;
+}
+
+body.dark-mode .rdo-report-back-btn:hover {
+  background: #1f3044;
+  border-color: #3b82f6;
+  color: #7dd3fc;
+}
+
+body.dark-mode .rdo-report-eyebrow,
+body.dark-mode .rdo-report-status-row,
+body.dark-mode .rdo-report-meta-item span {
+  color: #8fa3b9;
+}
+
+body.dark-mode .rdo-report-title-row h1,
+body.dark-mode .rdo-report-meta-item strong {
+  color: #e8edf3;
+}
+
+body.dark-mode .rdo-report-meta-item svg {
+  color: #60a5fa;
+}
+
+body.dark-mode .rdo-correction-alert {
+  background: rgba(127, 29, 29, 0.2);
+  border-color: rgba(248, 113, 113, 0.38);
+  border-left-color: #f87171;
+  color: #fecaca;
+}
+
+body.dark-mode .rdo-correction-alert-icon {
+  background: rgba(239, 68, 68, 0.18);
+  color: #f87171;
+}
+
+body.dark-mode .rdo-correction-alert strong,
+body.dark-mode .rdo-correction-alert p,
+body.dark-mode .rdo-correction-alert span {
+  color: #fecaca;
+}
+
+body.dark-mode .rdo-report-status::before {
+  box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.72);
+}
+
+body.dark-mode .rdo-report-status.is-approved {
+  background: rgba(16, 185, 129, 0.16);
+  color: #34d399;
+}
+
+body.dark-mode .rdo-report-status.is-review {
+  background: rgba(245, 158, 11, 0.16);
+  color: #fbbf24;
+}
+
+body.dark-mode .rdo-report-status.is-draft {
+  background: rgba(59, 130, 246, 0.16);
+  color: #60a5fa;
+}
+
+body.dark-mode .rdo-report-status.is-rejected {
+  background: rgba(239, 68, 68, 0.16);
+  color: #f87171;
+}
+
+body.dark-mode .rdo-report-status.is-neutral {
+  background: #2a4060;
+  color: #c5d3de;
+}
+
+body.dark-mode .rdo-report-section {
+  background: #1b2836;
+  border-color: #2a4060;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+
+body.dark-mode .rdo-report-section-head,
+body.dark-mode .rdo-report-table th,
+body.dark-mode .rdo-report-empty {
+  background: #1f3044;
+  border-color: #2a4060;
+}
+
+body.dark-mode .rdo-report-section-title h2,
+body.dark-mode .rdo-report-daypart > strong,
+body.dark-mode .rdo-report-daypart b,
+body.dark-mode .rdo-report-activity-item h3,
+body.dark-mode .rdo-report-note-item h3,
+body.dark-mode .rdo-report-activity-numbers strong,
+body.dark-mode .rdo-report-photo-info strong,
+body.dark-mode .rdo-report-attachment-info strong {
+  color: #e8edf3;
+}
+
+body.dark-mode .rdo-report-section-icon {
+  background: rgba(14, 165, 233, 0.16);
+  color: #7dd3fc;
+}
+
+body.dark-mode .rdo-report-count {
+  background: #2a4060;
+  color: #c5d3de;
+}
+
+body.dark-mode .rdo-report-daypart,
+body.dark-mode .rdo-report-activity-item,
+body.dark-mode .rdo-report-note-item,
+body.dark-mode .rdo-report-photo-card,
+body.dark-mode .rdo-report-attachment-card {
+  background: #172334;
+  border-color: #2a4060;
+}
+
+body.dark-mode .rdo-report-daypart div,
+body.dark-mode .rdo-report-table th,
+body.dark-mode .rdo-report-table td {
+  border-color: #2a4060;
+}
+
+body.dark-mode .rdo-report-daypart span,
+body.dark-mode .rdo-report-table th,
+body.dark-mode .rdo-report-empty,
+body.dark-mode .rdo-report-activity-item p,
+body.dark-mode .rdo-report-note-item p,
+body.dark-mode .rdo-report-activity-numbers span,
+body.dark-mode .rdo-report-photo-info span,
+body.dark-mode .rdo-report-photo-info small,
+body.dark-mode .rdo-report-attachment-info small {
+  color: #8fa3b9;
+}
+
+body.dark-mode .rdo-report-table td {
+  color: #c5d3de;
+}
+
+body.dark-mode .rdo-report-empty {
+  border-style: dashed;
+}
+
+body.dark-mode .rdo-report-activity-numbers div {
+  background: #1f3044;
+}
+
+body.dark-mode .rdo-report-tag {
+  background: rgba(59, 130, 246, 0.16);
+  color: #60a5fa;
+}
+
+body.dark-mode .rdo-report-tag.is-loose {
+  background: rgba(245, 158, 11, 0.16);
+  color: #fbbf24;
+}
+
+body.dark-mode .rdo-report-photo-card:hover,
+body.dark-mode .rdo-report-attachment-card:hover {
+  background: #1f3044;
+  border-color: #3b82f6;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.24);
+}
+
+body.dark-mode .rdo-report-photo-media {
+  background: linear-gradient(90deg, #111827 0, #1f3044 18%, #1f3044 82%, #111827 100%);
+}
+
+body.dark-mode .rdo-report-note-item > span {
+  background: #2a4060;
+  color: #c5d3de;
+}
+
+body.dark-mode .rdo-report-severity {
+  background: rgba(249, 115, 22, 0.16);
+  color: #fb923c;
+}
+
+body.dark-mode .rdo-report-attachment-icon {
+  background: #2a4060;
+  color: #c5d3de;
+}
+
+body.dark-mode .rdo-report-attachment-card.is-pdf .rdo-report-attachment-icon {
+  background: rgba(239, 68, 68, 0.16);
+  color: #f87171;
+}
+
+body.dark-mode .rdo-report-attachment-card.is-image .rdo-report-attachment-icon {
+  background: rgba(16, 185, 129, 0.16);
+  color: #34d399;
+}
+
+body.dark-mode .rdo-report-modal {
+  background: #1b2836;
+  border: 1px solid #2a4060;
+  box-shadow: 0 20px 25px rgba(0, 0, 0, 0.35);
+}
+
+body.dark-mode .rdo-report-modal h2 {
+  color: #e8edf3;
+}
+
+body.dark-mode .rdo-report-modal p {
+  color: #8fa3b9;
+}
+
+body.dark-mode .rdo-report-modal textarea {
+  background: #172334;
+  border-color: #2a4060;
+  color: #e8edf3;
+}
+
+body.dark-mode .rdo-report-modal textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+}
+
 /* ── Selects nativos — esquema de cores ─────────────────── */
 body.dark-mode select,
 body.dark-mode select option {
