@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowRight,
@@ -32,9 +32,16 @@ const modules = [
 ];
 
 const features = [
-  'Planejamento físico e acompanhamento por projeto',
-  'Indicadores para gestores, fiscais e equipes de qualidade',
-  'Fluxos de compras, almoxarifado, RDO e RNC conectados',
+  'Planejamento e execução conectados',
+  'Qualidade com evidências rastreáveis',
+  'Suprimentos e ativos no mesmo fluxo',
+];
+
+const workflowSteps = [
+  { icon: Layers3, number: '01', title: 'Planeje', text: 'Organize escopo, etapas, responsáveis e prazos em uma EAP clara.' },
+  { icon: Clock3, number: '02', title: 'Acompanhe', text: 'Registre a rotina da obra com RDOs, históricos e evidências de campo.' },
+  { icon: ClipboardCheck, number: '03', title: 'Controle', text: 'Trate não conformidades e acompanhe cada correção até a conclusão.' },
+  { icon: BarChart3, number: '04', title: 'Decida', text: 'Transforme a operação em indicadores objetivos para a gestão.' },
 ];
 
 const normalizeAuthErrorMessage = (msg) => String(msg || '');
@@ -111,6 +118,7 @@ function Landing({ initialAccess = false }) {
   const [tentandoRenovar, setTentandoRenovar] = useState(false);
 
   const accessRef = useRef(null);
+  const lastFocusedRef = useRef(null);
   const navigate = useNavigate();
   const { loginAuth } = useAuth();
   const mailTo = `mailto:${CONTACT_EMAIL}?subject=Quero%20conhecer%20a%20Vetor`;
@@ -118,16 +126,75 @@ function Landing({ initialAccess = false }) {
   const closeMenu = () => setMenuOpen(false);
 
   const openAccess = () => {
+    if (document.activeElement instanceof HTMLElement) {
+      lastFocusedRef.current = document.activeElement;
+    }
     setAccessOpen(true);
     setAccessMode('login');
     setForgotOpen(false);
     setErro('');
     setSucesso('');
     closeMenu();
-    requestAnimationFrame(() => {
-      accessRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    });
   };
+
+  const closeAccess = () => setAccessOpen(false);
+
+  useEffect(() => {
+    if (!accessOpen) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    const panel = accessRef.current;
+    const focusableSelector = [
+      'button:not([disabled])',
+      'a[href]',
+      'input:not([disabled])',
+      '[tabindex]:not([tabindex="-1"])',
+    ].join(',');
+
+    document.body.style.overflow = 'hidden';
+
+    const focusTimer = window.requestAnimationFrame(() => {
+      const firstFocusable = panel?.querySelector('[autofocus]') || panel?.querySelector(focusableSelector);
+      firstFocusable?.focus();
+    });
+
+    const handleKeyDown = (event) => {
+      if (trialExpirado) return;
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setAccessOpen(false);
+        return;
+      }
+
+      if (event.key !== 'Tab' || !panel) return;
+
+      const focusable = Array.from(panel.querySelectorAll(focusableSelector))
+        .filter((element) => element instanceof HTMLElement && element.offsetParent !== null);
+
+      if (!focusable.length) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.cancelAnimationFrame(focusTimer);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      window.setTimeout(() => lastFocusedRef.current?.focus(), 0);
+    };
+  }, [accessOpen, trialExpirado]);
 
   const handleCadastro = async (event) => {
     event.preventDefault();
@@ -303,20 +370,27 @@ function Landing({ initialAccess = false }) {
     <main className="landing-page">
       <header className="landing-header">
         <div className="landing-container landing-nav">
-          <a className="landing-brand" href="#inicio" onClick={closeMenu}>
-            <img src="/logo_vetor.png" alt="" />
-            <span>Vetor Gerenciamento</span>
+          <a className="landing-brand" href="#inicio" onClick={closeMenu} aria-label="Vetor Gerenciamento — início">
+            <span className="landing-logo-frame" aria-hidden="true"><img src="/logo_vetor_transparente.png" alt="" /></span>
+            <span>Vetor <b>Gerenciamento</b></span>
           </a>
 
           <nav className={`landing-nav-links ${menuOpen ? 'open' : ''}`} aria-label="Navegação principal">
             <a href="#solucoes" onClick={closeMenu}>Soluções</a>
             <a href="#modulos" onClick={closeMenu}>Módulos</a>
-            <a href="#seguranca" onClick={closeMenu}>Segurança</a>
+            <a href="#seguranca" onClick={closeMenu}>Governança</a>
             <a href="#contato" onClick={closeMenu}>Contato</a>
+            <button type="button" className="landing-nav-mobile-access" onClick={openAccess}>
+              Acessar sistema
+              <ArrowRight size={17} />
+            </button>
           </nav>
 
           <div className="landing-nav-actions">
-            <button type="button" className="landing-nav-access" onClick={openAccess}>Acessar sistema</button>
+            <button type="button" className="landing-nav-access" onClick={openAccess}>
+              Acessar sistema
+              <ArrowRight size={16} />
+            </button>
             <button
               type="button"
               className="landing-menu-btn"
@@ -324,79 +398,322 @@ function Landing({ initialAccess = false }) {
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen((open) => !open)}
             >
-              {menuOpen ? <X size={22} /> : <Menu size={22} />}
+              {menuOpen ? <X size={21} /> : <Menu size={21} />}
             </button>
           </div>
         </div>
       </header>
 
       <section className="landing-hero" id="inicio">
+        <div className="landing-hero-grid-lines" aria-hidden="true" />
+        <div className="landing-hero-orb landing-hero-orb-one" aria-hidden="true" />
+        <div className="landing-hero-orb landing-hero-orb-two" aria-hidden="true" />
+
         <div className="landing-container landing-hero-grid">
           <div className="landing-hero-copy">
-            <span className="landing-kicker">Gerenciamento, consultoria e tecnologia</span>
+            <span className="landing-kicker landing-kicker-light">Plataforma integrada para gestão de obras</span>
             <h1>
-              Gestão de obras
-              <span>com controle real.</span>
+              Sua obra inteira.
+              <span>Sob controle.</span>
             </h1>
             <p>
-              A Vetor centraliza projetos, RDO, RNC, compras, ativos e indicadores para equipes que precisam
-              decidir rápido sem perder rastreabilidade.
+              Planejamento, campo, qualidade e suprimentos reunidos em uma visão clara para sua equipe agir com
+              rapidez e rastreabilidade.
             </p>
+
             <div className="landing-hero-actions">
               <button type="button" className="landing-btn landing-btn-primary" onClick={openAccess}>
-                Entrar no sistema
+                Acessar plataforma
                 <ArrowRight size={18} />
               </button>
-              <a className="landing-btn landing-btn-light" href={mailTo}>
+              <a className="landing-btn landing-btn-ghost" href={mailTo}>
                 <Mail size={18} />
-                Contato
+                Solicitar demonstração
               </a>
             </div>
-            <div className="landing-hero-points">
+
+            <div className="landing-hero-points" aria-label="Principais benefícios">
               {features.map((feature) => (
                 <span key={feature}>
-                  <CheckCircle2 size={18} />
+                  <CheckCircle2 size={17} />
                   {feature}
                 </span>
               ))}
             </div>
           </div>
 
-          {accessOpen ? (
-            <section className="landing-access-card" ref={accessRef} aria-label="Acesso ao sistema">
+          <div className="landing-product-visual">
+            <div className="landing-product-glow" aria-hidden="true" />
+            <div className="landing-product-caption">
+              <span aria-hidden="true" />
+              Visão demonstrativa do produto
+            </div>
+            <div className="landing-product" aria-label="Prévia visual do sistema Vetor">
+              <div className="landing-product-top">
+                <span className="landing-product-brand">
+                  <span className="landing-logo-frame" aria-hidden="true"><img src="/logo_vetor_transparente.png" alt="" /></span>
+                  <b>Vetor</b>
+                </span>
+                <span className="landing-product-project">Obra Residencial Aurora</span>
+                <span className="landing-product-status"><i /> Em andamento</span>
+              </div>
+
+              <div className="landing-product-heading">
+                <div>
+                  <small>Visão geral do projeto</small>
+                  <strong>Indicadores da operação</strong>
+                </div>
+                <span>Atualizado hoje</span>
+              </div>
+
+              <div className="landing-product-stats">
+                <div>
+                  <small>Avanço físico</small>
+                  <strong>74%</strong>
+                  <span className="landing-stat-positive">Dentro do planejado</span>
+                </div>
+                <div>
+                  <small>RDOs no mês</small>
+                  <strong>28</strong>
+                  <span>Registros de campo</span>
+                </div>
+                <div>
+                  <small>RNCs abertas</small>
+                  <strong>05</strong>
+                  <span>Em acompanhamento</span>
+                </div>
+              </div>
+
+              <div className="landing-product-body">
+                <div className="landing-chart-card">
+                  <div className="landing-chart-head">
+                    <div><b>Evolução física</b><span>Planejado x realizado</span></div>
+                    <strong>74%</strong>
+                  </div>
+                  <div className="landing-chart-bars" aria-hidden="true">
+                    <div style={{ height: '46%' }} />
+                    <div style={{ height: '58%' }} />
+                    <div style={{ height: '53%' }} />
+                    <div style={{ height: '74%' }} />
+                    <div style={{ height: '68%' }} />
+                    <div style={{ height: '88%' }} />
+                    <div style={{ height: '81%' }} />
+                  </div>
+                  <div className="landing-chart-axis" aria-hidden="true"><span>Jan</span><span>Fev</span><span>Mar</span><span>Abr</span><span>Mai</span><span>Jun</span><span>Jul</span></div>
+                </div>
+
+                <div className="landing-timeline">
+                  <div className="landing-timeline-head"><b>Etapas da obra</b><span>3 etapas</span></div>
+                  <span className="done"><i /><b>Fundação</b><em>Concluído</em></span>
+                  <span className="active"><i /><b>Estrutura</b><em>Em andamento</em></span>
+                  <span><i /><b>Acabamento</b><em>Planejado</em></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="landing-integrations" id="solucoes">
+        <div className="landing-container landing-integrations-inner">
+          <div className="landing-integrations-copy">
+            <span>Uma operação, uma leitura</span>
+            <strong>Todos os fluxos conectados ao projeto.</strong>
+          </div>
+          <div className="landing-integration-track" aria-label="Fluxos integrados">
+            {['Projetos', 'EAP', 'RDO', 'RNC', 'Compras', 'Ativos'].map((item, index, items) => (
+              <React.Fragment key={item}>
+                <span>{item}</span>
+                {index < items.length - 1 && <ArrowRight size={14} aria-hidden="true" />}
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="landing-section landing-workflow-section">
+        <div className="landing-container">
+          <div className="landing-section-intro">
+            <div>
+              <span className="landing-kicker">Operação conectada</span>
+              <h2>Da estratégia ao campo, tudo conversa.</h2>
+            </div>
+            <p>
+              A Vetor organiza o ciclo da obra em um fluxo contínuo. A informação nasce na operação e chega à
+              gestão pronta para orientar a próxima decisão.
+            </p>
+          </div>
+
+          <div className="landing-workflow">
+            {workflowSteps.map(({ icon: Icon, number, title, text }) => (
+              <article className="landing-workflow-card" key={title}>
+                <div className="landing-workflow-card-top">
+                  <span><Icon size={21} /></span>
+                  <small>{number}</small>
+                </div>
+                <h3>{title}</h3>
+                <p>{text}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="landing-section landing-section-dark" id="modulos">
+        <div className="landing-section-dark-grid" aria-hidden="true" />
+        <div className="landing-container">
+          <div className="landing-section-intro landing-section-intro-dark">
+            <div>
+              <span className="landing-kicker landing-kicker-light">Módulos do sistema</span>
+              <h2>Ferramentas que trabalham como uma só.</h2>
+            </div>
+            <p>Do planejamento aos ativos, cada módulo compartilha o contexto do projeto e reduz retrabalho.</p>
+          </div>
+
+          <div className="landing-modules">
+            {modules.map(({ icon: Icon, title, text }, index) => (
+              <article className={`landing-module ${index === 0 ? 'landing-module-featured' : ''}`} key={title}>
+                <div className="landing-module-top">
+                  <span><Icon size={25} /></span>
+                  <small>0{index + 1}</small>
+                </div>
+                <h3>{title}</h3>
+                <p>{text}</p>
+                <div className="landing-module-foot">
+                  <CheckCircle2 size={15} />
+                  Conectado ao projeto
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="landing-section landing-security-section" id="seguranca">
+        <div className="landing-container landing-security">
+          <div className="landing-security-copy">
+            <span className="landing-kicker">Gestão com governança</span>
+            <h2>Controle para a equipe. Clareza para a gestão.</h2>
+            <p>
+              Cada perfil acessa o que precisa, enquanto documentos, evidências e decisões permanecem vinculados
+              à história do projeto.
+            </p>
+            <div className="landing-security-badge">
+              <ShieldCheck size={20} />
+              <span><b>Rastreabilidade de ponta a ponta</b>Informação organizada por projeto e por usuário.</span>
+            </div>
+          </div>
+
+          <div className="landing-governance-panel">
+            <div className="landing-governance-head">
+              <span><ShieldCheck size={26} /></span>
+              <div><small>Governança operacional</small><strong>Informação no fluxo certo</strong></div>
+            </div>
+            <div className="landing-governance-list">
+              <span><i><ShieldCheck size={19} /></i><b>Controle por perfil</b><em>Cada função com os acessos necessários.</em></span>
+              <span><i><FileText size={19} /></i><b>Documentos e evidências</b><em>Registros preservados no contexto da obra.</em></span>
+              <span><i><BarChart3 size={19} /></i><b>Indicadores executivos</b><em>Leitura objetiva para acompanhar a operação.</em></span>
+              <span><i><HardHat size={19} /></i><b>Rotina de campo</b><em>Execução conectada ao planejamento.</em></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="landing-contact" id="contato">
+        <div className="landing-container landing-contact-inner">
+          <div className="landing-contact-copy">
+            <span className="landing-kicker landing-kicker-light">Próximo passo</span>
+            <h2>Pronto para centralizar a gestão da sua obra?</h2>
+            <p>Conheça a Vetor e veja como a plataforma se adapta à rotina da sua equipe.</p>
+          </div>
+          <div className="landing-contact-actions">
+            <a className="landing-btn landing-btn-primary" href={mailTo}>
+              <Mail size={18} />
+              Solicitar demonstração
+            </a>
+            <button type="button" className="landing-btn landing-btn-ghost" onClick={openAccess}>
+              Acessar plataforma
+              <ArrowRight size={18} />
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <footer className="landing-footer">
+        <div className="landing-container landing-footer-inner">
+          <a className="landing-footer-brand" href="#inicio" aria-label="Voltar ao início">
+            <span className="landing-logo-frame" aria-hidden="true"><img src="/logo_vetor_transparente.png" alt="" /></span>
+            <span>Vetor <b>Gerenciamento</b></span>
+          </a>
+          <span>© {new Date().getFullYear()} Vetor Gerenciamento. Todos os direitos reservados.</span>
+          <a href={mailTo}>Fale com a Vetor</a>
+        </div>
+      </footer>
+
+      {accessOpen && (
+        <div
+          className="landing-access-overlay"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) closeAccess(); }}
+          role="presentation"
+        >
+          <aside
+            className="landing-access-panel"
+            ref={accessRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="landing-access-title"
+            aria-describedby="landing-access-description"
+          >
+            <div className="landing-access-panel-top">
               <div className="landing-access-brand">
-                <img src="/logo_vetor.png" alt="Vetor" />
-                <span>Área do cliente</span>
+                <span className="landing-logo-frame" aria-hidden="true"><img src="/logo_vetor_transparente.png" alt="" /></span>
+                <span><b>Vetor Gerenciamento</b>Área do cliente</span>
+              </div>
+              <button type="button" className="landing-access-close" onClick={closeAccess} aria-label="Fechar acesso">
+                <X size={21} />
+              </button>
+            </div>
+
+            <div className="landing-access-scroll">
+              <div className="landing-access-intro">
+                <span className="landing-access-eyebrow">Acesso à plataforma</span>
+                <h2 id="landing-access-title">
+                  {forgotOpen ? 'Recupere seu acesso' : accessMode === 'cadastro' ? 'Crie sua conta' : 'Bem-vindo de volta'}
+                </h2>
+                <p id="landing-access-description">
+                  {forgotOpen
+                    ? 'Informe seu login ou e-mail cadastrado para receber as instruções.'
+                    : accessMode === 'cadastro'
+                      ? 'Preencha os dados abaixo para começar a organizar seus projetos.'
+                      : 'Entre com seus dados para acessar projetos, indicadores e rotinas de obra.'}
+                </p>
               </div>
 
-              <div className="landing-access-tabs" aria-label="Tipo de acesso">
-                <button
-                  type="button"
-                  className={accessMode === 'login' ? 'active' : ''}
-                  onClick={() => { setAccessMode('login'); setForgotOpen(false); setErro(''); setSucesso(''); }}
-                >
-                  Entrar
-                </button>
-                <button
-                  type="button"
-                  className={accessMode === 'cadastro' ? 'active' : ''}
-                  onClick={() => { setAccessMode('cadastro'); setForgotOpen(false); setErro(''); setSucesso(''); }}
-                >
-                  Criar conta
-                </button>
-              </div>
+              {!forgotOpen && (
+                <div className="landing-access-tabs" role="tablist" aria-label="Tipo de acesso">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={accessMode === 'login'}
+                    className={accessMode === 'login' ? 'active' : ''}
+                    onClick={() => { setAccessMode('login'); setErro(''); setSucesso(''); }}
+                  >
+                    Entrar
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={accessMode === 'cadastro'}
+                    className={accessMode === 'cadastro' ? 'active' : ''}
+                    onClick={() => { setAccessMode('cadastro'); setErro(''); setSucesso(''); }}
+                  >
+                    Criar conta
+                  </button>
+                </div>
+              )}
 
-              <h2>{forgotOpen ? 'Recuperar senha' : accessMode === 'cadastro' ? 'Criar conta' : 'Entrar no sistema'}</h2>
-              <p>
-                {forgotOpen
-                  ? 'Informe seu login ou e-mail cadastrado para receber as instruções.'
-                  : accessMode === 'cadastro'
-                    ? 'Preencha os dados para criar sua conta e acessar seus projetos.'
-                  : 'Use seu usuário ou e-mail e a senha cadastrada para acessar seus projetos.'}
-              </p>
-
-              {erro && <div className="landing-access-alert error">{erro}</div>}
-              {sucesso && <div className="landing-access-alert success">{sucesso}</div>}
+              {erro && <div className="landing-access-alert error" role="alert">{erro}</div>}
+              {sucesso && <div className="landing-access-alert success" role="status">{sucesso}</div>}
 
               {forgotOpen ? (
                 <form className="landing-access-form" onSubmit={handleEsqueciSenha}>
@@ -427,7 +744,7 @@ function Landing({ initialAccess = false }) {
                   </button>
                 </form>
               ) : accessMode === 'cadastro' ? (
-                <form className="landing-access-form" onSubmit={handleCadastro}>
+                <form className="landing-access-form landing-access-form-register" onSubmit={handleCadastro}>
                   <label>
                     Nome completo
                     <input
@@ -443,6 +760,7 @@ function Landing({ initialAccess = false }) {
                         }));
                       }}
                       placeholder="Seu nome"
+                      autoFocus
                       required
                     />
                   </label>
@@ -503,7 +821,7 @@ function Landing({ initialAccess = false }) {
                     </span>
                     {cadastroForm.senha && (
                       <small className="landing-password-hint" style={{ color: getPasswordStrength(cadastroForm.senha).color }}>
-                        Nível da senha: {getPasswordStrength(cadastroForm.senha).label}
+                        Nível da senha: <b>{getPasswordStrength(cadastroForm.senha).label}</b>
                       </small>
                     )}
                   </label>
@@ -530,7 +848,7 @@ function Landing({ initialAccess = false }) {
                     Usuário ou e-mail
                     <input
                       type="text"
-                      maxLength="40"
+                      maxLength="120"
                       value={loginForm.usuario}
                       onChange={(event) => setLoginForm((prev) => ({ ...prev, usuario: event.target.value.trimStart() }))}
                       placeholder="Insira seu usuário ou e-mail"
@@ -579,145 +897,15 @@ function Landing({ initialAccess = false }) {
                   </button>
                 </form>
               )}
-            </section>
-          ) : (
-            <div className="landing-product" aria-label="Prévia visual do sistema Vetor">
-              <div className="landing-product-top">
-                <img src="/logo_vetor.png" alt="" />
-                <span>Obra Residencial Aurora</span>
-              </div>
-              <div className="landing-product-stats">
-                <div>
-                  <small>Avanço físico</small>
-                  <strong>74%</strong>
-                </div>
-                <div>
-                  <small>RDOs no mês</small>
-                  <strong>28</strong>
-                </div>
-                <div>
-                  <small>RNCs abertas</small>
-                  <strong>05</strong>
-                </div>
-              </div>
-              <div className="landing-product-body">
-                <div className="landing-chart">
-                  <div style={{ height: '54%' }} />
-                  <div style={{ height: '72%' }} />
-                  <div style={{ height: '48%' }} />
-                  <div style={{ height: '88%' }} />
-                  <div style={{ height: '66%' }} />
-                  <div style={{ height: '79%' }} />
-                </div>
-                <div className="landing-timeline">
-                  <span><b>Fundação</b><i>Concluído</i></span>
-                  <span><b>Estrutura</b><i>Em andamento</i></span>
-                  <span><b>Acabamento</b><i>Planejado</i></span>
-                </div>
+
+              <div className="landing-access-assurance">
+                <ShieldCheck size={18} />
+                <span><b>Acesso por perfil</b>Você visualiza apenas os projetos e recursos autorizados.</span>
               </div>
             </div>
-          )}
+          </aside>
         </div>
-      </section>
-
-      <section className="landing-strip" id="solucoes">
-        <div className="landing-container landing-strip-inner">
-          <div className="landing-strip-copy">
-            <strong>Operação conectada</strong>
-            <span>Obra, suprimentos e qualidade em uma leitura objetiva.</span>
-          </div>
-          <div className="landing-strip-modules">
-            <span>RDO</span>
-            <span>RNC</span>
-            <span>EAP</span>
-            <span>Compras</span>
-            <span>Ativos</span>
-          </div>
-        </div>
-      </section>
-
-      <section className="landing-section">
-        <div className="landing-container landing-split">
-          <div>
-            <span className="landing-kicker">Controle integrado</span>
-            <h2>
-              Menos planilhas soltas.
-              <span>Mais contexto para gerir a obra.</span>
-            </h2>
-            <p>
-              A Vetor conecta rotinas que normalmente ficam dispersas: planejamento, acompanhamento diário,
-              não conformidades, compras e ativos. O resultado é uma leitura mais precisa do que está acontecendo.
-            </p>
-          </div>
-          <div className="landing-checklist">
-            <span><CheckCircle2 size={20} /> Histórico por projeto e por usuário</span>
-            <span><CheckCircle2 size={20} /> Indicadores de prazo, qualidade e suprimentos</span>
-            <span><CheckCircle2 size={20} /> Perfis de acesso para cada papel da equipe</span>
-          </div>
-        </div>
-      </section>
-
-      <section className="landing-section landing-section-dark" id="modulos">
-        <div className="landing-container">
-          <div className="landing-section-head">
-            <span className="landing-kicker">Módulos do sistema</span>
-            <h2>Ferramentas para a rotina de quem executa e acompanha obras.</h2>
-          </div>
-          <div className="landing-modules">
-            {modules.map(({ icon: Icon, title, text }) => (
-              <article className="landing-module" key={title}>
-                <Icon size={28} />
-                <h3>{title}</h3>
-                <p>{text}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="landing-section" id="seguranca">
-        <div className="landing-container landing-security">
-          <div>
-            <span className="landing-kicker">Gestão com governança</span>
-            <h2>
-              Dados organizados.
-              <span>Acessos definidos.</span>
-              <span>Decisões rastreáveis.</span>
-            </h2>
-            <p>
-              O sistema foi estruturado para equipes com múltiplos perfis, mantendo cada usuário no fluxo certo
-              e preservando o registro das ações importantes.
-            </p>
-          </div>
-          <div className="landing-security-grid">
-            <span><ShieldCheck size={24} /> Controle por perfil</span>
-            <span><FileText size={24} /> Documentos e evidências</span>
-            <span><BarChart3 size={24} /> Indicadores executivos</span>
-            <span><HardHat size={24} /> Rotina de campo</span>
-          </div>
-        </div>
-      </section>
-
-      <section className="landing-contact" id="contato">
-        <div className="landing-container landing-contact-inner">
-          <div>
-            <span className="landing-kicker">Contato</span>
-            <h2>Quer adaptar a Vetor para sua operação?</h2>
-            <p>Fale com a equipe e solicite uma demonstração do sistema.</p>
-          </div>
-          <a className="landing-btn landing-btn-primary" href={mailTo}>
-            <Mail size={18} />
-            {CONTACT_EMAIL}
-          </a>
-        </div>
-      </section>
-
-      <footer className="landing-footer">
-        <div className="landing-container landing-footer-inner">
-          <img src="/logo_externo_vetor.png" alt="Vetor" />
-          <span>© {new Date().getFullYear()} Vetor Gerenciamento. Todos os direitos reservados.</span>
-        </div>
-      </footer>
+      )}
 
       {trialExpirado && (
         <div className="landing-trial-modal" role="dialog" aria-modal="true" aria-label="Período de teste encerrado">
