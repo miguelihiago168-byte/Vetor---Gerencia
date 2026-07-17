@@ -1129,7 +1129,7 @@ function RDOForm2() {
         id: resp.data?.id,
         nome_arquivo: resp.data?.arquivo?.nome_arquivo || arquivoFoto.name || file.name,
         caminho_arquivo: resp.data?.arquivo?.caminho_arquivo,
-        descricao: descricao || arquivoFoto.name || file.name,
+        descricao: descricao || '',
         atividade_eap_id: atividadeSelecionada?.tipo === 'eap' ? atividadeSelecionada.atividade_eap_id : null,
         atividade_avulsa_descricao: atividadeSelecionada?.tipo === 'avulsa' ? atividadeSelecionada.atividade_avulsa_descricao : null,
         ordem: resp.data?.ordem,
@@ -2194,20 +2194,19 @@ function RDOForm2() {
                           variant="solid"
                           size="sm"
                           icon={Trash2}
-                          label={`Remover ${f.nome_arquivo || 'foto'}`}
+                          label={`Remover ${f.descricao ? `foto: ${f.descricao}` : 'foto'}`}
                           onClick={(e) => { e.preventDefault(); e.stopPropagation(); removerFotoPersistida(f); }}
                         />
                         <a href={getUploadUrl(f.caminho_arquivo)} target="_blank" rel="noreferrer" style={{ display: 'block', textDecoration: 'none' }}>
                           <div className="rdo-photo-card-preview" style={{ position: 'relative', width: '100%', paddingTop: '70%', background: '#f8fafc' }}>
                             <img
                               src={getUploadUrl(f.caminho_arquivo)}
-                              alt={f.nome_arquivo || 'foto'}
+                              alt={f.descricao || 'Foto do RDO'}
                               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
                             />
                           </div>
                         </a>
                         <div style={{ padding: '8px 10px' }}>
-                          <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>{f.nome_arquivo}</div>
                           {editingFotoId === f.id ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                               <input
@@ -2256,18 +2255,17 @@ function RDOForm2() {
                           variant="solid"
                           size="sm"
                           icon={Trash2}
-                          label={`Remover ${f.file?.name || 'foto pendente'}`}
+                          label={`Remover ${f.descricao ? `foto: ${f.descricao}` : 'foto pendente'}`}
                           onClick={(e) => { e.preventDefault(); e.stopPropagation(); removerFotoFila(i); }}
                         />
                         <div className="rdo-photo-card-preview" style={{ position: 'relative', width: '100%', paddingTop: '70%', background: '#f8fafc' }}>
                           <img
                             src={f.previewUrl}
-                            alt={f.file?.name || 'foto pendente'}
+                            alt={f.descricao || 'Foto pendente do RDO'}
                             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
                           />
                         </div>
                         <div style={{ padding: '8px 10px' }}>
-                          <div style={{ fontSize: '11px', color: '#92400e', marginBottom: '4px' }}>{f.file?.name}</div>
                           <div style={{ fontSize: '12px', fontWeight: 600, color: '#1f2937' }}>{f.descricao || 'Sem descrição'}</div>
                           <div style={{ marginTop: '4px', fontSize: '11px', color: '#64748b' }}>{f.atividade_label || 'Atividade vinculada'}</div>
                           <div style={{ marginTop: '6px', fontSize: '11px', color: '#b45309', fontWeight: 600 }}>Pronta para envio ao salvar o RDO</div>

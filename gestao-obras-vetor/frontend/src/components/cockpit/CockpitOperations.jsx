@@ -90,15 +90,15 @@ export function PhotoAlbumCard({ album, getUrl, loading, onOpen }) {
       <header><div><strong>{group.numero_rdo}</strong><span>{formatDate(group.data_relatorio)} · {group.status}</span></div><CockpitLinkButton onClick={() => onOpen(`rdo/${group.rdo_id}`)}>Abrir RDO</CockpitLinkButton></header>
       <div className="cockpit-photo-grid">{group.fotos.map((photo) => {
         const index = photoIndexes.get(photo.id);
-        return <button type="button" key={photo.id} className="cockpit-photo" onClick={() => setSelectedIndex(index)}><img src={getUrl(photo.caminho_arquivo)} loading="lazy" alt={photo.descricao || photo.nome_arquivo || 'Foto do RDO'} /><span><strong>{photo.atividade_codigo ? `${photo.atividade_codigo} · ` : ''}{photo.atividade_descricao || photo.atividade_avulsa_descricao || 'Sem atividade'}</strong><small>{photo.descricao || photo.nome_arquivo || 'Foto do RDO'}</small></span></button>;
+        return <button type="button" key={photo.id} className="cockpit-photo" onClick={() => setSelectedIndex(index)}><img src={getUrl(photo.caminho_arquivo)} loading="lazy" alt={photo.descricao || 'Foto do RDO'} /><span><strong>{photo.atividade_codigo ? `${photo.atividade_codigo} · ` : ''}{photo.atividade_descricao || photo.atividade_avulsa_descricao || 'Sem atividade'}</strong><small>{photo.descricao || 'Foto sem descrição'}</small></span></button>;
       })}</div>
     </section>)}</div> : <EmptyState>Nenhuma foto registrada nos RDOs.</EmptyState>}
     {selected && <div className="cockpit-lightbox" role="dialog" aria-modal="true" aria-label="Álbum de fotos da obra" onClick={() => setSelectedIndex(null)}>
       <button type="button" className="cockpit-lightbox-close" aria-label="Fechar" onClick={() => setSelectedIndex(null)}>×</button>
       {photos.length > 1 && <button type="button" className="cockpit-lightbox-nav previous" aria-label="Foto anterior" onClick={(event) => { event.stopPropagation(); move(-1); }}><ChevronLeft /></button>}
-      <img onClick={(event) => event.stopPropagation()} src={getUrl(selected.caminho_arquivo)} alt={selected.descricao || selected.nome_arquivo || 'Foto do RDO'} />
+      <img onClick={(event) => event.stopPropagation()} src={getUrl(selected.caminho_arquivo)} alt={selected.descricao || 'Foto do RDO'} />
       {photos.length > 1 && <button type="button" className="cockpit-lightbox-nav next" aria-label="Próxima foto" onClick={(event) => { event.stopPropagation(); move(1); }}><ChevronRight /></button>}
-      <div onClick={(event) => event.stopPropagation()}><span><strong>{selected.numero_rdo} · {formatDate(selected.data_relatorio)}</strong><small>{selected.descricao || selected.atividade_descricao || selected.nome_arquivo || 'Foto do RDO'} · {selectedIndex + 1} de {photos.length}</small></span><CockpitLinkButton onClick={() => onOpen(`rdo/${selected.rdo_id}`)}>Abrir RDO</CockpitLinkButton></div>
+      <div onClick={(event) => event.stopPropagation()}><span><strong>{selected.numero_rdo} · {formatDate(selected.data_relatorio)}</strong><small>{selected.descricao || selected.atividade_descricao || 'Foto sem descrição'} · {selectedIndex + 1} de {photos.length}</small></span><CockpitLinkButton onClick={() => onOpen(`rdo/${selected.rdo_id}`)}>Abrir RDO</CockpitLinkButton></div>
     </div>}
   </CockpitCard>;
 }

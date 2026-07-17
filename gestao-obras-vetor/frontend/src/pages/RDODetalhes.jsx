@@ -522,7 +522,6 @@ function RDODetalhes() {
                   : foto.atividade_avulsa_descricao
                     ? `Avulsa - ${foto.atividade_avulsa_descricao}`
                     : '';
-                const fileName = foto.nome_arquivo || foto.nome_original || foto.caminho_arquivo?.split('/').pop();
                 return (
                   <a
                     key={foto.id || index}
@@ -537,7 +536,6 @@ function RDODetalhes() {
                     <div className="rdo-report-photo-info">
                       <strong>{foto.descricao || 'Foto sem descrição'}</strong>
                       {linkedActivity && <span>{linkedActivity}</span>}
-                      {fileName && <small>{fileName}</small>}
                     </div>
                   </a>
                 );

@@ -345,14 +345,15 @@ function renderHtml(data) {
   const fotoCards = fotos.map((foto) => {
     const filePath = path.join(uploadsDir, foto.caminho_arquivo || '');
     const src = toDataUri(filePath, foto.tipo || 'image/jpeg');
+    const descricao = String(foto.descricao || '').trim();
     const atividade = foto.atividade_descricao
       ?`${foto.atividade_codigo ?`${foto.atividade_codigo} - ` : ''}${foto.atividade_descricao}`
       : (foto.atividade_avulsa_descricao || '-');
     return `
       <article class="photo-card avoid-break">
-        ${src ?`<img src="${src}" alt="${escapeHtml(foto.nome_arquivo || 'Foto do RDO')}">` : '<div class="photo-missing">Imagem não encontrada</div>'}
+        ${src ?`<img src="${src}" alt="${escapeHtml(descricao || 'Foto do RDO')}">` : '<div class="photo-missing">Imagem não encontrada</div>'}
         <div class="photo-caption">
-          <strong>${escapeHtml(foto.descricao || foto.nome_arquivo || 'Foto do RDO')}</strong>
+          ${descricao ?`<strong>${escapeHtml(descricao)}</strong>` : ''}
           <span>Atividade: ${escapeHtml(atividade)}</span>
           <span>Data/Hora: ${fmtDateTime(foto.criado_em)}</span>
           <span>Autor: ${escapeHtml(foto.autor_nome || '-')}</span>
