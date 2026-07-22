@@ -50,14 +50,33 @@ mkdir -p /home/ubuntu/app
 echo ""
 echo ">>> [6/6] Criando script de backup do banco..."
 cat > /home/ubuntu/backup-db.sh << 'EOF'
+set -Eeuo pipefail
 #!/bin/bash
 # Backup diário do banco SQLite
 APP_DATA_DIR="/home/ubuntu/app_data/gestao-obras-vetor"
 BACKUP_DIR="/home/ubuntu/backups/gestao-obras-vetor"
+BACKUP_IMAGE="gestao-obras-vetor-backend"
 DB_PATH="$APP_DATA_DIR/database/gestao_obras.db"
-DATA=$(date +%Y-%m-%d_%H-%M)
 
 mkdir -p "$BACKUP_DIR"
+
+if [ -f "$APP_DATA_DIR/database/gestao_obras.db" ]; then
+  # The image contains the canonical full backup script. Mounting the whole
+  # directories preserves all tenant databases and uploaded files.
+  docker run --rm \
+    -e BACKUP_DIR=/app/backups \
+    -v "$APP_DATA_DIR/database:/app/database:ro" \
+    -v "$APP_DATA_DIR/uploads:/app/uploads:ro" \
+    -v "$BACKUP_DIR:/app/backups" \
+    "$BACKUP_IMAGE" node scripts/backupDatabase.js
+
+  # Keep the 30 newest complete backups.
+  find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d -name 'backup-*' -printf '%T@ %p\n' \
+    | sort -nr \
+    | awk 'NR > 30 {print $2}' \
+    | xargs -r -d '\n' rm -rf
+  exit 0
+fi
 
 if [ -f "$DB_PATH" ]; then
   cp "$DB_PATH" "$BACKUP_DIR/gestao_obras_$DATA.db"

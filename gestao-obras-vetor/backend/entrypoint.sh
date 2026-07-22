@@ -3,11 +3,11 @@ set -e
 
 echo ">>> Inicializando banco de dados..."
 if [ "${NODE_ENV:-development}" = "production" ]; then
-  echo ">>> Aplicando migrations de producao..."
-  MIGRATIONS_ALLOW_PRODUCTION=true node scripts/runMigrations.js
-
   echo ">>> Validando banco de producao em modo somente leitura..."
   node scripts/validateStartupDatabase.js
+
+  echo ">>> Validando ausencia de migrations pendentes..."
+  node scripts/runMigrations.js --status
 else
   node scripts/initDatabase.js
 

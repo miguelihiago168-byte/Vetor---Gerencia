@@ -28,10 +28,19 @@ const auth = async (req, res, next) => {
       return res.status(401).json({ erro: 'Usuário inválido ou inativo.' });
     }
 
+    const perfil = inferirPerfil(usuarioAtual);
+    if (!perfil) {
+      console.warn(`[auth] Usuario ${usuarioAtual.id} possui perfil invalido ou ausente.`);
+      return res.status(403).json({
+        codigo: 'INVALID_USER_PROFILE',
+        erro: 'Usuario sem perfil de acesso valido. Contate um administrador.'
+      });
+    }
+
     req.usuario = {
       ...decoded,
       ...usuarioAtual,
-      perfil: inferirPerfil(usuarioAtual)
+      perfil
     };
 
     const tenantIds = Array.isArray(decoded.tenant_ids)

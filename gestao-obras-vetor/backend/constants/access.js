@@ -54,11 +54,21 @@ const inferirPerfil = (usuario = {}) => {
   if (toIntFlag(usuario.is_adm) === 1) return PERFIS.ADM;
   if (toIntFlag(usuario.is_gestor) === 1) return PERFIS.GESTOR_GERAL;
 
-  return PERFIS.ADM;
+  // An absent or unrecognized role must never grant administrator access.
+  return null;
 };
 
 const mapPerfilParaLegado = (perfil) => {
-  const escolhido = normalizarPerfil(perfil) || PERFIS.ADM;
+  const escolhido = normalizarPerfil(perfil);
+
+  // Persist unknown roles without privileges if a caller bypasses validation.
+  if (!escolhido) {
+    return {
+      is_gestor: 0,
+      is_adm: 0,
+      perfil_almoxarifado: LEGACY_PERFIS_ALMOX.VISUALIZADOR
+    };
+  }
 
   const is_gestor = [PERFIS.GESTOR_GERAL, PERFIS.GESTOR_OBRA].includes(escolhido) ? 1 : 0;
   const is_adm = escolhido === PERFIS.ADM ? 1 : 0;
