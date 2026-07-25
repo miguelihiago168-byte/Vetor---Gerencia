@@ -121,6 +121,8 @@ jobs:
               "CHANGED_FILES=$(git diff --name-only $PREV_COMMIT $NEW_COMMIT || true)",
               "git reset --hard origin/$TARGET_BRANCH",
               "echo '$BACKEND_ENV_B64' | base64 -d > backend/.env",
+              "test -f .env || (echo 'Arquivo .env raiz ausente. Configure APP_DOMAIN, LETSENCRYPT_EMAIL e APP_DATA_DIR antes do deploy.'; exit 1)",
+              "sudo docker compose config -q",
               "echo '>>> Preservando cache Docker para acelerar builds incrementais.'",
               "export DOCKER_BUILDKIT=1",
               "export BUILDKIT_PROGRESS=plain",
@@ -131,9 +133,10 @@ jobs:
               "echo \"$CHANGED_FILES\" | grep -Eq '^(frontend/|nginx/|docker-compose.yml)' && NEED_FRONTEND=1 || true",
               "echo \"$CHANGED_FILES\" | grep -Eq '^(\\.github/workflows/deploy\\.yml|gestao-obras-vetor/\\.github/workflows/deploy\\.yml)$' && NEED_BACKEND=1 && NEED_FRONTEND=1 || true",
               "if [ $NEED_BACKEND -eq 1 ] && [ $NEED_FRONTEND -eq 1 ]; then sudo docker compose up -d --build backend frontend; elif [ $NEED_BACKEND -eq 1 ]; then sudo docker compose up -d --build backend; elif [ $NEED_FRONTEND -eq 1 ]; then sudo docker compose up -d --build frontend; else sudo docker compose up -d backend frontend; fi",
+              "sudo docker compose up -d --force-recreate caddy",
               "sudo docker compose ps",
               "sleep 5",
-              "curl -sf http://localhost/api/health && echo OK || (echo FALHOU; exit 1)"
+              "sudo docker compose exec -T frontend wget -qO- http://localhost/api/health && echo OK || (echo FALHOU; exit 1)"
             ]
           }
           JSON
@@ -257,6 +260,12 @@ jobs:
 
             echo '${{ secrets.BACKEND_ENV }}' > backend/.env
 
+            if [ ! -f .env ]; then
+              echo ">>> Arquivo .env raiz ausente. Configure APP_DOMAIN, LETSENCRYPT_EMAIL e APP_DATA_DIR antes do deploy."
+              exit 1
+            fi
+            sudo docker compose config -q
+
             echo ">>> Preservando cache Docker para acelerar builds incrementais."
             export DOCKER_BUILDKIT=1
             export BUILDKIT_PROGRESS=plain
@@ -284,12 +293,16 @@ jobs:
               sudo docker compose up -d backend frontend
             fi
 
+            # Recria o proxy para aplicar alteracoes no Caddyfile e garantir que
+            # ele seja iniciado mesmo em deploys sem rebuild de aplicacao.
+            sudo docker compose up -d --force-recreate caddy
+
             echo ">>> Status dos containers:"
             sudo docker compose ps
 
             echo ">>> Verificando health check..."
             sleep 5
-            curl -sf http://localhost/api/health && echo " OK" || echo " FALHOU"
+            sudo docker compose exec -T frontend wget -qO- http://localhost/api/health && echo " OK" || echo " FALHOU"
 
             echo ">>> Deploy concluído!"
 

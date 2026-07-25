@@ -1,0 +1,10 @@
+{
+	email {$LETSENCRYPT_EMAIL}
+	acme_ca https://acme-v02.api.letsencrypt.org/directory
+}
+
+# Caddy obtains and renews the Let's Encrypt certificate for the domain from .env.
+{$APP_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy frontend:80
+}

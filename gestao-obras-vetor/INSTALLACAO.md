@@ -89,43 +89,53 @@ Observações
 
 Se quiser, eu posso gerar um `docker-compose.yml` para rodar backend + frontend em containers.
 
-Docker (opção recomendada para disponibilizar em produção/servidores)
-- Para rodar com Docker e Nginx (frontend estático + proxy para `/api`):
+Docker com HTTPS automático (produção)
 
-1) Pré-requisitos: instale `docker` e `docker-compose`.
+O Docker Compose publica somente o Caddy nas portas TCP 80 e 443. Ele obtém e
+renova automaticamente o certificado Let's Encrypt; o frontend, API e Socket.IO
+ficam na rede interna Docker.
 
-2) Construir e subir os serviços (no diretório raiz do projeto):
+1) No DNS, crie o registro A/AAAA de `vetor.damjam.com.br` apontando para o IP
+do servidor Linux. Libere e, se necessário, encaminhe as portas TCP 80 e 443
+para esse servidor. Nenhum outro serviço pode ocupar essas portas.
+
+2) Copie `.env.example` para `.env` na raiz do projeto e preencha:
+```dotenv
+APP_DOMAIN=vetor.damjam.com.br
+LETSENCRYPT_EMAIL=admin@damjam.com.br
+APP_DATA_DIR=/srv/gestao-obras-vetor
+```
+`APP_DOMAIN` deve conter somente o domínio, sem `http://` ou `https://`.
+
+3) Mantenha as credenciais do backend em `backend/.env` (use
+`backend/.env.production.example` como referência) e inicie uma única vez:
 ```bash
-docker compose build
-docker compose up -d
+docker compose up -d --build
 ```
 
-3) Acesse via `http://<IP_DA_MAQUINA>/` (porta 80) — o Nginx do container serve o frontend e encaminha `/api` para o backend.
-
-4) Volumes:
-- `backend/uploads` e `backend/database` são montados no container do backend para persistência.
-
-Expor pela Internet
-- Configure port forwarding no roteador para a porta 80 (HTTP) para a máquina que executa o Docker.
-- Para segurança, use um proxy reverso com TLS (Let's Encrypt) ou um serviço de túnel (`ngrok`, `cloudflared`) para evitar abrir portas diretamente.
-
-Exemplo rápido com `ngrok` (teste):
+4) Verifique a emissão e o acesso:
 ```bash
-# suposição: ngrok instalado e você tem uma conta conectada
-ngrok http 80
-# ngrok irá criar um domínio público https://xxxx.ngrok.io apontando para seu localhost:80
+docker compose logs -f caddy
+curl -I http://vetor.damjam.com.br
+curl https://vetor.damjam.com.br/api/health
 ```
+O primeiro comando `curl` deve redirecionar para HTTPS. Certificados e dados
+ACME ficam nos volumes `caddy_data` e `caddy_config`, preservados em recriações
+normais dos containers.
+
+### Deploy automático pelo GitHub Actions
+
+Antes do primeiro push para `main`, crie o `.env` **na raiz do projeto no
+servidor** a partir de `.env.example`. Esse arquivo é ignorado pelo Git e será
+preservado pelo `git reset --hard` usado no deploy. O workflow valida sua
+presença, recria o Caddy a cada publicação e falha com uma mensagem clara se
+`APP_DOMAIN`, `LETSENCRYPT_EMAIL` ou `APP_DATA_DIR` não estiverem disponíveis.
 
 
-**Acesso remoto**
-- Para permitir que outras pessoas na sua rede (ou pela internet) acessem a instância, faça o seguinte:
-	- Backend: defina no arquivo `.env` ou na variável de ambiente `HOST=0.0.0.0` (padrão agora) e `PORT=3001` se desejar porta diferente.
-	- Frontend (desenvolvimento): o script `npm run dev` já foi atualizado para expor o Vite em `0.0.0.0` na porta `3000`.
-	- Abra/encaminhe as portas no firewall/roteador:
-		- Na rede local, abra a porta TCP `3001` (backend) e `3000` (frontend) no host Windows/Linux.
-		- Para acesso pela Internet, configure port forwarding no seu roteador para o IP da máquina que executa o app.
-	- Alternativa segura para exposição pública: use um proxy reverso (NGINX) com HTTPS, ou uma ferramenta de túnel como `ngrok`/`cloudflared`.
-	- Verificação: após iniciar os servidores, acesse `http://<IP_DA_MAQUINA>:3000/` (frontend) e `http://<IP_DA_MAQUINA>:3001/api/health` (backend).
-	- Segurança: se for disponibilizar pela Internet, proteja o backend com HTTPS/Firewall, troque `JWT_SECRET` e não deixe credenciais padrão em produção.
+**Acesso remoto em desenvolvimento**
 
-Se quiser, eu posso gerar um `docker-compose.yml` e um `nginx` básico para colocar em produção.
+Para testes somente na rede local, o Vite pode ser acessado em
+`http://<IP_DA_MAQUINA>:3000/` e a API em
+`http://<IP_DA_MAQUINA>:3001/api/health`. Não encaminhe essas portas para a
+internet. Em produção, use exclusivamente o fluxo Docker HTTPS acima; somente
+as portas TCP 80 e 443 do Caddy devem estar publicadas.
