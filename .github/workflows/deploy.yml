@@ -58,6 +58,15 @@ jobs:
 
             cd "$COMPOSE_DIR"
 
+            # O .env raiz e ignorado pelo Git. Recria-o a cada deploy a partir
+            # dos segredos do repositório, antes de validar o Docker Compose.
+            cat > .env <<EOF
+            APP_DOMAIN=${{ secrets.APP_DOMAIN }}
+            LETSENCRYPT_EMAIL=${{ secrets.LETSENCRYPT_EMAIL }}
+            APP_DATA_DIR=$APP_DATA_DIR
+            EOF
+            chmod 600 .env
+
             BACKEND_STOPPED=0
             restore_backend_on_failure() {
               status=$?
