@@ -581,8 +581,12 @@ function RDODetalhes() {
               {ocorrencias.map((item, index) => (
                 <article key={item.id || index} className="rdo-report-note-item">
                   <div>
-                    <h3>{item.titulo || item.tipo || 'Ocorrência'}</h3>
-                    <p>{item.descricao || '-'}</p>
+                    <h3>#{item.numero || index + 1} · {item.titulo || item.categoria || item.tipo || 'Ocorrência'}</h3>
+                    <p style={{ fontSize: '12px', color: '#64748b' }}>{item.categoria || 'Outra'} · {item.data_ocorrencia || rdo?.data_relatorio || '—'}{item.hora_inicio ? ` · ${item.hora_inicio}${item.hora_fim ? `–${item.hora_fim}` : item.em_andamento ? ' (em andamento)' : ''}` : ''}{item.local_frente ? ` · ${item.local_frente}` : ''}</p>
+                    <p>{item.descricao_detalhada || item.descricao || '-'}</p>
+                    {item.impactos?.length > 0 && <p style={{ fontSize: '12px' }}><strong>Impactos:</strong> {item.impactos.join(', ')}</p>}
+                    {item.providencia_imediata && <p style={{ fontSize: '12px' }}><strong>Providência:</strong> {item.providencia_imediata}</p>}
+                    {item.evidencias?.length > 0 && <p style={{ fontSize: '12px' }}><strong>Evidências:</strong> {item.evidencias.map((ev) => ev.anexo_nome || ev.foto_nome || 'Arquivo').join(', ')}</p>}
                   </div>
                   {item.gravidade && <span className="rdo-report-severity">{item.gravidade}</span>}
                 </article>

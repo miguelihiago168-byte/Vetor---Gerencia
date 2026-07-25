@@ -9,11 +9,11 @@ import { useNotification } from '../context/NotificationContext';
 import {
   getProjeto,
   getAtividadesEAP, getRDO, getRDOs, createRDO, updateRDO,
-  addRdoClima, addRdoComentario, addRdoOcorrencia, addRdoMaterial,
+  addRdoClima, addRdoComentario, addRdoMaterial,
   uploadRdoFoto, updateRdoFoto, deleteRdoFoto, reorderRdoFotos, updateStatusRDO, getExecucaoAcumulada,
   getRdoColaboradores, createRdoColaborador,
   getRdoEquipamentosCatalogo, getRdoEquipamentos, addRdoEquipamento, deleteRdoEquipamento,
-  getAnexos, uploadAnexo, deleteAnexo, getUploadUrl
+  getAnexos, uploadAnexo, deleteAnexo, getUploadUrl, getRdoOcorrenciasConfiguracao, vincularEvidenciaOcorrencia, desvincularEvidenciaOcorrencia
 } from '../services/api';
 import { ArrowLeft, ChevronDown, Plus, Save, Send, Trash2, Upload, FileText, Pencil, X } from 'lucide-react';
 import './RDO.css';
@@ -28,6 +28,12 @@ const ANEXO_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp,.gif,.hei
 const ANEXO_EXT_RE = /\.(pdf|doc|docx|xls|xlsx|jpe?g|png|webp|gif|heic|heif)$/i;
 const FOTO_MAX_SIDE = 1920;
 const FOTO_QUALITY = 0.82;
+const NOVA_OCORRENCIA = () => ({
+  titulo: '', categoria: 'Segurança', categoria_outra: '', data_ocorrencia: '', hora_inicio: '', hora_fim: '',
+  em_andamento: false, local_frente: '', atividade_eap_id: '', envolvidos: '', descricao_detalhada: '',
+  providencia_imediata: '', recomendacao: '', impactos: [], gravidade: 'Baixa', paralisacao: false,
+  trabalhadores_afetados: 0, impacto_cronograma: ''
+});
 
 const dias = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
 const weekdayFromLocalDateInput = (val) => {
@@ -165,6 +171,7 @@ function RDOForm2() {
     climaRegistros: [],
     mao_obra_detalhada: [],
     ocorrencias_lista: [],
+    sem_ocorrencias: false,
     comentarios_lista: [],
     materiais_lista: []
   });
@@ -183,6 +190,9 @@ function RDOForm2() {
     percentual_executada: '',
     observacao: ''
   });
+  const [ocorrenciaConfig, setOcorrenciaConfig] = useState({ categorias: [], impactos: [], gravidades: ['Baixa', 'Média', 'Alta', 'Crítica'] });
+  const [draftOcorrencia, setDraftOcorrencia] = useState(NOVA_OCORRENCIA);
+  const [ocorrenciaAberta, setOcorrenciaAberta] = useState(null);
   const [editAtividade, setEditAtividade] = useState(null);
 
   const normalizarAcaoLog = (log) => {
@@ -327,6 +337,13 @@ function RDOForm2() {
         const eapRes = await getAtividadesEAP(projetoId);
         setAtividadesEap(eapRes.data || []);
 
+        try {
+          const ocorrenciaRes = await getRdoOcorrenciasConfiguracao();
+          setOcorrenciaConfig(ocorrenciaRes.data || { categorias: [], impactos: [], gravidades: [] });
+        } catch {
+          setOcorrenciaConfig({ categorias: [{ value: 'Outra', label: 'Outra' }], impactos: [], gravidades: ['Baixa', 'Média', 'Alta', 'Crítica'] });
+        }
+
         let acumMap = {};
         try {
           const exRes = await getExecucaoAcumulada(projetoId);
@@ -409,11 +426,15 @@ function RDOForm2() {
               }))
               : [],
             mao_obra_detalhada: Array.isArray(rdo.mao_obra_detalhada) ? rdo.mao_obra_detalhada : [],
+            sem_ocorrencias: Number(rdo.sem_ocorrencias) === 1,
             ocorrencias_lista: (rdo.ocorrencias || []).map(o => ({
-              id: o.id,
-              titulo: o.titulo || '',
-              descricao: o.descricao || '',
-              gravidade: o.gravidade || 'Baixa'
+              ...NOVA_OCORRENCIA(), ...o,
+              atividade_eap_id: o.atividade_eap_id || '',
+              descricao_detalhada: o.descricao_detalhada || o.descricao || '',
+              impactos: Array.isArray(o.impactos) ? o.impactos : [],
+              em_andamento: Number(o.em_andamento) === 1,
+              paralisacao: Number(o.paralisacao) === 1,
+              trabalhadores_afetados: Number(o.trabalhadores_afetados || 0)
             })),
             comentarios_lista: [],
             materiais_lista: (rdo.materiais || []).map(m => ({
@@ -510,6 +531,7 @@ function RDOForm2() {
                           }))
                       : [],
                     ocorrencias_lista: [],
+                    sem_ocorrencias: false,
                     comentarios_lista: [],
                     materiais_lista: [],
                     mao_obra_detalhada: Array.isArray(detalheUltimo.mao_obra_detalhada)
@@ -988,19 +1010,56 @@ function RDOForm2() {
   };
 
   /* ── Ocorrências ────────────────────────────────── */
-  const [draftOcorrencia, setDraftOcorrencia] = useState({ titulo: '', descricao: '', gravidade: 'Baixa' });
-
   const addOcorrencia = () => {
-    if (!draftOcorrencia.descricao) return;
-    setFormData({ ...formData, ocorrencias_lista: [...formData.ocorrencias_lista, draftOcorrencia] });
-    setDraftOcorrencia({ titulo: '', descricao: '', gravidade: 'Baixa' });
+    if (!String(draftOcorrencia.descricao_detalhada || '').trim()) {
+      showRdoError('Informe a descrição completa da ocorrência.');
+      return;
+    }
+    if (draftOcorrencia.categoria === 'Outra' && !String(draftOcorrencia.categoria_outra || '').trim()) {
+      showRdoError('Descreva a categoria “Outra”.');
+      return;
+    }
+    const item = { ...draftOcorrencia, data_ocorrencia: draftOcorrencia.data_ocorrencia || formData.data_relatorio };
+    setFormData(prev => ({ ...prev, sem_ocorrencias: false, ocorrencias_lista: [...prev.ocorrencias_lista, item] }));
+    setDraftOcorrencia(NOVA_OCORRENCIA());
+    setOcorrenciaAberta(formData.ocorrencias_lista.length);
     setDirty(true);
   };
 
+  const updateOcorrencia = (idx, changes) => {
+    setFormData(prev => ({ ...prev, sem_ocorrencias: false, ocorrencias_lista: prev.ocorrencias_lista.map((item, index) => index === idx ? { ...item, ...changes } : item) }));
+    setDirty(true);
+  };
+  const duplicateOcorrencia = (idx) => {
+    const source = formData.ocorrencias_lista[idx];
+    if (!source) return;
+    const copy = { ...source, id: undefined, numero: undefined, titulo: source.titulo ? `${source.titulo} (cópia)` : 'Cópia de ocorrência', evidencias: [] };
+    setFormData(prev => ({ ...prev, sem_ocorrencias: false, ocorrencias_lista: [...prev.ocorrencias_lista, copy] }));
+    setOcorrenciaAberta(formData.ocorrencias_lista.length);
+    setDirty(true);
+  };
   const removeOcorrencia = (idx) => {
-    const arr = [...formData.ocorrencias_lista];
-    arr.splice(idx, 1);
-    setFormData({ ...formData, ocorrencias_lista: arr });
+    setFormData(prev => ({ ...prev, ocorrencias_lista: prev.ocorrencias_lista.filter((_, index) => index !== idx) }));
+    setOcorrenciaAberta(null);
+    setDirty(true);
+  };
+  const vincularEvidencia = async (idx, tipo, arquivoId) => {
+    const ocorrencia = formData.ocorrencias_lista[idx];
+    if (!rdoId || !ocorrencia?.id || !arquivoId) return;
+    try {
+      const payload = tipo === 'foto' ? { rdo_foto_id: Number(arquivoId) } : { anexo_id: Number(arquivoId) };
+      const response = await vincularEvidenciaOcorrencia(rdoId, ocorrencia.id, payload);
+      const origem = tipo === 'foto' ? rdoFotos.find((foto) => Number(foto.id) === Number(arquivoId)) : anexos.find((anexo) => Number(anexo.id) === Number(arquivoId));
+      updateOcorrencia(idx, { evidencias: [...(ocorrencia.evidencias || []), { id: response.data?.id, [tipo === 'foto' ? 'rdo_foto_id' : 'anexo_id']: Number(arquivoId), nome: origem?.nome_arquivo || origem?.nome || 'Evidência' }] });
+    } catch (error) { showRdoError(error?.response?.data?.erro || error.message); }
+  };
+  const desvincularEvidencia = async (idx, evidencia) => {
+    const ocorrencia = formData.ocorrencias_lista[idx];
+    if (!rdoId || !ocorrencia?.id || !evidencia?.id) return;
+    try {
+      await desvincularEvidenciaOcorrencia(rdoId, ocorrencia.id, evidencia.id);
+      updateOcorrencia(idx, { evidencias: (ocorrencia.evidencias || []).filter((item) => item.id !== evidencia.id) });
+    } catch (error) { showRdoError(error?.response?.data?.erro || error.message); }
   };
 
   /* ── Materiais ──────────────────────────────────── */
@@ -1315,6 +1374,9 @@ function RDOForm2() {
       if ((fotosQueue || []).some((foto) => !foto.atividadeTipo)) {
         throw new Error('Todas as fotos devem estar vinculadas a uma atividade antes de salvar o RDO.');
       }
+      if (targetStatus === 'analise' && !formData.sem_ocorrencias && formData.ocorrencias_lista.length === 0) {
+        throw new Error('Declare que não houve ocorrências ou registre ao menos uma antes de enviar para aprovação.');
+      }
 
       const body = {
         projeto_id: Number(projetoId),
@@ -1340,6 +1402,8 @@ function RDOForm2() {
           observacao: e.observacao || null
         }))),
         ocorrencias: '',
+        sem_ocorrencias: formData.sem_ocorrencias === true,
+        ocorrencias_lista: formData.ocorrencias_lista,
         comentarios: '',
         atividades: formData.atividades.map(a => {
           const sel = atividadesEap.find(x => String(x.id) === String(a.atividade_eap_id));
@@ -1437,9 +1501,6 @@ function RDOForm2() {
         for (const c of formData.climaRegistros) {
           await addRdoClima(rdoId, { periodo: c.periodo, condicao_tempo: c.condicao_tempo, condicao_trabalho: c.condicao_trabalho, pluviometria_mm: Number(c.pluviometria_mm || 0) });
         }
-        for (const o of (formData.ocorrencias_lista || []).filter(item => !item.id)) {
-          await addRdoOcorrencia(rdoId, { titulo: o.titulo || null, descricao: o.descricao, gravidade: o.gravidade || null });
-        }
         for (const m of (formData.materiais_lista || []).filter(item => !item.id)) {
           await addRdoMaterial(rdoId, {
             nome_material: m.nome,
@@ -1464,9 +1525,6 @@ function RDOForm2() {
         finalId = res.data?.rdo?.id;
         for (const c of formData.climaRegistros) {
           await addRdoClima(finalId, { periodo: c.periodo, condicao_tempo: c.condicao_tempo, condicao_trabalho: c.condicao_trabalho, pluviometria_mm: Number(c.pluviometria_mm || 0) });
-        }
-        for (const o of formData.ocorrencias_lista) {
-          await addRdoOcorrencia(finalId, { titulo: o.titulo || null, descricao: o.descricao, gravidade: o.gravidade || null });
         }
         for (const c of formData.comentarios_lista) {
           await addRdoComentario(finalId, { comentario: c });
@@ -2329,47 +2387,50 @@ function RDOForm2() {
         </Section>
 
         {/* ══ SEÇÃO 8 — Ocorrências ═════════════════════ */}
-        <Section id="ocorrencias" num="8" title="Ocorrências" badge={formData.ocorrencias_lista.length || null} isOpen={openSections.ocorrencias} onToggle={toggleSection}>
-          <div className="rdo-add-row">
-            <div className="form-group" style={{ flex: '2' }}>
-              <label className="form-label">Título</label>
-              <input className="form-input" type="text" value={draftOcorrencia.titulo}
-                onChange={(e) => setDraftOcorrencia({ ...draftOcorrencia, titulo: e.target.value })} />
-            </div>
-            <div className="form-group" style={{ flex: '3' }}>
-              <label className="form-label">Descrição *</label>
-              <input className="form-input" type="text" value={draftOcorrencia.descricao}
-                onChange={(e) => setDraftOcorrencia({ ...draftOcorrencia, descricao: e.target.value })} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Gravidade</label>
-              <select className="form-select" value={draftOcorrencia.gravidade}
-                onChange={(e) => setDraftOcorrencia({ ...draftOcorrencia, gravidade: e.target.value })}>
-                <option>Baixa</option><option>Média</option><option>Alta</option><option>Crítica</option>
-              </select>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <Button tone="primary" variant="solid" startIcon={Plus} onClick={addOcorrencia}>Adicionar</Button>
-            </div>
-          </div>
-          {formData.ocorrencias_lista.length === 0 ? (
-            <div className="rdo-empty">Nenhuma ocorrência registrada.</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
-              {formData.ocorrencias_lista.map((o, idx) => (
-                <div key={idx} className="rdo-ocorrencia-item">
-                  <div className="ocorr-content">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                      <span className={`rdo-badge ${gravBadgeCls(o.gravidade)}`}>{o.gravidade}</span>
-                      {o.titulo && <span className="ocorr-titulo">{o.titulo}</span>}
-                    </div>
-                    <div className="ocorr-desc">{o.descricao}</div>
-                  </div>
-                  <IconButton size="sm" tone="danger" variant="ghost" icon={Trash2} label={`Remover ocorrência ${o.titulo || idx + 1}`} style={{ flexShrink: 0 }} onClick={() => removeOcorrencia(idx)} />
+        <Section id="ocorrencias" num="8" title="Ocorrências do dia" badge={formData.ocorrencias_lista.length || null} isOpen={openSections.ocorrencias} onToggle={toggleSection}>
+          {(() => {
+            const totals = formData.ocorrencias_lista.reduce((acc, item) => ({ ...acc, [item.gravidade || 'Baixa']: (acc[item.gravidade || 'Baixa'] || 0) + 1 }), {});
+            return <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
+              {['Baixa', 'Média', 'Alta', 'Crítica'].map((gravidade) => <span key={gravidade} className={`rdo-badge ${gravBadgeCls(gravidade)}`}>{gravidade}: {totals[gravidade] || 0}</span>)}
+            </div>;
+          })()}
+          <label style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '16px', color: '#334155', fontWeight: 600 }}>
+            <input type="checkbox" checked={formData.sem_ocorrencias} onChange={(e) => {
+              const checked = e.target.checked;
+              if (checked && formData.ocorrencias_lista.length) { showRdoError('Remova as ocorrências antes de declarar ausência.'); return; }
+              setFormData(prev => ({ ...prev, sem_ocorrencias: checked })); setDirty(true);
+            }} /> Não houve ocorrências neste dia
+          </label>
+          {formData.ocorrencias_lista.map((o, idx) => {
+            const expanded = ocorrenciaAberta === idx;
+            const set = (changes) => updateOcorrencia(idx, changes);
+            return <article key={o.id || idx} className="rdo-ocorrencia-item" style={{ display: 'block', padding: '14px', marginBottom: '10px' }}>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', cursor: 'pointer' }} onClick={() => setOcorrenciaAberta(expanded ? null : idx)}>
+                <span className={`rdo-badge ${gravBadgeCls(o.gravidade)}`}>{o.gravidade}</span>
+                <div style={{ flex: 1 }}><strong>#{o.numero || idx + 1} · {o.titulo || o.categoria || 'Ocorrência'}</strong><div className="ocorr-desc">{o.data_ocorrencia || formData.data_relatorio} {o.hora_inicio ? `· ${o.hora_inicio}` : ''} · {o.local_frente || 'Local não informado'}</div></div>
+                <ChevronDown size={18} style={{ transform: expanded ? 'rotate(180deg)' : 'none' }} />
+              </div>
+              {expanded && <div style={{ borderTop: '1px solid #e2e8f0', marginTop: '12px', paddingTop: '12px' }}>
+                <div className="rdo-add-row">
+                  <div className="form-group" style={{ flex: 2 }}><label className="form-label">Título / resumo</label><input className="form-input" value={o.titulo || ''} onChange={(e) => set({ titulo: e.target.value })} /></div>
+                  <div className="form-group"><label className="form-label">Categoria *</label><select className="form-select" value={o.categoria || 'Outra'} onChange={(e) => set({ categoria: e.target.value })}>{ocorrenciaConfig.categorias.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}</select></div>
+                  <div className="form-group"><label className="form-label">Gravidade</label><select className="form-select" value={o.gravidade} onChange={(e) => set({ gravidade: e.target.value })}>{ocorrenciaConfig.gravidades.map((g) => <option key={g}>{g}</option>)}</select></div>
                 </div>
-              ))}
-            </div>
-          )}
+                {o.categoria === 'Outra' && <div className="form-group"><label className="form-label">Qual categoria? *</label><input className="form-input" value={o.categoria_outra || ''} onChange={(e) => set({ categoria_outra: e.target.value })} /></div>}
+                <div className="rdo-add-row"><div className="form-group"><label className="form-label">Data</label><input className="form-input" type="date" value={o.data_ocorrencia || ''} onChange={(e) => set({ data_ocorrencia: e.target.value })} /></div><div className="form-group"><label className="form-label">Início</label><input className="form-input" type="time" value={o.hora_inicio || ''} onChange={(e) => set({ hora_inicio: e.target.value })} /></div>{!o.em_andamento && <div className="form-group"><label className="form-label">Fim</label><input className="form-input" type="time" value={o.hora_fim || ''} onChange={(e) => set({ hora_fim: e.target.value })} /></div>}<label style={{ display: 'flex', alignItems: 'end', gap: '6px', paddingBottom: '10px' }}><input type="checkbox" checked={!!o.em_andamento} onChange={(e) => set({ em_andamento: e.target.checked, hora_fim: e.target.checked ? '' : o.hora_fim })} /> Em andamento</label></div>
+                <div className="rdo-add-row"><div className="form-group" style={{ flex: 2 }}><label className="form-label">Local / frente</label><input className="form-input" value={o.local_frente || ''} onChange={(e) => set({ local_frente: e.target.value })} /></div><div className="form-group" style={{ flex: 2 }}><label className="form-label">Atividade EAP (opcional)</label><select className="form-select" value={o.atividade_eap_id || ''} onChange={(e) => set({ atividade_eap_id: e.target.value })}><option value="">Não vinculada</option>{atividadesEap.map((a) => <option key={a.id} value={a.id}>{a.codigo_eap || a.id} — {a.nome || a.descricao}</option>)}</select></div><div className="form-group"><label className="form-label">Trabalhadores afetados</label><input className="form-input" min="0" type="number" value={o.trabalhadores_afetados ?? 0} onChange={(e) => set({ trabalhadores_afetados: e.target.value })} /></div></div>
+                <div className="form-group"><label className="form-label">Envolvidos</label><input className="form-input" value={o.envolvidos || ''} onChange={(e) => set({ envolvidos: e.target.value })} placeholder="Pessoas, equipes ou terceiros envolvidos" /></div>
+                <div className="form-group"><label className="form-label">Descrição completa *</label><textarea className="form-input" rows="3" value={o.descricao_detalhada || ''} onChange={(e) => set({ descricao_detalhada: e.target.value })} /></div>
+                <div className="rdo-add-row"><div className="form-group" style={{ flex: 1 }}><label className="form-label">Providência imediata</label><textarea className="form-input" rows="2" value={o.providencia_imediata || ''} onChange={(e) => set({ providencia_imediata: e.target.value })} /></div><div className="form-group" style={{ flex: 1 }}><label className="form-label">Recomendação</label><textarea className="form-input" rows="2" value={o.recomendacao || ''} onChange={(e) => set({ recomendacao: e.target.value })} /></div></div>
+                <div className="form-group"><label className="form-label">Impactos</label><div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>{ocorrenciaConfig.impactos.map((impacto) => <label key={impacto} style={{ fontSize: '13px' }}><input type="checkbox" checked={(o.impactos || []).includes(impacto)} onChange={(e) => { const current = o.impactos || []; const next = e.target.checked ? (impacto === 'Nenhum impacto identificado' ? [impacto] : [...current.filter((x) => x !== 'Nenhum impacto identificado'), impacto]) : current.filter((x) => x !== impacto); set({ impactos: next }); }} /> {impacto}</label>)}</div></div>
+                <div className="rdo-add-row"><label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><input type="checkbox" checked={!!o.paralisacao} onChange={(e) => set({ paralisacao: e.target.checked })} /> Houve paralisação</label><div className="form-group" style={{ flex: 1 }}><label className="form-label">Impacto no cronograma</label><input className="form-input" value={o.impacto_cronograma || ''} onChange={(e) => set({ impacto_cronograma: e.target.value })} /></div></div>
+                {rdoId && o.id && <div className="form-group"><label className="form-label">Evidências do RDO</label><div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}><select className="form-select" defaultValue="" onChange={(e) => { vincularEvidencia(idx, 'foto', e.target.value); e.target.value = ''; }}><option value="">Vincular foto da galeria…</option>{rdoFotos.map((foto) => <option key={foto.id} value={foto.id}>{foto.nome_arquivo || `Foto #${foto.id}`}</option>)}</select><select className="form-select" defaultValue="" onChange={(e) => { vincularEvidencia(idx, 'anexo', e.target.value); e.target.value = ''; }}><option value="">Vincular documento…</option>{anexos.map((anexo) => <option key={anexo.id} value={anexo.id}>{anexo.nome_arquivo || anexo.nome || `Anexo #${anexo.id}`}</option>)}</select></div>{(o.evidencias || []).map((ev) => <div key={ev.id} style={{ marginTop: '5px', fontSize: '13px' }}>{ev.anexo_nome || ev.foto_nome || ev.nome || 'Evidência'} <button type="button" className="link-button" onClick={() => desvincularEvidencia(idx, ev)}>remover</button></div>)}</div>}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}><Button tone="neutral" variant="ghost" onClick={() => duplicateOcorrencia(idx)}>Duplicar</Button><Button tone="danger" variant="ghost" startIcon={Trash2} onClick={() => removeOcorrencia(idx)}>Excluir</Button></div>
+              </div>}
+            </article>;
+          })}
+          {!formData.sem_ocorrencias && <div className="rdo-add-row" style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', alignItems: 'end' }}><div className="form-group" style={{ flex: 2 }}><label className="form-label">Nova ocorrência — título</label><input className="form-input" value={draftOcorrencia.titulo} onChange={(e) => setDraftOcorrencia({ ...draftOcorrencia, titulo: e.target.value })} /></div><div className="form-group" style={{ flex: 3 }}><label className="form-label">Descrição completa *</label><input className="form-input" value={draftOcorrencia.descricao_detalhada} onChange={(e) => setDraftOcorrencia({ ...draftOcorrencia, descricao_detalhada: e.target.value })} /></div><div className="form-group"><label className="form-label">Gravidade</label><select className="form-select" value={draftOcorrencia.gravidade} onChange={(e) => setDraftOcorrencia({ ...draftOcorrencia, gravidade: e.target.value })}>{ocorrenciaConfig.gravidades.map((g) => <option key={g}>{g}</option>)}</select></div><Button tone="primary" variant="solid" startIcon={Plus} onClick={addOcorrencia}>Adicionar</Button></div>}
+          {!formData.sem_ocorrencias && formData.ocorrencias_lista.length === 0 && <div className="rdo-empty">Registre uma ocorrência ou declare a ausência antes de enviar para aprovação.</div>}
         </Section>
 
         {/* ══ SEÇÃO 9 — Comentários ════════════════════ */}

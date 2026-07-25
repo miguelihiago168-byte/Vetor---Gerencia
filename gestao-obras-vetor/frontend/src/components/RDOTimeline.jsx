@@ -199,23 +199,21 @@ function RDOTimeline({ rdo, maoObra = [], atividadesExecutadas = [], ocorrencias
     });
   }
 
-  /* 6 — Ocorrências (apenas se houver) */
-  if (ocorrencias.length > 0) {
-    const alta = ocorrencias.filter(o => String(o.gravidade || '').toLowerCase() === 'alta').length;
+  /* 6 — Ocorrências: cada registro preserva seu momento no dia. */
+  ocorrencias.forEach((o, index) => {
+    const gravidade = String(o.gravidade || '').toLowerCase();
     events.push({
-      key: 'ocorrencias',
-      dotClass: alta > 0 ? 'dot-danger' : 'dot-warn',
-      time: null,
-      heading: 'Ocorrências Registradas',
-      desc: `${ocorrencias.length} ocorrência${ocorrencias.length !== 1 ? 's' : ''} no dia`,
-      tags: ocorrencias.slice(0, 3).map(o => ({
-        label: o.titulo || 'Ocorrência',
-        cls: String(o.gravidade || '').toLowerCase() === 'alta' ? 'tag-danger'
-          : String(o.gravidade || '').toLowerCase() === 'média' ? 'tag-warn'
-          : 'tag-warn',
-      })),
+      key: `ocorrencia-${o.id || index}`,
+      dotClass: gravidade === 'crítica' || gravidade === 'critica' || gravidade === 'alta' ? 'dot-danger' : 'dot-warn',
+      time: formatTime(o.hora_inicio),
+      heading: `Ocorrência #${o.numero || index + 1} · ${o.categoria || 'Registro'}`,
+      desc: o.titulo || o.descricao_detalhada || o.descricao || 'Ocorrência registrada',
+      tags: [{
+        label: o.gravidade || 'Baixa',
+        cls: gravidade === 'crítica' || gravidade === 'critica' || gravidade === 'alta' ? 'tag-danger' : 'tag-warn'
+      }],
     });
-  }
+  });
 
   /* 7 — Encerramento */
   const horaFim = formatTime(rdo.entrada_saida_fim);
