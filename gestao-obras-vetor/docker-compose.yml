@@ -1,5 +1,22 @@
 version: '3.8'
 services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: gestao-caddy
+    depends_on:
+      - frontend
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?APP_DOMAIN deve ser definido antes de executar docker compose}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:?LETSENCRYPT_EMAIL deve ser definido antes de executar docker compose}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+
   backend:
     build:
       context: .
@@ -11,6 +28,9 @@ services:
       - TZ=America/Sao_Paulo
       - NODE_ENV=production
       - APP_DATA_DIR=${APP_DATA_DIR:?APP_DATA_DIR deve ser definido antes de executar docker compose}
+      - FRONTEND_URL=https://${APP_DOMAIN:?APP_DOMAIN deve ser definido antes de executar docker compose}
+      - APP_BASE_URL=https://${APP_DOMAIN:?APP_DOMAIN deve ser definido antes de executar docker compose}
+      - PUBLIC_FILE_BASE_URL=https://${APP_DOMAIN:?APP_DOMAIN deve ser definido antes de executar docker compose}
     volumes:
       - ${APP_DATA_DIR:?APP_DATA_DIR deve ser definido antes de executar docker compose}/uploads:/app/uploads
       - ${APP_DATA_DIR:?APP_DATA_DIR deve ser definido antes de executar docker compose}/database:/app/database
@@ -25,8 +45,12 @@ services:
     container_name: gestao-frontend
     depends_on:
       - backend
-    ports:
-      - "80:80"
+    expose:
+      - "80"
     restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
 
 # Nota: O frontend serve os arquivos estáticos via Nginx e encaminha /api para o serviço 'backend'.

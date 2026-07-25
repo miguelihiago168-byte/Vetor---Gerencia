@@ -108,6 +108,22 @@ Na raiz do projeto:
 - **Backend API:** http://localhost:3001/api
 - **Health Check:** http://localhost:3001/api/health
 
+## Produção com Docker e HTTPS
+
+Em produção, preencha `.env` a partir de `.env.example` com o domínio sem
+protocolo (`APP_DOMAIN`), o e-mail da conta Let's Encrypt e `APP_DATA_DIR`.
+Com o DNS apontando para o servidor Linux e as portas TCP 80/443 liberadas,
+execute na raiz:
+
+```bash
+docker compose up -d --build
+```
+
+O Caddy publica as portas 80/443, redireciona HTTP para HTTPS e gerencia a
+emissão e renovação do certificado Let's Encrypt. O frontend, backend e banco
+não são expostos diretamente. Consulte `INSTALLACAO.md` para o procedimento de
+DNS, firewall e validação.
+
 ---
 
 ## Como rodar localmente (ordem recomendada)
