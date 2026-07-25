@@ -8,6 +8,7 @@ const backendPackage = require('../package.json');
 const { ensureRdoCorrectionColumns, clearRdoCorrection } = require('../services/rdoCorrectionService');
 const { generateRdoPdfBuffer } = require('../services/rdoPdfService');
 const { ensureSchemaReady } = require('../utils/schemaGuard');
+const { hydrateOccurrences, syncOccurrences, assertApprovalOccurrenceDeclaration } = require('../services/rdoOccurrenceService');
 const {
   ORIGINS,
   recordActivityEvent,
@@ -35,14 +36,14 @@ const ensureRdoOptionalColumns = async () => {
   await ensureSchemaReady({ getQuery, allQuery }, {
     tables: ['rdo_logs', 'rdo_comentarios', 'rdo_materiais', 'rdo_ocorrencias', 'rdo_assinaturas', 'rdo_clima', 'rdo_fotos', 'rdo_equipamentos'],
     columns: {
-      rdos: ['atividades_avulsas', 'aprovado_por', 'aprovado_em'],
+      rdos: ['atividades_avulsas', 'aprovado_por', 'aprovado_em', 'sem_ocorrencias'],
       rdo_fotos: ['ordem', 'atividade_avulsa_descricao', 'tipo', 'tamanho', 'largura', 'altura'],
       rdo_materiais: ['nome_material', 'quantidade', 'unidade', 'numero_nf', 'tipo_movimento'],
       rdo_equipamentos: ['horario_utilizacao', 'horas_utilizadas', 'observacao'],
       anexos: ['descricao', 'criado_por'],
       rdo_logs: ['rdo_id', 'usuario_id', 'acao', 'criado_em'],
       rdo_comentarios: ['rdo_id', 'usuario_id', 'comentario', 'criado_em'],
-      rdo_ocorrencias: ['rdo_id', 'titulo', 'descricao', 'gravidade', 'criado_por', 'criado_em'],
+      rdo_ocorrencias: ['rdo_id', 'titulo', 'descricao', 'gravidade', 'categoria', 'numero', 'data_ocorrencia', 'descricao_detalhada', 'criado_por', 'criado_em'],
       rdo_assinaturas: ['rdo_id', 'usuario_id', 'tipo', 'arquivo_assinatura', 'assinado_em'],
       rdo_clima: ['rdo_id', 'periodo', 'condicao_tempo', 'condicao_trabalho', 'pluviometria_mm']
     }
@@ -428,13 +429,7 @@ router.get('/:id', auth, async (req, res) => {
     // Ocorrências
     let ocorrencias = [];
     try {
-      ocorrencias = await allQuery(`
-        SELECT ro.*, u.nome as autor_nome
-        FROM rdo_ocorrencias ro
-        LEFT JOIN usuarios u ON ro.criado_por = u.id
-        WHERE ro.rdo_id = ?
-        ORDER BY ro.criado_em DESC
-      `, [id]);
+      ocorrencias = await hydrateOccurrences(id);
     } catch (_) {
       ocorrencias = [];
     }
@@ -756,6 +751,19 @@ router.post('/', auth, [
 
     const rdoId = result.lastID;
 
+    // Ocorrências são recebidas e persistidas como uma coleção única, sem inserções incrementais no cliente.
+    if (Array.isArray(req.body.ocorrencias_lista) || typeof req.body.sem_ocorrencias !== 'undefined') {
+      await syncOccurrences({
+        rdoId,
+        projetoId: Number(projeto_id),
+        tenantId: req.tenantId,
+        user: req.usuario,
+        occurrences: req.body.ocorrencias_lista || [],
+        semOcorrencias: req.body.sem_ocorrencias === true,
+        dataRelatorio: dataRelatorioStr
+      });
+    }
+
     // Inserir atividades executadas
     if (atividades && atividades.length > 0) {
       for (const atividade of atividades) {
@@ -995,6 +1003,18 @@ router.put('/:id', auth, async (req, res) => {
       id
     ]);
 
+    if (Array.isArray(req.body.ocorrencias_lista) || typeof req.body.sem_ocorrencias !== 'undefined') {
+      await syncOccurrences({
+        rdoId: Number(id),
+        projetoId: Number(rdoAtual.projeto_id),
+        tenantId: req.tenantId,
+        user: req.usuario,
+        occurrences: req.body.ocorrencias_lista || [],
+        semOcorrencias: req.body.sem_ocorrencias === true,
+        dataRelatorio: rdoAtual.data_relatorio
+      });
+    }
+
     // Atualizar atividades preservando IDs (para manter fotos vinculadas)
     if (atividades) {
       const existentes = await allQuery('SELECT id, atividade_eap_id, percentual_executado, quantidade_executada FROM rdo_atividades WHERE rdo_id = ?', [id]);
@@ -1164,6 +1184,14 @@ router.patch('/:id/status', auth, async (req, res) => {
       const cnt = await getQuery('SELECT COUNT(*) AS c FROM rdo_atividades WHERE rdo_id = ?', [id]);
       if (!cnt || cnt.c === 0) {
         return res.status(400).json({ erro: 'RDO sem atividades: não é permitido alterar status.' });
+      }
+    }
+
+    if (status === 'Em análise') {
+      try {
+        await assertApprovalOccurrenceDeclaration(id);
+      } catch (occurrenceError) {
+        return res.status(occurrenceError.status || 400).json({ erro: occurrenceError.message });
       }
     }
 
@@ -1361,6 +1389,9 @@ router.delete('/:id', auth, async (req, res) => {
     await runQuery('DELETE FROM rdo_atividades WHERE rdo_id = ?', [id]);
     await runQuery('DELETE FROM rdo_mao_obra WHERE rdo_id = ?', [id]);
     await runQuery('DELETE FROM rdo_clima WHERE rdo_id = ?', [id]);
+    await runQuery('DELETE FROM rdo_ocorrencia_impactos WHERE ocorrencia_id IN (SELECT id FROM rdo_ocorrencias WHERE rdo_id = ?)', [id]);
+    await runQuery('DELETE FROM rdo_ocorrencia_evidencias WHERE ocorrencia_id IN (SELECT id FROM rdo_ocorrencias WHERE rdo_id = ?)', [id]);
+    await runQuery('DELETE FROM rdo_ocorrencia_historico WHERE ocorrencia_id IN (SELECT id FROM rdo_ocorrencias WHERE rdo_id = ?)', [id]);
     await runQuery('DELETE FROM rdo_ocorrencias WHERE rdo_id = ?', [id]);
     await runQuery('DELETE FROM rdo_comentarios WHERE rdo_id = ?', [id]);
     await runQuery('DELETE FROM rdo_assinaturas WHERE rdo_id = ?', [id]);
@@ -2257,6 +2288,9 @@ router.delete('/projeto/:projetoId/todos', [auth, isGestor], async (req, res) =>
     await runQuery(`DELETE FROM rdo_atividades WHERE rdo_id IN (${idPlaceholders})`, ids);
     await runQuery(`DELETE FROM rdo_mao_obra WHERE rdo_id IN (${idPlaceholders})`, ids);
     await runQuery(`DELETE FROM rdo_clima WHERE rdo_id IN (${idPlaceholders})`, ids);
+    await runQuery(`DELETE FROM rdo_ocorrencia_impactos WHERE ocorrencia_id IN (SELECT id FROM rdo_ocorrencias WHERE rdo_id IN (${idPlaceholders}))`, ids);
+    await runQuery(`DELETE FROM rdo_ocorrencia_evidencias WHERE ocorrencia_id IN (SELECT id FROM rdo_ocorrencias WHERE rdo_id IN (${idPlaceholders}))`, ids);
+    await runQuery(`DELETE FROM rdo_ocorrencia_historico WHERE ocorrencia_id IN (SELECT id FROM rdo_ocorrencias WHERE rdo_id IN (${idPlaceholders}))`, ids);
     await runQuery(`DELETE FROM rdo_ocorrencias WHERE rdo_id IN (${idPlaceholders})`, ids);
     await runQuery(`DELETE FROM rdo_comentarios WHERE rdo_id IN (${idPlaceholders})`, ids);
     await runQuery(`DELETE FROM rdo_assinaturas WHERE rdo_id IN (${idPlaceholders})`, ids);

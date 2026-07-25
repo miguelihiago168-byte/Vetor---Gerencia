@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { allQuery, getQuery } = require('../config/database');
+const { hydrateOccurrences } = require('./rdoOccurrenceService');
 const backendPackage = require('../package.json');
 
 const uploadsDir = path.join(__dirname, '..', 'uploads');
@@ -254,7 +255,7 @@ async function loadRdoPdfData(id) {
   const materiais = await safeAll('SELECT * FROM rdo_materiais WHERE rdo_id = ?ORDER BY criado_em ASC, id ASC', [id]);
   const equipamentos = await safeAll('SELECT * FROM rdo_equipamentos WHERE rdo_id = ?ORDER BY id ASC', [id]);
   const clima = await safeAll('SELECT * FROM rdo_clima WHERE rdo_id = ?ORDER BY id ASC', [id]);
-  const ocorrencias = await safeAll('SELECT * FROM rdo_ocorrencias WHERE rdo_id = ?ORDER BY criado_em ASC, id ASC', [id]);
+  const ocorrencias = await hydrateOccurrences(id);
   const comentarios = await safeAll(`
     SELECT rc.*, u.nome AS autor_nome
     FROM rdo_comentarios rc
@@ -552,7 +553,9 @@ function renderHtml(data) {
       <div class="section-title">Ocorrências</div>
       <table>
         <thead><tr><th>Título</th><th>Gravidade</th><th>Descrição</th></tr></thead>
-        <tbody>${tableRows(ocorrencias, (item) => `<tr><td>${escapeHtml(item.titulo || 'Ocorrência')}</td><td>${escapeHtml(item.gravidade || '-')}</td><td>${nl2br(item.descricao || '-')}</td></tr>`, 'Nenhuma ocorrência informada.', 3)}</tbody>
+        <tbody>${Number(rdo.sem_ocorrencias) === 1
+          ? '<tr><td colspan="3">Declaração: não houve ocorrências neste dia.</td></tr>'
+          : tableRows(ocorrencias, (item) => `<tr><td><strong>#${escapeHtml(item.numero || '-')} · ${escapeHtml(item.titulo || item.categoria || 'Ocorrência')}</strong><br/><small>${escapeHtml(item.categoria || '-')} · ${escapeHtml(item.data_ocorrencia || dataRelatorio)}</small></td><td>${escapeHtml(item.gravidade || '-')}<br/><small>${escapeHtml((item.impactos || []).join(', ') || '-')}</small></td><td>${nl2br(item.descricao_detalhada || item.descricao || '-')}${item.providencia_imediata ? `<br/><strong>Providência:</strong> ${nl2br(item.providencia_imediata)}` : ''}${item.recomendacao ? `<br/><strong>Recomendação:</strong> ${nl2br(item.recomendacao)}` : ''}${item.evidencias?.length ? `<br/><strong>Evidências:</strong> ${escapeHtml(item.evidencias.map((ev) => ev.anexo_nome || ev.foto_nome || 'Arquivo').join(', '))}` : ''}</td></tr>`, 'Nenhuma ocorrência informada.', 3)}</tbody>
       </table>
     </section>
 

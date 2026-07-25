@@ -175,6 +175,13 @@ export const addRdoClima = (rdoId, data) => api.post(`/rdo/${rdoId}/clima`, data
 export const addRdoComentario = (rdoId, data) => api.post(`/rdo/${rdoId}/comentario`, data);
 export const addRdoMaterial = (rdoId, data) => api.post(`/rdo/${rdoId}/material`, data);
 export const addRdoOcorrencia = (rdoId, data) => api.post(`/rdo/${rdoId}/ocorrencia`, data);
+export const getRdoOcorrenciasConfiguracao = () => api.get('/rdos/ocorrencias/configuracao');
+export const getRdoOcorrencias = (rdoId) => api.get(`/rdos/${rdoId}/ocorrencias`);
+export const syncRdoOcorrencias = (rdoId, data) => api.put(`/rdos/${rdoId}/ocorrencias`, data);
+export const duplicarRdoOcorrencia = (rdoId, ocorrenciaId) => api.post(`/rdos/${rdoId}/ocorrencias/${ocorrenciaId}/duplicar`);
+export const getRdoOcorrenciaHistorico = (rdoId, ocorrenciaId) => api.get(`/rdos/${rdoId}/ocorrencias/${ocorrenciaId}/historico`);
+export const vincularEvidenciaOcorrencia = (rdoId, ocorrenciaId, data) => api.post(`/rdos/${rdoId}/ocorrencias/${ocorrenciaId}/evidencias`, data);
+export const desvincularEvidenciaOcorrencia = (rdoId, ocorrenciaId, evidenciaId) => api.delete(`/rdos/${rdoId}/ocorrencias/${ocorrenciaId}/evidencias/${evidenciaId}`);
 export const addRdoAssinatura = (rdoId, data) => api.post(`/rdo/${rdoId}/assinatura`, data);
 // Backend espera o campo 'arquivo' no upload
 export const uploadRdoFoto = (rdoId, formData, config = {}) => api.post(`/rdo/${rdoId}/foto`, formData, {
