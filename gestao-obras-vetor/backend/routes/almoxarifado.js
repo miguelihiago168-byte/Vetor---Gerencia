@@ -229,7 +229,10 @@ router.get('/ferramentas', [auth, requireReadPermission], async (req, res) => {
     const ok = await ensureProjectAccess(req.usuario, req.perfilAlmox, Number(projetoId));
     if (!ok) return res.status(403).json({ erro: 'Sem acesso a esta obra.' });
 
-    const filtros = ['f.ativo = 1'];
+    // Um ativo com quantidade total zerada foi integralmente baixado como perda.
+    // Ele continua no banco para preservar o histórico e o relatório de perdas,
+    // mas não faz mais parte dos ativos cadastrados da obra.
+    const filtros = ['f.ativo = 1', 'f.quantidade_total > 0'];
     const params = [];
 
     if (busca) {
@@ -377,6 +380,9 @@ router.post('/ferramentas/:ferramentaId/transferir', [auth, requireWritePermissi
 
     const ferramenta = await getQuery('SELECT * FROM almox_ferramentas WHERE id = ? AND ativo = 1', [Number(ferramentaId)]);
     if (!ferramenta) return res.status(404).json({ erro: 'Ativo não encontrado.' });
+    if (Number(ferramenta.quantidade_total) <= 0) {
+      return res.status(400).json({ erro: 'Não é possível transferir um ativo baixado como perda.' });
+    }
     if (!ferramenta.projeto_id) return res.status(400).json({ erro: 'Ativo sem obra de origem definida. Atualize o cadastro primeiro.' });
     if (Number(ferramenta.projeto_id) === Number(obraDestinoId)) {
       return res.status(400).json({ erro: 'A obra de destino deve ser diferente da obra atual.' });
