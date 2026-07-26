@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ClipboardCheck, FileText, PackagePlus, Paperclip, Save, Trash2, Warehouse } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Button from '../components/ui/Button';
-import { createMaterialRecebimento, deleteEvidenciaMaterial, enviarMaterialParaInspecao, getMaterialRecebimento, getMaterialTraceConfig, getUploadUrl, updateMaterialRecebimento, uploadEvidenciaMaterial } from '../services/api';
+import { addMaterialCorpoProva, createMaterialRecebimento, deleteEvidenciaMaterial, enviarMaterialParaInspecao, getMaterialRecebimento, getMaterialTraceConfig, getUploadUrl, updateMaterialCorpoProva, updateMaterialRecebimento, uploadEvidenciaMaterial } from '../services/api';
 import './RastreabilidadeMateriais.css';
 
 const localDateTime = () => {
@@ -17,6 +17,8 @@ const toLocalDateTimeInput = (value) => {
   if (Number.isNaN(date.getTime())) return String(value).slice(0, 16);
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 };
+const parsePeriods = (value) => { try { return Array.isArray(value) ? value : JSON.parse(value || '[]'); } catch { return []; } };
+const addDays = (value, days) => { const date = new Date(value); date.setDate(date.getDate() + Number(days)); return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(date); };
 
 const novoRecebimento = () => ({
   tipo_id: '', tipo_outro: '', codigo_material: '', nome_material: '', descricao: '',
@@ -27,11 +29,16 @@ const novoRecebimento = () => ({
 
 const TECHNICAL_FIELD_LABELS = {
   fck_mpa: 'Fck (MPa)',
+  classe: 'Classe do concreto',
   volume_solicitado: 'Volume solicitado',
   volume_recebido: 'Volume recebido',
+  usina: 'Usina fornecedora',
   slump_especificado: 'Slump especificado',
-  elemento_concretado: 'Elemento concretado',
+  temperatura: 'Temperatura',
+  aditivo: 'Aditivo',
+  elemento_concretado: 'Uso planejado / elemento a concretar',
   localizacao: 'Localização',
+  quantidade_corpos_prova_prevista: 'Quantidade prevista de corpos de prova',
   atividade_eap_id: 'Atividade EAP',
   rdo_id: 'RDO vinculado',
   classe_aco: 'Classe do aço',
@@ -64,6 +71,7 @@ export default function RastreabilidadeForm() {
   const [attachments, setAttachments] = useState([]);
   const [existingAttachments, setExistingAttachments] = useState([]);
   const [removingEvidenceId, setRemovingEvidenceId] = useState(null);
+  const [corposProva, setCorposProva] = useState({ id: null, quantidade: '', periodos_previstos: ['7', '14', '28'] });
   const attachmentUrls = useRef(new Set());
 
   useEffect(() => () => attachmentUrls.current.forEach((url) => URL.revokeObjectURL(url)), []);
@@ -80,6 +88,11 @@ export default function RastreabilidadeForm() {
       .then(({ data }) => {
         setForm((current) => ({ ...current, ...data, recebido_em: toLocalDateTimeInput(data.recebido_em), dados_tecnicos: data.dados_tecnicos || {} }));
         setExistingAttachments(data.evidencias || []);
+        const corpo = data.corpos_prova?.[0];
+        if (corpo) {
+          setCorposProva({ id: corpo.id, quantidade: String(corpo.quantidade || ''), periodos_previstos: parsePeriods(corpo.idades_previstas) });
+          setForm((current) => ({ ...current, dados_tecnicos: { ...current.dados_tecnicos, quantidade_corpos_prova_prevista: String(corpo.quantidade || '') } }));
+        }
       })
       .catch((error) => setErro(error.response?.data?.erro || error.message));
   }, [isEdit, recebimentoId]);
@@ -88,10 +101,25 @@ export default function RastreabilidadeForm() {
     () => config.tipos?.find((item) => String(item.id) === String(form.tipo_id)),
     [config.tipos, form.tipo_id]
   );
-  const technicalFields = materialType ? config.campos_tecnicos?.[materialType.codigo] || [] : [];
+  const technicalFields = materialType ? (config.campos_tecnicos?.[materialType.codigo] || []).filter((field) => field !== 'quantidade_corpos_prova_prevista') : [];
+  const isConcrete = materialType?.codigo === 'CONCRETO';
   const showGeneralManufacturer = !technicalFields.includes('fabricante');
   const showGeneralSerialNumber = !technicalFields.includes('numero_serie');
   const setValue = (field, value) => setForm((current) => ({ ...current, [field]: value }));
+  const togglePeriod = (period) => setCorposProva((current) => ({ ...current, periodos_previstos: current.periodos_previstos.includes(period) ? current.periodos_previstos.filter((item) => item !== period) : [...current.periodos_previstos, period] }));
+  const validateCorposProva = () => {
+    if (!isConcrete || String(corposProva.quantidade || '').trim() === '') return true;
+    const quantidade = Number(corposProva.quantidade);
+    if (!Number.isInteger(quantidade) || quantidade <= 0) { setErro('Informe uma quantidade inteira de corpos de prova maior que zero.'); return false; }
+    if (!corposProva.periodos_previstos.length) { setErro('Selecione ao menos um período previsto para os corpos de prova.'); return false; }
+    return true;
+  };
+  const salvarCorposProva = async (receiptId) => {
+    if (!isConcrete || String(corposProva.quantidade || '').trim() === '') return;
+    const payload = { identificacao: `Corpos de prova - ${form.nome_material}`, quantidade: Number(corposProva.quantidade), horario_coleta: form.recebido_em ? new Date(form.recebido_em).toISOString() : undefined, idades_previstas: corposProva.periodos_previstos };
+    if (corposProva.id) await updateMaterialCorpoProva(receiptId, corposProva.id, payload);
+    else await addMaterialCorpoProva(receiptId, payload);
+  };
   const addFiles = (event, categoria) => {
     const files = Array.from(event.target.files || []).map((file) => {
       const previewUrl = URL.createObjectURL(file);
@@ -148,17 +176,34 @@ export default function RastreabilidadeForm() {
       setErro('Descreva o tipo de material selecionado como Outros.');
       return;
     }
+    if (isConcrete) {
+      if (!String(form.dados_tecnicos?.elemento_concretado || '').trim()) {
+        setErro('Informe o uso planejado ou o elemento que receberá o concreto.');
+        return;
+      }
+      const quantidadePrevista = form.dados_tecnicos?.quantidade_corpos_prova_prevista;
+      if (quantidadePrevista !== undefined && String(quantidadePrevista).trim() !== '') {
+        const quantidade = Number(quantidadePrevista);
+        if (!Number.isInteger(quantidade) || quantidade <= 0) {
+          setErro('A quantidade prevista de corpos de prova deve ser um número inteiro maior que zero.');
+          return;
+        }
+      }
+    }
+    if (!validateCorposProva()) return;
     try {
       setSaving(true);
       const payload = { ...form, recebido_em: form.recebido_em ? new Date(form.recebido_em).toISOString() : undefined, projeto_id: Number(projetoId) };
       if (isEdit) {
         await updateMaterialRecebimento(recebimentoId, payload);
         await uploadPendingAttachments(recebimentoId);
+        await salvarCorposProva(recebimentoId);
         navigate(`/projeto/${projetoId}/rastreabilidade-materiais/${recebimentoId}`);
         return;
       }
       const response = await createMaterialRecebimento({ ...payload, rascunho: true });
       await uploadPendingAttachments(response.data.id);
+      await salvarCorposProva(response.data.id);
       if (!rascunho) await enviarMaterialParaInspecao(response.data.id);
       navigate(`/projeto/${projetoId}/rastreabilidade-materiais/${response.data.id}`);
     } catch (error) {
@@ -189,7 +234,7 @@ export default function RastreabilidadeForm() {
       <section className="material-form-section">
         <div className="material-section-title"><span>1</span><div><h2>Identificação do material</h2><p>Defina o tipo e a referência para localizar este recebimento depois.</p></div></div>
         <div className="material-form-grid material-form-grid--three">
-          <label className="form-group"><span className="form-label">Tipo de material *</span><select className="form-select" value={form.tipo_id} onChange={(event) => setValue('tipo_id', event.target.value)}><option value="">Selecione o tipo</option>{config.tipos?.map((type) => <option key={type.id} value={type.id}>{type.nome}</option>)}</select></label>
+          <label className="form-group"><span className="form-label">Tipo de material *</span><select className="form-select" value={form.tipo_id} onChange={(event) => { const tipoId = event.target.value; const tipo = config.tipos?.find((item) => String(item.id) === String(tipoId)); setForm((current) => ({ ...current, tipo_id: tipoId, unidade: tipo?.codigo === 'CONCRETO' ? 'M3' : current.unidade })); }}><option value="">Selecione o tipo</option>{config.tipos?.map((type) => <option key={type.id} value={type.id}>{type.nome}</option>)}</select></label>
           <label className="form-group"><span className="form-label">Nome do material *</span><input className="form-input" placeholder="Ex.: Cimento CP-II 50 kg" value={form.nome_material} onChange={(event) => setValue('nome_material', event.target.value)} /></label>
           <label className="form-group"><span className="form-label">Código interno</span><input className="form-input" placeholder="Opcional" value={form.codigo_material} onChange={(event) => setValue('codigo_material', event.target.value)} /></label>
         </div>
@@ -201,7 +246,7 @@ export default function RastreabilidadeForm() {
         <div className="material-section-title"><span>2</span><div><h2>Dados do recebimento</h2><p>Informe a quantidade recebida, documentos e onde o material ficará armazenado.</p></div></div>
         <div className="material-form-grid material-form-grid--four">
           <label className="form-group"><span className="form-label">Quantidade *</span><input className="form-input" type="number" min="0" step="0.001" value={form.quantidade_recebida} onChange={(event) => setValue('quantidade_recebida', event.target.value)} /></label>
-          <label className="form-group"><span className="form-label">Unidade *</span><select className="form-select" value={form.unidade} onChange={(event) => setValue('unidade', event.target.value)}>{config.unidades?.map((unit) => <option key={unit.codigo} value={unit.codigo}>{unit.nome} ({unit.codigo})</option>)}</select></label>
+          <label className="form-group"><span className="form-label">Unidade *</span><select className="form-select" value={form.unidade} disabled={isConcrete} onChange={(event) => setValue('unidade', event.target.value)}>{config.unidades?.map((unit) => <option key={unit.codigo} value={unit.codigo}>{unit.nome} ({unit.codigo})</option>)}</select>{isConcrete && <small className="material-muted">Concreto é controlado em m³.</small>}</label>
           <label className="form-group"><span className="form-label">Data e hora do recebimento</span><input className="form-input" type="datetime-local" value={form.recebido_em} onChange={(event) => setValue('recebido_em', event.target.value)} /></label>
           <label className="form-group"><span className="form-label">Local inicial</span><input className="form-input" placeholder="Ex.: Almoxarifado da obra" value={form.local_armazenamento} onChange={(event) => setValue('local_armazenamento', event.target.value)} /></label>
           <label className="form-group"><span className="form-label">Fornecedor</span><input className="form-input" placeholder="Nome do fornecedor" value={form.fornecedor_nome} onChange={(event) => setValue('fornecedor_nome', event.target.value)} /></label>
@@ -213,12 +258,21 @@ export default function RastreabilidadeForm() {
       </section>
 
       <section className="material-form-section">
-        <div className="material-section-title"><span>3</span><div><h2>Dados técnicos</h2><p>Campos adaptados ao tipo de material escolhido.</p></div></div>
-        {!materialType ? <div className="material-form-hint"><Warehouse size={18} />Selecione o tipo de material para exibir os campos técnicos aplicáveis.</div> : technicalFields.length ? <div className="material-form-grid material-form-grid--three">{technicalFields.map((field) => <label className="form-group" key={field}><span className="form-label">{fieldLabel(field)}</span><input className="form-input" value={form.dados_tecnicos[field] || ''} onChange={(event) => setForm((current) => ({ ...current, dados_tecnicos: { ...current.dados_tecnicos, [field]: event.target.value } }))} /></label>)}</div> : <div className="material-form-hint"><FileText size={18} />Este tipo não exige campos técnicos adicionais.</div>}
+        <div className="material-section-title"><span>3</span><div><h2>{isConcrete ? 'Dados do concreto' : 'Dados técnicos'}</h2><p>{isConcrete ? 'Registre a especificação, o uso planejado e a amostragem para controle tecnológico.' : 'Campos adaptados ao tipo de material escolhido.'}</p></div></div>
+        {!materialType ? <div className="material-form-hint"><Warehouse size={18} />Selecione o tipo de material para exibir os campos técnicos aplicáveis.</div> : technicalFields.length ? <div className="material-form-grid material-form-grid--three">{technicalFields.map((field) => <label className="form-group" key={field}><span className="form-label">{fieldLabel(field)}{isConcrete && field === 'elemento_concretado' ? ' *' : ''}</span><input className="form-input" type={field === 'quantidade_corpos_prova_prevista' ? 'number' : 'text'} min={field === 'quantidade_corpos_prova_prevista' ? '1' : undefined} step={field === 'quantidade_corpos_prova_prevista' ? '1' : undefined} value={form.dados_tecnicos[field] || ''} onChange={(event) => setForm((current) => ({ ...current, dados_tecnicos: { ...current.dados_tecnicos, [field]: event.target.value } }))} /></label>)}</div> : <div className="material-form-hint"><FileText size={18} />Este tipo não exige campos técnicos adicionais.</div>}
       </section>
 
+      {isConcrete && <section className="material-form-section">
+        <div className="material-section-title"><span>4</span><div><h2>Corpos de prova</h2><p>Defina a quantidade e os períodos previstos de ensaio antes de enviar o concreto para inspeção.</p></div></div>
+        <div className="material-form-grid material-form-grid--three">
+          <label className="form-group"><span className="form-label">Quantidade de corpos de prova</span><input className="form-input" type="number" min="1" step="1" placeholder="Opcional" value={corposProva.quantidade} onChange={(event) => { const quantidade = event.target.value; setCorposProva((current) => ({ ...current, quantidade })); setForm((current) => ({ ...current, dados_tecnicos: { ...current.dados_tecnicos, quantidade_corpos_prova_prevista: quantidade } })); }} /></label>
+          <div className="form-group material-form-inline-field"><span className="form-label">Períodos previstos para ensaio</span><div className="concrete-ages">{['7', '14', '28'].map((periodo) => <label key={periodo}><input type="checkbox" checked={corposProva.periodos_previstos.includes(periodo)} onChange={() => togglePeriod(periodo)} /> {periodo} dias</label>)}</div></div>
+        </div>
+        {String(corposProva.quantidade || '').trim() !== '' && <div className="material-next-step"><ClipboardCheck size={18} /><span><strong>Resumo previsto:</strong> {corposProva.quantidade} corpo(s) de prova · {corposProva.periodos_previstos.length ? corposProva.periodos_previstos.slice().sort((a, b) => Number(a) - Number(b)).map((periodo) => `${periodo} dias (${addDays(form.recebido_em, periodo)})`).join(' · ') : 'selecione os períodos previstos'}</span></div>}
+      </section>}
+
       <section className="material-form-section">
-        <div className="material-section-title"><span>4</span><div><h2>Nota fiscal, fotos e documentos</h2><p>Anexe os arquivos que comprovam o recebimento. Eles ficarão disponíveis na visualização do material.</p></div></div>
+        <div className="material-section-title"><span>{isConcrete ? '5' : '4'}</span><div><h2>Nota fiscal, fotos e documentos</h2><p>Anexe os arquivos que comprovam o recebimento. Eles ficarão disponíveis na visualização do material.</p></div></div>
         {isEdit && existingAttachments.length > 0 && <div className="material-existing-evidences">
           <h3>Anexos atuais</h3>
           {existingImages.length > 0 && <div className="material-image-gallery">{existingImages.map((evidence) => <figure key={evidence.id} className="material-image-preview"><a href={getUploadUrl(evidence.caminho_arquivo)} target="_blank" rel="noreferrer"><img src={getUploadUrl(evidence.caminho_arquivo)} alt={evidence.descricao || evidence.nome_arquivo} /></a><figcaption><span>{evidence.nome_arquivo}</span><button type="button" disabled={removingEvidenceId === evidence.id} onClick={() => removeExistingAttachment(evidence)} aria-label={`Excluir ${evidence.nome_arquivo}`}><Trash2 size={15} /></button></figcaption></figure>)}</div>}

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, CalendarClock, CheckCircle2, ClipboardCheck, FileImage, FileText, MapPin, PackageCheck, Paperclip, Pencil, XCircle } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Button from '../components/ui/Button';
+import ConcreteTracePanel from '../components/ConcreteTracePanel';
 import { addMaterialInspecao, enviarMaterialParaInspecao, getMaterialRecebimento, getUploadUrl, uploadEvidenciaMaterial } from '../services/api';
 import './RastreabilidadeMateriais.css';
 
@@ -152,6 +153,8 @@ export default function RastreabilidadeDetalhe() {
           {technicalData.length ? <dl className="material-tech-grid">{technicalData.map(([key, value]) => <div key={key}><dt>{key.replaceAll('_', ' ')}</dt><dd>{String(value)}</dd></div>)}</dl> : <p className="material-muted">Nenhum dado técnico complementar informado.</p>}
           {receipt.descricao && <p className="material-notes"><strong>Descrição:</strong> {receipt.descricao}</p>}{receipt.observacoes && <p className="material-notes"><strong>Observações:</strong> {receipt.observacoes}</p>}
         </section>
+
+        <ConcreteTracePanel receipt={receipt} onUpdated={setReceipt} onError={setError} />
 
         <section className="material-detail-card material-detail-card--wide">
           <div className="material-detail-card-title"><CalendarClock size={19} /><div><h2>Histórico</h2><p>Eventos deste recebimento em ordem cronológica.</p></div></div>

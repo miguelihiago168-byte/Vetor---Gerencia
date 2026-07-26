@@ -387,6 +387,7 @@ export const deleteEvidenciaMaterial = (id, evidenciaId) => api.delete(`/rastrea
 export const enviarMaterialParaInspecao = (id) => api.post(`/rastreabilidade/${id}/enviar-inspecao`);
 export const addMaterialCaminhao = (id, data) => api.post(`/rastreabilidade/${id}/caminhoes`, data);
 export const addMaterialCorpoProva = (id, data) => api.post(`/rastreabilidade/${id}/corpos-prova`, data);
+export const updateMaterialCorpoProva = (id, corpoProvaId, data) => api.put(`/rastreabilidade/${id}/corpos-prova/${corpoProvaId}`, data);
 export const encerrarMaterialRecebimento = (id, data) => api.post(`/rastreabilidade/${id}/encerrar`, data);
 
 // Email
