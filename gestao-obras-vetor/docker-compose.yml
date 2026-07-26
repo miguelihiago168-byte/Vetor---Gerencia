@@ -1,5 +1,41 @@
 version: '3.8'
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gestao-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB deve ser definido}
+      POSTGRES_USER: ${POSTGRES_USER:-gestao_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD deve ser definido}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    expose:
+      - "5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gestao_user} -d ${POSTGRES_DB:?POSTGRES_DB deve ser definido}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4:9
+    container_name: gestao-pgadmin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:?PGADMIN_DEFAULT_EMAIL deve ser definido}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?PGADMIN_DEFAULT_PASSWORD deve ser definido}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./pgadmin/servers.json:/pgadmin4/servers.json:ro
+      - ./pgadmin/pgpass:/pgpass:ro
+    restart: unless-stopped
+
   caddy:
     image: caddy:2-alpine
     container_name: gestao-caddy
@@ -22,6 +58,9 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     container_name: gestao-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
     env_file:
       - backend/.env
     environment:
@@ -31,9 +70,13 @@ services:
       - FRONTEND_URL=https://${APP_DOMAIN:?APP_DOMAIN deve ser definido antes de executar docker compose}
       - APP_BASE_URL=https://${APP_DOMAIN:?APP_DOMAIN deve ser definido antes de executar docker compose}
       - PUBLIC_FILE_BASE_URL=https://${APP_DOMAIN:?APP_DOMAIN deve ser definido antes de executar docker compose}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:?POSTGRES_DB deve ser definido}
+      - DB_USER=${POSTGRES_USER:-gestao_user}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - ${APP_DATA_DIR:?APP_DATA_DIR deve ser definido antes de executar docker compose}/uploads:/app/uploads
-      - ${APP_DATA_DIR:?APP_DATA_DIR deve ser definido antes de executar docker compose}/database:/app/database
     expose:
       - "3001"
     restart: unless-stopped
@@ -50,6 +93,8 @@ services:
     restart: unless-stopped
 
 volumes:
+  postgres_data:
+  pgadmin_data:
   caddy_data:
   caddy_config:
 

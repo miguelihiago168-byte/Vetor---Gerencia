@@ -83,6 +83,20 @@ const sendTrialExpired = (res, tenantId) => res.status(403).json({
   tenant_id: tenantId
 });
 
+const getTenantTrialColumnSupport = async () => {
+  const cols = await allQuery(
+    `SELECT column_name AS name
+     FROM information_schema.columns
+     WHERE table_name = 'tenants'`
+  ).catch(() => []);
+
+  const names = new Set((cols || []).map((c) => String(c.name)));
+  return {
+    hasTrialExpiresAt: names.has('trial_expires_at'),
+    hasTrialAtivo: names.has('trial_ativo')
+  };
+};
+
 const generateSlug = (nomeEmpresa) => {
   const base = String(nomeEmpresa || '')
     .normalize('NFD')
@@ -165,11 +179,14 @@ const purgeTenantData = async (tenantId) => {
 const cleanupExpiredTrials = async () => {
   if (!TRIAL_ENFORCEMENT_ENABLED) return;
   await ensureTenantTrialColumns();
+  const support = await getTenantTrialColumnSupport();
+  if (!support.hasTrialExpiresAt || !support.hasTrialAtivo) return;
+
   const expired = await allQuery(
     `SELECT id FROM tenants
      WHERE trial_ativo = 1
        AND trial_expires_at IS NOT NULL
-       AND datetime(trial_expires_at) <= datetime('now')`
+       AND trial_expires_at <= NOW()`
   ).catch(() => []);
 
   for (const t of expired) {
@@ -252,8 +269,16 @@ router.post('/login', [
       return res.status(403).json({ erro: 'Conta sem tenant ativo.' });
     }
 
+    const support = await getTenantTrialColumnSupport();
+    const tenantSelectFields = [
+      'id',
+      'ativo',
+      support.hasTrialExpiresAt ? 'trial_expires_at' : 'NULL::timestamptz AS trial_expires_at',
+      support.hasTrialAtivo ? 'trial_ativo' : '0::int AS trial_ativo'
+    ];
+
     const tenant = await getQuery(
-      'SELECT id, trial_expires_at, trial_ativo, ativo FROM tenants WHERE id = ?',
+      `SELECT ${tenantSelectFields.join(', ')} FROM tenants WHERE id = ?`,
       [tenantIdAtivo]
     );
     if (!tenant) {

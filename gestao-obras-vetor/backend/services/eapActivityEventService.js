@@ -32,14 +32,18 @@ const ORIGIN_LABELS = {
 
 const hasTable = async (tableName) => {
   const row = await getQuery(
-    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+    `SELECT table_name FROM information_schema.tables
+     WHERE table_type = 'BASE TABLE' AND table_name = ?`,
     [tableName]
   );
   return Boolean(row);
 };
 
 const tableColumns = async (tableName) => {
-  const rows = await allQuery(`PRAGMA table_info("${String(tableName).replace(/"/g, '""')}")`);
+  const rows = await allQuery(
+    `SELECT column_name AS name FROM information_schema.columns WHERE table_name = ?`,
+    [tableName]
+  );
   return new Set((rows || []).map((row) => String(row.name)));
 };
 
@@ -48,14 +52,14 @@ const addColumnIfMissing = async (tableName, columnSql) => {
   const columnName = String(columnSql).trim().split(/\s+/)[0];
   const columns = await tableColumns(tableName);
   if (!columns.has(columnName)) {
-    await runQuery(`ALTER TABLE "${String(tableName).replace(/"/g, '""')}" ADD COLUMN ${columnSql}`);
+    await runQuery(`ALTER TABLE "${String(tableName).replace(/"/g, '""')}" ADD COLUMN IF NOT EXISTS ${columnSql}`);
   }
 };
 
 const ensureEapActivityEventSchema = async () => {
   await runQuery(`
     CREATE TABLE IF NOT EXISTS atividade_eap_eventos (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       atividade_eap_id INTEGER NOT NULL,
       rdo_id INTEGER,
       tipo TEXT NOT NULL,
@@ -66,21 +70,21 @@ const ensureEapActivityEventSchema = async () => {
       quantidade_nova REAL,
       mensagem TEXT,
       usuario_id INTEGER,
-      criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
+      criado_em TIMESTAMPTZ DEFAULT NOW()
     )
   `);
 
   await runQuery(`
     CREATE TABLE IF NOT EXISTS rdo_alertas_atividade (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id SERIAL PRIMARY KEY,
       rdo_id INTEGER NOT NULL,
       atividade_eap_id INTEGER,
       tipo TEXT NOT NULL,
       mensagem TEXT NOT NULL,
       ativo INTEGER DEFAULT 1,
       criado_por INTEGER,
-      criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-      resolvido_em DATETIME
+      criado_em TIMESTAMPTZ DEFAULT NOW(),
+      resolvido_em TIMESTAMPTZ
     )
   `);
 

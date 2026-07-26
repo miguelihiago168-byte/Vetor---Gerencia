@@ -9,7 +9,7 @@ const initDatabase = async () => {
     await new Promise((resolve, reject) => {
       db.run(`
         CREATE TABLE IF NOT EXISTS usuarios (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          id SERIAL PRIMARY KEY,
           login TEXT UNIQUE NOT NULL,
           senha TEXT NOT NULL,
           pin TEXT,
@@ -21,11 +21,11 @@ const initDatabase = async () => {
           is_gestor INTEGER DEFAULT 0,
           is_adm INTEGER DEFAULT 0,
           ativo INTEGER DEFAULT 1,
-          deletado_em DATETIME,
+          deletado_em TIMESTAMPTZ,
           deletado_por INTEGER,
           criado_por INTEGER,
-          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+          criado_em TIMESTAMPTZ DEFAULT NOW(),
+          atualizado_em TIMESTAMPTZ DEFAULT NOW(),
           FOREIGN KEY (criado_por) REFERENCES usuarios(id),
           FOREIGN KEY (deletado_por) REFERENCES usuarios(id)
         )
@@ -40,7 +40,7 @@ const initDatabase = async () => {
     await new Promise((resolve, reject) => {
       db.run(`
         CREATE TABLE IF NOT EXISTS projetos (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          id SERIAL PRIMARY KEY,
           nome TEXT NOT NULL,
           empresa_responsavel TEXT NOT NULL,
           empresa_executante TEXT NOT NULL,
@@ -49,8 +49,8 @@ const initDatabase = async () => {
           ativo INTEGER DEFAULT 1,
           arquivado INTEGER DEFAULT 0,
           criado_por INTEGER NOT NULL,
-          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+          criado_em TIMESTAMPTZ DEFAULT NOW(),
+          atualizado_em TIMESTAMPTZ DEFAULT NOW(),
           FOREIGN KEY (criado_por) REFERENCES usuarios(id)
         )
       `, (err) => {
@@ -64,10 +64,10 @@ const initDatabase = async () => {
     await new Promise((resolve, reject) => {
       db.run(`
         CREATE TABLE IF NOT EXISTS projeto_usuarios (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          id SERIAL PRIMARY KEY,
           projeto_id INTEGER NOT NULL,
           usuario_id INTEGER NOT NULL,
-          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+          criado_em TIMESTAMPTZ DEFAULT NOW(),
           FOREIGN KEY (projeto_id) REFERENCES projetos(id) ON DELETE CASCADE,
           FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
           UNIQUE(projeto_id, usuario_id)
@@ -83,7 +83,7 @@ const initDatabase = async () => {
     await new Promise((resolve, reject) => {
       db.run(`
         CREATE TABLE IF NOT EXISTS atividades_eap (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          id SERIAL PRIMARY KEY,
           id_atividade TEXT,
           projeto_id INTEGER NOT NULL,
           codigo_eap TEXT NOT NULL,
@@ -101,8 +101,8 @@ const initDatabase = async () => {
           unidade_medida TEXT,
           quantidade_total REAL DEFAULT 0,
           criado_por INTEGER NOT NULL,
-          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+          criado_em TIMESTAMPTZ DEFAULT NOW(),
+          atualizado_em TIMESTAMPTZ DEFAULT NOW(),
           FOREIGN KEY (projeto_id) REFERENCES projetos(id) ON DELETE CASCADE,
           FOREIGN KEY (pai_id) REFERENCES atividades_eap(id) ON DELETE CASCADE,
           FOREIGN KEY (criado_por) REFERENCES usuarios(id),
@@ -119,7 +119,7 @@ const initDatabase = async () => {
     await new Promise((resolve, reject) => {
       db.run(`
         CREATE TABLE IF NOT EXISTS atividades_dependencias (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          id SERIAL PRIMARY KEY,
           projeto_id INTEGER NOT NULL,
           tenant_id INTEGER,
           atividade_origem_id INTEGER NOT NULL,
@@ -129,9 +129,9 @@ const initDatabase = async () => {
           confirmada_usuario INTEGER DEFAULT 0,
           score_sugestao REAL,
           motivo_sugestao TEXT,
-          criada_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          confirmada_em DATETIME,
+          criada_em TIMESTAMPTZ DEFAULT NOW(),
+          atualizado_em TIMESTAMPTZ DEFAULT NOW(),
+          confirmada_em TIMESTAMPTZ,
           confirmada_por INTEGER,
           FOREIGN KEY (projeto_id) REFERENCES projetos(id) ON DELETE CASCADE,
           FOREIGN KEY (atividade_origem_id) REFERENCES atividades_eap(id) ON DELETE CASCADE,
@@ -184,7 +184,7 @@ const initDatabase = async () => {
     await new Promise((resolve, reject) => {
       db.run(`
         CREATE TABLE IF NOT EXISTS rdos (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          id SERIAL PRIMARY KEY,
           numero_rdo INTEGER,
           projeto_id INTEGER NOT NULL,
           data_relatorio DATE NOT NULL,
@@ -212,12 +212,12 @@ const initDatabase = async () => {
           correcao_solicitada INTEGER DEFAULT 0,
           correcao_motivo TEXT,
           correcao_origem TEXT,
-          correcao_solicitada_em DATETIME,
+          correcao_solicitada_em TIMESTAMPTZ,
           correcao_solicitada_por TEXT,
           status_anterior_correcao TEXT,
-          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          aprovado_em DATETIME,
+          criado_em TIMESTAMPTZ DEFAULT NOW(),
+          atualizado_em TIMESTAMPTZ DEFAULT NOW(),
+          aprovado_em TIMESTAMPTZ,
           FOREIGN KEY (projeto_id) REFERENCES projetos(id) ON DELETE CASCADE,
           FOREIGN KEY (criado_por) REFERENCES usuarios(id),
           FOREIGN KEY (aprovado_por) REFERENCES usuarios(id),
@@ -235,13 +235,13 @@ const initDatabase = async () => {
     await new Promise((resolve, reject) => {
       db.run(`
         CREATE TABLE IF NOT EXISTS rdo_atividades (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          id SERIAL PRIMARY KEY,
           rdo_id INTEGER NOT NULL,
           atividade_eap_id INTEGER NOT NULL,
           percentual_executado REAL NOT NULL,
           quantidade_executada REAL,
           observacao TEXT,
-          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+          criado_em TIMESTAMPTZ DEFAULT NOW(),
           FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE,
           FOREIGN KEY (atividade_eap_id) REFERENCES atividades_eap(id) ON DELETE CASCADE
         )
@@ -256,13 +256,13 @@ const initDatabase = async () => {
     await new Promise((resolve, reject) => {
       db.run(`
         CREATE TABLE IF NOT EXISTS anexos (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          id SERIAL PRIMARY KEY,
           rdo_id INTEGER NOT NULL,
           tipo TEXT NOT NULL,
           nome_arquivo TEXT NOT NULL,
           caminho_arquivo TEXT NOT NULL,
           tamanho INTEGER,
-          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+          criado_em TIMESTAMPTZ DEFAULT NOW(),
           FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE
         )
       `, (err) => {
@@ -276,7 +276,7 @@ const initDatabase = async () => {
     await new Promise((resolve, reject) => {
       db.run(`
         CREATE TABLE IF NOT EXISTS historico_atividades (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          id SERIAL PRIMARY KEY,
           atividade_eap_id INTEGER NOT NULL,
           rdo_id INTEGER NOT NULL,
           percentual_anterior REAL NOT NULL,
@@ -284,7 +284,7 @@ const initDatabase = async () => {
           percentual_novo REAL NOT NULL,
           usuario_id INTEGER NOT NULL,
           data_execucao DATE NOT NULL,
-          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+          criado_em TIMESTAMPTZ DEFAULT NOW(),
           FOREIGN KEY (atividade_eap_id) REFERENCES atividades_eap(id) ON DELETE CASCADE,
           FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE,
           FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
@@ -300,7 +300,7 @@ const initDatabase = async () => {
     await new Promise((resolve, reject) => {
       db.run(`
         CREATE TABLE IF NOT EXISTS rnc (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          id SERIAL PRIMARY KEY,
           projeto_id INTEGER NOT NULL,
           rdo_id INTEGER,
           titulo TEXT NOT NULL,
@@ -309,14 +309,14 @@ const initDatabase = async () => {
           status TEXT DEFAULT 'Aberta',
           acao_corretiva TEXT,
           descricao_correcao TEXT,
-          descricao_correcao_em DATETIME,
+          descricao_correcao_em TIMESTAMPTZ,
           responsavel_id INTEGER,
           criado_por INTEGER NOT NULL,
           aprovado_por INTEGER,
-          aprovado_em DATETIME,
-          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          resolvido_em DATETIME,
+          aprovado_em TIMESTAMPTZ,
+          criado_em TIMESTAMPTZ DEFAULT NOW(),
+          atualizado_em TIMESTAMPTZ DEFAULT NOW(),
+          resolvido_em TIMESTAMPTZ,
           FOREIGN KEY (projeto_id) REFERENCES projetos(id) ON DELETE CASCADE,
           FOREIGN KEY (rdo_id) REFERENCES rdos(id),
           FOREIGN KEY (responsavel_id) REFERENCES usuarios(id),
@@ -334,14 +334,14 @@ const initDatabase = async () => {
     await new Promise((resolve, reject) => {
       db.run(`
         CREATE TABLE IF NOT EXISTS auditoria (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          id SERIAL PRIMARY KEY,
           tabela TEXT NOT NULL,
           registro_id INTEGER NOT NULL,
           acao TEXT NOT NULL,
           dados_anteriores TEXT,
           dados_novos TEXT,
           usuario_id INTEGER NOT NULL,
-          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+          criado_em TIMESTAMPTZ DEFAULT NOW(),
           FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
         )
       `, (err) => {
@@ -354,11 +354,11 @@ const initDatabase = async () => {
     await new Promise((resolve, reject) => {
       db.run(`
         CREATE TABLE IF NOT EXISTS rdo_logs (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          id SERIAL PRIMARY KEY,
           rdo_id INTEGER NOT NULL,
           usuario_id INTEGER,
           acao TEXT NOT NULL CHECK (acao IN ('VIEW', 'UPDATE')),
-          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+          criado_em TIMESTAMPTZ DEFAULT NOW(),
           FOREIGN KEY (rdo_id) REFERENCES rdos(id) ON DELETE CASCADE,
           FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL
         )
@@ -391,7 +391,7 @@ const initDatabase = async () => {
     await new Promise((resolve, reject) => {
       db.run(`
         CREATE TABLE IF NOT EXISTS pedidos_compra (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          id SERIAL PRIMARY KEY,
           projeto_id INTEGER NOT NULL,
           solicitante_id INTEGER NOT NULL,
           descricao TEXT NOT NULL,
@@ -403,8 +403,8 @@ const initDatabase = async () => {
           adm_responsavel_id INTEGER,
           cotacao_vencedora_id INTEGER,
           reprovado_motivo TEXT,
-          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-          atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+          criado_em TIMESTAMPTZ DEFAULT NOW(),
+          atualizado_em TIMESTAMPTZ DEFAULT NOW(),
           FOREIGN KEY (projeto_id) REFERENCES projetos(id) ON DELETE CASCADE,
           FOREIGN KEY (solicitante_id) REFERENCES usuarios(id),
           FOREIGN KEY (gestor_aprovador_id) REFERENCES usuarios(id),
@@ -421,7 +421,7 @@ const initDatabase = async () => {
     await new Promise((resolve, reject) => {
       db.run(`
         CREATE TABLE IF NOT EXISTS cotacoes (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          id SERIAL PRIMARY KEY,
           pedido_id INTEGER NOT NULL,
           fornecedor TEXT NOT NULL,
           valor_unitario REAL NOT NULL,
@@ -430,7 +430,7 @@ const initDatabase = async () => {
           prazo_entrega TEXT,
           status TEXT DEFAULT 'NAO_SELECIONADA',
           pdf_path TEXT,
-          criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+          criado_em TIMESTAMPTZ DEFAULT NOW(),
           FOREIGN KEY (pedido_id) REFERENCES pedidos_compra(id) ON DELETE CASCADE
         )
       `, (err) => {
@@ -444,8 +444,9 @@ const initDatabase = async () => {
     const senhaHash = await bcrypt.hash('123456', 10);
     await new Promise((resolve, reject) => {
       db.run(`
-        INSERT OR IGNORE INTO usuarios (login, senha, nome, email, is_gestor, is_adm, perfil)
+        INSERT INTO usuarios (login, senha, nome, email, is_gestor, is_adm, perfil)
         VALUES ('000001', ?, 'Administrador', 'admin@vetor.com', 1, 1, 'Gestor Geral')
+        ON CONFLICT (login) DO NOTHING
       `, [senhaHash], (err) => {
         if (err) reject(err);
         else resolve();
@@ -460,8 +461,6 @@ const initDatabase = async () => {
 
   } catch (error) {
     console.error('❌ Erro ao criar tabelas:', error);
-  } finally {
-    db.close();
   }
 };
 

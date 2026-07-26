@@ -60,13 +60,15 @@ module.exports = {
     await addColumnIfMissing(context, 'atividades_eap', 'status TEXT');
     await addColumnIfMissing(context, 'atividades_eap', 'nivel INTEGER');
 
-    await backfillIfTableExists(context, 'atividades_eap', `
-      UPDATE atividades_eap
-      SET tenant_id = (
-        SELECT p.tenant_id FROM projetos p WHERE p.id = atividades_eap.projeto_id
-      )
-      WHERE tenant_id IS NULL OR tenant_id = 0
-    `);
+    if (await columnExists(context, 'projetos', 'tenant_id')) {
+      await backfillIfTableExists(context, 'atividades_eap', `
+        UPDATE atividades_eap
+        SET tenant_id = (
+          SELECT p.tenant_id FROM projetos p WHERE p.id = atividades_eap.projeto_id
+        )
+        WHERE tenant_id IS NULL OR tenant_id = 0
+      `);
+    }
 
     await run(`
       CREATE TABLE IF NOT EXISTS atividades_dependencias (
