@@ -227,7 +227,7 @@ function Navbar() {
   const rotaUsuarios = isProjectContext ? `/projeto/${projetoId}/usuarios` : '/usuarios';
   const rotaAlmox = isProjectContext ? `/projeto/${projetoId}/almoxarifado` : '/ativos';
   const rotaExecucao = isProjectContext ? `/projeto/${projetoId}/rdos` : '/rdos';
-  const rotaQualidade = isProjectContext ? `/projeto/${projetoId}/rnc` : '/rnc';
+  const rotaQualidade = isProjectContext ? `/projeto/${projetoId}/qualidade` : '/rnc';
   const rotaPlanejamento = isProjectContext ? `/projeto/${projetoId}/planejamento` : '/planejamento';
   const rotaEmail = isProjectContext ? `/projeto/${projetoId}/email-dashboard` : '/email-dashboard';
   const rotaMensagens = isProjectContext ? `/projeto/${projetoId}/mensagens` : '/mensagens';
@@ -446,7 +446,7 @@ function Navbar() {
       )}
 
       {isProjectContext && canViewQualidade && (
-        <NavLink to={rotaQualidade} onClick={(e) => handleMenuNavigation(e, rotaQualidade)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
+        <NavLink to={rotaQualidade} onClick={(e) => handleMenuNavigation(e, rotaQualidade)} className={({ isActive }) => `navbar-link${(isActive || /^\/projeto\/\d+\/(rnc|rastreabilidade-materiais)/.test(location.pathname)) ? ' active' : ''}`}>
           Qualidade
           {isGestor && pendRnc > 0 && (<span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendRnc}</span>)}
         </NavLink>

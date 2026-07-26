@@ -372,6 +372,22 @@ export const getRdoFerramentas = (rdoId) => api.get(`/almoxarifado/rdo/${rdoId}/
 export const addRdoFerramenta = (rdoId, data) => api.post(`/almoxarifado/rdo/${rdoId}/ferramentas`, data);
 
 export const getRdoLogs = (rdoId) => api.get(`/rdos/${rdoId}/logs`);
+// Rastreabilidade de materiais
+export const getMaterialTraceConfig = () => api.get('/rastreabilidade/configuracao');
+export const getMaterialTraceIndicators = (projetoId) => api.get(`/rastreabilidade/indicadores/${projetoId}`);
+export const getMaterialRecebimentos = (projetoId, params) => api.get(`/rastreabilidade/projeto/${projetoId}`, { params });
+export const getMaterialRecebimento = (id) => api.get(`/rastreabilidade/${id}`);
+export const createMaterialRecebimento = (data) => api.post('/rastreabilidade', data);
+export const updateMaterialRecebimento = (id, data) => api.put(`/rastreabilidade/${id}`, data);
+export const addMaterialInspecao = (id, data) => api.post(`/rastreabilidade/${id}/inspecoes`, data);
+export const addMaterialAplicacao = (id, data) => api.post(`/rastreabilidade/${id}/aplicacoes`, data);
+export const gerarRncMaterial = (id, data) => api.post(`/rastreabilidade/${id}/rnc`, data);
+export const uploadEvidenciaMaterial = (id, data) => api.post(`/rastreabilidade/${id}/evidencias`, data, { headers: { 'Content-Type': 'multipart/form-data' } });
+export const deleteEvidenciaMaterial = (id, evidenciaId) => api.delete(`/rastreabilidade/${id}/evidencias/${evidenciaId}`);
+export const enviarMaterialParaInspecao = (id) => api.post(`/rastreabilidade/${id}/enviar-inspecao`);
+export const addMaterialCaminhao = (id, data) => api.post(`/rastreabilidade/${id}/caminhoes`, data);
+export const addMaterialCorpoProva = (id, data) => api.post(`/rastreabilidade/${id}/corpos-prova`, data);
+export const encerrarMaterialRecebimento = (id, data) => api.post(`/rastreabilidade/${id}/encerrar`, data);
 
 // Email
 export const getEmailConfig = () => api.get('/email/config');
