@@ -5,7 +5,7 @@ import CockpitReturnButton, { forwardCockpitNavigationState, getCockpitReturnCon
 import { getRNCs, deleteRNC, getRNCPDF } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
-import { AlertTriangle, Plus, Eye, Trash2, FileText, Search } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, Clock3, Plus, Eye, Trash2, FileText, Search } from 'lucide-react';
 import './RNC.css';
 
 const FILTER_TABS = [
@@ -187,6 +187,7 @@ function RNC() {
           <div className="rnc-header-context">
             {cockpitReturn && <CockpitReturnButton fallbackTo={`/projeto/${projetoId}`} />}
             <div className="rnc-header-text">
+              <button className="rnc-quality-return" onClick={() => navigate(`/projeto/${projetoId}/qualidade`)}><ArrowLeft size={15} /> Voltar para Qualidade</button>
               <h1>Não Conformidades</h1>
               <p>{rncs.length} {rncs.length === 1 ? 'registro' : 'registros'} neste projeto</p>
             </div>
@@ -198,6 +199,12 @@ function RNC() {
         </div>
 
         {erro && <div className="alert alert-error" style={{ marginBottom: 16 }}>{erro}</div>}
+
+        <div className="rnc-overview" aria-label="Resumo das não conformidades">
+          <div className="rnc-overview-item rnc-overview-open"><Clock3 size={19} /><div><strong>{countByStatus('Em andamento')}</strong><span>Abertas</span></div></div>
+          <div className="rnc-overview-item rnc-overview-review"><AlertTriangle size={19} /><div><strong>{countByStatus('Em análise')}</strong><span>Em aprovação</span></div></div>
+          <div className="rnc-overview-item rnc-overview-closed"><CheckCircle2 size={19} /><div><strong>{countByStatus('Encerrada')}</strong><span>Encerradas</span></div></div>
+        </div>
 
         {/* Toolbar */}
         <div className="rnc-toolbar">

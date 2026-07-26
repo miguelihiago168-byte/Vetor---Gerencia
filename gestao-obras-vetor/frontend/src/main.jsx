@@ -38,6 +38,11 @@ import Usuarios from './pages/Usuarios';
 import RNC from './pages/RNC';
 import RNCForm from './pages/RNCForm';
 import RNCDetalhes from './pages/RNCDetalhes';
+import QualidadeHub from './pages/QualidadeHub';
+import RastreabilidadeMateriais from './pages/RastreabilidadeMateriais';
+import RastreabilidadeForm from './pages/RastreabilidadeForm';
+import RastreabilidadeDetalhe from './pages/RastreabilidadeDetalhe';
+import RastreabilidadeSaidas from './pages/RastreabilidadeSaidas';
 import ProjetoSelector from './pages/ProjetoSelector';
 import AlmoxarifadoDashboard from './pages/AlmoxarifadoDashboard';
 import AlmoxFerramentas from './pages/AlmoxFerramentas';
@@ -222,6 +227,36 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/projeto/:projetoId/rnc" element={
             <PrivateRoute allowedPerfis={PERFIS_RNC}>
               <RNC />
+            </PrivateRoute>
+          } />
+          <Route path="/projeto/:projetoId/qualidade" element={
+            <PrivateRoute allowedPerfis={PERFIS_RNC}>
+              <QualidadeHub />
+            </PrivateRoute>
+          } />
+          <Route path="/projeto/:projetoId/rastreabilidade-materiais" element={
+            <PrivateRoute allowedPerfis={['Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade', 'Gestor de Qualidade', 'ADM', 'Almoxarife', 'Fiscal']}>
+              <RastreabilidadeMateriais />
+            </PrivateRoute>
+          } />
+          <Route path="/projeto/:projetoId/rastreabilidade-materiais/novo" element={
+            <PrivateRoute allowedPerfis={['Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade', 'Gestor de Qualidade', 'ADM', 'Almoxarife', 'Fiscal']}>
+              <RastreabilidadeForm />
+            </PrivateRoute>
+          } />
+          <Route path="/projeto/:projetoId/rastreabilidade-materiais/saidas" element={
+            <PrivateRoute allowedPerfis={['Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade', 'Gestor de Qualidade', 'ADM', 'Almoxarife', 'Fiscal']}>
+              <RastreabilidadeSaidas />
+            </PrivateRoute>
+          } />
+          <Route path="/projeto/:projetoId/rastreabilidade-materiais/:recebimentoId/editar" element={
+            <PrivateRoute allowedPerfis={['Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade', 'Gestor de Qualidade', 'ADM', 'Almoxarife', 'Fiscal']}>
+              <RastreabilidadeForm />
+            </PrivateRoute>
+          } />
+          <Route path="/projeto/:projetoId/rastreabilidade-materiais/:recebimentoId" element={
+            <PrivateRoute allowedPerfis={['Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade', 'Gestor de Qualidade', 'ADM', 'Almoxarife', 'Fiscal']}>
+              <RastreabilidadeDetalhe />
             </PrivateRoute>
           } />
           <Route path="/projeto/:projetoId/rnc/novo" element={
