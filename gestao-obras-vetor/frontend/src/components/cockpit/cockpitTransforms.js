@@ -102,7 +102,7 @@ export const buildAttentionPoints = ({ cockpit, activities, procurement, assets,
   if (Number(assets?.ferramentas_manutencao || 0) > 0) points.push({ source: 'Ativos', priority: 'attention', title: `${assets.ferramentas_manutencao} em manutenção`, detail: 'Verificar disponibilidade', href: 'almoxarifado/manutencao' });
   if (Number(assets?.total_perdas || 0) > 0) points.push({ source: 'Ativos', priority: 'critical', title: `${assets.total_perdas} perda(s) registrada(s)`, detail: 'Ocorrência oficial do Almoxarifado', href: 'almoxarifado/perdas' });
   if (cockpit?.execution?.totals?.awaiting_analysis > 0) points.push({ source: 'RDO', priority: 'attention', title: `${cockpit.execution.totals.awaiting_analysis} RDO(s) aguardando análise`, href: 'rdos' });
-  if (cockpit?.execution?.days_since_latest >= 3) points.push({ source: 'Execução', priority: 'critical', title: `${cockpit.execution.days_since_latest} dias sem novo RDO`, detail: 'Regra existente do Dashboard', date: cockpit.execution.latest_rdo_date, href: 'rdos' });
+  if (cockpit?.execution?.days_since_latest >= 3) points.push({ source: 'Execução', priority: 'critical', title: `${cockpit.execution.days_since_latest} dias úteis sem novo RDO`, detail: 'Regra existente do Dashboard', date: cockpit.execution.latest_rdo_date, href: 'rdos' });
   if (curve?.indicadores?.spi_status === 'vermelho') points.push({ source: 'Planejamento', priority: 'attention', title: `SPI ${Number(curve.indicadores.spi).toFixed(3)}`, detail: 'Ritmo abaixo do planejado', href: 'curva-s' });
   return points.slice(0, 8);
 };

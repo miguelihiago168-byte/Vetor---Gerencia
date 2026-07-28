@@ -1,6 +1,7 @@
 const assert = require('assert');
 const {
   dateKey,
+  businessDaysBetween,
   summarizeExecution,
   summarizeWorkforce,
   summarizeEquipment,
@@ -13,6 +14,8 @@ const now = new Date('2026-07-15T15:00:00-03:00');
 const main = async () => {
   assert.strictEqual(dateKey('2026-07-15'), '2026-07-15');
   assert.strictEqual(dateKey(now), '2026-07-15');
+  assert.strictEqual(businessDaysBetween('2026-07-17', '2026-07-20'), 1, 'fim de semana não deve contar como dia obrigatório de RDO');
+  assert.strictEqual(businessDaysBetween('2026-07-17', '2026-07-21'), 2);
 
   const rdos = [
     { id: 2, data_relatorio: '2026-07-15', status: 'Em análise', mao_obra_direta: 4, mao_obra_indireta: 1, activity_count: 2, photo_count: 3, occurrence_count: 1 },
@@ -22,6 +25,9 @@ const main = async () => {
   const execution = summarizeExecution(rdos, now);
   assert.deepStrictEqual(execution.totals, { rdos: 2, activities: 3, photos: 4, occurrences: 1, awaiting_analysis: 1 });
   assert.strictEqual(execution.days_since_latest, 0);
+
+  const fridayRdo = summarizeExecution([{ id: 3, data_relatorio: '2026-07-17', status: 'Aprovado' }], new Date('2026-07-20T15:00:00-03:00'));
+  assert.strictEqual(fridayRdo.days_since_latest, 1, 'segunda-feira deve ser o primeiro dia útil sem RDO após sexta-feira');
 
   const unavailable = summarizeWorkforce(rdos, [], now);
   assert.strictEqual(unavailable.hh, null);
