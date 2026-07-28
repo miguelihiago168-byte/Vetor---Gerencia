@@ -21,6 +21,19 @@ const shiftDateKey = (key, days) => {
   return date.toISOString().slice(0, 10);
 };
 
+const businessDaysBetween = (from, to) => {
+  if (!from || !to || from >= to) return 0;
+  let days = 0;
+  const cursor = new Date(`${from}T12:00:00Z`);
+  const end = new Date(`${to}T12:00:00Z`);
+  while (cursor < end) {
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+    const day = cursor.getUTCDay();
+    if (day !== 0 && day !== 6) days += 1;
+  }
+  return days;
+};
+
 const inWindow = (value, from, to, timeZone) => {
   const key = dateKey(value, timeZone);
   return Boolean(key && key >= from && key <= to);
@@ -34,7 +47,7 @@ const summarizeExecution = (rdos = [], now = new Date(), timeZone = DEFAULT_TIME
   const ordered = [...rdos].sort((a, b) => String(b.data_relatorio || '').localeCompare(String(a.data_relatorio || '')));
   const period = ordered.filter((rdo) => inWindow(rdo.data_relatorio, from, today, timeZone));
   const latestDate = dateKey(ordered[0]?.data_relatorio, timeZone);
-  const daysSinceLatest = latestDate ? Math.max(0, Math.floor((new Date(`${today}T12:00:00Z`) - new Date(`${latestDate}T12:00:00Z`)) / 86400000)) : null;
+  const daysSinceLatest = latestDate ? businessDaysBetween(latestDate, today) : null;
   return {
     period: { from, to: today, days: 7 },
     latest_rdo_date: ordered[0]?.data_relatorio || null,
@@ -220,6 +233,7 @@ const loadCockpit = async ({ project, permissions, allQuery, now = new Date() })
 module.exports = {
   DEFAULT_TIME_ZONE,
   dateKey,
+  businessDaysBetween,
   effective,
   summarizeExecution,
   summarizeWorkforce,
