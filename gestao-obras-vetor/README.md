@@ -1,6 +1,5 @@
 # Gestão de Obras - Vetor
 
-
 Sistema completo de gestão de obras com módulos de planejamento (EAP, Curva S, Gantt), execução diária (RDO), controle de compras/requisições, almoxarifado, gestão de usuários, RNC, notificações, email e rastreabilidade.
 
 Última atualização de documentação: 01/04/2026.
@@ -9,12 +8,14 @@ Observação: linha adicionada em 10/04/2026 para acionar novo deploy na branch 
 ## 🚀 Tecnologias
 
 ### Backend
+
 - Node.js + Express
-- SQLite
+- PostgreSQL (via Docker)
 - JWT para autenticação
 - Multer para upload de arquivos
 
 ### Frontend
+
 - React 18
 - Vite
 - React Router
@@ -28,31 +29,99 @@ Observação: linha adicionada em 10/04/2026 para acionar novo deploy na branch 
 
 - Node.js `18.20.4`
 - npm `10.8.2`
+- Docker Desktop (ou Docker Engine) em execução
+- Docker Compose habilitado (`docker compose`)
 - Dependências do projeto fixadas nos arquivos `package.json` (sem `^`)
 
-> Recomendado: usar `npm ci` para instalação determinística baseada no `package-lock.json`.
+> Recomendado: usar Docker Compose para backend, frontend e banco no mesmo fluxo.
 
-### 1. Instalar dependências do Backend
+### 1. Configurar variáveis de ambiente
 
-```powershell
-cd backend
-npm ci
+Na raiz do projeto:
+
+```bash
+cp .env.example .env
 ```
 
-### 2. Inicializar o banco de dados
+Preencha ao menos:
 
-```powershell
-npm run init-db
+- `POSTGRES_DB`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `PGADMIN_DEFAULT_EMAIL`
+- `PGADMIN_DEFAULT_PASSWORD`
+
+#### Tutorial: gerar senhas e segredos fortes (Linux)
+
+Não use valores como `troque_por_uma_senha_forte` fora de testes locais.
+
+1. Abra um terminal Linux na pasta do projeto e execute o comando abaixo. Ele cria um segredo aleatório de 64 caracteres hexadecimais (32 bytes criptograficamente seguros):
+
+```bash
+openssl rand -hex 32
 ```
 
-### 3. Instalar dependências do Frontend
+2. Copie o resultado e execute o comando novamente para gerar valores diferentes para cada segredo.
 
-```powershell
-cd ../frontend
-npm ci
+3. Preencha os arquivos sem aspas e sem espaços antes/depois do `=`:
+
+```dotenv
+# .env
+POSTGRES_PASSWORD=cole_um_valor_gerado_aqui
+PGADMIN_DEFAULT_PASSWORD=cole_outro_valor_gerado_aqui
+```
+
+```dotenv
+# backend/.env
+JWT_SECRET=cole_um_terceiro_valor_gerado_aqui
+# Para executar o backend diretamente no Windows, use a mesma senha do PostgreSQL:
+DB_PASSWORD=cole_o_mesmo_valor_de_POSTGRES_PASSWORD
+```
+
+4. Guarde os valores em um gerenciador de senhas. Eles não poderão ser exibidos pelo sistema depois.
+
+> Em uma instalação já criada, alterar somente `POSTGRES_PASSWORD` no `.env` não troca a senha dentro do PostgreSQL, pois o banco mantém a credencial existente no volume. Altere também a senha do usuário no PostgreSQL ou recrie o volume apenas se não houver dados a preservar.
+
+> Use o valor gerado diretamente no `.env`; não grave um hash ali. O PostgreSQL e a aplicação armazenam/verificam senhas de forma segura quando aplicável. Guarde esses valores em um gerenciador de senhas e nunca os versione no Git.
+
+No backend:
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Garanta que `DB_HOST=postgres` e que `DB_PASSWORD` tenha o mesmo valor de `POSTGRES_PASSWORD`.
+
+### 2. Subir banco PostgreSQL antes da aplicação
+
+```bash
+docker compose up -d postgres
+```
+
+### 3. Inicializar schema base e aplicar migrations
+
+```bash
+docker compose build backend
+docker compose run --rm backend npm run db:init
+docker compose run --rm -e MIGRATIONS_ALLOW_PRODUCTION=true backend npm run db:migrate
+docker compose run --rm backend npm run db:check
+```
+
+### 4. Subir aplicação completa
+
+```bash
+docker compose up -d
 ```
 
 ## ▶️ Executar o Sistema
+
+### Fluxo recomendado (Docker + PostgreSQL)
+
+1. Verifique Docker ativo: `docker info`
+2. Suba banco: `docker compose up -d postgres`
+3. Rode bootstrap do banco: `db:init`, `db:migrate`, `db:check`
+4. Suba stack: `docker compose up -d`
+5. Confira containers: `docker compose ps`
 
 ### Reinício rápido após deploy
 
@@ -84,12 +153,14 @@ docker compose up -d --build backend
 ### Opção 1: Executar manualmente (2 terminais)
 
 **Terminal 1 - Backend:**
+
 ```powershell
 cd backend
 npm run dev
 ```
 
 **Terminal 2 - Frontend:**
+
 ```powershell
 cd frontend
 npm run dev
@@ -98,15 +169,17 @@ npm run dev
 ### Opção 2: Script automatizado
 
 Na raiz do projeto:
+
 ```powershell
 .\start.ps1
 ```
 
 ## 🌐 Acessar o Sistema
 
-- **Frontend:** http://localhost:3000
-- **Backend API:** http://localhost:3001/api
-- **Health Check:** http://localhost:3001/api/health
+- **Aplicação (Caddy):** https://localhost
+- **Backend API (via proxy):** https://localhost/api
+- **Health Check:** https://localhost/api/health
+- **pgAdmin:** http://127.0.0.1:5050
 
 ## Produção com Docker e HTTPS
 
@@ -178,10 +251,9 @@ pm2 status
 ```
 
 - **Boas práticas**:
-   - Use variáveis de ambiente (`.env`) para `JWT_SECRET`, `JWT_EXPIRES_IN`, `DATABASE_URL`, `PORT`.
-   - Sempre verifique `GET /api/health` antes de iniciar o frontend.
-   - Se o backend falhar ao iniciar, cheque o log (`server.log` ou `pm2 logs`) e libere a porta como acima.
-
+  - Use variáveis de ambiente (`.env`) para `JWT_SECRET`, `JWT_EXPIRES_IN`, `DATABASE_URL`, `PORT`.
+  - Sempre verifique `GET /api/health` antes de iniciar o frontend.
+  - Se o backend falhar ao iniciar, cheque o log (`server.log` ou `pm2 logs`) e libere a porta como acima.
 
 ## 🔐 Credenciais Padrão
 
@@ -213,27 +285,30 @@ gestao-obras-vetor/
     └── index.html
 ```
 
-
 ## 📋 Funcionalidades Implementadas
 
 ### ✅ Autenticação e Perfis
+
 - Login com 6 dígitos (login e senha)
 - JWT tokens
 - Proteção de rotas
 - Perfis: Usuário comum, Gestor, ADM, Almoxarife, Fiscal, Gestor de Qualidade
 
 ### ✅ Gestão de Usuários
+
 - Criação automática de login (sequencial)
 - Perfis e permissões editáveis
 - Apenas gestor/adm pode promover outros usuários
 - Vinculação de usuários por projeto
 
 ### ✅ Gestão de Projetos
+
 - CRUD completo
 - Campos: nome, empresas, prazo, cidade
 - Arquivar/desarquivar projetos
 
 ### ✅ EAP (Estrutura Analítica do Projeto)
+
 - Estrutura hierárquica
 - Código EAP customizável
 - Status automático (Não iniciada / Em andamento / Concluída)
@@ -243,18 +318,20 @@ gestao-obras-vetor/
 - Dependências e sugestões automáticas
 
 ### ✅ RDO (Relatório Diário de Obra)
+
 - Preenchimento completo conforme especificação
 - Status com cores:
-   - 🟡 Em preenchimento
-   - 🔵 Em análise
-   - 🟢 Aprovado
-   - 🔴 Reprovado
+  - 🟡 Em preenchimento
+  - 🔵 Em análise
+  - 🟢 Aprovado
+  - 🔴 Reprovado
 - Upload de anexos (fotos, PDFs)
 - Vinculação com atividades da EAP
 - Registro de mão de obra, equipamentos, clima, materiais, ocorrências, assinaturas e fotos
 - Logs de alterações
 
 ### ✅ Compras e Requisições
+
 - Requisições multi-itens
 - Pedidos de compra
 - Fluxo de aprovação e análise
@@ -263,46 +340,54 @@ gestao-obras-vetor/
 - Exportação Excel
 
 ### ✅ Fornecedores
+
 - Cadastro, edição e exclusão de fornecedores
 
 ### ✅ Almoxarifado
+
 - Controle de ferramentas, retiradas, devoluções, manutenções, perdas, transferências
 - Relatórios de movimentações
 - Dashboard de ativos
 
 ### ✅ RNC (Registro de Não Conformidade)
+
 - Cadastro, edição, aprovação, correção e exclusão de RNC
 - Upload de anexos e fotos
 - PDF de RNC
 
 ### ✅ Notificações
+
 - Notificações por usuário e contexto
 - Marcação de lidas
 
 ### ✅ Email
+
 - Configuração de SMTP
 - Envio de emails, templates, histórico
 - Upload de imagens para email
 
 ### ✅ Dashboard
+
 - Avanço físico consolidado
 - Gráficos de evolução
 - Estatísticas de RDOs
 - Status das atividades
 
 ### ✅ Rastreabilidade
+
 - Histórico de todas as alterações
 - Tabela de auditoria
 - Registro de criador/modificador
 
-
 ## 🔧 APIs Disponíveis
 
 ### Auth
+
 - `POST /api/auth/login` - Login
 - `POST /api/auth/register` - Cadastro via convite
 
 ### Usuários
+
 - `GET /api/usuarios` - Listar
 - `POST /api/usuarios` - Criar
 - `PATCH /api/usuarios/:id/gestor` - Alterar permissão gestor
@@ -311,6 +396,7 @@ gestao-obras-vetor/
 - `PATCH /api/usuarios/:id/senha` - Alterar senha
 
 ### Projetos
+
 - `GET /api/projetos` - Listar
 - `GET /api/projetos/:id` - Detalhes
 - `POST /api/projetos` - Criar
@@ -320,6 +406,7 @@ gestao-obras-vetor/
 - `POST /api/projetos/:destinoId/copiar-eap` - Copiar EAP
 
 ### EAP
+
 - `GET /api/eap/projeto/:projetoId` - Listar atividades
 - `POST /api/eap` - Criar atividade
 - `PUT /api/eap/:id` - Atualizar
@@ -331,6 +418,7 @@ gestao-obras-vetor/
 - `GET /api/eap/projeto/:projetoId/gantt-data` - Dados para Gantt
 
 ### RDOs
+
 - `GET /api/rdos/projeto/:projetoId` - Listar
 - `GET /api/rdos/:id` - Detalhes
 - `POST /api/rdos` - Criar
@@ -341,6 +429,7 @@ gestao-obras-vetor/
 - `GET /api/rdos/:id/logs` - Logs do RDO
 
 ### Anexos
+
 - `POST /api/anexos/upload/:rdoId` - Upload RDO
 - `POST /api/anexos/upload-rnc/:rncId` - Upload RNC
 - `GET /api/anexos/rdo/:rdoId` - Listar anexos RDO
@@ -349,6 +438,7 @@ gestao-obras-vetor/
 - `DELETE /api/anexos/:id` - Deletar
 
 ### Compras e Requisições
+
 - `POST /api/requisicoes` - Criar requisição
 - `GET /api/requisicoes/projeto/:projetoId` - Listar requisições do projeto
 - `GET /api/requisicoes/:id` - Detalhes da requisição
@@ -366,6 +456,7 @@ gestao-obras-vetor/
 - `PATCH /api/requisicoes/:id/itens/:itemId/editar` - Editar item
 
 ### Pedidos de Compra
+
 - `POST /api/pedidos-compra` - Criar pedido
 - `GET /api/pedidos-compra/projeto/:projetoId` - Listar pedidos
 - `GET /api/pedidos-compra/:id` - Detalhes
@@ -374,12 +465,14 @@ gestao-obras-vetor/
 - `PATCH /api/pedidos-compra/:id/comprado` - Marcar como comprado
 
 ### Fornecedores
+
 - `GET /api/fornecedores` - Listar
 - `POST /api/fornecedores` - Criar
 - `PATCH /api/fornecedores/:id` - Editar
 - `DELETE /api/fornecedores/:id` - Excluir
 
 ### Almoxarifado
+
 - `GET /api/almoxarifado/perfil` - Perfil do almoxarifado
 - `GET /api/almoxarifado/ferramentas` - Listar ferramentas
 - `POST /api/almoxarifado/ferramentas` - Cadastrar ferramenta
@@ -394,6 +487,7 @@ gestao-obras-vetor/
 - `GET /api/almoxarifado/relatorios/perdas` - Relatório de perdas
 
 ### RNC
+
 - `GET /api/rnc/projeto/:projetoId` - Listar RNCs
 - `POST /api/rnc` - Criar RNC
 - `PUT /api/rnc/:id` - Editar RNC
@@ -404,11 +498,13 @@ gestao-obras-vetor/
 - `GET /api/rnc/:id/pdf` - PDF da RNC
 
 ### Notificações
+
 - `GET /api/notificacoes` - Listar notificações
 - `PATCH /api/notificacoes/:id/read` - Marcar como lida
 - `PATCH /api/notificacoes/marcar-todas-lidas` - Marcar todas como lidas
 
 ### Email
+
 - `GET /api/email/config` - Obter config
 - `POST /api/email/config` - Salvar config
 - `POST /api/email/config/test` - Testar config
@@ -422,14 +518,15 @@ gestao-obras-vetor/
 - `POST /api/email/upload-image` - Upload de imagem
 
 ### Dashboard
+
 - `GET /api/dashboard/projeto/:projetoId/avanco` - Avanço físico
 - `GET /api/dashboard/projeto/:projetoId/rdos-stats` - Estatísticas
 - `GET /api/dashboard/projeto/:projetoId/galeria-rdos` - Galeria de fotos agrupada por RDO
 - `GET /api/dashboard/projeto/:projetoId/curva-s` - Dados Curva S
 
 ### (Financeiro - desativado)
-- Rotas presentes mas desativadas
 
+- Rotas presentes mas desativadas
 
 ## 🎯 Próximos Passos
 
@@ -460,6 +557,7 @@ gestao-obras-vetor/
 ## 🐛 Troubleshooting
 
 ### Erro: "Cannot find module"
+
 ```powershell
 # Reinstalar dependências
 cd backend
@@ -472,6 +570,7 @@ npm ci
 ```
 
 ### Erro: "Port already in use"
+
 ```powershell
 # Verificar processos nas portas 3000 e 3001
 netstat -ano | findstr :3000
@@ -482,6 +581,7 @@ taskkill /PID <PID> /F
 ```
 
 ### Resetar banco de dados
+
 ```powershell
 cd backend
 Remove-Item database\gestao_obras.db
@@ -497,5 +597,3 @@ ISC - Uso interno da Vetor
 **Desenvolvido para Vetor - Sistema de Gestão de Obras**
 
 # Teste de Deploy Final
-
-

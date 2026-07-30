@@ -46,8 +46,8 @@
     "nodemailer": "^8.0.4",
     "pdfkit": "0.17.2",
     "puppeteer": "^24.38.0",
+    "pg": "^8.13.3",
     "socket.io": "^4.8.1",
-    "sqlite3": "5.1.6",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

@@ -12,14 +12,19 @@ const quoteIdentifier = (value) => `"${String(value).replace(/"/g, '""')}"`;
 
 const tableExists = async (getQuery, tableName) => {
   const row = await getQuery(
-    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+    `SELECT table_name FROM information_schema.tables
+     WHERE table_type = 'BASE TABLE' AND table_name = ?`,
     [tableName]
   );
   return Boolean(row);
 };
 
 const existingColumns = async (allQuery, tableName) => {
-  const rows = await allQuery(`PRAGMA table_info(${quoteIdentifier(tableName)})`);
+  const rows = await allQuery(
+    `SELECT column_name AS name FROM information_schema.columns
+     WHERE table_name = ?`,
+    [tableName]
+  );
   return new Set((rows || []).map((row) => String(row.name)));
 };
 

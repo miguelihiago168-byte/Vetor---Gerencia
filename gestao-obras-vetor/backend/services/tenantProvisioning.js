@@ -1,24 +1,29 @@
-const fs = require('fs');
+// ---------------------------------------------------------------------------
+// Tenant Provisioning — PostgreSQL schema-per-tenant
+// ---------------------------------------------------------------------------
+// Each tenant gets its own PostgreSQL schema: tenant_<id>
+// Tables within the schema mirror the public schema structure via LIKE ... INCLUDING ALL.
+// ---------------------------------------------------------------------------
+
 const path = require('path');
-const sqlite3 = require('sqlite3').verbose();
+const fs = require('fs');
 
 const {
+  pool,
   runQueryMain,
   getQueryMain,
-  allQueryMain,
   runWithTenantContext,
   runQuery,
-  getQuery,
-  allQuery
+  tenantSchema,
+  translateQuery,
 } = require('../config/database');
 
 const backendDir = path.join(__dirname, '..');
-const databaseDir = process.env.DB_DIR || path.join(backendDir, 'database');
-const mainDbPath = path.join(databaseDir, 'gestao_obras.db');
-const tenantDbDir = path.join(databaseDir, 'tenants');
 const migrationsDir = path.join(backendDir, 'scripts', 'migrations');
 
-const quoteIdent = (name) => `"${String(name).replace(/"/g, '""')}"`;
+// ---------------------------------------------------------------------------
+// Error factory
+// ---------------------------------------------------------------------------
 
 const createTenantError = (code, message, details = {}) => {
   const err = new Error(message);
@@ -27,80 +32,21 @@ const createTenantError = (code, message, details = {}) => {
   return err;
 };
 
-const openDb = (filePath, mode = sqlite3.OPEN_READWRITE) => new Promise((resolve, reject) => {
-  const db = new sqlite3.Database(filePath, mode, (err) => {
-    if (err) reject(err);
-    else resolve(db);
-  });
-});
+// ---------------------------------------------------------------------------
+// Schema existence check
+// ---------------------------------------------------------------------------
 
-const closeDb = (db) => new Promise((resolve, reject) => {
-  db.close((err) => {
-    if (err) reject(err);
-    else resolve();
-  });
-});
-
-const run = (db, sql, params = []) => new Promise((resolve, reject) => {
-  db.run(sql, params, function onRun(err) {
-    if (err) reject(err);
-    else resolve(this);
-  });
-});
-
-const get = (db, sql, params = []) => new Promise((resolve, reject) => {
-  db.get(sql, params, (err, row) => {
-    if (err) reject(err);
-    else resolve(row);
-  });
-});
-
-const all = (db, sql, params = []) => new Promise((resolve, reject) => {
-  db.all(sql, params, (err, rows) => {
-    if (err) reject(err);
-    else resolve(rows || []);
-  });
-});
-
-const getTenantDbPath = (tenantId) => path.join(tenantDbDir, `tenant_${Number(tenantId)}.db`);
-
-const ensureTenantTargetAvailable = (tenantId) => {
-  const numericTenantId = Number(tenantId);
-  if (!Number.isInteger(numericTenantId) || numericTenantId <= 0) {
-    throw createTenantError('TENANT_INVALID_ID', 'tenant_id invalido.');
-  }
-
-  const tenantPath = getTenantDbPath(numericTenantId);
-  if (fs.existsSync(tenantPath)) {
-    throw createTenantError(
-      'TENANT_DATABASE_ALREADY_EXISTS',
-      `Banco tenant ${numericTenantId} ja existe.`,
-      { tenantPath }
-    );
-  }
-
-  return tenantPath;
+const schemaExists = async (client, schema) => {
+  const result = await client.query(
+    `SELECT schema_name FROM information_schema.schemata WHERE schema_name = $1`,
+    [schema]
+  );
+  return result.rows.length > 0;
 };
 
-const copySchemaFromMain = async (targetDb) => {
-  const sourceDb = await openDb(mainDbPath, sqlite3.OPEN_READONLY);
-  try {
-    const schemaRows = await all(sourceDb, `
-      SELECT type, name, sql
-      FROM sqlite_master
-      WHERE sql IS NOT NULL
-        AND name NOT LIKE 'sqlite_%'
-        AND type IN ('table', 'index', 'trigger', 'view')
-      ORDER BY CASE type WHEN 'table' THEN 1 WHEN 'index' THEN 2 WHEN 'trigger' THEN 3 ELSE 4 END, name
-    `);
-
-    for (const row of schemaRows) {
-      await run(targetDb, row.sql);
-    }
-  } finally {
-    await closeDb(sourceDb);
-  }
-};
+// ---------------------------------------------------------------------------
+// Migration support
+// ---------------------------------------------------------------------------
 
 const loadMigrations = () => {
   if (!fs.existsSync(migrationsDir)) return [];
@@ -118,108 +64,174 @@ const loadMigrations = () => {
     });
 };
 
-const applyMigrationsToTenantDb = async (db, tenantId) => {
-  await run(db, `
+const applyMigrationsToSchema = async (client, schema, tenantId) => {
+  await client.query(`SET search_path TO "${schema}", public`);
+
+  await client.query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       id TEXT PRIMARY KEY,
       description TEXT,
-      applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      applied_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
 
-  const appliedRows = await all(db, 'SELECT id FROM schema_migrations');
-  const applied = new Set(appliedRows.map((row) => String(row.id)));
+  const appliedResult = await client.query('SELECT id FROM schema_migrations');
+  const applied = new Set(appliedResult.rows.map((row) => String(row.id)));
   const migrations = loadMigrations();
 
   for (const migration of migrations) {
     if (applied.has(migration.id)) continue;
 
     const context = {
-      target: { name: `tenant_${tenantId}`, filePath: getTenantDbPath(tenantId) },
-      run: (sql, params) => run(db, sql, params),
-      get: (sql, params) => get(db, sql, params),
-      all: (sql, params) => all(db, sql, params)
+      target: { name: `tenant_${tenantId}`, schema },
+      run: (sql, params) => client.query(translateQuery(sql), params || []),
+      get: async (sql, params) => {
+        const r = await client.query(translateQuery(sql), params || []);
+        return r.rows[0] || null;
+      },
+      all: async (sql, params) => {
+        const r = await client.query(translateQuery(sql), params || []);
+        return r.rows;
+      },
     };
 
     await migration.up(context);
-    await run(
-      db,
-      'INSERT INTO schema_migrations (id, description) VALUES (?, ?)',
+    await client.query(
+      `INSERT INTO schema_migrations (id, description) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING`,
       [migration.id, migration.description || '']
     );
   }
 };
 
-const tableColumns = async (db, table) => {
-  const cols = await all(db, `PRAGMA table_info(${quoteIdent(table)})`);
-  return cols.map((column) => column.name);
+// ---------------------------------------------------------------------------
+// Copy table structure from public schema to tenant schema
+// ---------------------------------------------------------------------------
+
+const copyTablesFromPublic = async (client, schema) => {
+  const tablesResult = await client.query(`
+    SELECT table_name
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_type = 'BASE TABLE'
+    ORDER BY table_name
+  `);
+
+  for (const { table_name } of tablesResult.rows) {
+    await client.query(
+      `CREATE TABLE IF NOT EXISTS "${schema}"."${table_name}" (LIKE public."${table_name}" INCLUDING ALL)`
+    );
+
+    // Copy any sequence ownership (for SERIAL columns) into tenant schema
+    const seqResult = await client.query(`
+      SELECT pg_get_serial_sequence('public."${table_name}"', column_name) AS seq, column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = $1
+        AND column_default LIKE 'nextval%'
+    `, [table_name]).catch(() => ({ rows: [] }));
+
+    for (const { column_name } of seqResult.rows) {
+      const seqName = `${schema}_${table_name}_${column_name}_seq`;
+      await client.query(
+        `CREATE SEQUENCE IF NOT EXISTS "${schema}"."${seqName}" START 1`
+      ).catch(() => {});
+      await client.query(
+        `ALTER TABLE "${schema}"."${table_name}"
+         ALTER COLUMN "${column_name}" SET DEFAULT nextval('"${schema}"."${seqName}"')`
+      ).catch(() => {});
+    }
+  }
 };
 
-const insertRow = async (db, table, row) => {
-  const columns = await tableColumns(db, table);
-  const present = columns.filter((column) => Object.prototype.hasOwnProperty.call(row, column));
+// ---------------------------------------------------------------------------
+// Insert a row by inspecting actual columns in the target schema
+// ---------------------------------------------------------------------------
+
+const insertRowInSchema = async (client, schema, table, row) => {
+  const colResult = await client.query(
+    `SELECT column_name FROM information_schema.columns
+     WHERE table_schema = $1 AND table_name = $2`,
+    [schema, table]
+  );
+  const columns = colResult.rows.map((r) => r.column_name);
+  const present = columns.filter((col) => Object.prototype.hasOwnProperty.call(row, col));
   if (present.length === 0) return;
 
-  await run(
-    db,
-    `INSERT INTO ${quoteIdent(table)} (${present.map(quoteIdent).join(', ')}) VALUES (${present.map(() => '?').join(', ')})`,
-    present.map((column) => row[column])
+  const placeholders = present.map((_, i) => `$${i + 1}`).join(', ');
+  await client.query(
+    `INSERT INTO "${schema}"."${table}" (${present.map((c) => `"${c}"`).join(', ')})
+     VALUES (${placeholders})`,
+    present.map((col) => row[col])
   );
 };
 
-const validateTenantDatabase = async (db, tenantId) => {
-  const tenant = await get(db, 'SELECT id FROM tenants WHERE id = ?', [tenantId]);
-  if (!tenant) throw createTenantError('TENANT_METADATA_MISSING', 'Banco tenant sem metadados do tenant.');
+// ---------------------------------------------------------------------------
+// Validate tenant schema
+// ---------------------------------------------------------------------------
+
+const validateTenantSchema = async (client, schema, tenantId) => {
+  await client.query(`SET search_path TO "${schema}", public`);
+
+  const tenantResult = await client.query(
+    'SELECT id FROM tenants WHERE id = $1',
+    [tenantId]
+  );
+  if (tenantResult.rows.length === 0) {
+    throw createTenantError('TENANT_METADATA_MISSING', 'Schema tenant sem metadados do tenant.');
+  }
 
   const migrations = loadMigrations();
-  const appliedRows = await all(db, 'SELECT id FROM schema_migrations ORDER BY id');
-  const applied = new Set(appliedRows.map((row) => String(row.id)));
-  const pending = migrations.filter((migration) => !applied.has(migration.id));
+  const appliedResult = await client.query('SELECT id FROM schema_migrations ORDER BY id');
+  const applied = new Set(appliedResult.rows.map((row) => String(row.id)));
+  const pending = migrations.filter((m) => !applied.has(m.id));
   if (pending.length > 0) {
-    throw createTenantError('TENANT_SCHEMA_OUTDATED', 'Banco tenant com migrations pendentes.', {
-      pending: pending.map((migration) => migration.id)
+    throw createTenantError('TENANT_SCHEMA_OUTDATED', 'Schema tenant com migrations pendentes.', {
+      pending: pending.map((m) => m.id),
     });
   }
-
-  const integrity = await all(db, 'PRAGMA integrity_check');
-  if (!(integrity.length === 1 && integrity[0].integrity_check === 'ok')) {
-    throw createTenantError('TENANT_INTEGRITY_FAILED', 'integrity_check falhou.', { integrity });
-  }
-
-  const foreignKeys = await all(db, 'PRAGMA foreign_key_check');
-  if (foreignKeys.length > 0) {
-    throw createTenantError('TENANT_FOREIGN_KEY_FAILED', 'foreign_key_check falhou.', { foreignKeys });
-  }
 };
 
-const createTenantDatabaseFromCleanSchema = async ({ tenantId, tenantRow, userRow, userTenantRow }) => {
-  if (!fs.existsSync(tenantDbDir)) fs.mkdirSync(tenantDbDir, { recursive: true });
+// ---------------------------------------------------------------------------
+// Create tenant schema (PostgreSQL equivalent of "create tenant database")
+// ---------------------------------------------------------------------------
 
-  const tenantPath = ensureTenantTargetAvailable(tenantId);
-  const tmpPath = `${tenantPath}.tmp-${process.pid}-${Date.now()}`;
-  const db = await openDb(tmpPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE);
+const createTenantSchema = async ({ tenantId, tenantRow, userRow, userTenantRow }) => {
+  const numericTenantId = Number(tenantId);
+  const schema = tenantSchema(numericTenantId);
 
+  const client = await pool.connect();
   try {
-    await run(db, 'PRAGMA foreign_keys = OFF');
-    await run(db, 'BEGIN');
-    await copySchemaFromMain(db);
-    await applyMigrationsToTenantDb(db, tenantId);
-    await insertRow(db, 'tenants', tenantRow);
-    await insertRow(db, 'usuarios', userRow);
-    await insertRow(db, 'usuario_tenants', userTenantRow);
-    await run(db, 'COMMIT');
-    await run(db, 'PRAGMA foreign_keys = ON');
-    await validateTenantDatabase(db, tenantId);
+    if (await schemaExists(client, schema)) {
+      throw createTenantError(
+        'TENANT_DATABASE_ALREADY_EXISTS',
+        `Schema tenant ${numericTenantId} ja existe: ${schema}`
+      );
+    }
+
+    await client.query('BEGIN');
+    await client.query(`CREATE SCHEMA "${schema}"`);
+    await copyTablesFromPublic(client, schema);
+    await applyMigrationsToSchema(client, schema, numericTenantId);
+    await insertRowInSchema(client, schema, 'tenants', tenantRow);
+    await insertRowInSchema(client, schema, 'usuarios', userRow);
+    await insertRowInSchema(client, schema, 'usuario_tenants', userTenantRow);
+    await validateTenantSchema(client, schema, numericTenantId);
+    await client.query('COMMIT');
+    return schema;
   } catch (error) {
-    await run(db, 'ROLLBACK').catch(() => {});
+    await client.query('ROLLBACK').catch(() => {});
+    await client.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE`).catch(() => {});
     throw error;
   } finally {
-    await closeDb(db).catch(() => {});
+    client.release();
   }
-
-  fs.renameSync(tmpPath, tenantPath);
-  return tenantPath;
 };
+
+// Keep legacy alias
+const createTenantDatabaseFromCleanSchema = createTenantSchema;
+
+// ---------------------------------------------------------------------------
+// Bootstrap data helpers
+// ---------------------------------------------------------------------------
 
 const getRowsForTenantBootstrap = async (tenantId, userId) => {
   const tenantRow = await getQueryMain('SELECT * FROM tenants WHERE id = ?', [tenantId]);
@@ -243,7 +255,7 @@ const activateTenant = async (tenantId) => {
   });
 };
 
-const rollbackTenantProvisioning = async ({ tenantId, userId, tenantPath }) => {
+const rollbackTenantProvisioning = async ({ tenantId, userId }) => {
   if (userId) {
     await runQueryMain('DELETE FROM usuario_tenants WHERE usuario_id = ?', [userId]).catch(() => {});
     await runQueryMain('DELETE FROM usuarios WHERE id = ?', [userId]).catch(() => {});
@@ -252,12 +264,18 @@ const rollbackTenantProvisioning = async ({ tenantId, userId, tenantPath }) => {
   if (tenantId) {
     await runQueryMain('DELETE FROM usuario_tenants WHERE tenant_id = ?', [tenantId]).catch(() => {});
     await runQueryMain('DELETE FROM tenants WHERE id = ?', [tenantId]).catch(() => {});
-  }
-
-  if (tenantPath && fs.existsSync(tenantPath)) {
-    fs.unlinkSync(tenantPath);
+    const client = await pool.connect();
+    try {
+      await client.query(`DROP SCHEMA IF EXISTS "${tenantSchema(tenantId)}" CASCADE`);
+    } finally {
+      client.release();
+    }
   }
 };
+
+// ---------------------------------------------------------------------------
+// Public API: provision a trial tenant
+// ---------------------------------------------------------------------------
 
 const provisionTrialTenant = async ({
   tenantName,
@@ -266,11 +284,10 @@ const provisionTrialTenant = async ({
   login,
   passwordHash,
   name,
-  email
+  email,
 }) => {
   let tenantId = null;
   let userId = null;
-  let tenantPath = null;
 
   try {
     const tenantInsert = await runQueryMain(
@@ -278,7 +295,6 @@ const provisionTrialTenant = async ({
       [tenantName, tenantSlug, trialExpiresAt || null, trialExpiresAt ? 1 : 0]
     );
     tenantId = Number(tenantInsert.lastID);
-    tenantPath = ensureTenantTargetAvailable(tenantId);
 
     const userInsert = await runQueryMain(
       `INSERT INTO usuarios (login, senha, nome, email, perfil, funcao, setor, is_gestor, is_adm, tenant_id, ativo, primeiro_acesso_pendente)
@@ -293,17 +309,21 @@ const provisionTrialTenant = async ({
     );
 
     const rows = await getRowsForTenantBootstrap(tenantId, userId);
-    tenantPath = await createTenantDatabaseFromCleanSchema({ tenantId, ...rows });
+    await createTenantSchema({ tenantId, ...rows });
     await activateTenant(tenantId);
 
-    return { tenantId, userId, tenantPath };
+    return { tenantId, userId };
   } catch (error) {
-    await rollbackTenantProvisioning({ tenantId, userId, tenantPath }).catch((rollbackError) => {
+    await rollbackTenantProvisioning({ tenantId, userId }).catch((rollbackError) => {
       console.error('[tenant-provisioning] rollback falhou:', rollbackError?.message || rollbackError);
     });
     throw error;
   }
 };
+
+// ---------------------------------------------------------------------------
+// Assert tenant is ready (validate schema exists and is up to date)
+// ---------------------------------------------------------------------------
 
 const assertTenantReady = async (tenantId) => {
   const numericTenantId = Number(tenantId);
@@ -312,23 +332,22 @@ const assertTenantReady = async (tenantId) => {
     throw createTenantError('TENANT_INACTIVE', 'Tenant inativo ou inexistente.');
   }
 
-  const tenantPath = getTenantDbPath(numericTenantId);
-  if (!fs.existsSync(tenantPath)) {
-    throw createTenantError('TENANT_DATABASE_MISSING', 'Banco tenant ausente.', { tenantPath });
-  }
-
-  const db = await openDb(tenantPath, sqlite3.OPEN_READONLY);
+  const schema = tenantSchema(numericTenantId);
+  const client = await pool.connect();
   try {
-    await validateTenantDatabase(db, numericTenantId);
+    if (!(await schemaExists(client, schema))) {
+      throw createTenantError('TENANT_DATABASE_MISSING', `Schema tenant ausente: ${schema}`);
+    }
+    await validateTenantSchema(client, schema, numericTenantId);
   } finally {
-    await closeDb(db).catch(() => {});
+    client.release();
   }
 };
 
 module.exports = {
   createTenantError,
-  getTenantDbPath,
   assertTenantReady,
   provisionTrialTenant,
-  createTenantDatabaseFromCleanSchema
+  createTenantDatabaseFromCleanSchema,
+  createTenantSchema,
 };

@@ -78,7 +78,9 @@ const createSchemaOutdatedError = (missingColumns) => {
 };
 
 const ensureAccessSchema = async () => {
-  const columns = await allQuery('PRAGMA table_info(usuarios)');
+  const columns = await allQuery(
+    `SELECT column_name AS name FROM information_schema.columns WHERE table_name = 'usuarios'`
+  );
   const existing = new Set((columns || []).map((column) => String(column.name)));
   const missing = REQUIRED_ACCESS_COLUMNS.filter((column) => !existing.has(column));
 

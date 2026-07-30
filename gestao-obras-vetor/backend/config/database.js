@@ -1,213 +1,293 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
-const fs = require('fs');
+const { Pool } = require('pg');
 const { AsyncLocalStorage } = require('async_hooks');
 
-const dbPath = path.join(process.env.DB_DIR || path.join(__dirname, '..', 'database'), 'gestao_obras.db');
-const dbDir = path.dirname(dbPath);
-const tenantDbDir = path.join(dbDir, 'tenants');
-const isProduction = process.env.NODE_ENV === 'production';
-
-const assertReadableFile = (targetPath, label) => {
-  if (!fs.existsSync(targetPath)) {
-    throw new Error(`${label} ausente em producao: ${targetPath}`);
-  }
-
-  const stats = fs.statSync(targetPath);
-  if (!stats.isFile() || stats.size <= 0) {
-    throw new Error(`${label} invalido em producao: ${targetPath}`);
-  }
-};
-
-if (isProduction) {
-  if (!fs.existsSync(dbDir)) throw new Error(`Diretorio de banco ausente em producao: ${dbDir}`);
-  if (!fs.existsSync(tenantDbDir)) throw new Error(`Diretorio de tenants ausente em producao: ${tenantDbDir}`);
-  assertReadableFile(dbPath, 'Banco principal');
-} else {
-  if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
-  if (!fs.existsSync(tenantDbDir)) fs.mkdirSync(tenantDbDir, { recursive: true });
+const resolvedDbName = process.env.DB_NAME || process.env.POSTGRES_DB;
+if (!resolvedDbName) {
+  throw new Error('DB_NAME (ou POSTGRES_DB) deve ser definido no ambiente.');
 }
 
+// ---------------------------------------------------------------------------
+// Connection pool
+// ---------------------------------------------------------------------------
+const pool = new Pool({
+  host: process.env.DB_HOST || 'localhost',
+  port: Number(process.env.DB_PORT) || 5432,
+  database: resolvedDbName,
+  user: process.env.DB_USER || 'gestao_user',
+  password: process.env.DB_PASSWORD || '',
+  max: Number(process.env.DB_POOL_MAX) || 20,
+  idleTimeoutMillis: Number(process.env.DB_POOL_IDLE_TIMEOUT) || 30000,
+  connectionTimeoutMillis: Number(process.env.DB_POOL_CONNECTION_TIMEOUT) || 5000,
+});
+
+pool.on('connect', () => {
+  console.log('PostgreSQL: nova conexão estabelecida');
+});
+
+pool.on('error', (err) => {
+  console.error('PostgreSQL pool error:', err);
+});
+
+// ---------------------------------------------------------------------------
+// Tenant context (AsyncLocalStorage)
+// ---------------------------------------------------------------------------
 const requestDbContext = new AsyncLocalStorage();
-const tenantDbMap = new Map();
 
-const createConnection = (targetPath) => new Promise((resolve, reject) => {
-  const conn = new sqlite3.Database(targetPath, (err) => {
-    if (err) reject(err);
-    else resolve(conn);
-  });
-});
+// ---------------------------------------------------------------------------
+// Query translation helpers
+// ---------------------------------------------------------------------------
 
-const mainDb = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('Erro ao conectar ao banco de dados principal:', err);
-  } else {
-    console.log('Conectado ao banco de dados SQLite (principal)');
+/**
+ * Translate SQLite-style ? placeholders to PostgreSQL $1, $2, ...
+ * Also rewrites AUTOINCREMENT → handled at DDL level.
+ */
+const translateQuery = (sql) => {
+  let normalizedSql = String(sql || '');
+  const hadInsertOrIgnore = /\bINSERT\s+OR\s+IGNORE\b/i.test(normalizedSql);
+
+  // Legacy SQLite compatibility for migration/runtime scripts.
+  normalizedSql = normalizedSql
+    .replace(/\bINTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT\b/gi, 'SERIAL PRIMARY KEY')
+    .replace(/\bDATETIME\b/gi, 'TIMESTAMPTZ')
+    .replace(/\bINSERT\s+OR\s+IGNORE\s+INTO\b/gi, 'INSERT INTO')
+    .replace(
+      /SELECT\s+name\s+FROM\s+sqlite_master\s+WHERE\s+type\s*=\s*'table'\s+AND\s+name\s*=\s*(\?|\"[^\"]+\"|'[^']+')/gi,
+      "SELECT table_name AS name FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND table_name = $1"
+    )
+    .replace(
+      /PRAGMA\s+table_info\s*\(\s*"?([a-zA-Z0-9_]+)"?\s*\)\s*;?/gi,
+      "SELECT column_name AS name FROM information_schema.columns WHERE table_name = '$1'"
+    );
+
+  if (hadInsertOrIgnore && !/\bON\s+CONFLICT\b/i.test(normalizedSql)) {
+    normalizedSql = `${normalizedSql.replace(/;\s*$/, '')} ON CONFLICT DO NOTHING`;
   }
-});
 
-const isSchemaMutation = (sql) => /^\s*(CREATE|ALTER|DROP)\b/i.test(String(sql || ''));
-
-const withDbRun = (conn, sql, params = []) => new Promise((resolve, reject) => {
-  if (isProduction && process.env.DISABLE_STARTUP_SCHEMA_MUTATIONS === 'true' && isSchemaMutation(sql)) {
-    reject(new Error('Mutacao automatica de schema bloqueada em producao.'));
-    return;
-  }
-
-  conn.run(sql, params, function(err) {
-    if (err) reject(err);
-    else resolve(this);
-  });
-});
-
-const withDbGet = (conn, sql, params = []) => new Promise((resolve, reject) => {
-  conn.get(sql, params, (err, row) => {
-    if (err) reject(err);
-    else resolve(row);
-  });
-});
-
-const withDbAll = (conn, sql, params = []) => new Promise((resolve, reject) => {
-  conn.all(sql, params, (err, rows) => {
-    if (err) reject(err);
-    else resolve(rows);
-  });
-});
-
-const listTableNames = async (conn) => {
-  const tables = await withDbAll(
-    conn,
-    "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
-  );
-  return tables.map((r) => r.name);
+  let idx = 0;
+  // Replace ? with $N (skip ?s inside string literals — simplified heuristic covers common cases)
+  return normalizedSql.replace(/\?/g, () => `$${++idx}`);
 };
 
-const tableHasColumn = async (conn, table, columnName) => {
-  const cols = await withDbAll(conn, `PRAGMA table_info(${table})`);
-  return cols.some((c) => String(c.name) === columnName);
+/**
+ * Detect whether a SQL statement is an INSERT so we can append RETURNING id.
+ */
+const isInsert = (sql) => /^\s*INSERT\b/i.test(String(sql));
+
+/**
+ * Detect whether a SQL statement is an UPDATE/DELETE so we can return rowCount.
+ */
+const isModification = (sql) => /^\s*(UPDATE|DELETE)\b/i.test(String(sql));
+
+// ---------------------------------------------------------------------------
+// Schema helpers (replaces SQLite PRAGMA / sqlite_master)
+// ---------------------------------------------------------------------------
+
+/**
+ * Return the PostgreSQL schema name for a tenant.
+ */
+const tenantSchema = (tenantId) => `tenant_${Number(tenantId)}`;
+
+/**
+ * Set search_path on a client to direct queries to the right schema.
+ * Main context uses 'public'; tenant context uses 'tenant_N, public'.
+ */
+const setSearchPath = async (client, schema) => {
+  await client.query(`SET search_path TO ${schema}`);
 };
 
-const deleteByFkSet = async (conn, table, fkColumn, allowedIds) => {
-  if (allowedIds.length === 0) {
-    await withDbRun(conn, `DELETE FROM ${table}`);
-    return;
-  }
-  const placeholders = allowedIds.map(() => '?').join(',');
-  await withDbRun(conn, `DELETE FROM ${table} WHERE ${fkColumn} NOT IN (${placeholders})`, allowedIds);
-};
+// ---------------------------------------------------------------------------
+// Core execution with a dedicated client (sets search_path per call)
+// ---------------------------------------------------------------------------
 
-const pruneTenantData = async (conn, tenantId) => {
-  const tables = await listTableNames(conn);
-
-  for (const table of tables) {
-    if (await tableHasColumn(conn, table, 'tenant_id')) {
-      await withDbRun(conn, `DELETE FROM ${table} WHERE tenant_id IS NOT NULL AND tenant_id != ?`, [tenantId]);
-    }
-  }
-
-  const projetoIds = (await withDbAll(conn, 'SELECT id FROM projetos')).map((r) => Number(r.id)).filter(Boolean);
-  const rdoIds = (await withDbAll(conn, 'SELECT id FROM rdos')).map((r) => Number(r.id)).filter(Boolean);
-  const rncIds = (await withDbAll(conn, 'SELECT id FROM rnc')).map((r) => Number(r.id)).filter(Boolean);
-  const atividadeIds = (await withDbAll(conn, 'SELECT id FROM atividades_eap')).map((r) => Number(r.id)).filter(Boolean);
-
-  for (const table of tables) {
-    if (table !== 'projetos' && await tableHasColumn(conn, table, 'projeto_id')) {
-      await deleteByFkSet(conn, table, 'projeto_id', projetoIds);
-    }
-    if (table !== 'rdos' && await tableHasColumn(conn, table, 'rdo_id')) {
-      await deleteByFkSet(conn, table, 'rdo_id', rdoIds);
-    }
-    if (table !== 'rnc' && await tableHasColumn(conn, table, 'rnc_id')) {
-      await deleteByFkSet(conn, table, 'rnc_id', rncIds);
-    }
-    if (table !== 'atividades_eap' && await tableHasColumn(conn, table, 'atividade_eap_id')) {
-      await deleteByFkSet(conn, table, 'atividade_eap_id', atividadeIds);
-    }
+const withClient = async (schema, fn) => {
+  const client = await pool.connect();
+  try {
+    await setSearchPath(client, schema);
+    return await fn(client);
+  } finally {
+    client.release();
   }
 };
 
-const getTenantDbPath = (tenantId) => path.join(tenantDbDir, `tenant_${tenantId}.db`);
+/**
+ * Execute any SQL (INSERT/UPDATE/DELETE/DDL).
+ * Returns { lastID, changes } to preserve compatibility with existing code.
+ * For INSERTs, automatically appends RETURNING id if not already present.
+ */
+const execWithClient = async (client, sql, params = []) => {
+  let finalSql = translateQuery(sql);
+  const insert = isInsert(finalSql);
 
+  if (insert && !/RETURNING\s+\S/i.test(finalSql)) {
+    finalSql = `${finalSql.replace(/;\s*$/, '')} RETURNING id`;
+  }
+
+  const result = await client.query(finalSql, params);
+  const lastID = insert && result.rows.length > 0 ? Number(result.rows[0].id) : null;
+  return { lastID, changes: result.rowCount };
+};
+
+const getWithClient = async (client, sql, params = []) => {
+  const result = await client.query(translateQuery(sql), params);
+  return result.rows[0] || null;
+};
+
+const allWithClient = async (client, sql, params = []) => {
+  const result = await client.query(translateQuery(sql), params);
+  return result.rows;
+};
+
+// ---------------------------------------------------------------------------
+// Active connection resolution (based on tenant context)
+// ---------------------------------------------------------------------------
+
+const getActiveSchema = () => {
+  const ctx = requestDbContext.getStore();
+  if (!ctx || !ctx.useTenantDb || !ctx.tenantId) return 'public';
+  return `${tenantSchema(ctx.tenantId)}, public`;
+};
+
+// ---------------------------------------------------------------------------
+// Public query API (schema-aware)
+// ---------------------------------------------------------------------------
+
+const runQuery = async (sql, params = []) => {
+  const schema = getActiveSchema();
+  return withClient(schema, (client) => execWithClient(client, sql, params));
+};
+
+const getQuery = async (sql, params = []) => {
+  const schema = getActiveSchema();
+  return withClient(schema, (client) => getWithClient(client, sql, params));
+};
+
+const allQuery = async (sql, params = []) => {
+  const schema = getActiveSchema();
+  return withClient(schema, (client) => allWithClient(client, sql, params));
+};
+
+// Main schema (public) only — used for cross-tenant operations
+const runQueryMain = (sql, params = []) =>
+  withClient('public', (client) => execWithClient(client, sql, params));
+
+const getQueryMain = (sql, params = []) =>
+  withClient('public', (client) => getWithClient(client, sql, params));
+
+const allQueryMain = (sql, params = []) =>
+  withClient('public', (client) => allWithClient(client, sql, params));
+
+// ---------------------------------------------------------------------------
+// Tenant context runner
+// ---------------------------------------------------------------------------
+
+const runWithTenantContext = (tenantId, fn) => {
+  const numericTenantId = Number(tenantId);
+  return requestDbContext.run({ tenantId: numericTenantId, useTenantDb: true }, fn);
+};
+
+// ---------------------------------------------------------------------------
+// Tenant schema management
+// ---------------------------------------------------------------------------
+
+/**
+ * Create schema for a tenant if it does not already exist.
+ * Copies table structure from the public schema by running the DDL.
+ */
 const ensureTenantDatabase = async (tenantId) => {
   const numericTenantId = Number(tenantId);
   if (!Number.isInteger(numericTenantId) || numericTenantId <= 0) {
     throw new Error('tenant_id inválido para provisionamento de banco.');
   }
 
-  const tenantPath = getTenantDbPath(numericTenantId);
-  // Detectar banco stale (ex: arquivo de dev em produção): compara criado_em do tenant no banco principal
-  if (fs.existsSync(tenantPath)) {
-    try {
-      const mainTenant = await withDbGet(mainDb, 'SELECT criado_em FROM tenants WHERE id = ?', [numericTenantId]);
-      if (mainTenant && mainTenant.criado_em) {
-        const testConn = await createConnection(tenantPath);
-        const fileRecord = await withDbGet(testConn, 'SELECT criado_em FROM tenants WHERE id = ?', [numericTenantId]).catch(() => null);
-        await new Promise((r) => testConn.close(() => r()));
-        if (!fileRecord || fileRecord.criado_em !== mainTenant.criado_em) {
-          throw new Error(`Banco tenant ${numericTenantId} divergente do banco principal.`);
-        }
-      }
-    } catch (err) {
-      throw err;
-    }
+  const schema = tenantSchema(numericTenantId);
+
+  // Check tenant exists in main table
+  const tenant = await getQueryMain('SELECT id FROM tenants WHERE id = ?', [numericTenantId]);
+  if (!tenant) {
+    throw new Error(`Tenant ${numericTenantId} não encontrado.`);
   }
 
-  if (!fs.existsSync(tenantPath)) {
-    throw new Error(`Banco tenant ${numericTenantId} ausente: ${tenantPath}`);
+  // Schema existence check
+  const exists = await withClient('public', (client) =>
+    getWithClient(
+      client,
+      `SELECT schema_name FROM information_schema.schemata WHERE schema_name = $1`,
+      [schema]
+    )
+  );
+
+  if (!exists) {
+    throw new Error(`Schema tenant ${numericTenantId} ausente: ${schema}`);
   }
-
-  return tenantPath;
 };
 
-const getTenantDbConnection = async (tenantId) => {
-  const numericTenantId = Number(tenantId);
-  if (!Number.isInteger(numericTenantId) || numericTenantId <= 0) {
-    return mainDb;
-  }
-
-  await ensureTenantDatabase(numericTenantId);
-
-  if (tenantDbMap.has(numericTenantId)) {
-    return tenantDbMap.get(numericTenantId);
-  }
-
-  const tenantPath = getTenantDbPath(numericTenantId);
-  const conn = await createConnection(tenantPath);
-  tenantDbMap.set(numericTenantId, conn);
-  return conn;
+// ---------------------------------------------------------------------------
+// Compatibility shim: db object that mimics the old sqlite3 callback API.
+// Used by routes/email.js and services/emailService.js which import { db }.
+// ---------------------------------------------------------------------------
+const db = {
+  run(sql, params, callback) {
+    if (typeof params === 'function') { callback = params; params = []; }
+    const schema = getActiveSchema();
+    withClient(schema, (client) => execWithClient(client, sql, params || []))
+      .then((result) => callback && callback.call(result, null))
+      .catch((err) => callback && callback.call({}, err));
+  },
+  get(sql, params, callback) {
+    if (typeof params === 'function') { callback = params; params = []; }
+    const schema = getActiveSchema();
+    withClient(schema, (client) => getWithClient(client, sql, params || []))
+      .then((row) => callback && callback(null, row))
+      .catch((err) => callback && callback(err));
+  },
+  all(sql, params, callback) {
+    if (typeof params === 'function') { callback = params; params = []; }
+    const schema = getActiveSchema();
+    withClient(schema, (client) => allWithClient(client, sql, params || []))
+      .then((rows) => callback && callback(null, rows))
+      .catch((err) => callback && callback(err));
+  },
 };
 
-const runWithTenantContext = (tenantId, fn) => {
-  return requestDbContext.run({ tenantId: Number(tenantId), useTenantDb: true }, fn);
+// ---------------------------------------------------------------------------
+// Introspection helpers (replaces SQLite PRAGMA / sqlite_master)
+// ---------------------------------------------------------------------------
+
+/**
+ * List table names in the current schema context.
+ */
+const listTableNames = async () => {
+  const schema = getActiveSchema().split(',')[0].trim();
+  const rows = await withClient('public', (client) =>
+    allWithClient(
+      client,
+      `SELECT table_name AS name FROM information_schema.tables
+       WHERE table_schema = $1 AND table_type = 'BASE TABLE'`,
+      [schema]
+    )
+  );
+  return rows.map((r) => r.name);
 };
 
-const getActiveConnection = async () => {
-  const ctx = requestDbContext.getStore();
-  if (!ctx || !ctx.useTenantDb || !ctx.tenantId) return mainDb;
-  return getTenantDbConnection(ctx.tenantId);
+/**
+ * Check whether a column exists in a table (replaces PRAGMA table_info).
+ */
+const tableHasColumn = async (tableName, columnName) => {
+  const schema = getActiveSchema().split(',')[0].trim();
+  const row = await withClient('public', (client) =>
+    getWithClient(
+      client,
+      `SELECT column_name FROM information_schema.columns
+       WHERE table_schema = $1 AND table_name = $2 AND column_name = $3`,
+      [schema, tableName, columnName]
+    )
+  );
+  return Boolean(row);
 };
-
-const runQuery = async (sql, params = []) => {
-  const conn = await getActiveConnection();
-  return withDbRun(conn, sql, params);
-};
-
-const getQuery = async (sql, params = []) => {
-  const conn = await getActiveConnection();
-  return withDbGet(conn, sql, params);
-};
-
-const allQuery = async (sql, params = []) => {
-  const conn = await getActiveConnection();
-  return withDbAll(conn, sql, params);
-};
-
-const runQueryMain = (sql, params = []) => withDbRun(mainDb, sql, params);
-const getQueryMain = (sql, params = []) => withDbGet(mainDb, sql, params);
-const allQueryMain = (sql, params = []) => withDbAll(mainDb, sql, params);
 
 module.exports = {
-  db: mainDb,
+  pool,
+  db,
   runQuery,
   getQuery,
   allQuery,
@@ -215,5 +295,14 @@ module.exports = {
   getQueryMain,
   allQueryMain,
   runWithTenantContext,
-  ensureTenantDatabase
+  ensureTenantDatabase,
+  // Helpers for internal use
+  tenantSchema,
+  withClient,
+  execWithClient,
+  getWithClient,
+  allWithClient,
+  translateQuery,
+  listTableNames,
+  tableHasColumn,
 };

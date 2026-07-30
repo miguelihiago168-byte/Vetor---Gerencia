@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const sqlite3 = require('sqlite3').verbose();
+const { pool, translateQuery } = require('../config/database');
 
 const args = new Set(process.argv.slice(2));
 const dryRun = args.has('--dry-run') || args.has('--status');
@@ -9,10 +9,6 @@ const includeTenants = !args.has('--main-only');
 const includeMain = !args.has('--tenants-only');
 const isProduction = process.env.NODE_ENV === 'production';
 
-const backendDir = path.join(__dirname, '..');
-const databaseDir = process.env.DB_DIR || path.join(backendDir, 'database');
-const mainDbPath = path.join(databaseDir, 'gestao_obras.db');
-const tenantDbDir = path.join(databaseDir, 'tenants');
 const migrationsDir = path.join(__dirname, 'migrations');
 
 const usage = () => {
@@ -21,8 +17,8 @@ const usage = () => {
 Opcoes:
   --dry-run       Lista migrations pendentes sem escrever no banco.
   --status        Alias de --dry-run voltado para CI/inspecao.
-  --main-only     Processa apenas database/gestao_obras.db.
-  --tenants-only  Processa apenas database/tenants/tenant_*.db.
+  --main-only     Processa apenas schema public.
+  --tenants-only  Processa apenas schemas tenant_<id>.
 
 Producao:
   Execucao real com NODE_ENV=production exige MIGRATIONS_ALLOW_PRODUCTION=true.
@@ -44,51 +40,6 @@ if (isProduction && !dryRun && process.env.MIGRATIONS_ALLOW_PRODUCTION !== 'true
   process.exit(1);
 }
 
-const openDb = (filePath, readonly = false) => new Promise((resolve, reject) => {
-  const flags = readonly ? sqlite3.OPEN_READONLY : sqlite3.OPEN_READWRITE;
-  const db = new sqlite3.Database(filePath, flags, (err) => {
-    if (err) reject(err);
-    else resolve(db);
-  });
-});
-
-const closeDb = (db) => new Promise((resolve, reject) => {
-  db.close((err) => {
-    if (err) reject(err);
-    else resolve();
-  });
-});
-
-const run = (db, sql, params = []) => new Promise((resolve, reject) => {
-  db.run(sql, params, function onRun(err) {
-    if (err) reject(err);
-    else resolve(this);
-  });
-});
-
-const get = (db, sql, params = []) => new Promise((resolve, reject) => {
-  db.get(sql, params, (err, row) => {
-    if (err) reject(err);
-    else resolve(row);
-  });
-});
-
-const all = (db, sql, params = []) => new Promise((resolve, reject) => {
-  db.all(sql, params, (err, rows) => {
-    if (err) reject(err);
-    else resolve(rows);
-  });
-});
-
-const tableExists = async (db, tableName) => {
-  const row = await get(
-    db,
-    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
-    [tableName]
-  );
-  return Boolean(row);
-};
-
 const loadMigrations = () => {
   if (!fs.existsSync(migrationsDir)) return [];
 
@@ -103,88 +54,85 @@ const loadMigrations = () => {
         throw new Error(`Migration invalida: ${fileName}`);
       }
 
-      return {
-        ...migration,
-        fileName
-      };
+      return { ...migration, fileName };
     });
 };
 
-const listTargets = () => {
+const listTargetSchemas = async () => {
   const targets = [];
+  if (includeMain) targets.push({ name: 'main', schema: 'public' });
 
-  if (includeMain) {
-    targets.push({ name: 'main', filePath: mainDbPath });
-  }
+  if (includeTenants) {
+    const result = await pool.query(`
+      SELECT schema_name
+      FROM information_schema.schemata
+      WHERE schema_name LIKE 'tenant_%'
+      ORDER BY schema_name
+    `);
 
-  if (includeTenants && fs.existsSync(tenantDbDir)) {
-    const tenantTargets = fs.readdirSync(tenantDbDir)
-      .filter((fileName) => /^tenant_\d+\.db$/.test(fileName))
-      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-      .map((fileName) => ({
-        name: fileName.replace(/\.db$/, ''),
-        filePath: path.join(tenantDbDir, fileName)
-      }));
-
-    targets.push(...tenantTargets);
+    for (const row of result.rows) {
+      targets.push({ name: row.schema_name, schema: row.schema_name });
+    }
   }
 
   return targets;
 };
 
-const ensureSchemaMigrations = async (db) => {
-  await run(db, `
+const ensureSchemaMigrations = async (client) => {
+  await client.query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       id TEXT PRIMARY KEY,
       description TEXT,
-      applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      applied_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
 };
 
-const appliedMigrations = async (db) => {
-  if (!(await tableExists(db, 'schema_migrations'))) return new Set();
-  const rows = await all(db, 'SELECT id FROM schema_migrations ORDER BY id');
-  return new Set(rows.map((row) => String(row.id)));
+const appliedMigrations = async (client) => {
+  const rows = await client.query('SELECT id FROM schema_migrations ORDER BY id');
+  return new Set(rows.rows.map((row) => String(row.id)));
 };
 
-const applyMigration = async (db, target, migration) => {
-  await run(db, 'BEGIN IMMEDIATE');
+const migrationContext = (client, target) => ({
+  target,
+  run: (sql, params = []) => client.query(translateQuery(sql), params),
+  get: async (sql, params = []) => {
+    const result = await client.query(translateQuery(sql), params);
+    return result.rows[0] || null;
+  },
+  all: async (sql, params = []) => {
+    const result = await client.query(translateQuery(sql), params);
+    return result.rows;
+  },
+});
 
+const applyMigration = async (client, target, migration) => {
+  await client.query('BEGIN');
   try {
-    const context = {
-      target,
-      run: (sql, params) => run(db, sql, params),
-      get: (sql, params) => get(db, sql, params),
-      all: (sql, params) => all(db, sql, params)
-    };
-
-    await migration.up(context);
-    await run(
-      db,
-      'INSERT INTO schema_migrations (id, description) VALUES (?, ?)',
+    await migration.up(migrationContext(client, target));
+    await client.query(
+      'INSERT INTO schema_migrations (id, description) VALUES ($1, $2)',
       [migration.id, migration.description || '']
     );
-    await run(db, 'COMMIT');
+    await client.query('COMMIT');
   } catch (err) {
-    await run(db, 'ROLLBACK').catch(() => {});
+    await client.query('ROLLBACK').catch(() => {});
     throw err;
   }
 };
 
 const processTarget = async (target, migrations) => {
-  if (!fs.existsSync(target.filePath)) {
-    throw new Error(`Banco nao encontrado para ${target.name}: ${target.filePath}`);
-  }
-
-  const db = await openDb(target.filePath, dryRun);
-
+  const client = await pool.connect();
   try {
-    if (!dryRun) await ensureSchemaMigrations(db);
+    await client.query(`SET search_path TO "${target.schema}", public`);
 
-    const applied = await appliedMigrations(db);
+    if (!dryRun) await ensureSchemaMigrations(client);
+    const applied = await appliedMigrations(client).catch(async () => {
+      if (dryRun) return new Set();
+      throw new Error(`schema_migrations ausente no schema ${target.schema}`);
+    });
+
     const pending = migrations.filter((migration) => !applied.has(migration.id));
-
     console.log(`[migrations] ${target.name}: aplicadas=${applied.size}, pendentes=${pending.length}`);
 
     for (const migration of pending) {
@@ -192,22 +140,22 @@ const processTarget = async (target, migrations) => {
         console.log(`[migrations] ${target.name}: pendente ${migration.id} - ${migration.description || ''}`);
       } else {
         console.log(`[migrations] ${target.name}: aplicando ${migration.id}`);
-        await applyMigration(db, target, migration);
+        await applyMigration(client, target, migration);
       }
     }
 
     return pending.length;
   } finally {
-    await closeDb(db);
+    client.release();
   }
 };
 
 const main = async () => {
   const migrations = loadMigrations();
-  const targets = listTargets();
+  const targets = await listTargetSchemas();
 
   if (targets.length === 0) {
-    throw new Error('Nenhum banco alvo encontrado.');
+    throw new Error('Nenhum schema alvo encontrado.');
   }
 
   if (migrations.length === 0) {
@@ -224,7 +172,11 @@ const main = async () => {
   }
 };
 
-main().catch((err) => {
-  console.error(err?.message || err);
-  process.exit(1);
-});
+main()
+  .catch((err) => {
+    console.error(err?.message || err);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await pool.end().catch(() => {});
+  });
