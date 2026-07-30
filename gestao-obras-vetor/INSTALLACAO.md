@@ -152,11 +152,18 @@ docker compose up -d --build
 docker compose logs -f caddy
 curl -I http://vetor.damjam.com.br
 curl https://vetor.damjam.com.br/api/health
+curl -I https://vetor.damjam.com.br/pgadmin/
 ```
 
 O primeiro comando `curl` deve redirecionar para HTTPS. Certificados e dados
 ACME ficam nos volumes `caddy_data` e `caddy_config`, preservados em recriações
 normais dos containers.
+
+O pgAdmin é publicado somente em `https://vetor.damjam.com.br/pgadmin/`, com
+login próprio e cookie de sessão marcado como seguro. O Caddy remove o prefixo
+internamente e informa o caminho ao pgAdmin, preservando links e redirecionamentos
+em HTTPS. A porta `5050` fica restrita ao loopback do servidor para suporte local
+e não deve ser liberada no firewall. Não exponha a porta do PostgreSQL na internet.
 
 ### Deploy automático pelo GitHub Actions
 
