@@ -386,6 +386,58 @@ gestao-obras-vetor/
 - `POST /api/auth/login` - Login
 - `POST /api/auth/register` - Cadastro via convite
 
+### Integração por service account (OAuth 2.0)
+
+O gateway de integração usa uma credencial técnica própria. Ele não utiliza login,
+senha ou sessão de um usuário do Vetor.
+
+1. Configure no backend as variáveis `SERVICE_JWT_SECRET`,
+   `SERVICE_TOKEN_ISSUER`, `SERVICE_TOKEN_AUDIENCE` e
+   `SERVICE_TOKEN_EXPIRES_IN=1h`. O segredo deve ser diferente de `JWT_SECRET`.
+2. Após aplicar as migrations, crie a conta e guarde o `client_secret` exibido em
+   um cofre de segredos:
+
+   ```bash
+   cd backend
+   npm run service-account -- create --name "Gateway banco local"
+   ```
+
+3. Solicite um token por HTTPS em `POST /api/oauth/token`, usando
+   `grant_type=client_credentials`. As credenciais podem ser enviadas por HTTP
+   Basic ou por formulário `application/x-www-form-urlencoded`, mas nunca pelos
+   dois meios na mesma requisição.
+
+   ```bash
+   curl --request POST "https://api.seu-dominio.com/api/oauth/token" \
+     --user "$CLIENT_ID:$CLIENT_SECRET" \
+     --data "grant_type=client_credentials"
+   ```
+
+   A resposta contém `access_token`, `token_type` (`Bearer`) e `expires_in`
+   (3.600 segundos por padrão). O gateway mantém o token apenas em memória e
+   solicita outro cerca de cinco minutos antes de ele expirar. Em uma resposta
+   `401`, ele descarta o token, tenta renová-lo e repete a operação uma única vez.
+   Nenhuma ação é exigida de usuários finais.
+
+4. Use o token para validar a identidade técnica sem expor dados de negócio:
+
+   ```bash
+   curl "https://api.seu-dominio.com/api/auth/service/session" \
+     --header "Authorization: Bearer $ACCESS_TOKEN"
+   ```
+
+As contas podem ser inspecionadas, rotacionadas em incidente ou desativadas:
+
+```bash
+npm run service-account -- list
+npm run service-account -- rotate --client-id sa_xxx
+npm run service-account -- deactivate --client-id sa_xxx
+```
+
+Rotação e desativação invalidam imediatamente tokens já emitidos. Nesta primeira
+etapa, tokens de service account não autenticam rotas de usuários nem dão acesso
+às APIs de negócio ou a um tenant.
+
 ### Usuários
 
 - `GET /api/usuarios` - Listar
