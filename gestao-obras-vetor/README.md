@@ -51,6 +51,39 @@ Preencha ao menos:
 - `PGADMIN_DEFAULT_EMAIL`
 - `PGADMIN_DEFAULT_PASSWORD`
 
+#### Tutorial: gerar senhas e segredos fortes (Linux)
+
+Não use valores como `troque_por_uma_senha_forte` fora de testes locais.
+
+1. Abra um terminal Linux na pasta do projeto e execute o comando abaixo. Ele cria um segredo aleatório de 64 caracteres hexadecimais (32 bytes criptograficamente seguros):
+
+```bash
+openssl rand -hex 32
+```
+
+2. Copie o resultado e execute o comando novamente para gerar valores diferentes para cada segredo.
+
+3. Preencha os arquivos sem aspas e sem espaços antes/depois do `=`:
+
+```dotenv
+# .env
+POSTGRES_PASSWORD=cole_um_valor_gerado_aqui
+PGADMIN_DEFAULT_PASSWORD=cole_outro_valor_gerado_aqui
+```
+
+```dotenv
+# backend/.env
+JWT_SECRET=cole_um_terceiro_valor_gerado_aqui
+# Para executar o backend diretamente no Windows, use a mesma senha do PostgreSQL:
+DB_PASSWORD=cole_o_mesmo_valor_de_POSTGRES_PASSWORD
+```
+
+4. Guarde os valores em um gerenciador de senhas. Eles não poderão ser exibidos pelo sistema depois.
+
+> Em uma instalação já criada, alterar somente `POSTGRES_PASSWORD` no `.env` não troca a senha dentro do PostgreSQL, pois o banco mantém a credencial existente no volume. Altere também a senha do usuário no PostgreSQL ou recrie o volume apenas se não houver dados a preservar.
+
+> Use o valor gerado diretamente no `.env`; não grave um hash ali. O PostgreSQL e a aplicação armazenam/verificam senhas de forma segura quando aplicável. Guarde esses valores em um gerenciador de senhas e nunca os versione no Git.
+
 No backend:
 
 ```bash

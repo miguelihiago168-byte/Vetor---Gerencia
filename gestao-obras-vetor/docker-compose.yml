@@ -9,8 +9,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD deve ser definido}
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    expose:
-      - "5432"
+    ports:
+      - "55432:5432"
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gestao_user} -d ${POSTGRES_DB:?POSTGRES_DB deve ser definido}"]
@@ -20,6 +20,7 @@ services:
 
   pgadmin:
     image: dpage/pgadmin4:9
+    platform: linux/amd64
     container_name: gestao-pgadmin
     depends_on:
       postgres:
@@ -28,6 +29,8 @@ services:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:?PGADMIN_DEFAULT_EMAIL deve ser definido}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?PGADMIN_DEFAULT_PASSWORD deve ser definido}
       PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGPASS_FILE: /pgpass
+      PGADMIN_REPLACE_SERVERS_ON_STARTUP: 'True'
     ports:
       - "5050:80"
     volumes:
