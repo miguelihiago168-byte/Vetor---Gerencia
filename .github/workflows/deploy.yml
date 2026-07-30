@@ -172,12 +172,7 @@ jobs:
 
             echo "Validando migrations pendentes antes do startup..."
             CHECK_STATUS=0
-            if docker run --rm \
-                -e NODE_ENV=production \
-                -e APP_DATA_DIR="$APP_DATA_DIR" \
-                -v "$APP_DATA_DIR/database:/app/database" \
-                -v "$APP_DATA_DIR/uploads:/app/uploads" \
-                gestao-obras-vetor-backend npm run db:check; then
+            if docker compose run --rm --no-deps backend npm run db:check; then
               CHECK_STATUS=0
             else
               CHECK_STATUS=$?
@@ -186,13 +181,9 @@ jobs:
 
             if [ "$CHECK_STATUS" -eq 2 ]; then
               echo "Migrations pendentes detectadas. Aplicando pelo runner centralizado..."
-              docker run --rm \
-                -e NODE_ENV=production \
+              docker compose run --rm --no-deps \
                 -e MIGRATIONS_ALLOW_PRODUCTION=true \
-                -e APP_DATA_DIR="$APP_DATA_DIR" \
-                -v "$APP_DATA_DIR/database:/app/database" \
-                -v "$APP_DATA_DIR/uploads:/app/uploads" \
-                gestao-obras-vetor-backend npm run db:migrate
+                backend npm run db:migrate
             elif [ "$CHECK_STATUS" -ne 0 ]; then
               echo "Falha ao validar migrations antes do deploy. Abortando."
               exit "$CHECK_STATUS"
@@ -201,12 +192,7 @@ jobs:
             fi
 
             echo "Validando migrations apos etapa de migracao..."
-            docker run --rm \
-              -e NODE_ENV=production \
-              -e APP_DATA_DIR="$APP_DATA_DIR" \
-              -v "$APP_DATA_DIR/database:/app/database" \
-              -v "$APP_DATA_DIR/uploads:/app/uploads" \
-              gestao-obras-vetor-backend npm run db:check
+            docker compose run --rm --no-deps backend npm run db:check
 
             echo "Executando integrity_check e foreign_key_check..."
             docker run --rm \
