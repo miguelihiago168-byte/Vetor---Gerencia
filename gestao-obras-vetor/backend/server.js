@@ -48,10 +48,14 @@ const almoxarifadoRoutes = require('./routes/almoxarifado');
 const emailRoutes = require('./routes/email');
 const mensagensRoutes = require('./routes/mensagens');
 const uploadsRoutes = require('./routes/uploads');
+const oauthRoutes = require('./routes/oauth');
+const serviceAuthRoutes = require('./routes/service_auth');
 // Startup nao executa migrations automaticas. Use npm run migrate/status antes de subir a aplicacao.
 console.log('[startup-db-guard] Migrations automaticas de startup desativadas.');
 
 app.use('/api/auth', authRoutes);
+app.use('/api/oauth', oauthRoutes);
+app.use('/api/auth/service', serviceAuthRoutes);
 app.use('/api/usuarios', usuariosRoutes);
 app.use('/api/projetos', projetosRoutes);
 app.use('/api/eap', eapRoutes);
