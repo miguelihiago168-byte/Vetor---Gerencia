@@ -271,7 +271,7 @@ gestao-obras-vetor/
 │   ├── middleware/      # Auth e auditoria
 │   ├── routes/          # Rotas da API
 │   ├── scripts/         # Script de inicialização
-│   ├── database/        # Arquivo SQLite (criado automaticamente)
+│   ├── database/        # Arquivo PostgreSQL (criado automaticamente)
 │   ├── uploads/         # Arquivos anexados aos RDOs
 │   └── server.js        # Servidor principal
 │
@@ -599,7 +599,7 @@ etapa, tokens de service account não autenticam rotas de usuários nem dão ace
 
 ## 📝 Notas
 
-- O banco SQLite é local e adequado para desenvolvimento/testes
+- O banco PostgreSQL é local e adequado para desenvolvimento/testes
 - Para produção, migre para PostgreSQL ou MySQL
 - Os arquivos de upload ficam em `backend/uploads/`
 - Logs são exibidos no console do backend
@@ -632,13 +632,6 @@ netstat -ano | findstr :3001
 taskkill /PID <PID> /F
 ```
 
-### Resetar banco de dados
-
-```powershell
-cd backend
-Remove-Item database\gestao_obras.db
-npm run init-db
-```
 
 ## 📄 Licença
 

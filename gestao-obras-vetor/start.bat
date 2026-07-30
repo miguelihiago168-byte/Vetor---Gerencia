@@ -21,13 +21,6 @@ if not exist "frontend\node_modules\" (
     cd ..
 )
 
-if not exist "backend\database\gestao_obras.db" (
-    echo Inicializando banco de dados...
-    cd backend
-    call npm run init-db
-    cd ..
-)
-
 echo.
 echo Iniciando servidores...
 echo.

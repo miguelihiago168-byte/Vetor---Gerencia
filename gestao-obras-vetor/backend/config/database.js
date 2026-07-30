@@ -38,20 +38,20 @@ const requestDbContext = new AsyncLocalStorage();
 // ---------------------------------------------------------------------------
 
 /**
- * Translate SQLite-style ? placeholders to PostgreSQL $1, $2, ...
+ * Translate PostgreSQL-style ? placeholders to PostgreSQL $1, $2, ...
  * Also rewrites AUTOINCREMENT → handled at DDL level.
  */
 const translateQuery = (sql) => {
   let normalizedSql = String(sql || '');
   const hadInsertOrIgnore = /\bINSERT\s+OR\s+IGNORE\b/i.test(normalizedSql);
 
-  // Legacy SQLite compatibility for migration/runtime scripts.
+  // Compatibility for legacy SQL already persisted in versioned migrations.
   normalizedSql = normalizedSql
     .replace(/\bINTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT\b/gi, 'SERIAL PRIMARY KEY')
     .replace(/\bDATETIME\b/gi, 'TIMESTAMPTZ')
     .replace(/\bINSERT\s+OR\s+IGNORE\s+INTO\b/gi, 'INSERT INTO')
     .replace(
-      /SELECT\s+name\s+FROM\s+sqlite_master\s+WHERE\s+type\s*=\s*'table'\s+AND\s+name\s*=\s*(\?|\"[^\"]+\"|'[^']+')/gi,
+      /SELECT\s+name\s+FROM\s+postgres_master\s+WHERE\s+type\s*=\s*'table'\s+AND\s+name\s*=\s*(\?|\"[^\"]+\"|'[^']+')/gi,
       "SELECT table_name AS name FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND table_name = $1"
     )
     .replace(
@@ -79,7 +79,7 @@ const isInsert = (sql) => /^\s*INSERT\b/i.test(String(sql));
 const isModification = (sql) => /^\s*(UPDATE|DELETE)\b/i.test(String(sql));
 
 // ---------------------------------------------------------------------------
-// Schema helpers (replaces SQLite PRAGMA / sqlite_master)
+// Schema helpers
 // ---------------------------------------------------------------------------
 
 /**
@@ -222,7 +222,7 @@ const ensureTenantDatabase = async (tenantId) => {
 };
 
 // ---------------------------------------------------------------------------
-// Compatibility shim: db object that mimics the old sqlite3 callback API.
+// Compatibility shim for callback-oriented modules.
 // Used by routes/email.js and services/emailService.js which import { db }.
 // ---------------------------------------------------------------------------
 const db = {
@@ -250,7 +250,7 @@ const db = {
 };
 
 // ---------------------------------------------------------------------------
-// Introspection helpers (replaces SQLite PRAGMA / sqlite_master)
+// Introspection helpers
 // ---------------------------------------------------------------------------
 
 /**
@@ -270,7 +270,7 @@ const listTableNames = async () => {
 };
 
 /**
- * Check whether a column exists in a table (replaces PRAGMA table_info).
+ * Check whether a column exists in the active schema.
  */
 const tableHasColumn = async (tableName, columnName) => {
   const schema = getActiveSchema().split(',')[0].trim();

@@ -18,8 +18,6 @@
     "db:migrate": "node scripts/runMigrations.js",
     "db:check": "node scripts/runMigrations.js --status",
     "db:integrity": "node scripts/checkDatabaseIntegrity.js",
-    "db:backup": "node scripts/backupDatabase.js",
-    "test:tenant": "node tests/tenantProvisioning.test.js",
     "test:cockpit": "node tests/cockpitService.test.js",
     "test:service-auth": "node tests/serviceAccountAuth.test.js && node tests/oauthRoute.test.js && node tests/serviceSessionRoute.test.js",
     "service-account": "node scripts/service_accounts.js",

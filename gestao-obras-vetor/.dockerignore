@@ -1,4 +1,5 @@
 node_modules/
+backend/database/
 **/node_modules/
 .git/
 .github/
@@ -13,8 +14,6 @@ coverage/
 *.ppk
 backend/.env
 frontend/.env
-backend/database/*.db
-backend/database/**/*.db
 backend/uploads/*
 uploads/
 database/

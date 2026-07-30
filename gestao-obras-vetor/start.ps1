@@ -8,7 +8,6 @@ Write-Host ""
 # Verificar se as dependências estão instaladas
 $backendNodeModules = Test-Path "backend\node_modules"
 $frontendNodeModules = Test-Path "frontend\node_modules"
-$database = Test-Path "backend\database\gestao_obras.db"
 
 if (-not $backendNodeModules) {
     Write-Host "📦 Instalando dependências do backend..." -ForegroundColor Yellow
@@ -24,12 +23,6 @@ if (-not $frontendNodeModules) {
     Set-Location ..
 }
 
-if (-not $database) {
-    Write-Host "🗄️  Inicializando banco de dados..." -ForegroundColor Yellow
-    Set-Location backend
-    npm run init-db
-    Set-Location ..
-}
 
 Write-Host ""
 Write-Host "✅ Iniciando servidores..." -ForegroundColor Green

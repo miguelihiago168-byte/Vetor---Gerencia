@@ -88,7 +88,7 @@ const ensureAccessSchema = async () => {
     throw createSchemaOutdatedError(missing.map((column) => `usuarios.${column}`));
   }
 
-  // Evita UPDATEs globais por requisição (podem causar SQLITE_BUSY em cargas concorrentes).
+  // Evita UPDATEs globais por requisição em cargas concorrentes.
   // A inferência de perfil já trata fallback por flags/funcao em tempo de execução.
 };
 
