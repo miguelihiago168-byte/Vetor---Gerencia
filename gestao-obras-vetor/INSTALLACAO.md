@@ -160,11 +160,25 @@ normais dos containers.
 
 ### Deploy automático pelo GitHub Actions
 
-Antes do primeiro push para `main`, crie o `.env` **na raiz do projeto no
-servidor** a partir de `.env.example`. Esse arquivo é ignorado pelo Git e será
-preservado pelo `git reset --hard` usado no deploy. O workflow valida sua
-presença, recria o Caddy a cada publicação e falha com uma mensagem clara se
-`APP_DOMAIN`, `LETSENCRYPT_EMAIL` ou `APP_DATA_DIR` não estiverem disponíveis.
+O workflow recria o `.env` da raiz do projeto a cada deploy. Portanto, não
+crie nem edite esse arquivo manualmente no servidor: configure os valores em
+**GitHub → Settings → Secrets and variables → Actions → New repository secret**.
+
+Crie estes secrets antes do primeiro push para `main`:
+
+- `APP_DOMAIN`
+- `LETSENCRYPT_EMAIL`
+- `POSTGRES_DB`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `PGADMIN_DEFAULT_EMAIL`
+- `PGADMIN_DEFAULT_PASSWORD`
+
+Use valores fortes para as duas senhas; em Linux, gere cada uma com
+`openssl rand -hex 32`. Em uma instalação PostgreSQL que já possui dados, os
+valores de `POSTGRES_DB`, `POSTGRES_USER` e `POSTGRES_PASSWORD` devem ser os
+mesmos usados na criação inicial do banco. Alterar apenas o secret não altera a
+senha já gravada no banco.
 
 **Acesso remoto em desenvolvimento**
 
