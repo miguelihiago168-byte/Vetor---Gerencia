@@ -18,6 +18,14 @@ jobs:
     steps:
       - name: Deploy no servidor
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          APP_DOMAIN: ${{ secrets.APP_DOMAIN }}
+          LETSENCRYPT_EMAIL: ${{ secrets.LETSENCRYPT_EMAIL }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          PGADMIN_DEFAULT_EMAIL: ${{ secrets.PGADMIN_DEFAULT_EMAIL }}
+          PGADMIN_DEFAULT_PASSWORD: ${{ secrets.PGADMIN_DEFAULT_PASSWORD }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
@@ -25,6 +33,7 @@ jobs:
           port: ${{ secrets.VPS_PORT }}
           timeout: 60s
           command_timeout: 15m
+          envs: APP_DOMAIN,LETSENCRYPT_EMAIL,POSTGRES_DB,POSTGRES_USER,POSTGRES_PASSWORD,PGADMIN_DEFAULT_EMAIL,PGADMIN_DEFAULT_PASSWORD
           script_stop: false
           script: |
             set -Eeuo pipefail
@@ -61,11 +70,24 @@ jobs:
             # O .env raiz e ignorado pelo Git. Recria-o a cada deploy a partir
             # dos segredos do repositório, antes de validar o Docker Compose.
             cat > .env <<EOF
-            APP_DOMAIN=${{ secrets.APP_DOMAIN }}
-            LETSENCRYPT_EMAIL=${{ secrets.LETSENCRYPT_EMAIL }}
+            APP_DOMAIN=$APP_DOMAIN
+            LETSENCRYPT_EMAIL=$LETSENCRYPT_EMAIL
             APP_DATA_DIR=$APP_DATA_DIR
+            POSTGRES_DB=$POSTGRES_DB
+            POSTGRES_USER=$POSTGRES_USER
+            POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+            PGADMIN_DEFAULT_EMAIL=$PGADMIN_DEFAULT_EMAIL
+            PGADMIN_DEFAULT_PASSWORD=$PGADMIN_DEFAULT_PASSWORD
             EOF
             chmod 600 .env
+
+            required_root_env_vars="APP_DOMAIN LETSENCRYPT_EMAIL APP_DATA_DIR POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD PGADMIN_DEFAULT_EMAIL PGADMIN_DEFAULT_PASSWORD"
+            for required_var in $required_root_env_vars; do
+              if ! grep -q "^${required_var}=." .env; then
+                echo "Variavel obrigatoria ausente ou vazia no .env: $required_var"
+                exit 1
+              fi
+            done
 
             BACKEND_STOPPED=0
             restore_backend_on_failure() {
