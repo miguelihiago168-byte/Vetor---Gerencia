@@ -2,7 +2,7 @@ const quoteIdentifier = (value) => `"${String(value).replace(/"/g, '""')}"`;
 
 const tableExists = async ({ get }, tableName) => {
   const row = await get(
-    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+    "SELECT table_name AS name FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = ?",
     [tableName]
   );
   return Boolean(row);

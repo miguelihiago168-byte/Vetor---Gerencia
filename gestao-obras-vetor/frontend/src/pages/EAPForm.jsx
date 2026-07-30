@@ -239,8 +239,8 @@ function EAPForm() {
   const formatarDataHora = (value) => {
     if (!value) return '-';
     const text = String(value).trim();
-    const sqliteUtc = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(text);
-    const data = new Date(sqliteUtc ? `${text.replace(' ', 'T')}Z` : text);
+    const postgresUtc = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(text);
+    const data = new Date(postgresUtc ? `${text.replace(' ', 'T')}Z` : text);
     if (Number.isNaN(data.getTime())) return String(value);
     return data.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
   };

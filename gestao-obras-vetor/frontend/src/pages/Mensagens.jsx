@@ -57,7 +57,7 @@ const parseBackendTimestamp = (value) => {
   const text = String(value).trim();
   if (!text) return null;
 
-  // Datas vindas do SQLite (CURRENT_TIMESTAMP) estão em UTC e sem timezone explícito.
+  // Datas vindas do PostgreSQL (CURRENT_TIMESTAMP) estão em UTC e sem timezone explícito.
   if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(text)) {
     return new Date(text.replace(' ', 'T') + 'Z');
   }

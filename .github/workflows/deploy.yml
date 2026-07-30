@@ -102,12 +102,6 @@ jobs:
             }
             trap restore_backend_on_failure EXIT
 
-            if [ ! -f scripts/validate_data_dir.sh ]; then
-              echo "Script de validacao de APP_DATA_DIR ausente."
-              exit 1
-            fi
-
-            sh scripts/validate_data_dir.sh "$APP_DATA_DIR"
             node <<'NODE'
             const fs = require('fs');
             const crypto = require('crypto');
@@ -139,16 +133,6 @@ jobs:
             NODE
             docker compose config >/dev/null
 
-            if [ ! -d "$APP_DATA_DIR/database" ]; then
-              echo "Diretorio de banco ausente: $APP_DATA_DIR/database"
-              exit 1
-            fi
-
-            if [ ! -f "$APP_DATA_DIR/database/gestao_obras.db" ]; then
-              echo "Banco principal ausente: $APP_DATA_DIR/database/gestao_obras.db"
-              exit 1
-            fi
-
             DEPLOY_COMMIT="$(git rev-parse --short HEAD)"
             echo "Commit a implantar: $DEPLOY_COMMIT"
 
@@ -163,21 +147,12 @@ jobs:
             echo "Criando backup pre-deploy em $BACKUP_DIR"
             mkdir -p "$BACKUP_DIR"
 
-            docker run --rm \
-              -e BACKUP_DIR="/app/backups/current" \
-              -v "$APP_DATA_DIR/database:/app/database:ro" \
-              -v "$APP_DATA_DIR/uploads:/app/uploads:ro" \
-              -v "$BACKUP_DIR:/app/backups/current" \
-              gestao-obras-vetor-backend npm run db:backup
+            docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > "$BACKUP_DIR/postgres.sql"
+            test -s "$BACKUP_DIR/postgres.sql"
 
             echo "Validando migrations pendentes antes do startup..."
             CHECK_STATUS=0
-            if docker run --rm \
-                -e NODE_ENV=production \
-                -e APP_DATA_DIR="$APP_DATA_DIR" \
-                -v "$APP_DATA_DIR/database:/app/database" \
-                -v "$APP_DATA_DIR/uploads:/app/uploads" \
-                gestao-obras-vetor-backend npm run db:check; then
+            if docker compose run --rm backend npm run db:check; then
               CHECK_STATUS=0
             else
               CHECK_STATUS=$?
@@ -186,13 +161,7 @@ jobs:
 
             if [ "$CHECK_STATUS" -eq 2 ]; then
               echo "Migrations pendentes detectadas. Aplicando pelo runner centralizado..."
-              docker run --rm \
-                -e NODE_ENV=production \
-                -e MIGRATIONS_ALLOW_PRODUCTION=true \
-                -e APP_DATA_DIR="$APP_DATA_DIR" \
-                -v "$APP_DATA_DIR/database:/app/database" \
-                -v "$APP_DATA_DIR/uploads:/app/uploads" \
-                gestao-obras-vetor-backend npm run db:migrate
+              docker compose run --rm -e MIGRATIONS_ALLOW_PRODUCTION=true backend npm run db:migrate
             elif [ "$CHECK_STATUS" -ne 0 ]; then
               echo "Falha ao validar migrations antes do deploy. Abortando."
               exit "$CHECK_STATUS"
@@ -201,20 +170,10 @@ jobs:
             fi
 
             echo "Validando migrations apos etapa de migracao..."
-            docker run --rm \
-              -e NODE_ENV=production \
-              -e APP_DATA_DIR="$APP_DATA_DIR" \
-              -v "$APP_DATA_DIR/database:/app/database" \
-              -v "$APP_DATA_DIR/uploads:/app/uploads" \
-              gestao-obras-vetor-backend npm run db:check
+            docker compose run --rm backend npm run db:check
 
             echo "Executando integrity_check e foreign_key_check..."
-            docker run --rm \
-              -e NODE_ENV=production \
-              -e APP_DATA_DIR="$APP_DATA_DIR" \
-              -v "$APP_DATA_DIR/database:/app/database:ro" \
-              -v "$APP_DATA_DIR/uploads:/app/uploads:ro" \
-              gestao-obras-vetor-backend npm run db:integrity
+            docker compose run --rm backend npm run db:integrity
 
             echo "Subindo containers apos backup e migrations..."
             docker compose up -d

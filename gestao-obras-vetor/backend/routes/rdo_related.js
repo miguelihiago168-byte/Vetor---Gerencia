@@ -534,7 +534,7 @@ router.post('/:rdoId/foto', auth, uploadFotoSingle, async (req, res) => {
     }
     console.error('Erro ao enviar foto', err);
     const message = String(err?.message || '');
-    if (/no such table|no such column|SQLITE_ERROR/i.test(message)) {
+    if (/relation .* does not exist|column .* does not exist/i.test(message)) {
       return res.status(500).json({
         erro: 'Erro ao enviar foto. O banco de dados precisa ser atualizado para suportar fotos do RDO.'
       });

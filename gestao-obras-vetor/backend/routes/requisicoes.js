@@ -77,7 +77,7 @@ const gerarNumeroRequisicao = async () => {
 
 // ─── Helper: registrar histórico ───────────────────────────────────────────
 const registrarHistorico = async (requisicaoId, itemId, usuarioId, tipoEvento, statusAnterior, statusNovo, detalhes) => {
-  // Usa o fuso do sistema operacional em vez de CURRENT_TIMESTAMP (UTC do SQLite)
+  // Usa o fuso do sistema operacional em vez de CURRENT_TIMESTAMP (UTC do PostgreSQL)
   const agora = new Date();
   const localIso = new Date(agora.getTime() - agora.getTimezoneOffset() * 60000)
     .toISOString().replace('T', ' ').slice(0, 19);

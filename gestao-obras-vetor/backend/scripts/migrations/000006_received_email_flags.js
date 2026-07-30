@@ -2,7 +2,7 @@ module.exports = {
   id: '000006_received_email_flags',
   description: 'Adiciona flags de favorito, importante e exclusao em emails recebidos',
   async up({ run, all }) {
-    const tables = await all("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'received_emails'");
+    const tables = await all("SELECT table_name AS name FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = 'received_emails'");
     if (!tables.length) return;
 
     const columns = await all('PRAGMA table_info(received_emails)');
