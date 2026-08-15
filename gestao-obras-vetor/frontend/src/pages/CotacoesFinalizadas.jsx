@@ -5,6 +5,10 @@ import { listarCotacoesFinalizadas, getProjetos, listarRequisicoesEncerradas } f
 
 const fmt = (v) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—';
 const fmtData = (iso) => iso ? new Date(iso).toLocaleDateString('pt-BR') : '—';
+const numeroFinito = (v) => {
+  const numero = Number(v);
+  return Number.isFinite(numero) ? numero : 0;
+};
 
 const STATUS_BADGE = {
   'Finalizada':         { cls: 'badge badge-green', label: 'Finalizada' },
@@ -47,9 +51,9 @@ export default function CotacoesFinalizadas() {
     ? reqs.filter((r) => r.numero_requisicao?.toLowerCase().includes(busca.toLowerCase()) || r.tipo_material?.toLowerCase().includes(busca.toLowerCase()) || r.solicitante_nome?.toLowerCase().includes(busca.toLowerCase()))
     : reqs;
 
-  const totalGasto = itensFiltrados.reduce((acc, i) => acc + (i.valor_total || 0), 0);
+  const totalGasto = itensFiltrados.reduce((acc, i) => acc + numeroFinito(i.valor_total), 0);
   const economiaMedia = itensFiltrados.length
-    ? itensFiltrados.reduce((acc, i) => acc + (i.economia_pct || 0), 0) / itensFiltrados.length : 0;
+    ? itensFiltrados.reduce((acc, i) => acc + numeroFinito(i.economia_pct), 0) / itensFiltrados.length : 0;
 
   const irParaReq = (id) => {
     if (projetoId) navigate(`/projeto/${projetoId}/compras/${id}`);
@@ -141,7 +145,7 @@ export default function CotacoesFinalizadas() {
                 </thead>
                 <tbody>
                   {itensFiltrados.map((i) => (
-                    <tr key={i.item_id}>
+                    <tr key={`${i.origem || 'requisicao'}-${i.item_id}`}>
                       <td><span style={{ color: 'var(--primary)', fontSize: '0.82rem' }}>{i.numero_requisicao}</span></td>
                       <td><strong>{i.item_descricao}</strong></td>
                       <td style={{ textAlign: 'center' }}>{i.quantidade} {i.unidade || ''}</td>

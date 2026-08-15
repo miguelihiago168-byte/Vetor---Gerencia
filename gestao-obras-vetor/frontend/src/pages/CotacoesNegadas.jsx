@@ -86,7 +86,7 @@ export default function CotacoesNegadas() {
             </thead>
             <tbody>
               {itensFiltrados.map((i) => (
-                <tr key={i.item_id}>
+                <tr key={`${i.origem || 'requisicao'}-${i.item_id}`}>
                   <td><span style={{ color: 'var(--primary)', fontSize: '0.82rem' }}>{i.numero_requisicao}</span></td>
                   <td><strong>{i.item_descricao}</strong></td>
                   <td style={{ textAlign: 'center' }}>{i.quantidade} {i.unidade || ''}</td>
