@@ -22,8 +22,13 @@ const parseProjectDeadline = (value) => {
   const dateKey = getDateKey(value);
   if (!dateKey) return null;
 
-  const date = new Date(`${dateKey}T00:00:00`);
-  return Number.isNaN(date.getTime()) ? null : date;
+  const [year, month, day] = dateKey.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year
+    && date.getMonth() === month - 1
+    && date.getDate() === day
+    ? date
+    : null;
 };
 
 function Projetos() {

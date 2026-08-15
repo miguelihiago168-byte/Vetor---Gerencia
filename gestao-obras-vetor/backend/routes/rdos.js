@@ -36,7 +36,7 @@ const ensureRdoOptionalColumns = async () => {
   await ensureSchemaReady({ getQuery, allQuery }, {
     tables: ['rdo_logs', 'rdo_comentarios', 'rdo_materiais', 'rdo_ocorrencias', 'rdo_assinaturas', 'rdo_clima', 'rdo_fotos', 'rdo_equipamentos'],
     columns: {
-      rdos: ['atividades_avulsas', 'aprovado_por', 'aprovado_em', 'sem_ocorrencias'],
+      rdos: ['atividades_avulsas', 'aprovado_por', 'aprovado_em', 'sem_ocorrencias', 'mao_obra_detalhada'],
       rdo_fotos: ['ordem', 'atividade_avulsa_descricao', 'tipo', 'tamanho', 'largura', 'altura'],
       rdo_materiais: ['nome_material', 'quantidade', 'unidade', 'numero_nf', 'tipo_movimento'],
       rdo_equipamentos: ['horario_utilizacao', 'horas_utilizadas', 'observacao'],
@@ -47,7 +47,7 @@ const ensureRdoOptionalColumns = async () => {
       rdo_assinaturas: ['rdo_id', 'usuario_id', 'tipo', 'arquivo_assinatura', 'assinado_em'],
       rdo_clima: ['rdo_id', 'periodo', 'condicao_tempo', 'condicao_trabalho', 'pluviometria_mm']
     }
-  });
+  }, '000002_rdo_mao_obra_detalhada');
 };
 
 const getRdoFotosOrderBy = async () => {

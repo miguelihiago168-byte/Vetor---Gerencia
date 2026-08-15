@@ -1,7 +1,8 @@
-const { allQuery, runQuery, getQuery } = require('../config/database');
+const { runQuery, getRequestContext } = require('../config/database');
 
 const registrarAuditoria = async (tabela, registroId, acao, dadosAnteriores, dadosNovos, usuarioId, options = {}) => {
-  const { strict = false, tenantId = null } = options;
+  const { strict = false, tenantId } = options;
+  const tenantIdResolvido = tenantId ?? getRequestContext().tenantId;
   try {
     await runQuery(`
       INSERT INTO auditoria (tabela, registro_id, acao, dados_anteriores, dados_novos, usuario_id, tenant_id)
@@ -13,7 +14,7 @@ const registrarAuditoria = async (tabela, registroId, acao, dadosAnteriores, dad
       dadosAnteriores ? JSON.stringify(dadosAnteriores) : null,
       dadosNovos ? JSON.stringify(dadosNovos) : null,
       usuarioId,
-      tenantId
+      tenantIdResolvido
     ]);
     return true;
   } catch (error) {
