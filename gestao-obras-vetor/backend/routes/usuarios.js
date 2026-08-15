@@ -737,8 +737,8 @@ router.post('/', [
     if (error?.message === 'Login invalido.') {
       return res.status(400).json({ erro: 'Usuário inválido.' });
     }
-    const sqliteMsg = String(error?.message || '').toLowerCase();
-    if (sqliteMsg.includes('unique constraint failed: usuarios.login') || sqliteMsg.includes('unique constraint failed')) {
+    const postgresMsg = String(error?.message || '').toLowerCase();
+    if (postgresMsg.includes('unique constraint failed: usuarios.login') || postgresMsg.includes('unique constraint failed')) {
       return res.status(409).json({ erro: 'Usuário já existe. Escolha outro login.' });
     }
     res.status(500).json({ erro: 'Erro ao criar usuário.' });

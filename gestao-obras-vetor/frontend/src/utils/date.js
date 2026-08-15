@@ -1,7 +1,7 @@
 /**
- * Faz o parse de strings de data/hora vindas do SQLite.
+ * Faz o parse de strings de data/hora vindas do PostgreSQL.
  *
- * SQLite armazena CURRENT_TIMESTAMP em UTC sem indicador de fuso (ex: "2026-03-27 18:30:00").
+ * PostgreSQL armazena CURRENT_TIMESTAMP em UTC sem indicador de fuso (ex: "2026-03-27 18:30:00").
  * Ao tratar como UTC (sufixo Z) o browser converte automaticamente para o
  * fuso configurado no sistema operacional/browser do usuário.
  *

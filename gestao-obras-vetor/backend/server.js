@@ -48,10 +48,15 @@ const almoxarifadoRoutes = require('./routes/almoxarifado');
 const emailRoutes = require('./routes/email');
 const mensagensRoutes = require('./routes/mensagens');
 const uploadsRoutes = require('./routes/uploads');
+const oauthRoutes = require('./routes/oauth');
+const serviceAuthRoutes = require('./routes/service_auth');
+const transferenciasRoutes = require('./routes/transferencias');
 // Startup nao executa migrations automaticas. Use npm run migrate/status antes de subir a aplicacao.
 console.log('[startup-db-guard] Migrations automaticas de startup desativadas.');
 
 app.use('/api/auth', authRoutes);
+app.use('/api/oauth', oauthRoutes);
+app.use('/api/auth/service', serviceAuthRoutes);
 app.use('/api/usuarios', usuariosRoutes);
 app.use('/api/projetos', projetosRoutes);
 app.use('/api/eap', eapRoutes);
@@ -66,6 +71,7 @@ app.use('/api/rnc', rncRoutes);
 app.use('/api/pedidos-compra', pedidosCompraRoutes);
 app.use('/api/requisicoes', requisicoesRoutes);
 app.use('/api/fornecedores', fornecedoresRoutes);
+app.use('/api/transferencias', transferenciasRoutes);
 // FINANCEIRO DESATIVADO
 // app.use('/api/financeiro', financeiroRoutes);
 app.use('/api/notificacoes', notificacoesRoutes);
@@ -103,12 +109,19 @@ const createRealtimeServer = (server) => {
         return next(new Error('Tenant fora do escopo do usuário.'));
       }
 
-      await ensureTenantDatabase(tenantId);
+      const tenant = await ensureTenantDatabase(tenantId);
+      const membership = await getQuery(
+        'SELECT 1 FROM usuario_tenants WHERE usuario_id = ? AND tenant_id = ? AND ativo = 1',
+        [usuarioAtual.id, tenantId]
+      );
+      if (!membership || !tenant.grupo_id) return next(new Error('Tenant fora do escopo do usuário.'));
 
       socket.data.usuario = {
         id: Number(usuarioAtual.id),
         nome: usuarioAtual.nome,
-        tenantId
+        tenantId,
+        grupoId: Number(tenant.grupo_id),
+        perfil: usuarioAtual.perfil,
       };
 
       return next();
@@ -118,7 +131,7 @@ const createRealtimeServer = (server) => {
   });
 
   io.on('connection', (socket) => {
-    const { tenantId, id: usuarioId } = socket.data.usuario;
+    const { tenantId, grupoId, perfil, id: usuarioId } = socket.data.usuario;
     socket.join(`tenant:${tenantId}`);
     socket.join(`tenant:${tenantId}:user:${usuarioId}`);
 
@@ -139,7 +152,7 @@ const createRealtimeServer = (server) => {
           );
 
           if (conversa) socket.join(`tenant:${tenantId}:conversa:${id}`);
-        });
+        }, { userId: usuarioId, groupId: grupoId, role: perfil });
       } catch (_) {
         // ignora join inválido
       }

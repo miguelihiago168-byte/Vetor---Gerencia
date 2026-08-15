@@ -5,8 +5,6 @@ const { pool, translateQuery } = require('../config/database');
 const args = new Set(process.argv.slice(2));
 const dryRun = args.has('--dry-run') || args.has('--status');
 const statusOnly = args.has('--status');
-const includeTenants = !args.has('--main-only');
-const includeMain = !args.has('--tenants-only');
 const isProduction = process.env.NODE_ENV === 'production';
 
 const migrationsDir = path.join(__dirname, 'migrations');
@@ -17,8 +15,7 @@ const usage = () => {
 Opcoes:
   --dry-run       Lista migrations pendentes sem escrever no banco.
   --status        Alias de --dry-run voltado para CI/inspecao.
-  --main-only     Processa apenas schema public.
-  --tenants-only  Processa apenas schemas tenant_<id>.
+  As migrations são aplicadas uma vez ao banco compartilhado.
 
 Producao:
   Execucao real com NODE_ENV=production exige MIGRATIONS_ALLOW_PRODUCTION=true.
@@ -30,8 +27,8 @@ if (args.has('--help') || args.has('-h')) {
   process.exit(0);
 }
 
-if (args.has('--main-only') && args.has('--tenants-only')) {
-  console.error('Use apenas uma opcao: --main-only ou --tenants-only.');
+if (args.has('--tenants-only')) {
+  console.error('--tenants-only foi removido: não existem schemas por tenant.');
   process.exit(1);
 }
 
@@ -59,23 +56,7 @@ const loadMigrations = () => {
 };
 
 const listTargetSchemas = async () => {
-  const targets = [];
-  if (includeMain) targets.push({ name: 'main', schema: 'public' });
-
-  if (includeTenants) {
-    const result = await pool.query(`
-      SELECT schema_name
-      FROM information_schema.schemata
-      WHERE schema_name LIKE 'tenant_%'
-      ORDER BY schema_name
-    `);
-
-    for (const row of result.rows) {
-      targets.push({ name: row.schema_name, schema: row.schema_name });
-    }
-  }
-
-  return targets;
+  return [{ name: 'shared', schema: 'public' }];
 };
 
 const ensureSchemaMigrations = async (client) => {

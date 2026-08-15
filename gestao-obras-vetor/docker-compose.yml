@@ -84,8 +84,12 @@ services:
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=${POSTGRES_DB:?POSTGRES_DB deve ser definido}
-      - DB_USER=${POSTGRES_USER:-gestao_user}
-      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_USER=${POSTGRES_APP_USER:-gestao_app}
+      - DB_PASSWORD=${POSTGRES_APP_PASSWORD:-${POSTGRES_PASSWORD}}
+      - DB_APP_USER=${POSTGRES_APP_USER:-gestao_app}
+      - DB_APP_PASSWORD=${POSTGRES_APP_PASSWORD:-${POSTGRES_PASSWORD}}
+      - DB_MIGRATIONS_USER=${POSTGRES_USER:-gestao_user}
+      - DB_MIGRATIONS_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - ${APP_DATA_DIR:?APP_DATA_DIR deve ser definido antes de executar docker compose}/uploads:/app/uploads
     expose:

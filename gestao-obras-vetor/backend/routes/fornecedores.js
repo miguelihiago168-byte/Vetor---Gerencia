@@ -68,9 +68,10 @@ router.post('/', async (req, res) => {
     }
 
     const result = await runQuery(
-      `INSERT INTO fornecedores (razao_social, nome_fantasia, cnpj, telefone, email, observacao)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO fornecedores (grupo_id, razao_social, nome_fantasia, cnpj, telefone, email, observacao)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
+        req.grupoId,
         razao_social.trim(),
         nome_fantasia?.trim() || null,
         cnpj?.trim() || null,

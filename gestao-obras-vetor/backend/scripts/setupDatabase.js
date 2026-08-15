@@ -25,8 +25,6 @@ const migrationScripts = [
   'migrate_add_rdo_mao_obra_detalhada.js',
   'migrate_add_rdo_quantidade.js',
   'migrate_add_rdo_number_and_history.js',
-  'migrate_rdo_numero_por_projeto.js',
-  'migrate_add_rdo_correction_fields.js',
   'migrate_add_rdo_versions.js',
   'migrate_add_rnc_descricao_correcao.js',
   'migrate_add_rnc_extra_fields.js',
@@ -39,8 +37,6 @@ const migrationScripts = [
   'migrate_add_notifications.js',
   'migrate_add_notifications_unique_index.js',
   'migrate_add_pin.js',
-  'migrate_add_indexes.js',
-  'migrate_integrity_constraints.js',
   'migrate_soft_delete_users.js',
 ];
 

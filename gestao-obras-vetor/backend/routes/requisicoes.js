@@ -77,7 +77,7 @@ const gerarNumeroRequisicao = async () => {
 
 // ─── Helper: registrar histórico ───────────────────────────────────────────
 const registrarHistorico = async (requisicaoId, itemId, usuarioId, tipoEvento, statusAnterior, statusNovo, detalhes) => {
-  // Usa o fuso do sistema operacional em vez de CURRENT_TIMESTAMP (UTC do SQLite)
+  // Usa o fuso do sistema operacional em vez de CURRENT_TIMESTAMP (UTC do PostgreSQL)
   const agora = new Date();
   const localIso = new Date(agora.getTime() - agora.getTimezoneOffset() * 60000)
     .toISOString().replace('T', ' ').slice(0, 19);
@@ -241,7 +241,7 @@ router.post('/', async (req, res) => {
     }
 
     const {
-      projeto_id, centro_custo, tipo_material, urgencia,
+      projeto_id, insumo_id, centro_custo, tipo_material, urgencia,
       observacao_geral, itens = []
     } = req.body;
 
@@ -279,9 +279,11 @@ router.post('/', async (req, res) => {
 
     const result = await runQuery(
       `INSERT INTO requisicoes
-         (numero_requisicao, projeto_id, solicitante_id, centro_custo, tipo_material, urgencia, observacao_geral)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [numero, projeto_id, usuario.id, centro_custo || null, tipo_material, urgencia, observacao_geral || null]
+         (grupo_id, tenant_destino_id, projeto_destino_id, numero_requisicao, projeto_id, solicitante_id,
+          insumo_id, centro_custo, tipo_material, urgencia, observacao_geral)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [req.grupoId, req.tenantId, projeto_id, numero, projeto_id, usuario.id, insumo_id || null,
+        centro_custo || null, tipo_material, urgencia, observacao_geral || null]
     );
     const requisicaoId = result.lastID;
 
