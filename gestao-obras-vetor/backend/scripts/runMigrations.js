@@ -113,7 +113,14 @@ const processTarget = async (target, migrations) => {
       throw new Error(`schema_migrations ausente no schema ${target.schema}`);
     });
 
-    const pending = migrations.filter((migration) => !applied.has(migration.id));
+    const pending = migrations.filter((migration) => {
+      if (applied.has(migration.id)) return false;
+
+      // A baseline substitui um historico completo sem exigir que bancos ja
+      // existentes recebam uma entrada artificial em schema_migrations.
+      const supersedes = Array.isArray(migration.supersedes) ? migration.supersedes : [];
+      return !supersedes.length || !supersedes.every((id) => applied.has(id));
+    });
     console.log(`[migrations] ${target.name}: aplicadas=${applied.size}, pendentes=${pending.length}`);
 
     for (const migration of pending) {

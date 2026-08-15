@@ -1,24 +1,19 @@
-# Migrations versionadas
+# Migration inicial
 
-Este diretorio recebe migrations novas e deterministicas do backend.
+Este diretorio tem somente a migration de baseline `000001_initial_schema`.
+Ela cria o schema atual completo em novas instalacoes e registra apenas uma
+linha em `schema_migrations`.
 
-Regras:
+Os passos incrementais anteriores foram preservados em
+`../migration-history/` e sao executados internamente pela baseline. Eles nao
+sao descobertos nem registrados individualmente pelo executor de migrations.
 
-- Criar arquivos com prefixo numerico crescente, por exemplo `000001_nome_da_migration.js`.
-- Cada arquivo deve exportar `id`, `description` e `up`.
-- `up` recebe um contexto com `run`, `get`, `all` e `target`.
-- Nao executar migrations automaticamente no startup de producao.
-- Em producao, execucao real exige `MIGRATIONS_ALLOW_PRODUCTION=true`.
-- Antes de executar em producao, rodar `npm run migrate:status` e validar backup.
+Use `npm run db:bootstrap-rls` (ou `npm run db:init`) em um banco PostgreSQL
+vazio. O comando cria as tabelas base e, em seguida, aplica a baseline.
 
-Exemplo:
+Em bancos que ja possuem todo o historico anterior em `schema_migrations`, o
+executor reconhece a baseline como satisfeita e nao tenta reaplica-la. Para um
+banco parcialmente migrado, conclua ou recrie a base antes de usar este formato.
 
-```js
-module.exports = {
-  id: '000001_exemplo',
-  description: 'Descreve a mudanca de schema',
-  async up({ run }) {
-    await run('ALTER TABLE exemplo ADD COLUMN novo_campo TEXT');
-  }
-};
-```
+Para mudancas futuras, crie uma nova migration numerada a partir de
+`000002_...`, sem alterar a baseline ja publicada.
