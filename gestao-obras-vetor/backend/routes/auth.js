@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
-const { getQuery, allQuery, runQuery } = require('../config/database');
+const { getQuery, allQuery, runQuery, runWithRequestContext } = require('../config/database');
 const { inferirPerfil } = require('../constants/access');
 const { ensureAccessSchema } = require('../middleware/rbac');
 const { auth, isAdm } = require('../middleware/auth');
@@ -249,12 +249,22 @@ router.post('/login', [
 
     const perfil = inferirPerfil(usuario);
     let tenantIds = [];
+    let tenantsDisponiveis = [];
     try {
       const vinculosTenant = await allQuery(
-        'SELECT tenant_id FROM usuario_tenants WHERE usuario_id = ? AND ativo = 1',
+        `SELECT t.id, t.nome, t.slug, t.grupo_id, g.nome AS grupo_nome, ut.tenant_padrao
+         FROM usuario_tenants ut
+         JOIN tenants t ON t.id = ut.tenant_id
+         JOIN grupos_empresariais g ON g.id = t.grupo_id
+         WHERE ut.usuario_id = ? AND ut.ativo = 1 AND t.ativo = 1
+         ORDER BY ut.tenant_padrao DESC, t.nome`,
         [usuario.id]
       );
       tenantIds = vinculosTenant.map((item) => Number(item.tenant_id)).filter(Boolean);
+      tenantsDisponiveis = vinculosTenant.map((item) => ({
+        id: Number(item.id), nome: item.nome, slug: item.slug, grupo_id: Number(item.grupo_id), grupo_nome: item.grupo_nome,
+      }));
+      tenantIds = tenantsDisponiveis.map((item) => item.id);
     } catch (schemaErr) {
       console.warn('Aviso no login (usuario_tenants):', schemaErr?.message || schemaErr);
       tenantIds = [];
@@ -272,7 +282,7 @@ router.post('/login', [
     const support = await getTenantTrialColumnSupport();
     const tenantSelectFields = [
       'id',
-      'ativo',
+      'ativo', 'grupo_id',
       support.hasTrialExpiresAt ? 'trial_expires_at' : 'NULL::timestamptz AS trial_expires_at',
       support.hasTrialAtivo ? 'trial_ativo' : '0::int AS trial_ativo'
     ];
@@ -313,7 +323,8 @@ router.post('/login', [
 
     let obrasVinculadas = [];
     try {
-      const projetos = await allQuery('SELECT projeto_id FROM projeto_usuarios WHERE usuario_id = ?', [usuario.id]);
+      const projetos = await runWithRequestContext({ userId: usuario.id, tenantId: tenantIdAtivo, groupId: tenant.grupo_id, role: perfil },
+        () => allQuery('SELECT projeto_id FROM projeto_usuarios WHERE usuario_id = ?', [usuario.id]));
       obrasVinculadas = projetos.map((item) => Number(item.projeto_id));
     } catch (schemaErr) {
       // Em ambiente recém-inicializado, a tabela pode ainda não existir.
@@ -341,6 +352,7 @@ router.post('/login', [
         perfil_almoxarifado: usuario.perfil_almoxarifado || null,
         tenant_id: tenantIdAtivo,
         tenant_ids: tenantIds,
+        grupo_id: Number(tenant.grupo_id),
         verificado: !!tenantIdAtivo
       },
       process.env.JWT_SECRET,
@@ -369,6 +381,8 @@ router.post('/login', [
         perfil_almoxarifado: usuario.perfil_almoxarifado || null,
         tenant_id: tenantIdAtivo,
         tenant_ids: tenantIds,
+        grupo_id: Number(tenant.grupo_id),
+        tenants: tenantsDisponiveis,
         verificado: !!tenantIdAtivo
       }
     });

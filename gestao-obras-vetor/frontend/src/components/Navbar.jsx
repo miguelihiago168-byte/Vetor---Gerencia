@@ -11,7 +11,7 @@ import { useDialog } from '../context/DialogContext';
 import ThemeToggle from './ThemeToggle';
 
 function Navbar() {
-  const { usuario, logout, isGestor, perfil } = useAuth();
+  const { usuario, logout, selecionarTenant, isGestor, perfil } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { isDirty } = useLeaveGuard();
@@ -175,6 +175,33 @@ function Navbar() {
     if (!ok) return;
     logout();
     navigate('/login');
+  };
+
+  const handleTenantChange = async (event) => {
+    const tenantId = Number(event.target.value);
+    if (!tenantId || tenantId === Number(usuario?.tenant_id)) return;
+    const ok = await confirmNav();
+    if (!ok) return;
+    selecionarTenant(tenantId);
+    setPerfilDropdownOpen(false);
+    navigate('/projetos');
+  };
+
+  const renderTenantSelector = () => {
+    if (!Array.isArray(usuario?.tenants) || usuario.tenants.length < 2) return null;
+    return (
+      <select
+        value={Number(usuario.tenant_id) || ''}
+        onChange={handleTenantChange}
+        aria-label="Selecionar empresa"
+        title="Selecionar empresa/CNPJ"
+        style={{ maxWidth: 170, padding: '6px 8px', borderRadius: 6 }}
+      >
+        {usuario.tenants.map((tenant) => (
+          <option key={tenant.id} value={tenant.id}>{tenant.nome}</option>
+        ))}
+      </select>
+    );
   };
 
   useEffect(() => {
@@ -528,6 +555,7 @@ function Navbar() {
           </button>
 
           <div className="navbar-account navbar-account-desktop">
+            {renderTenantSelector()}
             {renderNotificationBell()}
             <div className="navbar-perfil-dropdown" ref={perfilDropdownRef}>
               <button
@@ -599,6 +627,7 @@ function Navbar() {
             </div>
 
             <div className="navbar-mobile-account">
+              {renderTenantSelector()}
               {usuario && (
                 <div className="navbar-mobile-user">
                   {usuario.nome || usuario.login}

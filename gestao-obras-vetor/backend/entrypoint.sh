@@ -4,15 +4,12 @@ set -e
 echo ">>> Inicializando banco de dados..."
 if [ "${NODE_ENV:-development}" = "production" ]; then
   echo ">>> Validando banco de producao em modo somente leitura..."
-  node scripts/validateStartupDatabase.js
+  DB_USER="${DB_MIGRATIONS_USER:-$DB_USER}" DB_PASSWORD="${DB_MIGRATIONS_PASSWORD:-$DB_PASSWORD}" node scripts/validateStartupDatabase.js
 
   echo ">>> Validando ausencia de migrations pendentes..."
-  node scripts/runMigrations.js --status
+  DB_USER="${DB_MIGRATIONS_USER:-$DB_USER}" DB_PASSWORD="${DB_MIGRATIONS_PASSWORD:-$DB_PASSWORD}" node scripts/runMigrations.js --status
 else
-  node scripts/initDatabase.js
-
-  echo ">>> Aplicando migracao de multitenancy..."
-  node scripts/migrate_multitenancy.js
+  DB_USER="${DB_MIGRATIONS_USER:-$DB_USER}" DB_PASSWORD="${DB_MIGRATIONS_PASSWORD:-$DB_PASSWORD}" node scripts/bootstrapRlsDatabase.js
 fi
 
 echo ">>> Iniciando servidor..."
