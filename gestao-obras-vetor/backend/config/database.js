@@ -2,13 +2,9 @@ const { Pool } = require('pg');
 const { AsyncLocalStorage } = require('async_hooks');
 
 const resolvedDbName = process.env.DB_NAME || process.env.POSTGRES_DB;
-if (!resolvedDbName) {
-  throw new Error('DB_NAME (ou POSTGRES_DB) deve ser definido no ambiente.');
-}
+if (!resolvedDbName) throw new Error('DB_NAME (ou POSTGRES_DB) deve ser definido no ambiente.');
 
-// ---------------------------------------------------------------------------
-// Connection pool
-// ---------------------------------------------------------------------------
+// The application role must not own application tables nor have BYPASSRLS.
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: Number(process.env.DB_PORT) || 5432,
@@ -20,34 +16,16 @@ const pool = new Pool({
   connectionTimeoutMillis: Number(process.env.DB_POOL_CONNECTION_TIMEOUT) || 5000,
 });
 
-pool.on('connect', () => {
-  console.log('PostgreSQL: nova conexão estabelecida');
-});
+pool.on('error', (err) => console.error('PostgreSQL pool error:', err));
 
-pool.on('error', (err) => {
-  console.error('PostgreSQL pool error:', err);
-});
-
-// ---------------------------------------------------------------------------
-// Tenant context (AsyncLocalStorage)
-// ---------------------------------------------------------------------------
+// Only transports verified request context. It no longer selects a tenant schema.
 const requestDbContext = new AsyncLocalStorage();
 
-// ---------------------------------------------------------------------------
-// Query translation helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Translate PostgreSQL-style ? placeholders to PostgreSQL $1, $2, ...
- * Also rewrites AUTOINCREMENT → handled at DDL level.
- */
 const translateQuery = (sql) => {
   let normalizedSql = String(sql || '');
   const hadInsertOrIgnore = /\bINSERT\s+OR\s+IGNORE\b/i.test(normalizedSql);
-
-  // Compatibility for legacy SQL already persisted in versioned migrations.
   normalizedSql = normalizedSql
-    .replace(/\bINTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT\b/gi, 'SERIAL PRIMARY KEY')
+    .replace(/\bINTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT\b/gi, 'BIGSERIAL PRIMARY KEY')
     .replace(/\bDATETIME\b/gi, 'TIMESTAMPTZ')
     .replace(/\bINSERT\s+OR\s+IGNORE\s+INTO\b/gi, 'INSERT INTO')
     .replace(
@@ -55,254 +33,110 @@ const translateQuery = (sql) => {
       "SELECT table_name AS name FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND table_name = $1"
     )
     .replace(
-      /PRAGMA\s+table_info\s*\(\s*"?([a-zA-Z0-9_]+)"?\s*\)\s*;?/gi,
+      /PRAGMA\s+table_info\s*\(\s*\"?([a-zA-Z0-9_]+)\"?\s*\)\s*;?/gi,
       "SELECT column_name AS name FROM information_schema.columns WHERE table_name = '$1'"
     );
-
   if (hadInsertOrIgnore && !/\bON\s+CONFLICT\b/i.test(normalizedSql)) {
     normalizedSql = `${normalizedSql.replace(/;\s*$/, '')} ON CONFLICT DO NOTHING`;
   }
-
   let idx = 0;
-  // Replace ? with $N (skip ?s inside string literals — simplified heuristic covers common cases)
   return normalizedSql.replace(/\?/g, () => `$${++idx}`);
 };
 
-/**
- * Detect whether a SQL statement is an INSERT so we can append RETURNING id.
- */
 const isInsert = (sql) => /^\s*INSERT\b/i.test(String(sql));
+const normalizeContext = (context = {}) => ({
+  userId: Number(context.userId || context.usuarioId || 0) || null,
+  tenantId: Number(context.tenantId || 0) || null,
+  groupId: Number(context.groupId || context.grupoId || 0) || null,
+  role: context.role || context.perfil || null,
+});
+const getRequestContext = () => normalizeContext(requestDbContext.getStore() || {});
 
-/**
- * Detect whether a SQL statement is an UPDATE/DELETE so we can return rowCount.
- */
-const isModification = (sql) => /^\s*(UPDATE|DELETE)\b/i.test(String(sql));
-
-// ---------------------------------------------------------------------------
-// Schema helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Return the PostgreSQL schema name for a tenant.
- */
-const tenantSchema = (tenantId) => `tenant_${Number(tenantId)}`;
-
-/**
- * Set search_path on a client to direct queries to the right schema.
- * Main context uses 'public'; tenant context uses 'tenant_N, public'.
- */
-const setSearchPath = async (client, schema) => {
-  await client.query(`SET search_path TO ${schema}`);
+const setRlsContext = async (client, context) => {
+  for (const [key, value] of [
+    ['app.user_id', context.userId],
+    ['app.tenant_id', context.tenantId],
+    ['app.group_id', context.groupId],
+    ['app.role', context.role],
+  ]) {
+    await client.query('SELECT set_config($1, $2, true)', [key, value === null ? '' : String(value)]);
+  }
 };
 
-// ---------------------------------------------------------------------------
-// Core execution with a dedicated client (sets search_path per call)
-// ---------------------------------------------------------------------------
-
-const withClient = async (schema, fn) => {
+// Every compatibility query receives a short transaction, so SET LOCAL context
+// never leaks to another request through the pool.
+const withClient = async (schemaOrFn, maybeFn, explicitContext) => {
+  const fn = typeof schemaOrFn === 'function' ? schemaOrFn : maybeFn;
+  if (typeof fn !== 'function') throw new Error('withClient requer uma função de execução.');
+  const context = normalizeContext(explicitContext || getRequestContext());
   const client = await pool.connect();
   try {
-    await setSearchPath(client, schema);
-    return await fn(client);
+    await client.query('BEGIN');
+    await setRlsContext(client, context);
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
   } finally {
     client.release();
   }
 };
 
-/**
- * Execute any SQL (INSERT/UPDATE/DELETE/DDL).
- * Returns { lastID, changes } to preserve compatibility with existing code.
- * For INSERTs, automatically appends RETURNING id if not already present.
- */
 const execWithClient = async (client, sql, params = []) => {
   let finalSql = translateQuery(sql);
   const insert = isInsert(finalSql);
-
-  if (insert && !/RETURNING\s+\S/i.test(finalSql)) {
-    finalSql = `${finalSql.replace(/;\s*$/, '')} RETURNING id`;
-  }
-
+  if (insert && !/RETURNING\s+\S/i.test(finalSql)) finalSql = `${finalSql.replace(/;\s*$/, '')} RETURNING id`;
   const result = await client.query(finalSql, params);
-  const lastID = insert && result.rows.length > 0 ? Number(result.rows[0].id) : null;
-  return { lastID, changes: result.rowCount };
+  return { lastID: insert && result.rows.length ? Number(result.rows[0].id) : null, changes: result.rowCount };
 };
+const getWithClient = async (client, sql, params = []) => (await client.query(translateQuery(sql), params)).rows[0] || null;
+const allWithClient = async (client, sql, params = []) => (await client.query(translateQuery(sql), params)).rows;
 
-const getWithClient = async (client, sql, params = []) => {
-  const result = await client.query(translateQuery(sql), params);
-  return result.rows[0] || null;
-};
+const runQuery = (sql, params = []) => withClient((client) => execWithClient(client, sql, params));
+const getQuery = (sql, params = []) => withClient((client) => getWithClient(client, sql, params));
+const allQuery = (sql, params = []) => withClient((client) => allWithClient(client, sql, params));
 
-const allWithClient = async (client, sql, params = []) => {
-  const result = await client.query(translateQuery(sql), params);
-  return result.rows;
-};
+// Kept for callers that operate on identity/provisioning metadata; no schema switch occurs.
+const runQueryMain = runQuery;
+const getQueryMain = getQuery;
+const allQueryMain = allQuery;
+const runWithRequestContext = (context, fn) => requestDbContext.run(normalizeContext(context), fn);
+const runWithTenantContext = (tenantId, fn, context = {}) => runWithRequestContext({ ...context, tenantId }, fn);
 
-// ---------------------------------------------------------------------------
-// Active connection resolution (based on tenant context)
-// ---------------------------------------------------------------------------
-
-const getActiveSchema = () => {
-  const ctx = requestDbContext.getStore();
-  if (!ctx || !ctx.useTenantDb || !ctx.tenantId) return 'public';
-  return `${tenantSchema(ctx.tenantId)}, public`;
-};
-
-// ---------------------------------------------------------------------------
-// Public query API (schema-aware)
-// ---------------------------------------------------------------------------
-
-const runQuery = async (sql, params = []) => {
-  const schema = getActiveSchema();
-  return withClient(schema, (client) => execWithClient(client, sql, params));
-};
-
-const getQuery = async (sql, params = []) => {
-  const schema = getActiveSchema();
-  return withClient(schema, (client) => getWithClient(client, sql, params));
-};
-
-const allQuery = async (sql, params = []) => {
-  const schema = getActiveSchema();
-  return withClient(schema, (client) => allWithClient(client, sql, params));
-};
-
-// Main schema (public) only — used for cross-tenant operations
-const runQueryMain = (sql, params = []) =>
-  withClient('public', (client) => execWithClient(client, sql, params));
-
-const getQueryMain = (sql, params = []) =>
-  withClient('public', (client) => getWithClient(client, sql, params));
-
-const allQueryMain = (sql, params = []) =>
-  withClient('public', (client) => allWithClient(client, sql, params));
-
-// ---------------------------------------------------------------------------
-// Tenant context runner
-// ---------------------------------------------------------------------------
-
-const runWithTenantContext = (tenantId, fn) => {
-  const numericTenantId = Number(tenantId);
-  return requestDbContext.run({ tenantId: numericTenantId, useTenantDb: true }, fn);
-};
-
-// ---------------------------------------------------------------------------
-// Tenant schema management
-// ---------------------------------------------------------------------------
-
-/**
- * Create schema for a tenant if it does not already exist.
- * Copies table structure from the public schema by running the DDL.
- */
 const ensureTenantDatabase = async (tenantId) => {
-  const numericTenantId = Number(tenantId);
-  if (!Number.isInteger(numericTenantId) || numericTenantId <= 0) {
-    throw new Error('tenant_id inválido para provisionamento de banco.');
-  }
-
-  const schema = tenantSchema(numericTenantId);
-
-  // Check tenant exists in main table
-  const tenant = await getQueryMain('SELECT id FROM tenants WHERE id = ?', [numericTenantId]);
-  if (!tenant) {
-    throw new Error(`Tenant ${numericTenantId} não encontrado.`);
-  }
-
-  // Schema existence check
-  const exists = await withClient('public', (client) =>
-    getWithClient(
-      client,
-      `SELECT schema_name FROM information_schema.schemata WHERE schema_name = $1`,
-      [schema]
-    )
-  );
-
-  if (!exists) {
-    throw new Error(`Schema tenant ${numericTenantId} ausente: ${schema}`);
-  }
+  const id = Number(tenantId);
+  if (!Number.isInteger(id) || id <= 0) throw new Error('tenant_id inválido.');
+  const tenant = await getQuery('SELECT id, grupo_id, ativo FROM tenants WHERE id = ?', [id]);
+  if (!tenant || Number(tenant.ativo) !== 1) throw new Error('Tenant inválido ou inativo.');
+  return tenant;
 };
 
-// ---------------------------------------------------------------------------
-// Compatibility shim for callback-oriented modules.
-// Used by routes/email.js and services/emailService.js which import { db }.
-// ---------------------------------------------------------------------------
 const db = {
   run(sql, params, callback) {
     if (typeof params === 'function') { callback = params; params = []; }
-    const schema = getActiveSchema();
-    withClient(schema, (client) => execWithClient(client, sql, params || []))
-      .then((result) => callback && callback.call(result, null))
-      .catch((err) => callback && callback.call({}, err));
+    runQuery(sql, params || []).then((result) => callback && callback.call(result, null)).catch((err) => callback && callback.call({}, err));
   },
   get(sql, params, callback) {
     if (typeof params === 'function') { callback = params; params = []; }
-    const schema = getActiveSchema();
-    withClient(schema, (client) => getWithClient(client, sql, params || []))
-      .then((row) => callback && callback(null, row))
-      .catch((err) => callback && callback(err));
+    getQuery(sql, params || []).then((row) => callback && callback(null, row)).catch((err) => callback && callback(err));
   },
   all(sql, params, callback) {
     if (typeof params === 'function') { callback = params; params = []; }
-    const schema = getActiveSchema();
-    withClient(schema, (client) => allWithClient(client, sql, params || []))
-      .then((rows) => callback && callback(null, rows))
-      .catch((err) => callback && callback(err));
+    allQuery(sql, params || []).then((rows) => callback && callback(null, rows)).catch((err) => callback && callback(err));
   },
 };
 
-// ---------------------------------------------------------------------------
-// Introspection helpers
-// ---------------------------------------------------------------------------
-
-/**
- * List table names in the current schema context.
- */
-const listTableNames = async () => {
-  const schema = getActiveSchema().split(',')[0].trim();
-  const rows = await withClient('public', (client) =>
-    allWithClient(
-      client,
-      `SELECT table_name AS name FROM information_schema.tables
-       WHERE table_schema = $1 AND table_type = 'BASE TABLE'`,
-      [schema]
-    )
-  );
-  return rows.map((r) => r.name);
-};
-
-/**
- * Check whether a column exists in the active schema.
- */
-const tableHasColumn = async (tableName, columnName) => {
-  const schema = getActiveSchema().split(',')[0].trim();
-  const row = await withClient('public', (client) =>
-    getWithClient(
-      client,
-      `SELECT column_name FROM information_schema.columns
-       WHERE table_schema = $1 AND table_name = $2 AND column_name = $3`,
-      [schema, tableName, columnName]
-    )
-  );
-  return Boolean(row);
-};
+const listTableNames = async () => (await allQuery("SELECT table_name AS name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'")).map((row) => row.name);
+const tableHasColumn = async (tableName, columnName) => Boolean(await getQuery(
+  "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND table_name = ? AND column_name = ?",
+  [tableName, columnName]
+));
 
 module.exports = {
-  pool,
-  db,
-  runQuery,
-  getQuery,
-  allQuery,
-  runQueryMain,
-  getQueryMain,
-  allQueryMain,
-  runWithTenantContext,
-  ensureTenantDatabase,
-  // Helpers for internal use
-  tenantSchema,
-  withClient,
-  execWithClient,
-  getWithClient,
-  allWithClient,
-  translateQuery,
-  listTableNames,
-  tableHasColumn,
+  pool, db, runQuery, getQuery, allQuery, runQueryMain, getQueryMain, allQueryMain,
+  runWithRequestContext, runWithTenantContext, ensureTenantDatabase, withClient,
+  execWithClient, getWithClient, allWithClient, translateQuery, listTableNames,
+  tableHasColumn, getRequestContext,
 };

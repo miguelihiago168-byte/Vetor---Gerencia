@@ -43,34 +43,18 @@ const auth = async (req, res, next) => {
       perfil
     };
 
-    const tenantIds = Array.isArray(decoded.tenant_ids)
-      ? decoded.tenant_ids.map((t) => Number(t)).filter(Boolean)
-      : [];
-
     const tenantDoToken = decoded.tenant_id ? Number(decoded.tenant_id) : null;
     const tenantHeader = req.header('x-tenant-id') ? Number(req.header('x-tenant-id')) : null;
 
-    let tenantIdAtivo = tenantHeader || tenantDoToken || null;
-    if (!tenantIdAtivo && tenantIds.length > 0) {
-      tenantIdAtivo = tenantIds[0];
-    }
+    const vinculos = await allQuery(
+      'SELECT tenant_id FROM usuario_tenants WHERE usuario_id = ? AND ativo = 1',
+      [req.usuario.id]
+    );
+    const allowedTenantIds = vinculos.map((v) => Number(v.tenant_id)).filter(Boolean);
+    req.usuario.tenant_ids = allowedTenantIds;
+    const tenantIdAtivo = tenantHeader || tenantDoToken || allowedTenantIds[0] || null;
 
     // Em tokens legados (sem tenant_ids), verificar vínculos no banco
-    if ((!tenantIdAtivo || tenantIds.length === 0) && req.usuario?.id) {
-      try {
-        const vinculos = await allQuery('SELECT tenant_id FROM usuario_tenants WHERE usuario_id = ? AND ativo = 1', [req.usuario.id]);
-        const idsBanco = vinculos.map(v => Number(v.tenant_id)).filter(Boolean);
-        if (!tenantIdAtivo && idsBanco.length > 0) tenantIdAtivo = idsBanco[0];
-        if (tenantIds.length === 0) req.usuario.tenant_ids = idsBanco;
-      } catch (_) {
-        // ignora fallback
-      }
-    }
-
-    const allowedTenantIds = Array.isArray(req.usuario.tenant_ids)
-      ? req.usuario.tenant_ids.map((t) => Number(t)).filter(Boolean)
-      : [];
-
     if (!tenantIdAtivo) {
       return res.status(403).json({ erro: 'Usuário sem tenant ativo.' });
     }
@@ -82,13 +66,24 @@ const auth = async (req, res, next) => {
     req.tenantId = tenantIdAtivo;
     req.usuario.tenant_id = tenantIdAtivo;
 
-    const isAuthRoute = String(req.originalUrl || '').startsWith('/api/auth');
-    if (isAuthRoute) {
-      return next();
+    // The tenant is a CNPJ row in the shared database. Its group is part of
+    // the verified request context used by PostgreSQL RLS policies.
+    const tenant = await ensureTenantDatabase(tenantIdAtivo);
+    const grupoId = Number(tenant.grupo_id);
+    if (!grupoId) {
+      return res.status(403).json({
+        codigo: 'TENANT_GROUP_MISSING',
+        erro: 'Tenant sem grupo empresarial configurado.'
+      });
     }
 
-    await ensureTenantDatabase(tenantIdAtivo);
-    return runWithTenantContext(tenantIdAtivo, () => next());
+    req.grupoId = grupoId;
+    req.usuario.grupo_id = grupoId;
+    return runWithTenantContext(tenantIdAtivo, () => next(), {
+      userId: req.usuario.id,
+      groupId: grupoId,
+      role: perfil,
+    });
   } catch (error) {
     if (error?.name === 'TokenExpiredError') {
       return res.status(401).json({

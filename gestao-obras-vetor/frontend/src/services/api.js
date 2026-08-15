@@ -72,6 +72,13 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    try {
+      const storedUser = localStorage.getItem('usuario') || sessionStorage.getItem('usuario');
+      const tenantId = storedUser ? Number(JSON.parse(storedUser)?.tenant_id) : null;
+      if (tenantId) config.headers['x-tenant-id'] = String(tenantId);
+    } catch (_) {
+      // A malformed local cache is handled by AuthContext during bootstrap.
+    }
     return config;
   },
   (error) => {
@@ -389,6 +396,14 @@ export const addMaterialCaminhao = (id, data) => api.post(`/rastreabilidade/${id
 export const addMaterialCorpoProva = (id, data) => api.post(`/rastreabilidade/${id}/corpos-prova`, data);
 export const updateMaterialCorpoProva = (id, corpoProvaId, data) => api.put(`/rastreabilidade/${id}/corpos-prova/${corpoProvaId}`, data);
 export const encerrarMaterialRecebimento = (id, data) => api.post(`/rastreabilidade/${id}/encerrar`, data);
+
+// Transferências entre CNPJs do mesmo grupo empresarial
+export const listarTransferencias = () => api.get('/transferencias');
+export const detalharTransferencia = (id) => api.get(`/transferencias/${id}`);
+export const solicitarTransferencia = (data) => api.post('/transferencias', data);
+export const aprovarTransferenciaOrigem = (id) => api.post(`/transferencias/${id}/aprovar-origem`);
+export const aprovarTransferenciaDestino = (id) => api.post(`/transferencias/${id}/aprovar-destino`);
+export const rejeitarTransferencia = (id, motivo) => api.post(`/transferencias/${id}/rejeitar`, { motivo });
 
 // Email
 export const getEmailConfig = () => api.get('/email/config');

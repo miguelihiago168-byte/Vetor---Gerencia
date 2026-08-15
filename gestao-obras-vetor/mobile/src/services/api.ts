@@ -43,6 +43,9 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    const usuario = await storage.getUsuario();
+    const tenantId = Number(usuario?.tenant_id || 0);
+    if (tenantId) config.headers['x-tenant-id'] = String(tenantId);
     return config;
   },
   (error) => Promise.reject(error),
@@ -318,5 +321,12 @@ export const cancelarReuniaoMensagem = (id: number) =>
 
 export const getUsuarios = (params?: Record<string, unknown>) =>
   api.get('/usuarios', { params });
+
+export const listarTransferencias = () => api.get('/transferencias');
+export const detalharTransferencia = (id: number) => api.get(`/transferencias/${id}`);
+export const solicitarTransferencia = (data: Record<string, unknown>) => api.post('/transferencias', data);
+export const aprovarTransferenciaOrigem = (id: number) => api.post(`/transferencias/${id}/aprovar-origem`);
+export const aprovarTransferenciaDestino = (id: number) => api.post(`/transferencias/${id}/aprovar-destino`);
+export const rejeitarTransferencia = (id: number, motivo?: string) => api.post(`/transferencias/${id}/rejeitar`, { motivo });
 
 export default api;

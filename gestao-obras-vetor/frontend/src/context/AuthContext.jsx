@@ -69,13 +69,19 @@ export const AuthProvider = ({ children }) => {
     setUsuario(novosDados);
   };
 
+  const selecionarTenant = (tenantId) => {
+    const tenant = (usuario?.tenants || []).find((item) => Number(item.id) === Number(tenantId));
+    if (!tenant) throw new Error('Tenant não disponível para este usuário.');
+    atualizarUsuarioLogado({ tenant_id: Number(tenant.id), grupo_id: Number(tenant.grupo_id) });
+  };
+
   const primeiroAcessoPendente = usuario?.primeiro_acesso_pendente === true;
   const perfil = usuario?.perfil || null;
   const isGestor = perfil === 'Gestor Geral' || perfil === 'Gestor da Obra' || perfil === 'Gestor Local';
   const isAdm = perfil === 'ADM' || usuario?.is_adm === 1;
 
   return (
-    <AuthContext.Provider value={{ usuario, loading, loginAuth, logout, atualizarUsuarioLogado, isGestor, isAdm, perfil, primeiroAcessoPendente }}>
+    <AuthContext.Provider value={{ usuario, loading, loginAuth, logout, atualizarUsuarioLogado, selecionarTenant, isGestor, isAdm, perfil, primeiroAcessoPendente }}>
       {children}
     </AuthContext.Provider>
   );

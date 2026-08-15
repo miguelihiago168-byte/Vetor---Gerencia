@@ -25,6 +25,7 @@ interface AuthContextType {
   loginAuth: (token: string, dadosUsuario: Usuario) => Promise<void>;
   logout: () => Promise<void>;
   atualizarUsuarioLogado: (dados: Partial<Usuario>) => Promise<void>;
+  selecionarTenant: (tenantId: number) => Promise<void>;
   isGestor: boolean;
   isAdm: boolean;
   perfil: string | null;
@@ -81,6 +82,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUsuario(novosDados);
   };
 
+  const selecionarTenant = async (tenantId: number) => {
+    const tenants = Array.isArray(usuario?.tenants) ? usuario.tenants as Array<{ id: number; grupo_id: number }> : [];
+    const tenant = tenants.find((item) => Number(item.id) === Number(tenantId));
+    if (!tenant) throw new Error('Tenant não disponível para este usuário.');
+    await atualizarUsuarioLogado({ tenant_id: Number(tenant.id), grupo_id: Number(tenant.grupo_id) });
+  };
+
   const perfil = usuario?.perfil ?? null;
   const isGestor = perfil !== null && PERFIS_GESTOR.includes(perfil);
   const isAdm = perfil === 'ADM' || usuario?.is_adm === 1;
@@ -93,6 +101,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loginAuth,
         logout,
         atualizarUsuarioLogado,
+        selecionarTenant,
         isGestor,
         isAdm,
         perfil,
