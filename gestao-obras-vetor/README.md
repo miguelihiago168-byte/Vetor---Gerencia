@@ -179,7 +179,7 @@ Na raiz do projeto:
 - **Aplicação (Caddy):** https://localhost
 - **Backend API (via proxy):** https://localhost/api
 - **Health Check:** https://localhost/api/health
-- **pgAdmin:** http://127.0.0.1:5050
+- **pgAdmin local (suporte):** http://127.0.0.1:5050
 
 ## Produção com Docker e HTTPS
 
@@ -196,6 +196,10 @@ O Caddy publica as portas 80/443, redireciona HTTP para HTTPS e gerencia a
 emissão e renovação do certificado Let's Encrypt. O frontend, backend e banco
 não são expostos diretamente. Consulte `INSTALLACAO.md` para o procedimento de
 DNS, firewall e validação.
+
+O pgAdmin de produção é acessado em `https://vetor.damjam.com.br/pgadmin/`.
+Ele passa pelo Caddy com HTTPS; não publique a porta `5050` nem a porta
+PostgreSQL no firewall.
 
 ---
 
