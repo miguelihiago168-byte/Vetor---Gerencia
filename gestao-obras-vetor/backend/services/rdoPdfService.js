@@ -252,9 +252,9 @@ async function loadRdoPdfData(id) {
   `, [id]);
   const anexosDocumentais = anexos.filter((item) => !isImageAttachment(item));
 
-  const materiais = await safeAll('SELECT * FROM rdo_materiais WHERE rdo_id = ?ORDER BY criado_em ASC, id ASC', [id]);
-  const equipamentos = await safeAll('SELECT * FROM rdo_equipamentos WHERE rdo_id = ?ORDER BY id ASC', [id]);
-  const clima = await safeAll('SELECT * FROM rdo_clima WHERE rdo_id = ?ORDER BY id ASC', [id]);
+  const materiais = await safeAll('SELECT * FROM rdo_materiais WHERE rdo_id = ? ORDER BY criado_em ASC, id ASC', [id]);
+  const equipamentos = await safeAll('SELECT * FROM rdo_equipamentos WHERE rdo_id = ? ORDER BY id ASC', [id]);
+  const clima = await safeAll('SELECT * FROM rdo_clima WHERE rdo_id = ? ORDER BY id ASC', [id]);
   const ocorrencias = await hydrateOccurrences(id);
   const comentarios = await safeAll(`
     SELECT rc.*, u.nome AS autor_nome

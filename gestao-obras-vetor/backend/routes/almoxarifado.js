@@ -250,7 +250,7 @@ router.get('/ferramentas', [auth, requireReadPermission], async (req, res) => {
       WHERE ${filtros.join(' AND ')}
         AND f.projeto_id = ?
       GROUP BY f.id
-      ORDER BY CAST(f.codigo AS INTEGER) ASC, f.id ASC
+      ORDER BY f.codigo ASC, f.id ASC
     `, [Number(projetoId), ...params, Number(projetoId)]);
 
     res.json(ferramentas);

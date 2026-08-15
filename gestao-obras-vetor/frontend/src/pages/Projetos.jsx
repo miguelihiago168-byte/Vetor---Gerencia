@@ -9,6 +9,19 @@ import { Plus, Edit, Users, Calendar, Archive, RotateCcw, Eye, EyeOff, MapPin } 
 import { IconButton } from '../components/ui/Button';
 import './Projetos.css';
 
+const parseDateOnly = (value) => {
+  const match = String(value ?? '').trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+
+  const [, year, month, day] = match;
+  const date = new Date(Number(year), Number(month) - 1, Number(day));
+  return date.getFullYear() === Number(year)
+    && date.getMonth() === Number(month) - 1
+    && date.getDate() === Number(day)
+    ? date
+    : null;
+};
+
 function Projetos() {
   const { confirm } = useDialog();
   const { success: notifySuccess, error: notifyError } = useNotification();
@@ -250,7 +263,7 @@ function Projetos() {
           {projetosFiltrados.map((projeto) => {
             const pct = Math.round(projeto.percentual_progresso || 0);
             const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-            const prazo = projeto.prazo_termino ? new Date(projeto.prazo_termino + 'T00:00:00') : null;
+            const prazo = parseDateOnly(projeto.prazo_termino);
             const diasRestantes = prazo ? Math.round((prazo - hoje) / (1000 * 60 * 60 * 24)) : null;
             const prazoTone = diasRestantes === null ? 'muted'
               : diasRestantes > 30 ? 'ok'
