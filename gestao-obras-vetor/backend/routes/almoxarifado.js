@@ -250,7 +250,7 @@ router.get('/ferramentas', [auth, requireReadPermission], async (req, res) => {
       WHERE ${filtros.join(' AND ')}
         AND f.projeto_id = ?
       GROUP BY f.id
-      ORDER BY CAST(f.codigo AS INTEGER) ASC, f.id ASC
+      ORDER BY f.codigo ASC, f.id ASC
     `, [Number(projetoId), ...params, Number(projetoId)]);
 
     res.json(ferramentas);
@@ -1207,7 +1207,7 @@ router.get('/relatorios/movimentacoes', [auth, requireReadPermission], async (re
       LEFT JOIN projetos po ON po.id = m.projeto_origem_id
       LEFT JOIN projetos pd ON pd.id = m.projeto_destino_id
       LEFT JOIN usuarios u ON u.id = m.usuario_id
-      WHERE (? IS NULL OR m.projeto_origem_id = ? OR m.projeto_destino_id = ?)
+      WHERE (?::integer IS NULL OR m.projeto_origem_id = ? OR m.projeto_destino_id = ?)
       ORDER BY m.id DESC
       LIMIT 500
     `, [projetoId ? Number(projetoId) : null, projetoId ? Number(projetoId) : null, projetoId ? Number(projetoId) : null]);
@@ -1244,7 +1244,7 @@ router.get('/relatorios/perdas', [auth, requireReadPermission], async (req, res)
       LEFT JOIN usuarios uc ON uc.id = a.colaborador_id
       LEFT JOIN projetos pr ON pr.id = p.projeto_id
       LEFT JOIN usuarios u ON u.id = p.criado_por
-      WHERE (? IS NULL OR p.projeto_id = ?)
+      WHERE (?::integer IS NULL OR p.projeto_id = ?)
       ORDER BY p.id DESC
       LIMIT 500
     `, [projetoId ? Number(projetoId) : null, projetoId ? Number(projetoId) : null]);
