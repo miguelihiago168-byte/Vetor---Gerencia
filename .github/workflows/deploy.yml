@@ -177,6 +177,9 @@ jobs:
 
             echo "Subindo containers apos backup e migrations..."
             docker compose up -d
+            # Caddy le o Caddyfile apenas no startup. Reiniciar garante que
+            # novas rotas, como /pgadmin/, entrem em vigor no mesmo deploy.
+            docker compose restart caddy
             BACKEND_STOPPED=0
             docker compose ps
 
