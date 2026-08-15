@@ -9,15 +9,24 @@ import { Plus, Edit, Users, Calendar, Archive, RotateCcw, Eye, EyeOff, MapPin } 
 import { IconButton } from '../components/ui/Button';
 import './Projetos.css';
 
-const parseDateOnly = (value) => {
-  const match = String(value ?? '').trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!match) return null;
+// Datas DATE do PostgreSQL podem chegar como "YYYY-MM-DD" ou como timestamp ISO.
+// Mantemos apenas a parte do calendário para evitar mudança de fuso e strings como
+// "2026-08-15T00:00:00.000ZT00:00:00", que resultam em Invalid Date.
+const getDateKey = (value) => {
+  if (!value) return '';
+  const match = String(value).match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : '';
+};
 
-  const [, year, month, day] = match;
-  const date = new Date(Number(year), Number(month) - 1, Number(day));
-  return date.getFullYear() === Number(year)
-    && date.getMonth() === Number(month) - 1
-    && date.getDate() === Number(day)
+const parseProjectDeadline = (value) => {
+  const dateKey = getDateKey(value);
+  if (!dateKey) return null;
+
+  const [year, month, day] = dateKey.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year
+    && date.getMonth() === month - 1
+    && date.getDate() === day
     ? date
     : null;
 };
@@ -146,7 +155,7 @@ function Projetos() {
         nome: projeto.nome,
         empresa_responsavel: projeto.empresa_responsavel,
         empresa_executante: projeto.empresa_executante,
-        prazo_termino: projeto.prazo_termino,
+        prazo_termino: getDateKey(projeto.prazo_termino),
         cidade: projeto.cidade,
         usuarios: projeto.usuarios?.map(u => u.id) || []
       });
@@ -263,7 +272,7 @@ function Projetos() {
           {projetosFiltrados.map((projeto) => {
             const pct = Math.round(projeto.percentual_progresso || 0);
             const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-            const prazo = parseDateOnly(projeto.prazo_termino);
+            const prazo = parseProjectDeadline(projeto.prazo_termino);
             const diasRestantes = prazo ? Math.round((prazo - hoje) / (1000 * 60 * 60 * 24)) : null;
             const prazoTone = diasRestantes === null ? 'muted'
               : diasRestantes > 30 ? 'ok'
