@@ -350,11 +350,12 @@ router.get('/finalizadas', async (req, res) => {
         c.condicao_pagamento,
         u.nome AS responsavel_nome,
         i.atualizado_em AS data_compra,
+        'requisicao' AS origem,
         -- Economia: (media_cotacoes - valor_selecionado) / media_cotacoes * 100
         ROUND(
-          (
+          ((
             (SELECT AVG(cx.valor_unitario) FROM requisicao_cotacoes cx WHERE cx.item_id = i.id) - c.valor_unitario
-          ) / NULLIF((SELECT AVG(cx.valor_unitario) FROM requisicao_cotacoes cx WHERE cx.item_id = i.id), 0) * 100,
+          ) / NULLIF((SELECT AVG(cx.valor_unitario) FROM requisicao_cotacoes cx WHERE cx.item_id = i.id), 0) * 100)::numeric,
           2
         ) AS economia_pct,
         (SELECT COUNT(*) FROM requisicao_cotacoes cx WHERE cx.item_id = i.id) AS total_cotacoes
@@ -387,7 +388,59 @@ router.get('/finalizadas', async (req, res) => {
     sql += ' ORDER BY i.atualizado_em DESC';
 
     const rows = await allQuery(sql, params);
-    res.json(rows);
+
+    // A tela consolidada também deve mostrar pedidos do fluxo legado. Sem esta
+    // consulta, pedidos marcados como COMPRADO ficavam fora de "Finalizadas".
+    let pedidosSql = `
+      SELECT
+        p.id AS item_id,
+        p.id AS pedido_id,
+        p.descricao AS item_descricao,
+        p.quantidade,
+        p.unidade,
+        ('Pedido #' || p.id) AS numero_requisicao,
+        p.projeto_id,
+        pr.nome AS projeto_nome,
+        'Pedido de compra' AS tipo_material,
+        c.valor_unitario,
+        (p.quantidade * c.valor_unitario) AS valor_total,
+        c.fornecedor AS fornecedor_nome,
+        NULL AS fornecedor_cnpj,
+        c.prazo_entrega,
+        NULL AS condicao_pagamento,
+        u.nome AS responsavel_nome,
+        p.atualizado_em AS data_compra,
+        'pedido' AS origem,
+        NULL AS economia_pct,
+        (SELECT COUNT(*) FROM cotacoes cx WHERE cx.pedido_id = p.id) AS total_cotacoes
+      FROM pedidos_compra p
+      JOIN projetos pr ON pr.id = p.projeto_id
+      LEFT JOIN cotacoes c ON c.id = p.cotacao_vencedora_id
+      LEFT JOIN usuarios u ON u.id = p.adm_responsavel_id
+      WHERE p.status = 'COMPRADO'
+    `;
+    const pedidosParams = [];
+
+    if (projeto_id) {
+      pedidosSql += ' AND p.projeto_id = ?';
+      pedidosParams.push(Number(projeto_id));
+    } else if (!['ADM', 'Financeiro', 'Gestor Geral'].includes(perfil)) {
+      const projetosUsuario = await allQuery(
+        'SELECT projeto_id FROM projeto_usuarios WHERE usuario_id = ?',
+        [usuario.id]
+      );
+      if (projetosUsuario.length > 0) {
+        const ids = projetosUsuario.map((p) => p.projeto_id).join(',');
+        pedidosSql += ` AND p.projeto_id IN (${ids})`;
+      } else {
+        pedidosSql += ' AND 1 = 0';
+      }
+    }
+
+    const pedidos = await allQuery(pedidosSql, pedidosParams);
+    res.json([...rows, ...pedidos].sort((a, b) =>
+      new Date(b.data_compra || 0) - new Date(a.data_compra || 0)
+    ));
   } catch (err) {
     console.error('[requisicoes] Erro /finalizadas:', err);
     res.status(500).json({ erro: 'Erro ao buscar cotações finalizadas.' });
@@ -460,6 +513,7 @@ router.get('/negadas', async (req, res) => {
         i.status_item,
         i.motivo_reprovacao,
         i.atualizado_em AS data_evento,
+        'requisicao' AS origem,
         r.numero_requisicao,
         r.projeto_id,
         p.nome AS projeto_nome,
@@ -496,7 +550,52 @@ router.get('/negadas', async (req, res) => {
     sql += ' ORDER BY i.atualizado_em DESC';
 
     const rows = await allQuery(sql, params);
-    res.json(rows);
+
+    // Inclui pedidos reprovados do fluxo legado na mesma listagem consolidada.
+    let pedidosSql = `
+      SELECT
+        p.id AS item_id,
+        p.id AS pedido_id,
+        p.descricao AS item_descricao,
+        p.quantidade,
+        p.unidade,
+        'Reprovado' AS status_item,
+        p.reprovado_motivo AS motivo_reprovacao,
+        p.atualizado_em AS data_evento,
+        'pedido' AS origem,
+        ('Pedido #' || p.id) AS numero_requisicao,
+        p.projeto_id,
+        pr.nome AS projeto_nome,
+        'Pedido de compra' AS tipo_material,
+        NULL AS urgencia,
+        u.nome AS responsavel_nome
+      FROM pedidos_compra p
+      JOIN projetos pr ON pr.id = p.projeto_id
+      LEFT JOIN usuarios u ON u.id = p.gestor_aprovador_id
+      WHERE p.status = 'REPROVADO'
+    `;
+    const pedidosParams = [];
+
+    if (projeto_id) {
+      pedidosSql += ' AND p.projeto_id = ?';
+      pedidosParams.push(Number(projeto_id));
+    } else if (!['ADM', 'Financeiro', 'Gestor Geral'].includes(perfil)) {
+      const projetosUsuario = await allQuery(
+        'SELECT projeto_id FROM projeto_usuarios WHERE usuario_id = ?',
+        [usuario.id]
+      );
+      if (projetosUsuario.length > 0) {
+        const ids = projetosUsuario.map((p) => p.projeto_id).join(',');
+        pedidosSql += ` AND p.projeto_id IN (${ids})`;
+      } else {
+        pedidosSql += ' AND 1 = 0';
+      }
+    }
+
+    const pedidos = await allQuery(pedidosSql, pedidosParams);
+    res.json([...rows, ...pedidos].sort((a, b) =>
+      new Date(b.data_evento || 0) - new Date(a.data_evento || 0)
+    ));
   } catch (err) {
     console.error('[requisicoes] Erro /negadas:', err);
     res.status(500).json({ erro: 'Erro ao buscar cotações negadas.' });
