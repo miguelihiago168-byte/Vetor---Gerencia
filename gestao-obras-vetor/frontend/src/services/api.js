@@ -111,6 +111,9 @@ export const redefinirSenha = (token, senha) => api.post('/auth/redefinir-senha'
 export const cancelarConta = (data) => api.post('/auth/cancelar-conta', data);
 export const renovarTrial = (data) => api.post('/auth/renovar-trial', data);
 
+// Contato público
+export const enviarContato = (data) => api.post('/contato', data);
+
 // Usuários
 export const getUsuarios = (params) => api.get('/usuarios', { params });
 export const getUsuario = (id) => api.get(`/usuarios/${id}`);
