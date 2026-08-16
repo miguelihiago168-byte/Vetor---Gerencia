@@ -48,6 +48,8 @@ const initDatabase = async () => {
           cidade TEXT NOT NULL,
           ativo INTEGER DEFAULT 1,
           arquivado INTEGER DEFAULT 0,
+          rdo_copiar_automaticamente INTEGER NOT NULL DEFAULT 0,
+          rdo_exige_aprovacao_fiscal INTEGER NOT NULL DEFAULT 1,
           criado_por INTEGER NOT NULL,
           criado_em TIMESTAMPTZ DEFAULT NOW(),
           atualizado_em TIMESTAMPTZ DEFAULT NOW(),
@@ -209,6 +211,10 @@ const initDatabase = async () => {
           status TEXT DEFAULT 'Em preenchimento',
           criado_por INTEGER NOT NULL,
           aprovado_por INTEGER,
+          gestor_aprovado_por INTEGER,
+          gestor_aprovado_em TIMESTAMPTZ,
+          fiscal_aprovado_por INTEGER,
+          fiscal_aprovado_em TIMESTAMPTZ,
           correcao_solicitada INTEGER DEFAULT 0,
           correcao_motivo TEXT,
           correcao_origem TEXT,
@@ -221,6 +227,8 @@ const initDatabase = async () => {
           FOREIGN KEY (projeto_id) REFERENCES projetos(id) ON DELETE CASCADE,
           FOREIGN KEY (criado_por) REFERENCES usuarios(id),
           FOREIGN KEY (aprovado_por) REFERENCES usuarios(id),
+          FOREIGN KEY (gestor_aprovado_por) REFERENCES usuarios(id),
+          FOREIGN KEY (fiscal_aprovado_por) REFERENCES usuarios(id),
           UNIQUE(projeto_id, data_relatorio),
           UNIQUE(projeto_id, numero_rdo)
         )

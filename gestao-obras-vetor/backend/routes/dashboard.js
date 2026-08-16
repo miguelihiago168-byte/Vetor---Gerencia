@@ -164,7 +164,8 @@ router.get('/projeto/:projetoId/rdos-stats', auth, async (req, res) => {
       SELECT 
         COUNT(*) as total_rdos,
         SUM(CASE WHEN status = 'Aprovado' THEN 1 ELSE 0 END) as aprovados,
-        SUM(CASE WHEN status = 'Em análise' THEN 1 ELSE 0 END) as em_analise,
+        SUM(CASE WHEN status = 'Em aprovação do gestor' THEN 1 ELSE 0 END) as em_aprovacao_gestor,
+        SUM(CASE WHEN status = 'Em aprovação do fiscal' THEN 1 ELSE 0 END) as em_aprovacao_fiscal,
         SUM(CASE WHEN status = 'Em preenchimento' THEN 1 ELSE 0 END) as em_preenchimento,
         SUM(CASE WHEN status = 'Reprovado' THEN 1 ELSE 0 END) as reprovados,
         SUM(mao_obra_direta + mao_obra_indireta + mao_obra_terceiros) as total_mao_obra

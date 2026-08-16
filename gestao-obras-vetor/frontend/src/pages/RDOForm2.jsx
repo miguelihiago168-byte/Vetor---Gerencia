@@ -10,7 +10,7 @@ import {
   getProjeto,
   getAtividadesEAP, getRDO, getRDOs, createRDO, updateRDO,
   addRdoClima, addRdoComentario, addRdoMaterial,
-  uploadRdoFoto, updateRdoFoto, deleteRdoFoto, reorderRdoFotos, updateStatusRDO, getExecucaoAcumulada,
+  uploadRdoFoto, updateRdoFoto, deleteRdoFoto, reorderRdoFotos, executeRdoWorkflow, getExecucaoAcumulada,
   getRdoColaboradores, createRdoColaborador,
   getRdoEquipamentosCatalogo, getRdoEquipamentos, addRdoEquipamento, deleteRdoEquipamento,
   getAnexos, uploadAnexo, deleteAnexo, getUploadUrl, getRdoOcorrenciasConfiguracao, vincularEvidenciaOcorrencia, desvincularEvidenciaOcorrencia
@@ -59,6 +59,11 @@ const normalizeRdoStatus = (status) =>
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
+
+const toDateInputValue = (value) => {
+  const match = String(value || '').match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : '';
+};
 
 const Section = ({ id, num, title, badge, children, isOpen, onToggle }) => (
   <div className="rdo-section">
@@ -379,9 +384,9 @@ function RDOForm2() {
           if (!rdo) return;
 
           const statusNorm = normalizeRdoStatus(rdo.status);
-          if (statusNorm === 'aprovado' || statusNorm === 'em analise') {
+          if (statusNorm === 'aprovado' || statusNorm === 'em aprovacao do gestor' || statusNorm === 'em aprovacao do fiscal' || statusNorm === 'em analise') {
             notifyInfo(
-              statusNorm === 'em analise'
+              statusNorm.includes('aprovacao') || statusNorm === 'em analise'
                 ? 'Este RDO já foi enviado para aprovação.'
                 : 'Este RDO está aprovado e não pode ser editado.',
               5000
@@ -393,8 +398,8 @@ function RDOForm2() {
           setLoadedRdoStatus(rdo.status || '');
 
           setFormData({
-            data_relatorio: rdo.data_relatorio,
-            dia_semana: rdo.dia_semana,
+            data_relatorio: toDateInputValue(rdo.data_relatorio),
+            dia_semana: rdo.dia_semana || weekdayFromLocalDateInput(toDateInputValue(rdo.data_relatorio)),
             entrada_saida_inicio: rdo.entrada_saida_inicio || '07:00',
             entrada_saida_fim: rdo.entrada_saida_fim || '17:00',
             intervalo_almoco_inicio: rdo.intervalo_almoco_inicio || '12:00',
@@ -1514,7 +1519,13 @@ function RDOForm2() {
           showRdoError(`RDO salvo, mas ${fotosFalharam.length} foto(s) não foram enviadas: ${fotosFalharam.join('; ')}`, 9000);
         }
         if (targetStatus === 'analise') {
-          try { await updateStatusRDO(rdoId, 'Em análise'); } catch {}
+          try {
+            await executeRdoWorkflow(rdoId, 'ENVIAR_PARA_APROVACAO_GESTOR');
+          } catch (workflowError) {
+            const detalhe = workflowError.response?.data?.erro || workflowError.message;
+            showRdoError(`RDO salvo, mas não foi enviado para aprovação: ${detalhe}`, 9000);
+            return;
+          }
         }
         await carregarLogsRdo(rdoId);
         const msgRdo = targetStatus === 'analise' ? 'RDO enviado para aprovação.' : 'RDO salvo com sucesso.';
@@ -1567,7 +1578,13 @@ function RDOForm2() {
           try { const lista = await getAnexos(finalId); setAnexos(lista.data || []); } catch {}
         }
         if (targetStatus === 'analise') {
-          try { if (finalId) await updateStatusRDO(finalId, 'Em análise'); } catch {}
+          try {
+            if (finalId) await executeRdoWorkflow(finalId, 'ENVIAR_PARA_APROVACAO_GESTOR');
+          } catch (workflowError) {
+            const detalhe = workflowError.response?.data?.erro || workflowError.message;
+            showRdoError(`RDO salvo, mas não foi enviado para aprovação: ${detalhe}`, 9000);
+            return;
+          }
         }
         const msgNovo = targetStatus === 'analise' ? 'RDO enviado para aprovação.' : 'RDO salvo com sucesso.';
         setSucesso(msgNovo);

@@ -7,8 +7,7 @@ import {
   getRDO,
   listRdoMaoObra,
   getAnexos,
-  updateStatusRDO,
-  addRdoComentario,
+  executeRdoWorkflow,
   getUploadUrl
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -50,15 +49,16 @@ const formatLocalDate = (dstr) => {
 };
 
 const statusLabel = (s) => {
-  if (s === 'Em análise') return 'Em aprovação';
+  if (s === 'Em aprovação do gestor') return 'Aguardando aprovação do gestor';
+  if (s === 'Em aprovação do fiscal') return 'Aguardando aprovação do fiscal';
   if (s === 'Em preenchimento') return 'Em preenchimento';
   return s || 'N/A';
 };
 
 const statusClass = (s) => {
   const normalized = String(s || '').toLowerCase();
-  if (normalized.includes('aprov')) return 'is-approved';
-  if (normalized.includes('analise') || normalized.includes('análise')) return 'is-review';
+  if (normalized === 'aprovado') return 'is-approved';
+  if (normalized.includes('aprovação') || normalized.includes('aprovacao') || normalized.includes('analise') || normalized.includes('análise')) return 'is-review';
   if (normalized.includes('preench')) return 'is-draft';
   if (normalized.includes('reprov')) return 'is-rejected';
   return 'is-neutral';
@@ -136,11 +136,11 @@ const EmptyState = ({ children }) => (
 
 function RDODetalhes() {
   const { projetoId, rdoId } = useParams();
-  const { isGestor, perfil } = useAuth();
+  const { perfil } = useAuth();
   const { alert } = useDialog();
 
-  const canAprovarRdo = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade'].includes(perfil);
-  const canReprovarRdo = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Fiscal'].includes(perfil);
+  const canDecidirGestor = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade'].includes(perfil);
+  const canDecidirFiscal = perfil === 'Fiscal';
 
   const [rdo, setRdo] = useState(null);
   const [sucesso, setSucesso] = useState('');
@@ -152,6 +152,7 @@ function RDODetalhes() {
   const [anexos, setAnexos] = useState([]);
   const [comentarios, setComentarios] = useState([]);
   const [showSolicitarCorrecaoModal, setShowSolicitarCorrecaoModal] = useState(false);
+  const [acaoDevolucao, setAcaoDevolucao] = useState('SOLICITAR_CORRECAO');
   const [textoCorrecao, setTextoCorrecao] = useState('');
   const [isEnviandoCorrecao, setIsEnviandoCorrecao] = useState(false);
 
@@ -214,28 +215,13 @@ function RDODetalhes() {
     link.remove();
   };
 
-  const aprovarRDO = async () => {
+  const aprovarRDO = async (acao) => {
     try {
-      await updateStatusRDO(rdoId, 'Aprovado');
-      setRdo(prev => ({ ...prev, status: 'Aprovado' }));
-      setSucesso('RDO aprovado com sucesso.');
+      const resp = await executeRdoWorkflow(rdoId, acao);
+      setRdo(prev => ({ ...prev, status: resp.data?.status, correcao_solicitada: 0 }));
+      setSucesso(resp.data?.mensagem || 'RDO aprovado com sucesso.');
     } catch (error) {
       await alert({ title: 'Erro', message: 'Falha ao aprovar RDO: ' + (error.response?.data?.erro || error.message) });
-    }
-  };
-
-  const reprovarRDO = async () => {
-    try {
-      const resp = await updateStatusRDO(rdoId, 'Reprovado');
-      setRdo(prev => ({
-        ...prev,
-        status: resp.data?.status || 'Em preenchimento',
-        correcao_solicitada: resp.data?.correcao_solicitada ?? 1,
-        correcao_motivo: resp.data?.correcao_motivo || 'RDO reprovado. Revise as informações e envie novamente para aprovação.'
-      }));
-      setSucesso(resp.data?.mensagem || 'RDO reprovado e enviado para correção.');
-    } catch (error) {
-      await alert({ title: 'Erro', message: 'Falha ao reprovar RDO: ' + (error.response?.data?.erro || error.message) });
     }
   };
 
@@ -247,13 +233,11 @@ function RDODetalhes() {
       }
 
       setIsEnviandoCorrecao(true);
-      await addRdoComentario(rdoId, { comentario: `[SOLICITAR CORREÇÃO] ${textoCorrecao.trim()}` });
-      await updateStatusRDO(rdoId, 'Em preenchimento');
-
-      setRdo(prev => ({ ...prev, status: 'Em preenchimento' }));
+      const resp = await executeRdoWorkflow(rdoId, acaoDevolucao, textoCorrecao.trim());
+      setRdo(prev => ({ ...prev, status: resp.data?.status, correcao_solicitada: 1, correcao_motivo: textoCorrecao.trim() }));
       setTextoCorrecao('');
       setShowSolicitarCorrecaoModal(false);
-      setSucesso('Correção solicitada com sucesso. RDO retornou para edição.');
+      setSucesso(resp.data?.mensagem || 'RDO devolvido para correção.');
       carregarDados();
     } catch (error) {
       await alert({ title: 'Erro', message: 'Falha ao solicitar correção: ' + (error.response?.data?.erro || error.message) });
@@ -327,32 +311,17 @@ function RDODetalhes() {
 
           <div className="rdo-report-actions">
             <Button tone="primary" variant="outline" startIcon={Download} className="rdo-view-action-btn" onClick={handleDownloadPDF}>PDF</Button>
-            {canAprovarRdo && rdo.status === 'Em análise' && (
-              <Button tone="success" variant="solid" startIcon={CheckCircle2} className="rdo-view-action-btn" onClick={aprovarRDO}>Aprovar</Button>
+            {canDecidirGestor && rdo.status === 'Em aprovação do gestor' && (
+              <Button tone="success" variant="solid" startIcon={CheckCircle2} className="rdo-view-action-btn" onClick={() => aprovarRDO('APROVAR_GESTOR')}>Aprovar como gestor</Button>
             )}
-            {canReprovarRdo && rdo.status === 'Em análise' && (
-              <Button tone="danger" variant="solid" startIcon={XCircle} className="rdo-view-action-btn" onClick={reprovarRDO}>Reprovar</Button>
+            {canDecidirFiscal && rdo.status === 'Em aprovação do fiscal' && (
+              <Button tone="success" variant="solid" startIcon={CheckCircle2} className="rdo-view-action-btn" onClick={() => aprovarRDO('APROVAR_FISCAL')}>Aprovar como fiscal</Button>
             )}
-            {canReprovarRdo && rdo.status === 'Em análise' && (
-              <Button tone="warning" variant="soft" startIcon={RotateCcw} className="rdo-view-action-btn" onClick={() => setShowSolicitarCorrecaoModal(true)}>Solicitar correção</Button>
-            )}
-            {isGestor && rdo.status === 'Aprovado' && (
-              <Button
-                tone="warning"
-                variant="soft"
-                startIcon={RotateCcw}
-                className="rdo-view-action-btn rdo-view-action-btn-wide"
-                onClick={async () => {
-                  try {
-                    await updateStatusRDO(rdoId, 'Em preenchimento');
-                    setRdo(prev => ({ ...prev, status: 'Em preenchimento' }));
-                  } catch (error) {
-                    await alert({ title: 'Erro', message: 'Falha ao permitir edição: ' + (error.response?.data?.erro || error.message) });
-                  }
-                }}
-              >
-                Permitir edição
-              </Button>
+            {((canDecidirGestor && rdo.status === 'Em aprovação do gestor') || (canDecidirFiscal && rdo.status === 'Em aprovação do fiscal')) && (
+              <>
+                <Button tone="warning" variant="soft" startIcon={RotateCcw} className="rdo-view-action-btn" onClick={() => { setAcaoDevolucao('SOLICITAR_CORRECAO'); setShowSolicitarCorrecaoModal(true); }}>Solicitar correção</Button>
+                <Button tone="danger" variant="solid" startIcon={XCircle} className="rdo-view-action-btn" onClick={() => { setAcaoDevolucao('REPROVAR'); setShowSolicitarCorrecaoModal(true); }}>Reprovar</Button>
+              </>
             )}
           </div>
 
@@ -377,6 +346,20 @@ function RDODetalhes() {
               <span>Obra</span>
               <strong>{rdo.projeto_nome || 'N/A'}</strong>
             </div>
+            {rdo.gestor_aprovado_por_nome && (
+              <div className="rdo-report-meta-item">
+                <CheckCircle2 size={16} />
+                <span>Aprovação do gestor</span>
+                <strong>{rdo.gestor_aprovado_por_nome}</strong>
+              </div>
+            )}
+            {rdo.fiscal_aprovado_por_nome && (
+              <div className="rdo-report-meta-item">
+                <CheckCircle2 size={16} />
+                <span>Aprovação do fiscal</span>
+                <strong>{rdo.fiscal_aprovado_por_nome}</strong>
+              </div>
+            )}
           </div>
         </div>
 
@@ -388,7 +371,7 @@ function RDODetalhes() {
               <AlertTriangle size={18} />
             </div>
             <div>
-              <strong>Este RDO foi impactado por um recálculo de atividade.</strong>
+              <strong>Este RDO possui uma devolução pendente.</strong>
               {rdo.correcao_motivo && <p>{rdo.correcao_motivo}</p>}
               <span>Revise as informações antes de reenviar para aprovação.</span>
             </div>
@@ -651,8 +634,8 @@ function RDODetalhes() {
       {showSolicitarCorrecaoModal && (
         <div className="rdo-report-modal-backdrop">
           <div className="rdo-report-modal">
-            <h2>Solicitar correção</h2>
-            <p>Descreva quais correções devem ser feitas neste RDO.</p>
+            <h2>{acaoDevolucao === 'REPROVAR' ? 'Reprovar RDO' : 'Solicitar correção'}</h2>
+            <p>{acaoDevolucao === 'REPROVAR' ? 'Informe o motivo da reprovação. O RDO retornará ao criador para correção.' : 'Descreva quais correções devem ser feitas neste RDO.'}</p>
             <textarea
               value={textoCorrecao}
               onChange={(e) => setTextoCorrecao(e.target.value)}
@@ -674,7 +657,7 @@ function RDODetalhes() {
                 className="btn btn-warning"
                 disabled={isEnviandoCorrecao || !textoCorrecao.trim()}
               >
-                {isEnviandoCorrecao ? 'Enviando...' : 'Solicitar correção'}
+                {isEnviandoCorrecao ? 'Enviando...' : acaoDevolucao === 'REPROVAR' ? 'Reprovar' : 'Solicitar correção'}
               </button>
             </div>
           </div>

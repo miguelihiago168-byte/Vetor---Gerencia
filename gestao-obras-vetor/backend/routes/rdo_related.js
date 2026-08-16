@@ -87,7 +87,7 @@ const ensureRdoFotosSchema = async () => {
   await ensureSchemaReady({ getQuery, allQuery }, {
     tables: ['rdo_fotos'],
     columns: {
-      rdo_fotos: ['rdo_id', 'rdo_atividade_id', 'nome_arquivo', 'caminho_arquivo', 'descricao', 'criado_por', 'criado_em', 'atividade_avulsa_descricao', 'ordem', 'tipo', 'tamanho', 'largura', 'altura']
+      rdo_fotos: ['rdo_id', 'rdo_atividade_id', 'nome_arquivo', 'caminho_arquivo', 'descricao', 'criado_por', 'criado_em', 'tenant_id', 'atividade_avulsa_descricao', 'ordem', 'tipo', 'tamanho', 'largura', 'altura']
     }
   });
 };
@@ -403,7 +403,7 @@ router.get('/projeto/:projetoId/equipamentos-catalogo', auth, async (req, res) =
     }
 
     const rows = await allQuery(`
-      SELECT TRIM(e.nome) AS nome, COUNT(*) AS usos, MAX(r.data_relatorio) AS ultimo_uso
+      SELECT MIN(TRIM(e.nome)) AS nome, COUNT(*) AS usos, MAX(r.data_relatorio) AS ultimo_uso
       FROM rdo_equipamentos e
       INNER JOIN rdos r ON r.id = e.rdo_id
       WHERE r.projeto_id = ?
@@ -511,8 +511,8 @@ router.post('/:rdoId/foto', auth, uploadFotoSingle, async (req, res) => {
 
     // Salvar no table rdo_fotos
     const result = await runQuery(
-      'INSERT INTO rdo_fotos (rdo_id, rdo_atividade_id, nome_arquivo, caminho_arquivo, descricao, atividade_avulsa_descricao, ordem, criado_por, tipo, tamanho) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [rdoId, rdoAtividadeId, originalname, caminhoArquivo, descricao || null, atividadeAvulsaDescricao || null, ordem, req.usuario.id, mimetype || null, size || null]
+      'INSERT INTO rdo_fotos (rdo_id, rdo_atividade_id, nome_arquivo, caminho_arquivo, descricao, atividade_avulsa_descricao, ordem, criado_por, tenant_id, tipo, tamanho) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [rdoId, rdoAtividadeId, originalname, caminhoArquivo, descricao || null, atividadeAvulsaDescricao || null, ordem, req.usuario.id, req.tenantId, mimetype || null, size || null]
     );
 
     // Retornar informação do arquivo para o frontend

@@ -20,6 +20,7 @@
     "db:check": "node scripts/runMigrations.js --status",
     "db:integrity": "node scripts/checkDatabaseIntegrity.js",
     "test:cockpit": "node tests/cockpitService.test.js",
+    "test:rdo-workflow": "node tests/rdoWorkflowService.test.js",
     "test:rls": "node tests/rlsArchitecture.test.js",
     "test:service-auth": "node tests/serviceAccountAuth.test.js && node tests/oauthRoute.test.js && node tests/serviceSessionRoute.test.js",
     "service-account": "node scripts/service_accounts.js",

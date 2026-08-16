@@ -2,9 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import CockpitReturnButton, { forwardCockpitNavigationState, getCockpitReturnContext } from '../components/CockpitReturnButton';
-import { getRDOs, updateStatusRDO } from '../services/api';
+import { getRDOs, executeRdoWorkflow, getRdoConfiguracao, updateRdoConfiguracao } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { FileText, Plus, Eye, MoreHorizontal, CheckCircle, XCircle, RotateCcw, AlertTriangle, Search, X } from 'lucide-react';
+import { FileText, Plus, Eye, MoreHorizontal, CheckCircle, XCircle, RotateCcw, AlertTriangle, Search, X, Settings } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import { useDialog } from '../context/DialogContext';
 import { useUserPreferences } from '../context/UserPreferencesContext';
@@ -17,10 +17,13 @@ function RDOs() {
   const location = useLocation();
   const cockpitReturn = getCockpitReturnContext(location);
   const { isGestor, perfil } = useAuth();
+  const { prefs, setPreference } = useUserPreferences();
 
   // Controle de permissões para ações nos RDOs
-  const canAprovarRdo = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade'].includes(perfil);
-  const canReprovarRdo = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Fiscal'].includes(perfil);
+  const canDecidirGestor = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade'].includes(perfil);
+  const canDecidirFiscal = perfil === 'Fiscal';
+  const canConfigurarRdo = perfil === 'Gestor Geral';
+  const canConfigurarCopiaRdo = true;
   const { info, success, error: notifyError } = useNotification();
   const { alert } = useDialog();
   const [sucesso, setSucesso] = useState('');
@@ -30,6 +33,9 @@ function RDOs() {
   const [openDropdown, setOpenDropdown] = useState(null);
   const [showCopyModal, setShowCopyModal] = useState(false);
   const [copyChecked, setCopyChecked] = useState(false);
+  const [showRdoSettings, setShowRdoSettings] = useState(false);
+  const [savingRdoSettings, setSavingRdoSettings] = useState(false);
+  const [rdoConfig, setRdoConfig] = useState({ copiar_automaticamente: false, exige_aprovacao_fiscal: true, pode_configurar: false });
   const [filters, setFilters] = useState({
     dataInicial: '',
     dataFinal: '',
@@ -66,7 +72,8 @@ function RDOs() {
   };
 
   const statusLabel = (s) => {
-    if (s === 'Em análise') return 'Em aprovação';
+    if (s === 'Em aprovação do gestor') return 'Aguardando gestor';
+    if (s === 'Em aprovação do fiscal') return 'Aguardando fiscal';
     if (s === 'Em preenchimento') return 'Em preenchimento';
     return s || 'N/A';
   };
@@ -74,7 +81,7 @@ function RDOs() {
   const getBadgeClass = (status) => {
     if (status === 'Aprovado') return 'rdo-badge rdo-badge-aprovado';
     if (status === 'Reprovado') return 'rdo-badge rdo-badge-reprovado';
-    if (status === 'Em análise') return 'rdo-badge rdo-badge-analise';
+    if (status === 'Em aprovação do gestor' || status === 'Em aprovação do fiscal') return 'rdo-badge rdo-badge-analise';
     return 'rdo-badge rdo-badge-pendente';
   };
 
@@ -137,7 +144,11 @@ function RDOs() {
   }, [rdos, filters]);
 
   useEffect(() => {
-    carregarRDOs();
+    const carregarPagina = async () => {
+      await carregarConfiguracaoRdo();
+      await carregarRDOs();
+    };
+    carregarPagina();
   }, [projetoId]);
 
   const carregarRDOs = async () => {
@@ -152,15 +163,38 @@ function RDOs() {
     }
   };
 
-  const aprovarRDO = async (rdoId, e) => {
+  const carregarConfiguracaoRdo = async () => {
+    try {
+      const response = await getRdoConfiguracao(projetoId);
+      setRdoConfig((current) => ({ ...current, ...response.data, copiar_automaticamente: Boolean(prefs?.alwaysCopyRDO) }));
+    } catch (_) {}
+  };
+
+  const salvarConfiguracaoRdo = async () => {
+    try {
+      setSavingRdoSettings(true);
+      setPreference('alwaysCopyRDO', Boolean(rdoConfig.copiar_automaticamente));
+      if (canConfigurarRdo) {
+        const response = await updateRdoConfiguracao(projetoId, { exige_aprovacao_fiscal: rdoConfig.exige_aprovacao_fiscal });
+        setRdoConfig((current) => ({ ...current, ...response.data, copiar_automaticamente: current.copiar_automaticamente }));
+        await carregarRDOs();
+      }
+      setShowRdoSettings(false);
+      success('Configurações de RDO atualizadas.', 4000);
+    } catch (err) {
+      notifyError(err.response?.data?.erro || 'Não foi possível salvar as configurações de RDO.', 6000);
+    } finally { setSavingRdoSettings(false); }
+  };
+
+  const aprovarRDO = async (rdoId, acao, e) => {
     e?.stopPropagation?.();
     setOpenDropdown(null);
     try {
-      const { updateStatusRDO } = await import('../services/api');
-      await updateStatusRDO(rdoId, 'Aprovado');
-      setRdos(prev => prev.map(r => r.id === rdoId ? { ...r, status: 'Aprovado' } : r));
-      setSucesso('RDO aprovado com sucesso.');
-      success('RDO aprovado com sucesso.', 4000);
+      const resp = await executeRdoWorkflow(rdoId, acao);
+      setRdos(prev => prev.map(r => r.id === rdoId ? { ...r, status: resp.data.status, correcao_solicitada: 0 } : r));
+      const mensagem = resp.data?.mensagem || 'RDO aprovado com sucesso.';
+      setSucesso(mensagem);
+      success(mensagem, 4000);
     } catch (err) {
       const msg = 'Falha ao aprovar RDO: ' + (err.response?.data?.erro || err.message);
       notifyError(msg, 6000);
@@ -168,63 +202,30 @@ function RDOs() {
     }
   };
 
-  const reprovarRDO = async (rdoId, e) => {
+  const devolverRDO = async (rdoId, acao, e) => {
     e?.preventDefault?.();
     e?.stopPropagation?.();
     setOpenDropdown(null);
+    const motivo = window.prompt(acao === 'REPROVAR' ? 'Informe o motivo da reprovação:' : 'Informe as correções necessárias:');
+    if (!motivo?.trim()) return;
     try {
-      const { updateStatusRDO } = await import('../services/api');
-      const resp = await updateStatusRDO(rdoId, 'Reprovado');
+      const resp = await executeRdoWorkflow(rdoId, acao, motivo.trim());
       setRdos(prev => prev.map(r => r.id === rdoId ? {
         ...r,
         status: resp.data?.status || 'Em preenchimento',
         correcao_solicitada: resp.data?.correcao_solicitada ?? 1,
-        correcao_motivo: resp.data?.correcao_motivo || 'RDO reprovado. Revise as informações e envie novamente para aprovação.'
+        correcao_motivo: resp.data?.correcao_motivo || motivo.trim()
       } : r));
-      setSucesso(resp.data?.mensagem || 'RDO reprovado e enviado para correção.');
-      success(resp.data?.mensagem || 'RDO reprovado e enviado para correção.', 4000);
+      setSucesso(resp.data?.mensagem || 'RDO devolvido para correção.');
+      success(resp.data?.mensagem || 'RDO devolvido para correção.', 4000);
     } catch (err) {
-      const msg = 'Falha ao reprovar RDO: ' + (err.response?.data?.erro || err.message);
+      const msg = 'Falha ao devolver RDO: ' + (err.response?.data?.erro || err.message);
       notifyError(msg, 6000);
       await alert({ title: 'Erro', message: msg });
     }
   };
 
-  const handleVoltarEdicao = async (rdoId, e) => {
-    if (e) e.stopPropagation();
-    setOpenDropdown(null);
-    if (!isGestor) {
-      await alert({ title: 'Acesso restrito', message: 'Apenas gestores podem voltar o RDO para edição.' });
-      return;
-    }
-    try {
-      const { updateStatusRDO } = await import('../services/api');
-      await updateStatusRDO(rdoId, 'Em preenchimento');
-      setRdos(prev => prev.map(r => r.id === rdoId ? { ...r, status: 'Em preenchimento' } : r));
-      setSucesso('RDO revertido para edição.');
-      success('RDO revertido para edição.', 4500);
-      navigate(`/projeto/${projetoId}/rdos/${rdoId}/editar`);
-    } catch (err) {
-      const msg = 'Falha ao voltar para edição: ' + (err.response?.data?.erro || err.message);
-      notifyError(msg, 6000);
-      await alert({ title: 'Erro', message: msg });
-    }
-  };
-
-  const solicitarCorrecaoRDO = async (rdoId, e) => {
-    e?.stopPropagation?.();
-    setOpenDropdown(null);
-    try {
-      await updateStatusRDO(rdoId, 'Em preenchimento');
-      setRdos(prev => prev.map(r => r.id === rdoId ? { ...r, status: 'Em preenchimento' } : r));
-      setSucesso('Correção solicitada com sucesso.');
-      success('Correção solicitada com sucesso.', 4000);
-    } catch (error) {
-      const msg = 'Falha ao solicitar correção: ' + (error.response?.data?.erro || error.message);
-      notifyError(msg, 6000);
-      await alert({ title: 'Erro', message: msg });
-    }
-  };
+  const solicitarCorrecaoRDO = (rdoId, e) => devolverRDO(rdoId, 'SOLICITAR_CORRECAO', e);
 
   const handleDownloadPDF = async (rdoId, e) => {
     if (e) e.stopPropagation();
@@ -239,8 +240,6 @@ function RDOs() {
     link.click();
     link.remove();
   };
-
-  const { prefs, setPreference } = useUserPreferences();
 
   // Handler para botão Novo RDO
   const handleNovoRDO = () => {
@@ -299,11 +298,12 @@ function RDOs() {
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+            {canConfigurarCopiaRdo && <button className="btn btn-secondary" onClick={() => setShowRdoSettings(true)} title="Configurações de RDO" aria-label="Configurações de RDO"><Settings size={18} /></button>}
             <button className="btn btn-primary" onClick={handleNovoRDO}>
               <Plus size={15} />
               Novo RDO
             </button>
-            {prefs?.alwaysCopyRDO && (
+            {false && (
               <button
                 className="btn btn-secondary"
                 style={{ padding: '8px 12px', fontSize: 12 }}
@@ -316,7 +316,7 @@ function RDOs() {
 
           <Modal open={showCopyModal} title="Novo RDO" onClose={() => {
             setShowCopyModal(false);
-            setCopyChecked(Boolean(prefs?.alwaysCopyRDO));
+            setCopyChecked(false);
           }}>
             <div style={{ marginBottom: 18 }}>
               Deseja copiar as informações do último relatório?
@@ -329,6 +329,13 @@ function RDOs() {
               <input type="checkbox" checked={copyChecked} onChange={e => setCopyChecked(e.target.checked)} />
               Sempre copiar automaticamente
             </label>
+          </Modal>
+          <Modal open={showRdoSettings} title="Configurações dos RDOs" onClose={() => setShowRdoSettings(false)}>
+            <div style={{ display: 'grid', gap: 16 }}>
+              <label style={{ display: 'flex', gap: 10 }}><input type="checkbox" checked={rdoConfig.copiar_automaticamente} onChange={e => setRdoConfig(c => ({ ...c, copiar_automaticamente: e.target.checked }))} /><span><strong>Copiar último RDO automaticamente</strong><br /><small>Ao criar, traz as informações do último relatório.</small></span></label>
+              {canConfigurarRdo && <label style={{ display: 'flex', gap: 10 }}><input type="checkbox" checked={rdoConfig.exige_aprovacao_fiscal} onChange={e => setRdoConfig(c => ({ ...c, exige_aprovacao_fiscal: e.target.checked }))} /><span><strong>Exigir aprovação da fiscalização</strong><br /><small>Exclusivo do Gestor Geral. Desative para finalizar o RDO na aprovação do gestor.</small></span></label>}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}><button className="btn btn-secondary" onClick={() => setShowRdoSettings(false)}>Cancelar</button><button className="btn btn-primary" disabled={savingRdoSettings} onClick={salvarConfiguracaoRdo}>{savingRdoSettings ? 'Salvando...' : 'Salvar configurações'}</button></div>
+            </div>
           </Modal>
         </div>
 
@@ -376,7 +383,8 @@ function RDOs() {
               <select value={filters.status} onChange={(event) => updateFilter('status', event.target.value)}>
                 <option value="">Todos</option>
                 <option value="Em preenchimento">Em preenchimento</option>
-                <option value="Em análise">Em aprovação</option>
+                <option value="Em aprovação do gestor">Em aprovação do gestor</option>
+                <option value="Em aprovação do fiscal">Em aprovação do fiscal</option>
                 <option value="Aprovado">Aprovado</option>
                 <option value="Reprovado">Reprovado</option>
               </select>
@@ -437,8 +445,9 @@ function RDOs() {
                   {lista.map(rdo => {
                     const statusNorm = normalizeStatus(rdo.status);
                     const isAprovado = statusNorm === 'aprovado';
-                    const isEmAnalise = statusNorm === 'em analise';
-                    const isVisualizacao = isAprovado || isEmAnalise;
+                    const isEmAprovacaoGestor = statusNorm === 'em aprovacao do gestor';
+                    const isEmAprovacaoFiscal = statusNorm === 'em aprovacao do fiscal';
+                    const isVisualizacao = isAprovado || isEmAprovacaoGestor || isEmAprovacaoFiscal;
                     const temCorrecaoPendente = Number(rdo.correcao_solicitada || 0) === 1;
 
                     return (
@@ -538,26 +547,24 @@ function RDOs() {
                                   Ver detalhes
                                 </button>
 
-                                {/* Aprovar: Gestores de obra e qualidade */}
-                                {canAprovarRdo && isEmAnalise && (
+                                {canDecidirGestor && isEmAprovacaoGestor && (
                                   <>
                                     <div className="rdo-dropdown-divider" />
                                     <button
                                       className="rdo-dropdown-item success"
-                                      onClick={e => aprovarRDO(rdo.id, e)}
+                                      onClick={e => aprovarRDO(rdo.id, 'APROVAR_GESTOR', e)}
                                     >
                                       <CheckCircle size={14} />
-                                      Aprovar
+                                      Aprovar como gestor
                                     </button>
                                   </>
                                 )}
-                                {/* Reprovar: Gestor Geral, Gestor de Obra e Fiscal */}
-                                {canReprovarRdo && isEmAnalise && (
+                                {canDecidirFiscal && isEmAprovacaoFiscal && (
                                   <>
-                                    {!canAprovarRdo && <div className="rdo-dropdown-divider" />}
+                                    <div className="rdo-dropdown-divider" />
                                     <button
                                       className="rdo-dropdown-item danger"
-                                      onClick={e => reprovarRDO(rdo.id, e)}
+                                      onClick={e => devolverRDO(rdo.id, 'REPROVAR', e)}
                                     >
                                       <XCircle size={14} />
                                       Reprovar
@@ -565,8 +572,7 @@ function RDOs() {
                                   </>
                                 )}
 
-                                {/* Solicitar Correção: Gestor Geral, Gestor de Obra e Fiscal */}
-                                {canReprovarRdo && isEmAnalise && (
+                                {(canDecidirGestor && isEmAprovacaoGestor) || (canDecidirFiscal && isEmAprovacaoFiscal) ? (
                                   <button
                                     className="rdo-dropdown-item warning"
                                     onClick={e => solicitarCorrecaoRDO(rdo.id, e)}
@@ -574,21 +580,23 @@ function RDOs() {
                                     <RotateCcw size={14} />
                                     Solicitar Correção
                                   </button>
+                                ) : null}
+
+                                {canDecidirGestor && isEmAprovacaoGestor && (
+                                  <button className="rdo-dropdown-item danger" onClick={e => devolverRDO(rdo.id, 'REPROVAR', e)}>
+                                    <XCircle size={14} />
+                                    Reprovar
+                                  </button>
+                                )}
+
+                                {canDecidirFiscal && isEmAprovacaoFiscal && (
+                                  <button className="rdo-dropdown-item success" onClick={e => aprovarRDO(rdo.id, 'APROVAR_FISCAL', e)}>
+                                    <CheckCircle size={14} />
+                                    Aprovar como fiscal
+                                  </button>
                                 )}
 
                                 {/* Gestor: voltar para edição em RDOs aprovados */}
-                                {isGestor && isAprovado && (
-                                  <>
-                                    <div className="rdo-dropdown-divider" />
-                                    <button
-                                      className="rdo-dropdown-item warning"
-                                      onClick={e => handleVoltarEdicao(rdo.id, e)}
-                                    >
-                                      <RotateCcw size={14} />
-                                      Voltar para edição
-                                    </button>
-                                  </>
-                                )}
 
                               </div>
                             )}

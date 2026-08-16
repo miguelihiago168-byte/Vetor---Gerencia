@@ -162,10 +162,15 @@ export const confirmarImportacaoEAP = (projetoId, linhas) =>
 
 // RDOs
 export const getRDOs = (projetoId) => api.get(`/rdos/projeto/${projetoId}`);
+export const getRdoConfiguracao = (projetoId) => api.get(`/rdos/projeto/${projetoId}/configuracao`);
+export const updateRdoConfiguracao = (projetoId, data) => api.put(`/rdos/projeto/${projetoId}/configuracao`, data);
 export const getRDO = (id) => api.get(`/rdos/${id}`);
 export const createRDO = (data) => api.post('/rdos', data);
 export const updateRDO = (id, data) => api.put(`/rdos/${id}`, data);
-export const updateStatusRDO = (id, status) => api.patch(`/rdos/${id}/status`, { status });
+export const executeRdoWorkflow = (id, acao, motivo) => api.patch(`/rdos/${id}/fluxo`, {
+  acao,
+  ...(motivo ? { motivo } : {})
+});
 export const deleteRDO = (id) => api.delete(`/rdos/${id}`);
 export const deleteRDOsProjetoTodos = (projetoId) => api.delete(`/rdos/projeto/${projetoId}/todos`);
 // PDF

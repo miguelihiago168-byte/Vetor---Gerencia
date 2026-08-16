@@ -18,12 +18,12 @@ const main = async () => {
   assert.strictEqual(businessDaysBetween('2026-07-17', '2026-07-21'), 2);
 
   const rdos = [
-    { id: 2, data_relatorio: '2026-07-15', status: 'Em análise', mao_obra_direta: 4, mao_obra_indireta: 1, activity_count: 2, photo_count: 3, occurrence_count: 1 },
+    { id: 2, data_relatorio: '2026-07-15', status: 'Em aprovação do gestor', mao_obra_direta: 4, mao_obra_indireta: 1, activity_count: 2, photo_count: 3, occurrence_count: 1 },
     { id: 1, data_relatorio: '2026-07-10', status: 'Aprovado', mao_obra_direta: 2, mao_obra_terceiros: 2, activity_count: 1, photo_count: 1, occurrence_count: 0 },
     { id: 0, data_relatorio: '2026-07-01', status: 'Aprovado', mao_obra_direta: 9 }
   ];
   const execution = summarizeExecution(rdos, now);
-  assert.deepStrictEqual(execution.totals, { rdos: 2, activities: 3, photos: 4, occurrences: 1, awaiting_analysis: 1 });
+  assert.deepStrictEqual(execution.totals, { rdos: 2, activities: 3, photos: 4, occurrences: 1, awaiting_analysis: 1, awaiting_manager: 1, awaiting_fiscal: 0 });
   assert.strictEqual(execution.days_since_latest, 0);
 
   const fridayRdo = summarizeExecution([{ id: 3, data_relatorio: '2026-07-17', status: 'Aprovado' }], new Date('2026-07-20T15:00:00-03:00'));

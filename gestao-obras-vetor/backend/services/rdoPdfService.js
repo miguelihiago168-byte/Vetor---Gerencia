@@ -129,7 +129,7 @@ const getStatusTheme = (status) => {
   if (normalized.includes('aprovado')) return { bg: '#dcfce7', border: '#16a34a', color: '#166534' };
   if (normalized.includes('reprovado')) return { bg: '#fee2e2', border: '#dc2626', color: '#991b1b' };
   if (normalized.includes('correcao')) return { bg: '#ffedd5', border: '#f97316', color: '#9a3412' };
-  if (normalized.includes('analise')) return { bg: '#fef3c7', border: '#d97706', color: '#92400e' };
+  if (normalized.includes('analise') || normalized.includes('aprovacao')) return { bg: '#fef3c7', border: '#d97706', color: '#92400e' };
   if (normalized.includes('preenchimento')) return { bg: '#dbeafe', border: '#2563eb', color: '#1e40af' };
   return { bg: '#e0f2fe', border: '#0b5f86', color: '#0b5f86' };
 };
@@ -180,11 +180,17 @@ async function loadRdoPdfData(id) {
            u.nome AS criado_por_nome,
            u.assinatura_png AS criado_por_assinatura_png,
            g.nome AS aprovado_por_nome,
-           g.assinatura_png AS aprovado_por_assinatura_png
+           g.assinatura_png AS aprovado_por_assinatura_png,
+           gm.nome AS gestor_aprovado_por_nome,
+           gm.assinatura_png AS gestor_aprovado_por_assinatura_png,
+           fs.nome AS fiscal_aprovado_por_nome,
+           fs.assinatura_png AS fiscal_aprovado_por_assinatura_png
     FROM rdos r
     JOIN projetos p ON r.projeto_id = p.id
     LEFT JOIN usuarios u ON r.criado_por = u.id
     LEFT JOIN usuarios g ON r.aprovado_por = g.id
+    LEFT JOIN usuarios gm ON r.gestor_aprovado_por = gm.id
+    LEFT JOIN usuarios fs ON r.fiscal_aprovado_por = fs.id
     WHERE r.id = ?
   `, [id]);
 
@@ -332,6 +338,14 @@ function renderHtml(data) {
   const assinaturaAprovacao = aprovacaoPath && aprovacaoPath.startsWith(uploadsRoot + path.sep)
     ? toDataUri(aprovacaoPath, 'image/png')
     : null;
+  const assinaturaGestorPath = rdo.status === 'Aprovado' && rdo.gestor_aprovado_por_assinatura_png
+    ? path.resolve(uploadsDir, String(rdo.gestor_aprovado_por_assinatura_png).replace(/\\/g, '/'))
+    : null;
+  const assinaturaFiscalPath = rdo.status === 'Aprovado' && rdo.fiscal_aprovado_por_assinatura_png
+    ? path.resolve(uploadsDir, String(rdo.fiscal_aprovado_por_assinatura_png).replace(/\\/g, '/'))
+    : null;
+  const assinaturaGestor = assinaturaGestorPath && assinaturaGestorPath.startsWith(uploadsRoot + path.sep) ? toDataUri(assinaturaGestorPath, 'image/png') : null;
+  const assinaturaFiscal = assinaturaFiscalPath && assinaturaFiscalPath.startsWith(uploadsRoot + path.sep) ? toDataUri(assinaturaFiscalPath, 'image/png') : null;
   const dataRelatorio = fmtDate(rdo.data_relatorio);
   const statusStyle = statusInlineStyle(rdo.status || 'Em preenchimento');
   const totalEquipe = Number(rdo.mao_obra_direta || 0) + Number(rdo.mao_obra_indireta || 0) + Number(rdo.mao_obra_terceiros || 0);
@@ -616,10 +630,21 @@ function renderHtml(data) {
             ${assinatura ? `<img class="signature-image" src="${assinatura}" alt="Assinatura de ${escapeHtml(rdo.criado_por_nome || responsavelNome)}">` : ''}
             <div class="signature-line">${escapeHtml(rdo.criado_por_nome || responsavelNome)}<br><small>Responsável pelo preenchimento</small></div>
           </div>
-          <div class="signature-box">
-            ${assinaturaAprovacao ? `<img class="signature-image" src="${assinaturaAprovacao}" alt="Assinatura de ${escapeHtml(rdo.aprovado_por_nome || 'Aprovador')}">` : ''}
-            <div class="signature-line">${escapeHtml(rdo.status === 'Aprovado' && rdo.aprovado_por_nome ? rdo.aprovado_por_nome : 'Aprovação / Fiscalização')}<br><small>Responsável pela aprovação</small></div>
-          </div>
+          ${rdo.gestor_aprovado_por_nome || rdo.fiscal_aprovado_por_nome ? `
+            <div class="signature-box">
+              ${assinaturaGestor ? `<img class="signature-image" src="${assinaturaGestor}" alt="Assinatura de ${escapeHtml(rdo.gestor_aprovado_por_nome || 'Gestor')}">` : ''}
+              <div class="signature-line">${escapeHtml(rdo.gestor_aprovado_por_nome || 'Gestor')}<br><small>Aprovação do gestor</small></div>
+            </div>
+            <div class="signature-box">
+              ${assinaturaFiscal ? `<img class="signature-image" src="${assinaturaFiscal}" alt="Assinatura de ${escapeHtml(rdo.fiscal_aprovado_por_nome || 'Fiscal')}">` : ''}
+              <div class="signature-line">${escapeHtml(rdo.fiscal_aprovado_por_nome || 'Fiscal')}<br><small>Aprovação da fiscalização</small></div>
+            </div>
+          ` : `
+            <div class="signature-box">
+              ${assinaturaAprovacao ? `<img class="signature-image" src="${assinaturaAprovacao}" alt="Assinatura de ${escapeHtml(rdo.aprovado_por_nome || 'Aprovador')}">` : ''}
+              <div class="signature-line">${escapeHtml(rdo.status === 'Aprovado' && rdo.aprovado_por_nome ? rdo.aprovado_por_nome : 'Aprovação / Fiscalização')}<br><small>Responsável pela aprovação</small></div>
+            </div>
+          `}
         </div>
       </div>
     </section>
@@ -746,13 +771,21 @@ async function renderFallbackPdf(data, reason) {
     doc.image(assinaturaFallbackPath, { fit: [180, 55], align: 'center' });
     doc.font('Helvetica').fontSize(9).text(`Assinatura: ${data.rdo.criado_por_nome || data.responsavelNome || '-'}`, { align: 'center' });
   }
-  const aprovacaoFallbackPath = data.rdo.status === 'Aprovado' && data.rdo.aprovado_por_assinatura_png
-    ? path.resolve(uploadsDir, String(data.rdo.aprovado_por_assinatura_png).replace(/\\/g, '/'))
-    : null;
-  if (aprovacaoFallbackPath && aprovacaoFallbackPath.startsWith(uploadsRoot + path.sep) && fs.existsSync(aprovacaoFallbackPath)) {
-    doc.moveDown(0.5);
-    doc.image(aprovacaoFallbackPath, { fit: [180, 55], align: 'center' });
-    doc.font('Helvetica').fontSize(9).text(`Aprovacao: ${data.rdo.aprovado_por_nome || 'Aprovador'}`, { align: 'center' });
+  const approvalSignatures = data.rdo.gestor_aprovado_por_nome || data.rdo.fiscal_aprovado_por_nome
+    ? [
+        ['Aprovação do gestor', data.rdo.gestor_aprovado_por_nome, data.rdo.gestor_aprovado_por_assinatura_png],
+        ['Aprovação da fiscalização', data.rdo.fiscal_aprovado_por_nome, data.rdo.fiscal_aprovado_por_assinatura_png]
+      ]
+    : [['Aprovação', data.rdo.aprovado_por_nome, data.rdo.aprovado_por_assinatura_png]];
+  for (const [label, name, signature] of approvalSignatures) {
+    const approvalPath = data.rdo.status === 'Aprovado' && signature
+      ? path.resolve(uploadsDir, String(signature).replace(/\\/g, '/'))
+      : null;
+    if (approvalPath && approvalPath.startsWith(uploadsRoot + path.sep) && fs.existsSync(approvalPath)) {
+      doc.moveDown(0.5);
+      doc.image(approvalPath, { fit: [180, 55], align: 'center' });
+    }
+    if (data.rdo.status === 'Aprovado' && name) doc.font('Helvetica').fontSize(9).text(`${label}: ${name}`, { align: 'center' });
   }
   doc.moveDown();
   doc.font('Helvetica-Bold').fontSize(11).text(`Atividades (${data.atividadesPdf.length})`);

@@ -88,7 +88,11 @@ function Navbar() {
       try {
         const rdosRes = await getRDOs(projetoId);
         const rdos = rdosRes.data || [];
-        const rdosCount = rdos.filter(r => (r.status === 'Em análise' || r.status === 'Em analise')).length;
+        const rdosCount = rdos.filter((r) => {
+          if (['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade'].includes(perfil)) return r.status === 'Em aprovação do gestor';
+          if (perfil === 'Fiscal') return r.status === 'Em aprovação do fiscal';
+          return false;
+        }).length;
         setPendRdos(rdosCount);
 
         const rncRes = await getRNCs(projetoId);

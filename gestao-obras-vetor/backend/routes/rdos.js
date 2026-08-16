@@ -4,6 +4,7 @@ const { allQuery, runQuery, getQuery } = require('../config/database');
 const { auth, isGestor } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
 const { PERFIS, inferirPerfil } = require('../constants/access');
+const { RDO_STATUS, RDO_ACTION, assertWorkflowAction } = require('../services/rdoWorkflowService');
 const backendPackage = require('../package.json');
 const { ensureRdoCorrectionColumns, clearRdoCorrection } = require('../services/rdoCorrectionService');
 const { generateRdoPdfBuffer } = require('../services/rdoPdfService');
@@ -17,6 +18,11 @@ const {
 } = require('../services/eapActivityEventService');
 
 const router = express.Router();
+const RDO_CONFIG_MANAGER_PROFILES = new Set([
+  PERFIS.GESTOR_GERAL,
+  PERFIS.GESTOR_OBRA,
+  PERFIS.GESTOR_QUALIDADE
+]);
 
 const getEapStatusByPercentual = (percentual) => {
   const valor = Number(percentual || 0);
@@ -50,7 +56,8 @@ const ensureRdoOptionalColumns = async () => {
   await ensureSchemaReady({ getQuery, allQuery }, {
     tables: ['rdo_logs', 'rdo_comentarios', 'rdo_materiais', 'rdo_ocorrencias', 'rdo_assinaturas', 'rdo_clima', 'rdo_fotos', 'rdo_equipamentos'],
     columns: {
-      rdos: ['atividades_avulsas', 'aprovado_por', 'aprovado_em', 'sem_ocorrencias', 'mao_obra_detalhada'],
+      rdos: ['atividades_avulsas', 'aprovado_por', 'aprovado_em', 'gestor_aprovado_por', 'gestor_aprovado_em', 'fiscal_aprovado_por', 'fiscal_aprovado_em', 'historico_status', 'sem_ocorrencias', 'mao_obra_detalhada'],
+      projetos: ['rdo_copiar_automaticamente', 'rdo_exige_aprovacao_fiscal'],
       rdo_fotos: ['ordem', 'atividade_avulsa_descricao', 'tipo', 'tamanho', 'largura', 'altura'],
       rdo_materiais: ['nome_material', 'quantidade', 'unidade', 'numero_nf', 'tipo_movimento'],
       rdo_equipamentos: ['horario_utilizacao', 'horas_utilizadas', 'observacao'],
@@ -61,7 +68,63 @@ const ensureRdoOptionalColumns = async () => {
       rdo_assinaturas: ['rdo_id', 'usuario_id', 'tipo', 'arquivo_assinatura', 'assinado_em'],
       rdo_clima: ['rdo_id', 'periodo', 'condicao_tempo', 'condicao_trabalho', 'pluviometria_mm']
     }
-  }, '000002_rdo_mao_obra_detalhada');
+  }, '000005_rdo_project_settings');
+};
+
+const getRdoProjectConfig = async (projetoId, tenantId) => getQuery(`
+  SELECT id, rdo_copiar_automaticamente, rdo_exige_aprovacao_fiscal
+  FROM projetos WHERE id = ? AND tenant_id = ? AND ativo = 1
+`, [projetoId, tenantId]);
+
+const assertRdoProjectAccess = async (req, projetoId, { manage = false } = {}) => {
+  const projeto = await getRdoProjectConfig(projetoId, req.tenantId);
+  if (!projeto) {
+    const error = new Error('Projeto nÃ£o encontrado.');
+    error.status = 404;
+    throw error;
+  }
+  const perfil = inferirPerfil(req.usuario);
+  const isGeneralManager = perfil === PERFIS.GESTOR_GERAL;
+  const vinculo = isGeneralManager ? true : await getQuery(
+    'SELECT 1 AS vinculado FROM projeto_usuarios WHERE projeto_id = ? AND usuario_id = ?',
+    [projetoId, req.usuario.id]
+  );
+  if (!vinculo) {
+    const error = new Error('VocÃª nÃ£o estÃ¡ vinculado a este projeto.');
+    error.status = 403;
+    throw error;
+  }
+  if (manage && perfil !== PERFIS.GESTOR_GERAL) {
+    const error = new Error('Apenas gestores vinculados ao projeto podem alterar as configuraÃ§Ãµes de RDO.');
+    error.status = 403;
+    throw error;
+  }
+  return projeto;
+};
+
+const reconcileRdosWithoutFiscalApproval = async (projetoId, usuario) => {
+  const pendentes = await allQuery(`
+    SELECT id, gestor_aprovado_por, gestor_aprovado_em, historico_status
+    FROM rdos WHERE projeto_id = ? AND status = ?
+  `, [projetoId, RDO_STATUS.FISCAL_REVIEW]);
+  const aprovados = [];
+  for (const rdo of pendentes) {
+    let historico = [];
+    try { historico = JSON.parse(rdo.historico_status || '[]'); } catch (_) {}
+    historico.push({ acao: 'FISCALIZACAO_NAO_EXIGIDA', status: RDO_STATUS.APPROVED, etapa: 'gestor', por: usuario.id, nome: usuario.nome || null, em: new Date().toISOString(), motivo: 'A aprovação da fiscalização está desativada no projeto.' });
+    const result = await runQuery(`
+      UPDATE rdos SET status = ?, aprovado_por = COALESCE(gestor_aprovado_por, ?),
+        aprovado_em = COALESCE(gestor_aprovado_em, CURRENT_TIMESTAMP), historico_status = ?, atualizado_em = CURRENT_TIMESTAMP
+      WHERE id = ? AND status = ?
+    `, [RDO_STATUS.APPROVED, usuario.id, JSON.stringify(historico), rdo.id, RDO_STATUS.FISCAL_REVIEW]);
+    if (result?.changes) aprovados.push(rdo.id);
+  }
+  for (const rdoId of aprovados) {
+    const atividades = await allQuery('SELECT DISTINCT atividade_eap_id FROM rdo_atividades WHERE rdo_id = ?', [rdoId]);
+    await recalcularEapAtividades(atividades.map((item) => item.atividade_eap_id), { rdoId, origem: ORIGINS.RDO_APROVADO, usuarioId: usuario.id });
+    try { await clearRdoActivityAlerts({ rdoId }); } catch (_) {}
+  }
+  return aprovados.length;
 };
 
 const getRdoFotosOrderBy = async () => {
@@ -253,6 +316,66 @@ const recalcularPercentualPai = async (atividadeId) => {
   }
 };
 
+// Configuracoes do fluxo de RDO por projeto.
+router.get('/projeto/:projetoId/configuracao', auth, async (req, res) => {
+  try {
+    await ensureRdoOptionalColumns();
+    const projeto = await assertRdoProjectAccess(req, req.params.projetoId);
+    if (Number(projeto.rdo_exige_aprovacao_fiscal ?? 1) === 0 && inferirPerfil(req.usuario) === PERFIS.GESTOR_GERAL) {
+      await reconcileRdosWithoutFiscalApproval(projeto.id, req.usuario);
+    }
+    res.json({ copiar_automaticamente: Number(projeto.rdo_copiar_automaticamente || 0) === 1, exige_aprovacao_fiscal: Number(projeto.rdo_exige_aprovacao_fiscal ?? 1) !== 0, pode_configurar: inferirPerfil(req.usuario) === PERFIS.GESTOR_GERAL });
+  } catch (error) { res.status(error.status || 500).json({ erro: error.message || 'Erro ao obter configurações de RDO.' }); }
+});
+
+router.put('/projeto/:projetoId/configuracao', auth, async (req, res) => {
+  try {
+    await ensureRdoOptionalColumns();
+    const projeto = await assertRdoProjectAccess(req, req.params.projetoId, { manage: true });
+    const exigeFiscal = req.body?.exige_aprovacao_fiscal === false ? 0 : 1;
+    await runQuery('UPDATE projetos SET rdo_exige_aprovacao_fiscal = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?', [exigeFiscal, projeto.id, req.tenantId]);
+    const rdosLiberados = [];
+    if (!exigeFiscal) {
+      const pendentesFiscal = await allQuery(`
+        SELECT id, numero_rdo, gestor_aprovado_por, gestor_aprovado_em, historico_status
+        FROM rdos
+        WHERE projeto_id = ? AND status = ?
+      `, [projeto.id, RDO_STATUS.FISCAL_REVIEW]);
+      for (const rdo of pendentesFiscal) {
+        let historico = [];
+        try { historico = JSON.parse(rdo.historico_status || '[]'); } catch (_) {}
+        historico.push({
+          acao: 'FISCALIZACAO_NAO_EXIGIDA',
+          status: RDO_STATUS.APPROVED,
+          etapa: 'gestor',
+          por: req.usuario.id,
+          nome: req.usuario.nome || null,
+          em: new Date().toISOString(),
+          motivo: 'A aprovação da fiscalização foi desativada nas configurações do projeto.'
+        });
+        const result = await runQuery(`
+          UPDATE rdos SET status = ?, aprovado_por = COALESCE(gestor_aprovado_por, ?),
+            aprovado_em = COALESCE(gestor_aprovado_em, CURRENT_TIMESTAMP),
+            historico_status = ?, atualizado_em = CURRENT_TIMESTAMP
+          WHERE id = ? AND status = ?
+        `, [RDO_STATUS.APPROVED, req.usuario.id, JSON.stringify(historico), rdo.id, RDO_STATUS.FISCAL_REVIEW]);
+        if (result?.changes) rdosLiberados.push(rdo.id);
+      }
+      for (const rdoId of rdosLiberados) {
+        const atividades = await allQuery('SELECT DISTINCT atividade_eap_id FROM rdo_atividades WHERE rdo_id = ?', [rdoId]);
+        await recalcularEapAtividades(atividades.map((item) => item.atividade_eap_id), {
+          rdoId,
+          origem: ORIGINS.RDO_APROVADO,
+          usuarioId: req.usuario.id
+        });
+        try { await clearRdoActivityAlerts({ rdoId }); } catch (_) {}
+      }
+    }
+    await registrarAuditoria('projetos', projeto.id, 'RDO_CONFIGURACAO_ATUALIZADA', projeto, { exige_aprovacao_fiscal: Boolean(exigeFiscal) }, req.usuario.id);
+    res.json({ mensagem: rdosLiberados.length ? `Configurações atualizadas. ${rdosLiberados.length} RDO(s) pendente(s) da fiscalização foram aprovados.` : 'Configurações de RDO atualizadas.', exige_aprovacao_fiscal: Boolean(exigeFiscal), rdos_liberados: rdosLiberados.length, pode_configurar: true });
+  } catch (error) { res.status(error.status || 500).json({ erro: error.message || 'Erro ao salvar configurações de RDO.' }); }
+});
+
 // Listar RDOs de um projeto
 router.get('/projeto/:projetoId', auth, async (req, res) => {
   try {
@@ -263,10 +386,13 @@ router.get('/projeto/:projetoId', auth, async (req, res) => {
     try {
       rdos = await allQuery(`
         SELECT r.*, u.nome as criado_por_nome, g.nome as aprovado_por_nome,
+               gm.nome AS gestor_aprovado_por_nome, fs.nome AS fiscal_aprovado_por_nome,
                ${rdoListDerivedFields}
         FROM rdos r
         LEFT JOIN usuarios u ON r.criado_por = u.id
         LEFT JOIN usuarios g ON r.aprovado_por = g.id
+        LEFT JOIN usuarios gm ON r.gestor_aprovado_por = gm.id
+        LEFT JOIN usuarios fs ON r.fiscal_aprovado_por = fs.id
         WHERE r.projeto_id = ?
         ORDER BY r.criado_em DESC, r.id DESC
       `, [projetoId]);
@@ -276,6 +402,7 @@ router.get('/projeto/:projetoId', auth, async (req, res) => {
       }
       rdos = await allQuery(`
         SELECT r.*, u.nome as criado_por_nome, NULL as aprovado_por_nome,
+               NULL AS gestor_aprovado_por_nome, NULL AS fiscal_aprovado_por_nome,
                ${rdoListDerivedFields}
         FROM rdos r
         LEFT JOIN usuarios u ON r.criado_por = u.id
@@ -302,10 +429,13 @@ router.get('/:id', auth, async (req, res) => {
     try {
       rdo = await getQuery(`
         SELECT r.*, u.nome as criado_por_nome, g.nome as aprovado_por_nome,
+               gm.nome AS gestor_aprovado_por_nome, fs.nome AS fiscal_aprovado_por_nome,
                p.nome as projeto_nome, p.empresa_responsavel, p.empresa_executante, p.cidade
         FROM rdos r
         LEFT JOIN usuarios u ON r.criado_por = u.id
         LEFT JOIN usuarios g ON r.aprovado_por = g.id
+        LEFT JOIN usuarios gm ON r.gestor_aprovado_por = gm.id
+        LEFT JOIN usuarios fs ON r.fiscal_aprovado_por = fs.id
         LEFT JOIN projetos p ON r.projeto_id = p.id
         WHERE r.id = ?
       `, [id]);
@@ -313,6 +443,7 @@ router.get('/:id', auth, async (req, res) => {
       // Fallback para schema legado de projetos (colunas opcionais podem não existir)
       rdo = await getQuery(`
         SELECT r.*, u.nome as criado_por_nome, g.nome as aprovado_por_nome,
+               NULL AS gestor_aprovado_por_nome, NULL AS fiscal_aprovado_por_nome,
                p.nome as projeto_nome
         FROM rdos r
         LEFT JOIN usuarios u ON r.criado_por = u.id
@@ -534,7 +665,7 @@ router.get('/:id', auth, async (req, res) => {
          WHERE rdo_id = ?
            AND usuario_id = ?
            AND acao = 'VIEW'
-           AND criado_em >= datetime('now', '-10 seconds')
+           AND criado_em >= CURRENT_TIMESTAMP - INTERVAL '10 seconds'
          ORDER BY id DESC
          LIMIT 1`,
         [id, req.usuario.id]
@@ -745,7 +876,7 @@ router.post('/', auth, [
     // Número RDO sequencial e único (RDO-XXX)
     const numeroRdoFinal = numero_rdo;
 
-    const initialStatus = req.body.status && ['Em preenchimento','Em análise','Aprovado','Reprovado'].includes(req.body.status) ? req.body.status : 'Em preenchimento';
+    const initialStatus = RDO_STATUS.DRAFT;
 
     const result = await runQuery(`
       INSERT INTO rdos (
@@ -861,29 +992,6 @@ router.post('/', auth, [
       }
     }
 
-    // Notificar aprovadores do projeto sobre novo RDO
-    try {
-      const criadorNome = req.usuario.nome || `Usuário #${req.usuario.id}`;
-      const gestoresProjeto = await allQuery(
-        `SELECT u.id FROM usuarios u
-         JOIN projeto_usuarios pu ON pu.usuario_id = u.id
-         WHERE pu.projeto_id = ?
-           AND u.id != ?
-           AND u.ativo = 1
-           AND (u.perfil IN ('Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade', 'Gestor de Qualidade') OR u.is_gestor = 1)`,
-        [projeto_id, req.usuario.id]
-      );
-      for (const g of gestoresProjeto) {
-        await runQuery(
-          `INSERT OR IGNORE INTO notificacoes (usuario_id, tipo, mensagem, referencia_tipo, referencia_id)
-           VALUES (?, ?, ?, ?, ?)`,
-          [g.id, 'rdo_criado', `Novo RDO criado por ${criadorNome}: ${numeroRdoFinal}`, 'rdo', rdoId]
-        );
-      }
-    } catch (e) {
-      console.warn('Falha ao notificar aprovadores sobre novo RDO:', e?.message || e);
-    }
-
     res.status(201).json({
       mensagem: 'RDO criado com sucesso.',
       rdo: { id: rdoId, data_relatorio: dataRelatorioStr }
@@ -908,14 +1016,11 @@ router.put('/:id', auth, async (req, res) => {
       return res.status(404).json({ erro: 'RDO não encontrado.' });
     }
 
-    // Apenas criador ou gestor pode editar
-    if (rdoAtual.criado_por !== req.usuario.id && !req.usuario.is_gestor) {
-      return res.status(403).json({ erro: 'Você não tem permissão para editar este RDO.' });
+    if (Number(rdoAtual.criado_por) !== Number(req.usuario.id)) {
+      return res.status(403).json({ erro: 'Apenas o criador pode editar este RDO.' });
     }
-
-    // Se RDO aprovado: não permitir edição via PUT. É necessário reverter status via PATCH (gestor).
-    if (rdoAtual.status === 'Aprovado') {
-      return res.status(403).json({ erro: 'RDO aprovado. Solicite ao gestor para voltar à edição.' });
+    if (![RDO_STATUS.DRAFT, RDO_STATUS.REJECTED].includes(rdoAtual.status)) {
+      return res.status(403).json({ erro: 'O RDO só pode ser editado enquanto estiver em preenchimento ou devolvido para correção.' });
     }
 
     const {
@@ -1133,6 +1238,9 @@ router.put('/:id', auth, async (req, res) => {
     if (Number(rdoAtual.correcao_solicitada || 0) === 1) {
       try {
         await clearRdoCorrection({ rdoId: id });
+        if (rdoAtual.status === RDO_STATUS.REJECTED) {
+          await runQuery('UPDATE rdos SET status = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?', [RDO_STATUS.DRAFT, id]);
+        }
       } catch (clearError) {
         console.warn('Falha ao encerrar pendência de correção do RDO:', clearError?.message || clearError);
       }
@@ -1160,9 +1268,181 @@ router.put('/:id', auth, async (req, res) => {
   }
 });
 
-// Alterar status do RDO
-router.patch('/:id/status', auth, async (req, res) => {
+// Fluxo sequencial de aprovação: preenchimento -> gestor -> fiscal -> aprovado.
+router.patch('/:id/fluxo', auth, async (req, res) => {
   try {
+    await ensureRdoOptionalColumns();
+    const { id } = req.params;
+    const { acao, motivo } = req.body || {};
+    const rdoAtual = await getQuery('SELECT * FROM rdos WHERE id = ?', [id]);
+    if (!rdoAtual) return res.status(404).json({ erro: 'RDO não encontrado.' });
+
+    const vinculo = await getQuery(
+      'SELECT 1 AS vinculado FROM projeto_usuarios WHERE projeto_id = ? AND usuario_id = ?',
+      [rdoAtual.projeto_id, req.usuario.id]
+    );
+    if (!vinculo) return res.status(403).json({ erro: 'Você não está vinculado a este projeto.' });
+
+    const projectConfig = await getRdoProjectConfig(rdoAtual.projeto_id, req.tenantId);
+    if (!projectConfig) return res.status(404).json({ erro: 'Projeto do RDO não encontrado.' });
+    const exigeAprovacaoFiscal = Number(projectConfig.rdo_exige_aprovacao_fiscal ?? 1) !== 0;
+
+    let transition;
+    try {
+      transition = assertWorkflowAction({ rdo: rdoAtual, usuario: req.usuario, acao, motivo, exigeAprovacaoFiscal });
+    } catch (workflowError) {
+      return res.status(workflowError.status || 400).json({ erro: workflowError.message });
+    }
+    const isManagerApproval = acao === RDO_ACTION.APPROVE_MANAGER;
+    const isFinalApproval = acao === RDO_ACTION.APPROVE_FISCAL || (isManagerApproval && !exigeAprovacaoFiscal);
+
+    if (acao === RDO_ACTION.SEND_TO_MANAGER) {
+      const activityCount = await getQuery('SELECT COUNT(*) AS total FROM rdo_atividades WHERE rdo_id = ?', [id]);
+      if (!Number(activityCount?.total || 0)) {
+        return res.status(400).json({ erro: 'RDO sem atividades: não é permitido enviar para aprovação.' });
+      }
+      try {
+        await assertApprovalOccurrenceDeclaration(id);
+      } catch (occurrenceError) {
+        return res.status(occurrenceError.status || 400).json({ erro: occurrenceError.message });
+      }
+    }
+
+    if (isFinalApproval) {
+      const atividadesNoRdo = await allQuery(
+        'SELECT atividade_eap_id, COALESCE(quantidade_executada, 0) AS quantidade_executada FROM rdo_atividades WHERE rdo_id = ?',
+        [id]
+      );
+      for (const atividade of atividadesNoRdo) {
+        const atividadeEap = await getQuery('SELECT codigo_eap, descricao, quantidade_total FROM atividades_eap WHERE id = ?', [atividade.atividade_eap_id]);
+        if (!atividadeEap || !(Number(atividadeEap.quantidade_total) > 0)) continue;
+        const somaAprovada = await getQuery(`
+          SELECT COALESCE(SUM(COALESCE(ra.quantidade_executada, 0)), 0) AS total
+          FROM rdo_atividades ra INNER JOIN rdos r ON r.id = ra.rdo_id
+          WHERE ra.atividade_eap_id = ? AND r.status = ? AND r.id <> ?
+        `, [atividade.atividade_eap_id, RDO_STATUS.APPROVED, id]);
+        const total = Number(somaAprovada?.total || 0) + Number(atividade.quantidade_executada || 0);
+        if (total > Number(atividadeEap.quantidade_total)) {
+          return res.status(400).json({
+            erro: `Atividade ${atividadeEap.codigo_eap || atividade.atividade_eap_id} - ${atividadeEap.descricao || ''}: quantidade aprovada (${total}) ultrapassa o previsto (${atividadeEap.quantidade_total}).`
+          });
+        }
+      }
+    }
+
+    const now = new Date().toISOString();
+    const isReturn = [RDO_ACTION.REQUEST_CORRECTION, RDO_ACTION.REJECT].includes(acao);
+    const resetApprovals = acao === RDO_ACTION.SEND_TO_MANAGER || isReturn;
+    const historico = (() => {
+      try { return JSON.parse(rdoAtual.historico_status || '[]'); } catch (_) { return []; }
+    })();
+    historico.push({
+      acao,
+      status: transition.nextStatus,
+      etapa: transition.stage,
+      por: req.usuario.id,
+      nome: req.usuario.nome || null,
+      em: now,
+      motivo: isReturn ? String(motivo).trim() : null
+    });
+
+    const correctionOrigin = isReturn
+      ? `${transition.stage === 'fiscal' ? 'Fiscalização' : 'Gestão'}: ${acao === RDO_ACTION.REJECT ? 'reprovado' : 'correção solicitada'}`
+      : null;
+    const correctionMessage = isReturn ? String(motivo).trim() : null;
+
+    const updateResult = await runQuery(`
+      UPDATE rdos SET
+        status = ?,
+        aprovado_por = ?, aprovado_em = ?,
+        gestor_aprovado_por = ?, gestor_aprovado_em = ?,
+        fiscal_aprovado_por = ?, fiscal_aprovado_em = ?,
+        historico_status = ?,
+        correcao_solicitada = ?, correcao_motivo = ?, correcao_origem = ?,
+        correcao_solicitada_em = ?, correcao_solicitada_por = ?,
+        status_anterior_correcao = ?, atualizado_em = CURRENT_TIMESTAMP
+      WHERE id = ? AND status = ?
+    `, [
+      transition.nextStatus,
+      isFinalApproval ? req.usuario.id : null,
+      isFinalApproval ? now : null,
+      isManagerApproval ? req.usuario.id : (resetApprovals ? null : rdoAtual.gestor_aprovado_por),
+      isManagerApproval ? now : (resetApprovals ? null : rdoAtual.gestor_aprovado_em),
+      isFinalApproval ? req.usuario.id : (resetApprovals ? null : rdoAtual.fiscal_aprovado_por),
+      isFinalApproval ? now : (resetApprovals ? null : rdoAtual.fiscal_aprovado_em),
+      JSON.stringify(historico),
+      isReturn ? 1 : 0,
+      correctionMessage,
+      correctionOrigin,
+      isReturn ? now : null,
+      isReturn ? String(req.usuario.nome || req.usuario.id) : null,
+      isReturn ? rdoAtual.status : null,
+      id,
+      rdoAtual.status
+    ]);
+    if (!updateResult?.changes) {
+      return res.status(409).json({ erro: 'O RDO foi atualizado por outra decisão. Recarregue a página.' });
+    }
+
+    const notify = async (where, params, tipo, mensagem) => {
+      const users = await allQuery(`
+        SELECT u.id FROM usuarios u
+        JOIN projeto_usuarios pu ON pu.usuario_id = u.id
+        WHERE pu.projeto_id = ? AND u.ativo = 1 AND (${where}) AND u.id <> ?
+      `, [rdoAtual.projeto_id, ...params, req.usuario.id]);
+      for (const user of users) {
+        await runQuery(
+          'INSERT OR IGNORE INTO notificacoes (usuario_id, tipo, mensagem, referencia_tipo, referencia_id) VALUES (?, ?, ?, ?, ?)',
+          [user.id, tipo, mensagem, 'rdo', id]
+        );
+      }
+    };
+    const rdoLabel = `RDO-${String(rdoAtual.numero_rdo || id).padStart(3, '0')}`;
+    if (acao === RDO_ACTION.SEND_TO_MANAGER) {
+      await notify("(u.perfil IN ('Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade', 'Gestor de Qualidade') OR u.is_gestor = 1)", [], 'rdo_aguarda_gestor', `${rdoLabel} aguarda aprovação do gestor.`);
+    } else if (isManagerApproval && exigeAprovacaoFiscal) {
+      await notify("u.perfil = 'Fiscal'", [], 'rdo_aguarda_fiscal', `${rdoLabel} foi aprovado pela gestão e aguarda fiscalização.`);
+      if (Number(rdoAtual.criado_por) !== Number(req.usuario.id)) {
+        await runQuery('INSERT OR IGNORE INTO notificacoes (usuario_id, tipo, mensagem, referencia_tipo, referencia_id) VALUES (?, ?, ?, ?, ?)', [rdoAtual.criado_por, 'rdo_aprovado_gestor', `${rdoLabel} foi aprovado pela gestão e encaminhado à fiscalização.`, 'rdo', id]);
+      }
+    } else if (isFinalApproval) {
+      await notify("(u.perfil IN ('Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade', 'Gestor de Qualidade') OR u.is_gestor = 1)", [], 'rdo_aprovado_fiscal', `${rdoLabel} foi aprovado pela fiscalização.`);
+      if (Number(rdoAtual.criado_por) !== Number(req.usuario.id)) {
+        await runQuery('INSERT OR IGNORE INTO notificacoes (usuario_id, tipo, mensagem, referencia_tipo, referencia_id) VALUES (?, ?, ?, ?, ?)', [rdoAtual.criado_por, 'rdo_aprovado_fiscal', `${rdoLabel} foi aprovado pela fiscalização.`, 'rdo', id]);
+      }
+    } else if (isReturn && Number(rdoAtual.criado_por) !== Number(req.usuario.id)) {
+      await runQuery('INSERT OR IGNORE INTO notificacoes (usuario_id, tipo, mensagem, referencia_tipo, referencia_id) VALUES (?, ?, ?, ?, ?)', [rdoAtual.criado_por, acao === RDO_ACTION.REJECT ? 'rdo_reprovado' : 'rdo_correcao_solicitada', `${rdoLabel}: ${correctionMessage}`, 'rdo', id]);
+    }
+
+    if (isFinalApproval) {
+      const atividades = await allQuery('SELECT DISTINCT atividade_eap_id FROM rdo_atividades WHERE rdo_id = ?', [id]);
+      await recalcularEapAtividades(atividades.map((item) => item.atividade_eap_id), {
+        rdoId: id,
+        origem: ORIGINS.RDO_APROVADO,
+        usuarioId: req.usuario.id
+      });
+      try { await clearRdoActivityAlerts({ rdoId: id }); } catch (error) { console.warn('Falha ao encerrar alertas de RDO:', error?.message || error); }
+    }
+
+    await registrarAuditoria('rdos', id, 'WORKFLOW_ACTION', rdoAtual, { acao, status: transition.nextStatus, motivo: correctionMessage }, req.usuario.id);
+    res.json({
+      mensagem: isReturn
+        ? (acao === RDO_ACTION.REJECT ? 'RDO reprovado e devolvido para correção.' : 'Correção solicitada; RDO devolvido para edição.')
+        : `RDO atualizado para ${transition.nextStatus}.`,
+      status: transition.nextStatus,
+      correcao_solicitada: isReturn ? 1 : 0,
+      correcao_motivo: correctionMessage
+    });
+  } catch (error) {
+    console.error('Erro no fluxo de aprovação do RDO:', error);
+    res.status(error.status || 500).json({ erro: error.message || 'Erro ao atualizar o fluxo do RDO.' });
+  }
+});
+
+// Rota mantida apenas para diagnóstico de clientes antigos; não aceita mudanças livres de status.
+router.patch('/:id/status-legacy', auth, async (req, res) => {
+  try {
+    return res.status(410).json({ erro: 'A alteração direta de status foi substituída pelo fluxo de aprovação do RDO.' });
     await ensureRdoOptionalColumns();
     const { id } = req.params;
     const { status } = req.body;
@@ -1652,7 +1932,7 @@ router.get('/:id/pdf', auth, async (req, res) => {
     };
 
     const statusBadge = (s) => {
-      const map = { 'Aprovado': '#10b981', 'Em análise': '#f59e0b', 'Em preenchimento': '#0ea5e9', 'Reprovado': '#ef4444' };
+      const map = { 'Aprovado': '#10b981', 'Em aprovação do gestor': '#f59e0b', 'Em aprovação do fiscal': '#f59e0b', 'Em análise': '#f59e0b', 'Em preenchimento': '#0ea5e9', 'Reprovado': '#ef4444' };
       return map[s] || '#6b7280';
     };
 

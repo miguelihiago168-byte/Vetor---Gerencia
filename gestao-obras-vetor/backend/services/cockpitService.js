@@ -58,7 +58,9 @@ const summarizeExecution = (rdos = [], now = new Date(), timeZone = DEFAULT_TIME
       activities: period.reduce((sum, rdo) => sum + number(rdo.activity_count), 0),
       photos: period.reduce((sum, rdo) => sum + number(rdo.photo_count), 0),
       occurrences: period.reduce((sum, rdo) => sum + number(rdo.occurrence_count), 0),
-      awaiting_analysis: period.filter((rdo) => ['Em análise', 'Em analise'].includes(rdo.status)).length
+      awaiting_analysis: period.filter((rdo) => ['Em aprovação do gestor', 'Em aprovação do fiscal'].includes(rdo.status)).length,
+      awaiting_manager: period.filter((rdo) => rdo.status === 'Em aprovação do gestor').length,
+      awaiting_fiscal: period.filter((rdo) => rdo.status === 'Em aprovação do fiscal').length
     }
   };
 };
