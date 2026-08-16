@@ -1,5 +1,7 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
+ARG VITE_RECAPTCHA_SITE_KEY
+ENV VITE_RECAPTCHA_SITE_KEY=$VITE_RECAPTCHA_SITE_KEY
 COPY frontend/package*.json ./
 RUN npm ci --legacy-peer-deps --no-audit --no-fund \
 	&& npm cache clean --force

@@ -49,6 +49,7 @@ Preencha ao menos:
 - `POSTGRES_PASSWORD`
 - `PGADMIN_DEFAULT_EMAIL`
 - `PGADMIN_DEFAULT_PASSWORD`
+- `VITE_RECAPTCHA_SITE_KEY` (chave pública do Google reCAPTCHA v2)
 
 #### Tutorial: gerar senhas e segredos fortes (Linux)
 
@@ -90,6 +91,8 @@ cp backend/.env.example backend/.env
 ```
 
 Garanta que `DB_HOST=postgres` e que `DB_PASSWORD` tenha o mesmo valor de `POSTGRES_PASSWORD`.
+
+Para ativar o formulário público de contato, preencha também no `backend/.env` as credenciais `CONTACT_SMTP_*`, o remetente `CONTACT_FROM_*`, o destino `CONTACT_TO_EMAIL` e a chave privada `RECAPTCHA_SECRET_KEY`. A chave pública `VITE_RECAPTCHA_SITE_KEY` fica no `.env` da raiz, pois é incorporada no build do frontend.
 
 ### 2. Subir banco PostgreSQL antes da aplicação
 
