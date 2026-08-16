@@ -8,6 +8,7 @@ const { PERMISSIONS, hasPermission, assertProjectAccess } = require('../middlewa
 const { PERFIS, inferirPerfil } = require('../constants/access');
 const { ensureFinanceiroSchema, sincronizarDespesaPedido } = require('../services/financeiro');
 const { ensureSchemaReady, sendSchemaOutdated } = require('../utils/schemaGuard');
+const { criarPendenciaRecebimento } = require('../services/estoque');
 
 const router = express.Router();
 
@@ -125,8 +126,12 @@ const requirePedidoPermission = (permission) => async (req, res, next) => {
       return res.status(403).json({ erro: 'Acesso negado para esta ação.' });
     }
 
-    const allowed = await assertProjectAccess(req, res, pedido.projeto_id);
-    if (!allowed) return;
+    if (pedido.projeto_id) {
+      const allowed = await assertProjectAccess(req, res, pedido.projeto_id);
+      if (!allowed) return;
+    } else if (![PERFIS.ADM, PERFIS.GESTOR_GERAL, PERFIS.FINANCEIRO].includes(inferirPerfil(req.usuario))) {
+      return res.status(403).json({ erro: 'Apenas perfis globais podem operar compras do estoque central.' });
+    }
 
     next();
   } catch (error) {
@@ -137,17 +142,18 @@ const requirePedidoPermission = (permission) => async (req, res, next) => {
 
 const requireCreatePermissionWithProject = async (req, res, next) => {
   try {
-    const projetoId = Number(req.body.projeto_id);
-    if (!projetoId) {
-      return res.status(400).json({ erro: 'projeto_id é obrigatório.' });
-    }
+    const projetoId = Number(req.body.projeto_id) || null;
 
     if (!hasPermission(req.usuario, PERMISSIONS.PURCHASE_CREATE)) {
       return res.status(403).json({ erro: 'Acesso negado para criar solicitação de compra.' });
     }
 
-    const allowed = await assertProjectAccess(req, res, projetoId);
-    if (!allowed) return;
+    if (projetoId) {
+      const allowed = await assertProjectAccess(req, res, projetoId);
+      if (!allowed) return;
+    } else if (![PERFIS.ADM, PERFIS.GESTOR_GERAL, PERFIS.FINANCEIRO].includes(inferirPerfil(req.usuario))) {
+      return res.status(403).json({ erro: 'Apenas perfis globais podem criar compras para o estoque central.' });
+    }
 
     next();
   } catch (error) {
@@ -177,7 +183,7 @@ router.post('/', [auth, requireCreatePermissionWithProject], async (req, res) =>
     const result = await runQuery(`
       INSERT INTO pedidos_compra (projeto_id, solicitante_id, descricao, quantidade, unidade, aplicacao_local, status)
       VALUES (?, ?, ?, ?, ?, ?, 'SOLICITADO')
-    `, [Number(projeto_id), req.usuario.id, descricao, quantidade, unidade || null, aplicacao_local || null]);
+    `, [Number(projeto_id) || null, req.usuario.id, descricao, quantidade, unidade || null, aplicacao_local || null]);
 
     const pedido = await carregarPedido(result.lastID);
     await registrarHistoricoPedido(pedido.id, req.usuario.id, 'CRIADO', {
@@ -358,12 +364,39 @@ router.patch('/:id/comprado', [auth, requirePedidoPermission(PERMISSIONS.PURCHAS
     if (pedido.status !== 'APROVADO_PARA_COMPRA') {
       return res.status(400).json({ erro: 'Pedido não está aprovado para compra.' });
     }
+    const cotacao = pedido.cotacao_vencedora_id
+      ? await getQuery('SELECT * FROM cotacoes WHERE id = ? AND pedido_id = ?', [pedido.cotacao_vencedora_id, pedido.id])
+      : null;
 
     await updatePedidoStatus(pedido.id, 'COMPRADO');
     const pedidoNovo = await carregarPedido(pedido.id);
 
     await registrarHistoricoPedido(pedido.id, req.usuario.id, 'COMPRADO', { de: pedido.status, para: pedidoNovo.status });
     await registrarAuditoria('pedidos_compra', pedido.id, 'COMPRADO', pedido, pedidoNovo, req.usuario.id, { strict: true });
+
+    await criarPendenciaRecebimento({
+      tenantId: req.tenantId,
+      tipo: 'PEDIDO_COMPRA',
+      referenciaId: pedido.id,
+      projetoId: pedido.projeto_id,
+      descricao: pedido.descricao,
+      quantidade: pedido.quantidade,
+      unidade: pedido.unidade,
+      fornecedorNome: cotacao?.fornecedor,
+      dadosCompra: {
+        especificacao_tecnica: pedido.aplicacao_local || null,
+        marca: cotacao?.marca || null,
+        modelo: cotacao?.modelo || null,
+        valor_unitario: cotacao?.valor_unitario ?? null,
+        frete: cotacao?.frete ?? null,
+        prazo_entrega: cotacao?.prazo_entrega || null,
+        condicao_pagamento: cotacao?.condicoes_pagamento || null,
+        garantia: cotacao?.garantia || null,
+        observacao_cotacao: cotacao?.observacoes || null,
+        cotacao_pdf: cotacao?.pdf_path || null
+      },
+      usuarioId: req.usuario.id
+    });
 
     res.json({ ok: true });
   } catch (error) {

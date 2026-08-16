@@ -332,6 +332,12 @@ function Navbar() {
       navigate(`/projeto/${notificacao.projeto_id}/mensagens?tab=agenda&reuniao=${notificacao.referencia_id}`);
       return;
     }
+    if (notificacao?.referencia_tipo === 'estoque_transferencia') {
+      await marcarNotificacao(notificacao.id);
+      setNotifOpen(false);
+      navigate(notificacao.projeto_id ? `/projeto/${notificacao.projeto_id}/compras/estoque` : '/compras/estoque');
+      return;
+    }
     await marcarNotificacao(notificacao.id);
   };
 
@@ -381,11 +387,11 @@ function Navbar() {
               <div className="notif-empty">Não há notificações não lidas.</div>
             ) : notificacoes.map((notificacao) => (
               <div
-                className={`notif-item${notificacao.referencia_tipo === 'reuniao' ? ' notif-item-clickable' : ''}`}
+                className={`notif-item${['reuniao', 'estoque_transferencia'].includes(notificacao.referencia_tipo) ? ' notif-item-clickable' : ''}`}
                 key={notificacao.id}
                 onClick={() => abrirNotificacao(notificacao)}
-                role={notificacao.referencia_tipo === 'reuniao' ? 'button' : undefined}
-                tabIndex={notificacao.referencia_tipo === 'reuniao' ? 0 : undefined}
+                role={['reuniao', 'estoque_transferencia'].includes(notificacao.referencia_tipo) ? 'button' : undefined}
+                tabIndex={['reuniao', 'estoque_transferencia'].includes(notificacao.referencia_tipo) ? 0 : undefined}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') abrirNotificacao(notificacao);
                 }}

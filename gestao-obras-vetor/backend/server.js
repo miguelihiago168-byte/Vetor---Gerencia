@@ -51,6 +51,7 @@ const uploadsRoutes = require('./routes/uploads');
 const oauthRoutes = require('./routes/oauth');
 const serviceAuthRoutes = require('./routes/service_auth');
 const transferenciasRoutes = require('./routes/transferencias');
+const estoqueRoutes = require('./routes/estoque');
 // Startup nao executa migrations automaticas. Use npm run migrate/status antes de subir a aplicacao.
 console.log('[startup-db-guard] Migrations automaticas de startup desativadas.');
 
@@ -72,6 +73,7 @@ app.use('/api/pedidos-compra', pedidosCompraRoutes);
 app.use('/api/requisicoes', requisicoesRoutes);
 app.use('/api/fornecedores', fornecedoresRoutes);
 app.use('/api/transferencias', transferenciasRoutes);
+app.use('/api/estoque', estoqueRoutes);
 // FINANCEIRO DESATIVADO
 // app.use('/api/financeiro', financeiroRoutes);
 app.use('/api/notificacoes', notificacoesRoutes);

@@ -25,6 +25,7 @@ import CotacoesNegadas from './pages/CotacoesNegadas';
 import Fornecedores from './pages/Fornecedores';
 import ComprasStatusList from './pages/ComprasStatusList';
 import ComprasGlobal from './pages/ComprasGlobal';
+import Estoque from './pages/Estoque';
 // FINANCEIRO DESATIVADO
 // import FinanceiroFluxoCaixa from './pages/FinanceiroFluxoCaixa';
 import EAP from './pages/EAP';
@@ -170,6 +171,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/projeto/:projetoId/compras/fornecedores" element={
             <PrivateRoute allowedPerfis={PERFIS_GESTORES_ADM}>
               <Fornecedores />
+            </PrivateRoute>
+          } />
+          <Route path="/projeto/:projetoId/compras/estoque" element={
+            <PrivateRoute allowedPerfis={PERFIS_COMPRAS}>
+              <Estoque />
             </PrivateRoute>
           } />
           {/* FINANCEIRO DESATIVADO
@@ -343,6 +349,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/gantt" element={<ProjetoSelector destino="gantt" />} />
           <Route path="/rnc" element={<ProjetoSelector destino="rnc" />} />
           <Route path="/compras" element={<PrivateRoute allowedPerfis={PERFIS_COMPRAS}><ComprasGlobal /></PrivateRoute>} />
+          <Route path="/compras/estoque" element={<PrivateRoute allowedPerfis={PERFIS_COMPRAS}><Estoque /></PrivateRoute>} />
           <Route path="/compras/status/:statusSlug" element={<PrivateRoute allowedPerfis={PERFIS_COMPRAS}><ComprasStatusList /></PrivateRoute>} />
           {/* FINANCEIRO DESATIVADO: <Route path="/financeiro" element={<ProjetoSelector destino="financeiro" />} /> */}
           <Route path="/ativos" element={<ProjetoSelector destino="almoxarifado" />} />

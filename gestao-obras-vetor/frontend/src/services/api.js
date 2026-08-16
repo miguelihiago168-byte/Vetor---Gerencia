@@ -351,6 +351,22 @@ export const reprovarPedido = (id, motivo) => api.patch(`/pedidos-compra/${id}/r
 export const listarPedidosPorProjeto = (projetoId) => api.get(`/pedidos-compra/projeto/${projetoId}`);
 export const detalharPedido = (id) => api.get(`/pedidos-compra/${id}`);
 
+// Estoque de insumos
+export const getEstoqueSaldos = (params) => api.get('/estoque/saldos', { params });
+export const getEstoqueLotes = (insumoId, params) => api.get(`/estoque/insumos/${insumoId}/lotes`, { params });
+export const getEstoquePendencias = () => api.get('/estoque/pendencias');
+export const receberEstoquePendencia = (id, data) => api.post(`/estoque/pendencias/${id}/receber`, data);
+export const anexarDocumentoEstoque = (loteId, data) => api.post(`/estoque/lotes/${loteId}/anexos`, data, { headers: { 'Content-Type': 'multipart/form-data' } });
+export const getEstoqueTransferencias = () => api.get('/estoque/transferencias');
+export const criarEstoqueTransferencia = (data) => api.post('/estoque/transferencias', data);
+export const aprovarEstoqueTransferencia = (id) => api.post(`/estoque/transferencias/${id}/aprovar`);
+export const separarEstoqueTransferencia = (id) => api.post(`/estoque/transferencias/${id}/separar`);
+export const despacharEstoqueTransferencia = (id) => api.post(`/estoque/transferencias/${id}/despachar`);
+export const confirmarEstoqueTransferencia = (id) => api.post(`/estoque/transferencias/${id}/confirmar-recebimento`);
+export const rejeitarEstoqueTransferencia = (id, justificativa) => api.post(`/estoque/transferencias/${id}/rejeitar`, { justificativa });
+export const cancelarEstoqueTransferencia = (id, justificativa) => api.post(`/estoque/transferencias/${id}/cancelar`, { justificativa });
+export const getEstoqueMovimentacoes = (params) => api.get('/estoque/movimentacoes', { params });
+
 // Financeiro (Fluxo de Caixa)
 export const getFinanceiroDashboard = (projetoId, params) => api.get(`/financeiro/projeto/${projetoId}/dashboard`, { params });
 export const updateFinanceiroSaldoInicial = (projetoId, saldoInicial) => api.patch(`/financeiro/projeto/${projetoId}/saldo-inicial`, { saldo_inicial: saldoInicial });

@@ -1,0 +1,42 @@
+.estoque-page { display: grid; gap: 16px; }
+.estoque-intro { display: flex; justify-content: space-between; gap: 20px; align-items: center; }
+.estoque-intro h2 { display: flex; align-items: center; gap: 9px; margin: 4px 0; }
+.estoque-intro p { margin: 0; color: var(--text-muted); }
+.estoque-intro label { min-width: 240px; display: grid; gap: 6px; font-size: 13px; color: var(--text-muted); }
+.estoque-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.estoque-kpis .card { display: flex; align-items: center; gap: 12px; padding: 16px; }
+.estoque-kpis svg { color: var(--primary); }
+.estoque-kpis strong, .estoque-kpis span { display: block; }
+.estoque-kpis strong { font-size: 20px; }
+.estoque-kpis span { color: var(--text-muted); font-size: 13px; }
+.estoque-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.estoque-form { display: grid; gap: 11px; }
+.estoque-form h3 { display: flex; gap: 8px; align-items: center; margin: 0; }
+.estoque-form p, .estoque-form small { margin: 0; color: var(--text-muted); }
+.estoque-destino-recebimento { color: var(--primary) !important; font-weight: 600; }
+.estoque-detalhes-compra { padding: 12px; border: 1px solid var(--border-color, #dbe3ef); border-radius: 10px; background: var(--bg-secondary, #f8fafc); }
+.estoque-detalhes-compra > strong { display: block; margin-bottom: 9px; }
+.estoque-detalhes-compra dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 16px; margin: 0; }
+.estoque-detalhes-compra dt { color: var(--text-muted); font-size: 12px; }
+.estoque-detalhes-compra dd { margin: 2px 0 0; font-size: 13px; overflow-wrap: anywhere; }
+.estoque-detalhe-amplo { grid-column: 1 / -1; }
+.estoque-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.estoque-list { overflow: visible; }
+.estoque-list-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.estoque-list-header h3, .estoque-list-header p { margin: 0; }
+.estoque-list-header p { color: var(--text-muted); font-size: 13px; margin-top: 3px; }
+.estoque-list-header form { display: flex; align-items: center; gap: 8px; min-width: 300px; }
+.estoque-list-header form input { width: 100%; }
+.table-wrap { overflow-x: auto; }
+.estoque-status { display: inline-flex; text-transform: capitalize; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 999px; background: var(--bg-tertiary); }
+.estoque-status.pendente_destino { background: #fef3c7; color: #92400e; }
+.estoque-status.concluida { background: #dcfce7; color: #166534; }
+.estoque-itens-transferencia { min-width: 260px; }
+.estoque-itens-transferencia > div + div { margin-top: 5px; }
+.estoque-especificacao-transferencia { color: var(--primary); font-weight: 600; }
+.estoque-acoes { position: relative; display: inline-block; }
+.estoque-menu-acoes { position: static; min-width: 180px; margin-top: 6px; padding: 6px; border: 1px solid var(--border-color, #dbe3ef); border-radius: 8px; background: var(--bg-primary, #fff); box-shadow: 0 10px 24px rgba(15, 23, 42, .16); }
+.estoque-menu-acoes button { display: block; width: 100%; padding: 8px 9px; border: 0; border-radius: 6px; background: transparent; color: var(--text-primary); text-align: left; cursor: pointer; font: inherit; font-size: 13px; }
+.estoque-menu-acoes button:hover { background: var(--bg-tertiary, #f1f5f9); }
+.estoque-menu-acoes .danger { color: #b91c1c; }
+@media (max-width: 760px) { .estoque-intro, .estoque-list-header { align-items: stretch; flex-direction: column; } .estoque-intro label, .estoque-list-header form { min-width: 0; } .estoque-kpis, .estoque-grid, .estoque-form-grid, .estoque-detalhes-compra dl { grid-template-columns: 1fr; } }

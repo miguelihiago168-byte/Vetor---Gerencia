@@ -4,7 +4,7 @@ import Navbar from './Navbar';
 import { useAuth } from '../context/AuthContext';
 import { getRequisicoesBadges } from '../services/api';
 import {
-  ShoppingCart, List, CheckCircle, XCircle, Users,
+  ShoppingCart, List, CheckCircle, XCircle, Users, Boxes,
   Clock, Tag, ThumbsUp, AlertCircle,
 } from 'lucide-react';
 import './ComprasLayout.css';
@@ -83,6 +83,15 @@ function ComprasLayout({ title, children, extraHeader }) {
               >
                 <span className="suprimentos-nav-row">
                   <List size={14} /> Requisições
+                </span>
+              </NavLink>
+
+              <NavLink
+                to={projetoId ? `/projeto/${projetoId}/compras/estoque` : '/compras/estoque'}
+                className={({ isActive }) => `almox-nav-link${isActive ? ' active' : ''}`}
+              >
+                <span className="suprimentos-nav-row">
+                  <Boxes size={14} /> Estoque
                 </span>
               </NavLink>
 

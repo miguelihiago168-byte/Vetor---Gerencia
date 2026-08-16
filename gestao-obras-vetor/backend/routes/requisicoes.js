@@ -15,6 +15,7 @@ const { allQuery, getQuery, runQuery } = require('../config/database');
 const { carregarPerfilUsuario, assertProjectAccess } = require('../middleware/rbac');
 const { inferirPerfil } = require('../constants/access');
 const { auth } = require('../middleware/auth');
+const { criarPendenciaRecebimento } = require('../services/estoque');
 
 router.use(auth);
 
@@ -1639,6 +1640,15 @@ router.patch('/:id/itens/:itemId/comprado', async (req, res) => {
     const req2 = await getQuery('SELECT projeto_id FROM requisicoes WHERE id = ?', [req.params.id]);
     const ok = await assertProjectAccess(req, res, Number(req2.projeto_id));
     if (!ok) return;
+    const cotacaoSelecionada = await getQuery(`
+      SELECT COALESCE(rc.fornecedor_nome, f.nome_fantasia, f.razao_social) AS fornecedor_nome,
+        rc.cnpj, rc.telefone, rc.email, rc.valor_unitario, rc.frete,
+        rc.prazo_entrega, rc.condicao_pagamento, rc.observacao
+      FROM requisicao_cotacoes rc
+      LEFT JOIN fornecedores f ON f.id=rc.fornecedor_id
+      WHERE rc.item_id=? AND rc.selecionada=1
+      LIMIT 1
+    `, [item.id]);
 
     await runQuery(
       `UPDATE requisicao_itens
@@ -1651,6 +1661,31 @@ router.patch('/:id/itens/:itemId/comprado', async (req, res) => {
       Number(req.params.id), item.id, usuario.id,
       'ITEM_COMPRADO', item.status_item, STATUS_ITEM.COMPRADO, null
     );
+
+    // A compra nao aumenta o saldo: ela cria uma pendencia para o recebimento
+    // fisico no estoque central, inclusive quando a entrega for parcial.
+    await criarPendenciaRecebimento({
+      tenantId: req.tenantId,
+      tipo: 'REQUISICAO_ITEM',
+      referenciaId: item.id,
+      projetoId: req2.projeto_id,
+      descricao: item.descricao,
+      quantidade: item.quantidade,
+      unidade: item.unidade,
+      fornecedorNome: cotacaoSelecionada?.fornecedor_nome,
+      dadosCompra: {
+        especificacao_tecnica: item.especificacao_tecnica || null,
+        fornecedor_cnpj: cotacaoSelecionada?.cnpj || null,
+        fornecedor_telefone: cotacaoSelecionada?.telefone || null,
+        fornecedor_email: cotacaoSelecionada?.email || null,
+        valor_unitario: cotacaoSelecionada?.valor_unitario ?? null,
+        frete: cotacaoSelecionada?.frete ?? null,
+        prazo_entrega: cotacaoSelecionada?.prazo_entrega || null,
+        condicao_pagamento: cotacaoSelecionada?.condicao_pagamento || null,
+        observacao_cotacao: cotacaoSelecionada?.observacao || null
+      },
+      usuarioId: usuario.id
+    });
 
     await atualizarStatusRequisicao(Number(req.params.id), usuario.id);
 
@@ -2028,6 +2063,15 @@ router.patch('/:id/comprar-todos', async (req, res) => {
     }
 
     for (const item of itens) {
+      const cotacaoSelecionada = await getQuery(`
+        SELECT COALESCE(rc.fornecedor_nome, f.nome_fantasia, f.razao_social) AS fornecedor_nome,
+          rc.cnpj, rc.telefone, rc.email, rc.valor_unitario, rc.frete,
+          rc.prazo_entrega, rc.condicao_pagamento, rc.observacao
+        FROM requisicao_cotacoes rc
+        LEFT JOIN fornecedores f ON f.id=rc.fornecedor_id
+        WHERE rc.item_id=? AND rc.selecionada=1
+        LIMIT 1
+      `, [item.id]);
       await runQuery(
         `UPDATE requisicao_itens
            SET status_item = ?, atualizado_em = CURRENT_TIMESTAMP
@@ -2039,6 +2083,28 @@ router.patch('/:id/comprar-todos', async (req, res) => {
         'ITEM_COMPRADO', item.status_item, STATUS_ITEM.COMPRADO,
         { lote: true, origem: 'kanban_dnd' }
       );
+      await criarPendenciaRecebimento({
+        tenantId: req.tenantId,
+        tipo: 'REQUISICAO_ITEM',
+        referenciaId: item.id,
+        projetoId: req2.projeto_id,
+        descricao: item.descricao,
+        quantidade: item.quantidade,
+        unidade: item.unidade,
+        fornecedorNome: cotacaoSelecionada?.fornecedor_nome,
+        dadosCompra: {
+          especificacao_tecnica: item.especificacao_tecnica || null,
+          fornecedor_cnpj: cotacaoSelecionada?.cnpj || null,
+          fornecedor_telefone: cotacaoSelecionada?.telefone || null,
+          fornecedor_email: cotacaoSelecionada?.email || null,
+          valor_unitario: cotacaoSelecionada?.valor_unitario ?? null,
+          frete: cotacaoSelecionada?.frete ?? null,
+          prazo_entrega: cotacaoSelecionada?.prazo_entrega || null,
+          condicao_pagamento: cotacaoSelecionada?.condicao_pagamento || null,
+          observacao_cotacao: cotacaoSelecionada?.observacao || null
+        },
+        usuarioId: usuario.id
+      });
     }
 
     await atualizarStatusRequisicao(Number(req.params.id), usuario.id);

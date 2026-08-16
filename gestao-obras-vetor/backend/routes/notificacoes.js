@@ -18,12 +18,16 @@ router.get('/', auth, async (req, res) => {
       `SELECT n.*,
               CASE
                 WHEN n.referencia_tipo = 'reuniao' THEN mr.projeto_id
+                WHEN n.referencia_tipo = 'estoque_transferencia' THEN et.destino_projeto_id
                 ELSE NULL
               END AS projeto_id
        FROM notificacoes n
        LEFT JOIN mensagem_reunioes mr
          ON n.referencia_tipo = 'reuniao'
         AND mr.id = n.referencia_id
+       LEFT JOIN estoque_transferencias et
+         ON n.referencia_tipo = 'estoque_transferencia'
+        AND et.id = n.referencia_id
        WHERE n.usuario_id = ?
          AND COALESCE(n.${readColumn}, 0) = 0
        ORDER BY n.criado_em DESC
