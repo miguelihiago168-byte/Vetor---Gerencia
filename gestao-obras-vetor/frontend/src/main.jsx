@@ -8,6 +8,7 @@ import { DialogProvider } from './context/DialogContext';
 import { UserPreferencesProvider } from './context/UserPreferencesContext';
 import PrivateRoute from './components/PrivateRoute';
 import NotificationContainer from './components/NotificationContainer';
+import ModalBackdropGuard from './components/ModalBackdropGuard';
 import Landing from './pages/Landing';
 import CriarConta from './pages/CriarConta';
 import RedefinirSenha from './pages/RedefinirSenha';
@@ -71,6 +72,7 @@ const PERFIS_USUARIOS = ['Gestor Geral', 'ADM'];
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
+    <ModalBackdropGuard />
     <NotificationProvider>
       <AuthProvider>
         <UserPreferencesProvider>
