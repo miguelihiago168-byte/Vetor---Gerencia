@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import CockpitReturnButton, { forwardCockpitNavigationState, getCockpitReturnContext } from '../components/CockpitReturnButton';
 import { getRDOs, updateStatusRDO } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { FileText, Plus, Eye, MoreHorizontal, CheckCircle, XCircle, RotateCcw, AlertTriangle } from 'lucide-react';
+import { FileText, Plus, Eye, MoreHorizontal, CheckCircle, XCircle, RotateCcw, AlertTriangle, Search, X } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import { useDialog } from '../context/DialogContext';
 import { useUserPreferences } from '../context/UserPreferencesContext';
@@ -30,6 +30,14 @@ function RDOs() {
   const [openDropdown, setOpenDropdown] = useState(null);
   const [showCopyModal, setShowCopyModal] = useState(false);
   const [copyChecked, setCopyChecked] = useState(false);
+  const [filters, setFilters] = useState({
+    dataInicial: '',
+    dataFinal: '',
+    identificador: '',
+    somenteComOcorrencias: false,
+    somenteImpraticaveis: false,
+    status: ''
+  });
 
   // Fecha dropdown ao clicar fora
   useEffect(() => {
@@ -82,6 +90,51 @@ function RDOs() {
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase();
+
+  const updateFilter = (field, value) => {
+    setFilters((current) => ({ ...current, [field]: value }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      dataInicial: '',
+      dataFinal: '',
+      identificador: '',
+      somenteComOcorrencias: false,
+      somenteImpraticaveis: false,
+      status: ''
+    });
+  };
+
+  const hasActiveFilters = Boolean(
+    filters.dataInicial || filters.dataFinal || filters.identificador.trim() ||
+    filters.somenteComOcorrencias || filters.somenteImpraticaveis || filters.status
+  );
+
+  const filteredRdos = useMemo(() => {
+    const identifier = filters.identificador.trim().replace(/^rdo\s*-?\s*/i, '');
+    const normalizedIdentifier = identifier.replace(/^0+(?=\d)/, '');
+    const isNumericIdentifier = /^\d+$/.test(normalizedIdentifier);
+
+    return rdos.filter((rdo) => {
+      const date = String(rdo.data_relatorio || '').slice(0, 10);
+      if (filters.dataInicial && (!date || date < filters.dataInicial)) return false;
+      if (filters.dataFinal && (!date || date > filters.dataFinal)) return false;
+
+      if (identifier) {
+        if (!isNumericIdentifier) return false;
+        const matchesIdentifier = [rdo.id, rdo.numero_rdo]
+          .filter((value) => value !== null && typeof value !== 'undefined')
+          .some((value) => String(Number(value)) === normalizedIdentifier);
+        if (!matchesIdentifier) return false;
+      }
+
+      if (filters.somenteComOcorrencias && Number(rdo.ocorrencias_count || 0) === 0) return false;
+      if (filters.somenteImpraticaveis && !(rdo.tem_impraticabilidade === true || Number(rdo.tem_impraticabilidade) === 1)) return false;
+      if (filters.status && rdo.status !== filters.status) return false;
+      return true;
+    });
+  }, [rdos, filters]);
 
   useEffect(() => {
     carregarRDOs();
@@ -217,7 +270,7 @@ function RDOs() {
   }
 
   const grupos = Object.entries(
-    rdos.reduce((acc, r) => {
+    filteredRdos.reduce((acc, r) => {
       const m = r.data_relatorio ? String(r.data_relatorio).match(/^(\d{4}-\d{2}-\d{2})/) : null;
       const key = m ? m[1] : 'sem-data';
       if (!acc[key]) acc[key] = [];
@@ -240,7 +293,8 @@ function RDOs() {
                 Relatórios Diários de Obra
               </h1>
               <p style={{ fontSize: '13px', color: '#94a3b8', margin: '4px 0 0', fontWeight: 400 }}>
-                {rdos.length} {rdos.length === 1 ? 'relatório' : 'relatórios'} neste projeto
+                {filteredRdos.length} {filteredRdos.length === 1 ? 'relatório' : 'relatórios'}
+                {hasActiveFilters ? ` de ${rdos.length}` : ''} neste projeto
               </p>
             </div>
           </div>
@@ -281,11 +335,91 @@ function RDOs() {
         {sucesso && <div className="alert alert-success" style={{ marginBottom: '20px' }}>{sucesso}</div>}
         {erro    && <div className="alert alert-error"   style={{ marginBottom: '20px' }}>{erro}</div>}
 
+        {rdos.length > 0 && (
+          <section className="rdo-filters" aria-label="Filtros de RDOs">
+            <div className="rdo-filter-field rdo-filter-period">
+              <span className="rdo-filter-label">Período</span>
+              <div className="rdo-filter-date-range">
+                <input
+                  type="date"
+                  value={filters.dataInicial}
+                  onChange={(event) => updateFilter('dataInicial', event.target.value)}
+                  aria-label="Data inicial"
+                />
+                <span>até</span>
+                <input
+                  type="date"
+                  value={filters.dataFinal}
+                  min={filters.dataInicial || undefined}
+                  onChange={(event) => updateFilter('dataFinal', event.target.value)}
+                  aria-label="Data final"
+                />
+              </div>
+            </div>
+
+            <label className="rdo-filter-field rdo-filter-identifier">
+              <span className="rdo-filter-label">ID ou nº do RDO</span>
+              <span className="rdo-filter-input-wrap">
+                <Search size={15} aria-hidden="true" />
+                <input
+                  type="search"
+                  inputMode="numeric"
+                  placeholder="Ex.: RDO-001"
+                  value={filters.identificador}
+                  onChange={(event) => updateFilter('identificador', event.target.value)}
+                />
+              </span>
+            </label>
+
+            <label className="rdo-filter-field">
+              <span className="rdo-filter-label">Status</span>
+              <select value={filters.status} onChange={(event) => updateFilter('status', event.target.value)}>
+                <option value="">Todos</option>
+                <option value="Em preenchimento">Em preenchimento</option>
+                <option value="Em análise">Em aprovação</option>
+                <option value="Aprovado">Aprovado</option>
+                <option value="Reprovado">Reprovado</option>
+              </select>
+            </label>
+
+            <label className="rdo-filter-toggle">
+              <input
+                type="checkbox"
+                checked={filters.somenteComOcorrencias}
+                onChange={(event) => updateFilter('somenteComOcorrencias', event.target.checked)}
+              />
+              Com ocorrências
+            </label>
+
+            <label className="rdo-filter-toggle">
+              <input
+                type="checkbox"
+                checked={filters.somenteImpraticaveis}
+                onChange={(event) => updateFilter('somenteImpraticaveis', event.target.checked)}
+              />
+              Condição impraticável
+            </label>
+
+            {hasActiveFilters && (
+              <button type="button" className="rdo-clear-filters" onClick={clearFilters}>
+                <X size={14} />
+                Limpar filtros
+              </button>
+            )}
+          </section>
+        )}
+
         {rdos.length === 0 ? (
           <div className="rdo-empty">
             <FileText size={40} style={{ color: '#cbd5e1' }} />
             <h3>Nenhum RDO encontrado</h3>
             <p>Crie o primeiro relatório diário para este projeto.</p>
+          </div>
+        ) : filteredRdos.length === 0 ? (
+          <div className="rdo-empty">
+            <FileText size={40} style={{ color: '#cbd5e1' }} />
+            <h3>Nenhum RDO corresponde aos filtros</h3>
+            <p>Revise os filtros aplicados ou limpe-os para ver todos os relatórios.</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>

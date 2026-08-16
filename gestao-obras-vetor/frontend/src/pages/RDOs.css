@@ -1,5 +1,127 @@
 /* RDOs list — minimal design inspired by Notion / Linear / Stripe */
 
+/* ── Filters ── */
+.rdo-filters {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding: 14px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+}
+
+.rdo-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 148px;
+}
+
+.rdo-filter-label {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rdo-filter-field input,
+.rdo-filter-field select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #1e293b;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.rdo-filter-field > input,
+.rdo-filter-field select {
+  padding: 7px 10px;
+}
+
+.rdo-filter-field input:focus,
+.rdo-filter-field select:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.rdo-filter-period { min-width: 252px; }
+
+.rdo-filter-date-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rdo-filter-date-range input { padding: 7px 8px; }
+.rdo-filter-date-range span { color: #94a3b8; font-size: 12px; }
+
+.rdo-filter-identifier { min-width: 170px; }
+
+.rdo-filter-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #94a3b8;
+}
+
+.rdo-filter-input-wrap:focus-within {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.rdo-filter-input-wrap input {
+  min-height: 34px;
+  padding: 0;
+  border: 0;
+  box-shadow: none !important;
+}
+
+.rdo-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 2px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rdo-filter-toggle input { accent-color: #2563eb; }
+
+.rdo-clear-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: none;
+  background: transparent;
+  color: #475569;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.rdo-clear-filters:hover { color: #0f172a; text-decoration: underline; }
+
 /* ── Date group header ── */
 .rdo-date-group {
   display: flex;
@@ -283,4 +405,16 @@
   color: #94a3b8;
   font-size: 14px;
   margin: 0;
+}
+
+@media (max-width: 720px) {
+  .rdo-filters { align-items: stretch; }
+  .rdo-filter-field,
+  .rdo-filter-period,
+  .rdo-filter-identifier {
+    min-width: min(100%, 240px);
+    flex: 1 1 100%;
+  }
+  .rdo-filter-date-range input { min-width: 0; flex: 1; }
+  .rdo-filter-toggle { min-height: 28px; }
 }

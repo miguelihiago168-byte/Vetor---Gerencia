@@ -31,6 +31,20 @@ const getPdfVersionLabel = () => {
   return `Versão ${appVersion} (${appEnv})`;
 };
 
+const rdoListDerivedFields = `
+  (SELECT COUNT(*) FROM rdo_ocorrencias ro WHERE ro.rdo_id = r.id) AS ocorrencias_count,
+  CASE WHEN
+    LOWER(COALESCE(r.praticabilidade_manha, '')) IN ('impraticável', 'impraticavel')
+    OR LOWER(COALESCE(r.praticabilidade_tarde, '')) IN ('impraticável', 'impraticavel')
+    OR EXISTS (
+      SELECT 1
+      FROM rdo_clima rc
+      WHERE rc.rdo_id = r.id
+        AND LOWER(COALESCE(rc.condicao_trabalho, '')) IN ('impraticável', 'impraticavel')
+    )
+  THEN TRUE ELSE FALSE END AS tem_impraticabilidade
+`;
+
 const ensureRdoOptionalColumns = async () => {
   await ensureRdoCorrectionColumns();
   await ensureSchemaReady({ getQuery, allQuery }, {
@@ -242,12 +256,14 @@ const recalcularPercentualPai = async (atividadeId) => {
 // Listar RDOs de um projeto
 router.get('/projeto/:projetoId', auth, async (req, res) => {
   try {
+    await ensureRdoOptionalColumns();
     const { projetoId } = req.params;
 
     let rdos;
     try {
       rdos = await allQuery(`
-        SELECT r.*, u.nome as criado_por_nome, g.nome as aprovado_por_nome
+        SELECT r.*, u.nome as criado_por_nome, g.nome as aprovado_por_nome,
+               ${rdoListDerivedFields}
         FROM rdos r
         LEFT JOIN usuarios u ON r.criado_por = u.id
         LEFT JOIN usuarios g ON r.aprovado_por = g.id
@@ -259,7 +275,8 @@ router.get('/projeto/:projetoId', auth, async (req, res) => {
         throw queryError;
       }
       rdos = await allQuery(`
-        SELECT r.*, u.nome as criado_por_nome, NULL as aprovado_por_nome
+        SELECT r.*, u.nome as criado_por_nome, NULL as aprovado_por_nome,
+               ${rdoListDerivedFields}
         FROM rdos r
         LEFT JOIN usuarios u ON r.criado_por = u.id
         WHERE r.projeto_id = ?
