@@ -18,11 +18,19 @@ import {
   ShieldCheck,
   X,
 } from 'lucide-react';
-import { cancelarConta, esqueciSenha, login as loginAPI, registerTrialAccount, renovarTrial } from '../services/api';
+import { cancelarConta, enviarContato, esqueciSenha, login as loginAPI, registerTrialAccount, renovarTrial } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import './Landing.css';
 
-const CONTACT_EMAIL = 'contatovetorgerenciamento@gmail.com';
+const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY || '';
+
+const formatBrazilianPhone = (value) => {
+  const digits = String(value || '').replace(/\D/g, '').slice(0, 11);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+};
 
 const modules = [
   { icon: Layers3, title: 'Projetos e EAP', text: 'Estruture etapas, atividades, responsáveis e avanços em uma única visão.' },
@@ -116,12 +124,19 @@ function Landing({ initialAccess = false }) {
   const [cancelandoConta, setCancelandoConta] = useState(false);
   const [codigoRenovacao, setCodigoRenovacao] = useState('');
   const [tentandoRenovar, setTentandoRenovar] = useState(false);
+  const [contactForm, setContactForm] = useState({ nome: '', email: '', empresa: '', telefone: '', mensagem: '' });
+  const [contactError, setContactError] = useState('');
+  const [contactSuccess, setContactSuccess] = useState('');
+  const [contactSending, setContactSending] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState('');
+  const [captchaError, setCaptchaError] = useState('');
 
   const accessRef = useRef(null);
   const lastFocusedRef = useRef(null);
+  const recaptchaRef = useRef(null);
+  const recaptchaWidgetIdRef = useRef(null);
   const navigate = useNavigate();
   const { loginAuth } = useAuth();
-  const mailTo = `mailto:${CONTACT_EMAIL}?subject=Quero%20conhecer%20a%20Vetor`;
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -195,6 +210,48 @@ function Landing({ initialAccess = false }) {
       window.setTimeout(() => lastFocusedRef.current?.focus(), 0);
     };
   }, [accessOpen, trialExpirado]);
+
+  useEffect(() => {
+    if (!RECAPTCHA_SITE_KEY) {
+      setCaptchaError('O formulário de contato está temporariamente indisponível.');
+      return undefined;
+    }
+
+    let cancelled = false;
+    const renderCaptcha = () => {
+      if (cancelled || !recaptchaRef.current || recaptchaWidgetIdRef.current !== null || !window.grecaptcha?.render) return;
+      recaptchaWidgetIdRef.current = window.grecaptcha.render(recaptchaRef.current, {
+        sitekey: RECAPTCHA_SITE_KEY,
+        callback: (token) => {
+          setCaptchaToken(token);
+          setCaptchaError('');
+        },
+        'expired-callback': () => setCaptchaToken(''),
+        'error-callback': () => {
+          setCaptchaToken('');
+          setCaptchaError('Não foi possível carregar a verificação. Tente novamente.');
+        },
+      });
+    };
+
+    const existingScript = document.getElementById('google-recaptcha-script');
+    const script = existingScript || document.createElement('script');
+    if (!existingScript) {
+      script.id = 'google-recaptcha-script';
+      script.src = 'https://www.google.com/recaptcha/api.js?render=explicit';
+      script.async = true;
+      script.defer = true;
+      document.head.appendChild(script);
+    }
+
+    if (window.grecaptcha?.render) renderCaptcha();
+    else script.addEventListener('load', renderCaptcha);
+
+    return () => {
+      cancelled = true;
+      script.removeEventListener('load', renderCaptcha);
+    };
+  }, []);
 
   const handleCadastro = async (event) => {
     event.preventDefault();
@@ -366,6 +423,49 @@ function Landing({ initialAccess = false }) {
     }
   };
 
+  const handleContactChange = (event) => {
+    const { name, value } = event.target;
+    setContactForm((current) => ({
+      ...current,
+      [name]: name === 'telefone' ? formatBrazilianPhone(value) : value,
+    }));
+  };
+
+  const resetCaptcha = () => {
+    setCaptchaToken('');
+    if (recaptchaWidgetIdRef.current !== null && window.grecaptcha?.reset) {
+      window.grecaptcha.reset(recaptchaWidgetIdRef.current);
+    }
+  };
+
+  const handleContactSubmit = async (event) => {
+    event.preventDefault();
+    setContactError('');
+    setContactSuccess('');
+
+    if (!RECAPTCHA_SITE_KEY) {
+      setContactError('O formulário de contato está temporariamente indisponível.');
+      return;
+    }
+    if (!captchaToken) {
+      setCaptchaError('Confirme que você não é um robô antes de enviar.');
+      return;
+    }
+
+    setContactSending(true);
+    try {
+      await enviarContato({ ...contactForm, recaptchaToken: captchaToken });
+      setContactSuccess('Mensagem enviada com sucesso. Em breve nossa equipe entrará em contato.');
+      setContactForm({ nome: '', email: '', empresa: '', telefone: '', mensagem: '' });
+      resetCaptcha();
+    } catch (error) {
+      setContactError(error.response?.data?.erro || 'Não foi possível enviar sua mensagem. Tente novamente.');
+      resetCaptcha();
+    } finally {
+      setContactSending(false);
+    }
+  };
+
   return (
     <main className="landing-page">
       <header className="landing-header">
@@ -426,7 +526,7 @@ function Landing({ initialAccess = false }) {
                 Acessar plataforma
                 <ArrowRight size={18} />
               </button>
-              <a className="landing-btn landing-btn-ghost" href={mailTo}>
+              <a className="landing-btn landing-btn-ghost" href="#contato">
                 <Mail size={18} />
                 Solicitar demonstração
               </a>
@@ -626,16 +726,42 @@ function Landing({ initialAccess = false }) {
             <h2>Pronto para centralizar a gestão da sua obra?</h2>
             <p>Conheça a Vetor e veja como a plataforma se adapta à rotina da sua equipe.</p>
           </div>
-          <div className="landing-contact-actions">
-            <a className="landing-btn landing-btn-primary" href={mailTo}>
-              <Mail size={18} />
-              Solicitar demonstração
-            </a>
-            <button type="button" className="landing-btn landing-btn-ghost" onClick={openAccess}>
-              Acessar plataforma
-              <ArrowRight size={18} />
-            </button>
-          </div>
+          <form className="landing-contact-form" onSubmit={handleContactSubmit}>
+            <div className="landing-contact-fields">
+              <label>
+                <span>Seu nome</span>
+                <input name="nome" value={contactForm.nome} onChange={handleContactChange} autoComplete="name" required maxLength="120" />
+              </label>
+              <label>
+                <span>Seu e-mail</span>
+                <input type="email" name="email" value={contactForm.email} onChange={handleContactChange} autoComplete="email" required maxLength="254" />
+              </label>
+              <label>
+                <span>Empresa</span>
+                <input name="empresa" value={contactForm.empresa} onChange={handleContactChange} autoComplete="organization" required maxLength="160" />
+              </label>
+              <label>
+                <span>Telefone / WhatsApp</span>
+                <input type="tel" name="telefone" value={contactForm.telefone} onChange={handleContactChange} autoComplete="tel" inputMode="numeric" placeholder="(11) 99999-9999" required />
+              </label>
+              <label className="landing-contact-message">
+                <span>Como podemos ajudar?</span>
+                <textarea name="mensagem" value={contactForm.mensagem} onChange={handleContactChange} required maxLength="4000" />
+              </label>
+            </div>
+            <div className="landing-contact-submit-row">
+              <div>
+                <div ref={recaptchaRef} className="landing-recaptcha" />
+                {captchaError && <p className="landing-contact-feedback error" role="alert">{captchaError}</p>}
+              </div>
+              <button type="submit" className="landing-btn landing-btn-primary" disabled={contactSending || !RECAPTCHA_SITE_KEY}>
+                <Mail size={18} />
+                {contactSending ? 'Enviando mensagem...' : 'Enviar mensagem'}
+              </button>
+            </div>
+            {contactError && <p className="landing-contact-feedback error" role="alert">{contactError}</p>}
+            {contactSuccess && <p className="landing-contact-feedback success" role="status">{contactSuccess}</p>}
+          </form>
         </div>
       </section>
 
@@ -646,7 +772,7 @@ function Landing({ initialAccess = false }) {
             <span>Vetor <b>Gerenciamento</b></span>
           </a>
           <span>© {new Date().getFullYear()} Vetor Gerenciamento. Todos os direitos reservados.</span>
-          <a href={mailTo}>Fale com a Vetor</a>
+          <a href="#contato">Fale com a Vetor</a>
         </div>
       </footer>
 

@@ -15,6 +15,8 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 const app = express();
+// A aplicação recebe requisições por Caddy e Nginx; assim req.ip preserva o IP do visitante.
+app.set('trust proxy', 2);
 
 // Middlewares
 app.use(cors());
@@ -51,12 +53,14 @@ const uploadsRoutes = require('./routes/uploads');
 const oauthRoutes = require('./routes/oauth');
 const serviceAuthRoutes = require('./routes/service_auth');
 const transferenciasRoutes = require('./routes/transferencias');
+const contatoRoutes = require('./routes/contato');
 // Startup nao executa migrations automaticas. Use npm run migrate/status antes de subir a aplicacao.
 console.log('[startup-db-guard] Migrations automaticas de startup desativadas.');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/oauth', oauthRoutes);
 app.use('/api/auth/service', serviceAuthRoutes);
+app.use('/api/contato', contatoRoutes);
 app.use('/api/usuarios', usuariosRoutes);
 app.use('/api/projetos', projetosRoutes);
 app.use('/api/eap', eapRoutes);

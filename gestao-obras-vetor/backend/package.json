@@ -23,6 +23,7 @@
     "test:rdo-workflow": "node tests/rdoWorkflowService.test.js",
     "test:rls": "node tests/rlsArchitecture.test.js",
     "test:service-auth": "node tests/serviceAccountAuth.test.js && node tests/oauthRoute.test.js && node tests/serviceSessionRoute.test.js",
+    "test:contact": "node tests/contactRoute.test.js",
     "service-account": "node scripts/service_accounts.js",
     "migrate-curva-s": "node scripts/migrate_add_curva_s_fields.js"
   },
