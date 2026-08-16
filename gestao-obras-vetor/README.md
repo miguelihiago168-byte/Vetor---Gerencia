@@ -2,8 +2,7 @@
 
 Sistema completo de gestão de obras com módulos de planejamento (EAP, Curva S, Gantt), execução diária (RDO), controle de compras/requisições, almoxarifado, gestão de usuários, RNC, notificações, email e rastreabilidade.
 
-Última atualização de documentação: 01/04/2026.
-Observação: linha adicionada em 10/04/2026 para acionar novo deploy na branch main.
+Última atualização de documentação: 16/08/2026.
 
 ## 🚀 Tecnologias
 
@@ -123,9 +122,9 @@ docker compose up -d
 4. Suba stack: `docker compose up -d`
 5. Confira containers: `docker compose ps`
 
-### Reinício rápido após deploy
+### Reinício local rápido (desenvolvimento)
 
-Na raiz do projeto, execute:
+Para reiniciar a stack no ambiente local de desenvolvimento, execute na raiz:
 
 ```powershell
 .\scripts\restart_after_deploy.ps1
@@ -144,11 +143,8 @@ Para que o PDF gerado na web fique igual ao PDF do localhost, o deploy do backen
 - Em Docker: o `backend/Dockerfile` já instala `chromium` e define `PUPPETEER_EXECUTABLE_PATH`.
 - Em PM2/Linux direto: use o `backend/ecosystem.config.js`, que já define `PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser`.
 
-Após atualizar essas dependências no servidor, faça rebuild/restart do backend:
-
-```bash
-docker compose up -d --build backend
-```
+Em produção, esse build e reinício fazem parte do workflow automático de deploy;
+não os execute manualmente no servidor.
 
 ### Opção 1: Executar manualmente (2 terminais)
 
@@ -183,19 +179,24 @@ Na raiz do projeto:
 
 ## Produção com Docker e HTTPS
 
-Em produção, preencha `.env` a partir de `.env.example` com o domínio sem
-protocolo (`APP_DOMAIN`), o e-mail da conta Let's Encrypt e `APP_DATA_DIR`.
-Com o DNS apontando para o servidor Linux e as portas TCP 80/443 liberadas,
-execute na raiz:
+O deploy de produção é automático: a mesclagem de uma pull request **para** a
+branch `main` gera um `push` que inicia o workflow **Deploy Vetor** no GitHub
+Actions. Não faça deploy, rebuild ou reinício manual na EC2/VPS.
 
-```bash
-docker compose up -d --build
-```
+O workflow acessa o servidor por SSH, atualiza o checkout para `origin/main`,
+recria o `.env` a partir dos secrets do repositório, constrói as imagens, cria
+backup do PostgreSQL, valida/aplica migrations, sobe os containers e confirma o
+health check. Consulte `INSTALLACAO.md` para os secrets, a preparação inicial do
+servidor e como acompanhar uma execução.
 
 O Caddy publica as portas 80/443, redireciona HTTP para HTTPS e gerencia a
 emissão e renovação do certificado Let's Encrypt. O frontend, backend e banco
 não são expostos diretamente. Consulte `INSTALLACAO.md` para o procedimento de
 DNS, firewall e validação.
+
+Para acompanhar o deploy, abra **GitHub → Actions → Deploy Vetor** e verifique
+os logs e o health check final. Novos pushes na `main` cancelam a execução de
+deploy ainda em andamento para priorizar a versão mais recente.
 
 O pgAdmin de produção é acessado em `https://vetor.damjam.com.br/pgadmin/`.
 Ele passa pelo Caddy com HTTPS; não publique a porta `5050` nem a porta
