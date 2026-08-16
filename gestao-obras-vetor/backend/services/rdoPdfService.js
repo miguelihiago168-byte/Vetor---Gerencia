@@ -5,11 +5,6 @@ const { hydrateOccurrences } = require('./rdoOccurrenceService');
 const backendPackage = require('../package.json');
 
 const uploadsDir = path.join(__dirname, '..', 'uploads');
-const logoPathCandidates = [
-  path.join(__dirname, '..', '..', 'frontend', 'public', 'logo_vetor.png'),
-  path.join(__dirname, '..', '..', 'frontend', 'public', 'logo_externo_vetor.png'),
-  path.join(__dirname, '..', '..', 'frontend', 'public', 'logo.svg')
-];
 
 const escapeHtml = (value) => String(value ?? '')
   .replace(/&/g, '&amp;')
@@ -77,6 +72,8 @@ const toDataUri = (filePath, fallbackMime = 'image/jpeg') => {
     const ext = path.extname(filePath).toLowerCase();
     const mime = ext === '.svg'
       ?'image/svg+xml'
+      : ext === '.jpg' || ext === '.jpeg'
+        ?'image/jpeg'
       : ext === '.png'
         ?'image/png'
         : ext === '.webp'
@@ -88,11 +85,19 @@ const toDataUri = (filePath, fallbackMime = 'image/jpeg') => {
   }
 };
 
-const getLogoDataUri = () => {
-  const logoPath = logoPathCandidates.find((candidate) => {
-    try { return fs.existsSync(candidate); } catch { return false; }
-  });
-  return toDataUri(logoPath, 'image/png');
+const resolveProjectLogoPath = (storedPath) => {
+  if (!storedPath) return null;
+  const normalized = String(storedPath)
+    .replace(/\\/g, '/')
+    .replace(/^\/+/, '')
+    .replace(/^uploads\//i, '');
+  const absolutePath = path.resolve(uploadsDir, normalized);
+  if (!absolutePath.startsWith(path.resolve(uploadsDir) + path.sep)) return null;
+  return fs.existsSync(absolutePath) ? absolutePath : null;
+};
+
+const getProjectLogoDataUri = (storedPath) => {
+  return toDataUri(resolveProjectLogoPath(storedPath), 'image/png');
 };
 
 const safeAll = async (sql, params = []) => {
@@ -175,6 +180,8 @@ async function loadRdoPdfData(id) {
            p.cidade AS projeto_cidade,
            p.empresa_responsavel AS projeto_contratante,
            p.empresa_executante AS projeto_executante,
+           p.logo_empresa_responsavel AS projeto_logo_empresa_responsavel,
+           p.logo_empresa_executante AS projeto_logo_empresa_executante,
            p.prazo_termino AS projeto_prazo_termino,
            p.criado_em AS projeto_criado_em,
            u.nome AS criado_por_nome,
@@ -324,7 +331,19 @@ async function loadRdoPdfData(id) {
 function renderHtml(data) {
   const { rdo, responsavelNome, atividadesPdf, maoObra, fotos, anexos, materiaisRecebidos, equipamentos, clima, ocorrencias, comentarios } = data;
   const displayId = displayRdoNumber(rdo);
-  const logo = getLogoDataUri();
+  const logos = [
+    getProjectLogoDataUri(rdo.projeto_logo_empresa_responsavel),
+    getProjectLogoDataUri(rdo.projeto_logo_empresa_executante)
+  ].filter(Boolean);
+  const companyBrandsHtml = [
+    [getProjectLogoDataUri(rdo.projeto_logo_empresa_responsavel), 'Contratante', rdo.projeto_contratante],
+    [getProjectLogoDataUri(rdo.projeto_logo_empresa_executante), 'Executante', rdo.projeto_executante]
+  ].filter(([logo]) => logo).map(([logo, role, name]) => `
+    <div class="company-brand">
+      <img src="${logo}" alt="Logo ${escapeHtml(name || role)}">
+      <div><span>${role}</span><strong>${escapeHtml(name || '-')}</strong></div>
+    </div>
+  `).join('');
   const assinaturaPath = rdo.criado_por_assinatura_png
     ? path.resolve(uploadsDir, String(rdo.criado_por_assinatura_png).replace(/\\/g, '/'))
     : null;
@@ -391,8 +410,14 @@ function renderHtml(data) {
     body { margin: 0; font-family: Arial, "Segoe UI", sans-serif; color: #111827; font-size: 9pt; line-height: 1.35; }
     .page { padding: 0; }
     .brand-line { height: 4px; background: #0b5f86; margin-bottom: 10px; }
-    .doc-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
-    .doc-title img { max-height: 42px; max-width: 128px; object-fit: contain; }
+    .doc-title { position: relative; min-height: 34px; margin-bottom: 12px; padding-right: 110px; }
+    .doc-title h1 { margin: 0; text-align: center; }
+    .doc-title .status { position: absolute; top: 0; right: 0; }
+    .company-brands { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0 0 14px; }
+    .company-brand { display: grid; grid-template-columns: 132px 1fr; align-items: center; gap: 14px; min-height: 92px; padding: 10px; border: 1px solid #b9cddd; border-radius: 7px; background: #f8fbfd; }
+    .company-brand img { width: 132px; height: 70px; object-fit: contain; background: white; border-radius: 5px; }
+    .company-brand span { display: block; margin-bottom: 3px; color: #475569; font-size: 7.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+    .company-brand strong { display: block; color: #06263a; font-size: 10.5pt; line-height: 1.25; }
     .doc-title h1 { margin: 0; font-size: 15pt; letter-spacing: .03em; color: #06263a; text-transform: uppercase; }
     .status { border: 1px solid #0b5f86; color: #0b5f86; padding: 4px 8px; border-radius: 4px; font-weight: 700; }
     .section { margin-bottom: 9px; break-inside: avoid; page-break-inside: avoid; }
@@ -453,10 +478,10 @@ function renderHtml(data) {
   <main class="page">
     <div class="brand-line"></div>
     <div class="doc-title avoid-break">
-      <div>${logo ?`<img src="${logo}" alt="Vetor">` : '<strong>VETOR</strong>'}</div>
       <h1>Relatório Diário de Obra (RDO)</h1>
       <div class="status" style="${statusStyle}">${escapeHtml(rdo.status || 'Em preenchimento')}</div>
     </div>
+    ${companyBrandsHtml ? `<div class="company-brands avoid-break">${companyBrandsHtml}</div>` : ''}
 
     <section class="section">
       <div class="section-title">Identificação</div>
@@ -720,7 +745,7 @@ async function renderWithPuppeteer(html, rdo, displayId) {
     const headerStatusStyle = statusInlineStyle(rdo.status || '-');
     const headerTemplate = `
       <div style="font-size:7px;color:#334155;width:100%;padding:0 38px;font-family:Arial,sans-serif;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #d7dee8;height:22px;">
-        <span><strong>VETOR</strong> | ${escapeHtml(rdo.projeto_nome || '-')}</span>
+        <span>${escapeHtml(rdo.projeto_nome || '-')}</span>
         <span>${displayId} | ${fmtDate(rdo.data_relatorio)} | <span style="display:inline-block;border:1px solid #0b5f86;border-radius:3px;padding:1px 4px;font-weight:700;${headerStatusStyle}">${escapeHtml(rdo.status || '-')}</span></span>
       </div>
     `;
@@ -753,6 +778,15 @@ async function renderFallbackPdf(data, reason) {
   const chunks = [];
   doc.on('data', (chunk) => chunks.push(chunk));
   const done = new Promise((resolve) => doc.on('end', () => resolve(Buffer.concat(chunks))));
+  const logoPaths = [
+    resolveProjectLogoPath(data.rdo.projeto_logo_empresa_responsavel),
+    resolveProjectLogoPath(data.rdo.projeto_logo_empresa_executante)
+  ].filter((logoPath) => logoPath && /\.(png|jpe?g)$/i.test(logoPath));
+  if (logoPaths.length) {
+    const logoY = doc.y;
+    logoPaths.forEach((logoPath, index) => doc.image(logoPath, 36 + (index * 130), logoY, { fit: [120, 42] }));
+    doc.y = logoY + 50;
+  }
 
   doc.font('Helvetica-Bold').fontSize(16).text('Relatório Diário de Obra');
   doc.moveDown(0.2);

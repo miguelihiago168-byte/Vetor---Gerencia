@@ -225,6 +225,17 @@ function RDODetalhes() {
     }
   };
 
+  const voltarAprovadoParaCorrecao = async () => {
+    try {
+      const resp = await executeRdoWorkflow(rdoId, 'VOLTAR_APROVADO_PARA_CORRECAO');
+      setRdo(prev => ({ ...prev, status: resp.data?.status, correcao_solicitada: 1, correcao_motivo: null }));
+      setSucesso(resp.data?.mensagem || 'RDO aprovado devolvido para correção.');
+      carregarDados();
+    } catch (error) {
+      await alert({ title: 'Erro', message: 'Falha ao voltar o RDO para correção: ' + (error.response?.data?.erro || error.message) });
+    }
+  };
+
   const solicitarCorrecaoRDO = async () => {
     try {
       if (!textoCorrecao.trim()) {
@@ -298,6 +309,18 @@ function RDODetalhes() {
           <div className="rdo-report-hero-main">
             <CockpitReturnButton fallbackTo={`/projeto/${projetoId}/rdos`} className="btn rdo-report-back-btn" />
             <div className="rdo-report-title-block">
+              {(rdo.logo_empresa_responsavel || rdo.logo_empresa_executante) && (
+                <div className="rdo-company-brands rdo-report-company-brands">
+                  {rdo.logo_empresa_responsavel && <div className="rdo-company-brand">
+                    <img src={getUploadUrl(rdo.logo_empresa_responsavel)} alt={`Logo ${rdo.empresa_responsavel}`} />
+                    <div><span>Contratante</span><strong>{rdo.empresa_responsavel}</strong></div>
+                  </div>}
+                  {rdo.logo_empresa_executante && <div className="rdo-company-brand">
+                    <img src={getUploadUrl(rdo.logo_empresa_executante)} alt={`Logo ${rdo.empresa_executante}`} />
+                    <div><span>Executante</span><strong>{rdo.empresa_executante}</strong></div>
+                  </div>}
+                </div>
+              )}
               <div className="rdo-report-eyebrow">Relatório diário de obra</div>
               <div className="rdo-report-title-row">
                 <h1>RDO {numeroRdoExibicao}</h1>
@@ -323,6 +346,9 @@ function RDODetalhes() {
                 <Button tone="danger" variant="solid" startIcon={XCircle} className="rdo-view-action-btn" onClick={() => { setAcaoDevolucao('REPROVAR'); setShowSolicitarCorrecaoModal(true); }}>Reprovar</Button>
               </>
             )}
+            {rdo.status === 'Aprovado' && (canDecidirGestor || canDecidirFiscal) && (
+              <Button tone="warning" variant="soft" startIcon={RotateCcw} className="rdo-view-action-btn" onClick={voltarAprovadoParaCorrecao}>Voltar para correção</Button>
+            )}
           </div>
 
           <div className="rdo-report-meta-grid">
@@ -346,18 +372,10 @@ function RDODetalhes() {
               <span>Obra</span>
               <strong>{rdo.projeto_nome || 'N/A'}</strong>
             </div>
-            {rdo.gestor_aprovado_por_nome && (
-              <div className="rdo-report-meta-item">
-                <CheckCircle2 size={16} />
-                <span>Aprovação do gestor</span>
-                <strong>{rdo.gestor_aprovado_por_nome}</strong>
-              </div>
-            )}
-            {rdo.fiscal_aprovado_por_nome && (
-              <div className="rdo-report-meta-item">
-                <CheckCircle2 size={16} />
-                <span>Aprovação do fiscal</span>
-                <strong>{rdo.fiscal_aprovado_por_nome}</strong>
+            {(rdo.gestor_aprovado_por_nome || rdo.fiscal_aprovado_por_nome) && (
+              <div className="rdo-report-approval-summary">
+                {rdo.gestor_aprovado_por_nome && <span><CheckCircle2 size={15} />Gestor: <strong>{rdo.gestor_aprovado_por_nome}</strong></span>}
+                {rdo.fiscal_aprovado_por_nome && <span><CheckCircle2 size={15} />Fiscal: <strong>{rdo.fiscal_aprovado_por_nome}</strong></span>}
               </div>
             )}
           </div>

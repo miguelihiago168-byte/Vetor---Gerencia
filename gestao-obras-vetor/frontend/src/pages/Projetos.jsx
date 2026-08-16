@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getProjetos, createProjeto, updateProjeto, getUsuarios, arquivarProjeto, desarquivarProjeto, getDashboardAvanco, copiarEapProjeto } from '../services/api';
+import { getProjetos, createProjeto, updateProjeto, uploadProjetoLogos, getUploadUrl, getUsuarios, arquivarProjeto, desarquivarProjeto, getDashboardAvanco, copiarEapProjeto } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
 import { useNotification } from '../context/NotificationContext';
@@ -51,6 +51,8 @@ function Projetos() {
   const [sucesso, setSucesso] = useState('');
   const [showArquivados, setShowArquivados] = useState(false);
   const [copiarEapDe, setCopiarEapDe] = useState('');
+  const [logoFiles, setLogoFiles] = useState({ responsavel: null, executante: null });
+  const [logoPreviews, setLogoPreviews] = useState({ responsavel: '', executante: '' });
   
   const { isGestor, perfil } = useAuth();
   const navigate = useNavigate();
@@ -112,15 +114,28 @@ function Projetos() {
     e.preventDefault();
     setErro('');
     setSucesso('');
+    let projetoPersistido = false;
 
     try {
+      const enviarLogos = async (projetoId) => {
+        if (!logoFiles.responsavel && !logoFiles.executante) return;
+        const dados = new FormData();
+        if (logoFiles.responsavel) dados.append('logo_empresa_responsavel', logoFiles.responsavel);
+        if (logoFiles.executante) dados.append('logo_empresa_executante', logoFiles.executante);
+        await uploadProjetoLogos(projetoId, dados);
+      };
+
       if (editando) {
         await updateProjeto(editando.id, formData);
+        projetoPersistido = true;
+        await enviarLogos(editando.id);
         setSucesso('Projeto atualizado com sucesso!');
         notifySuccess('Projeto atualizado com sucesso!', 4000);
       } else {
         const res = await createProjeto(formData);
         const novoId = res.data?.projeto?.id;
+        projetoPersistido = Boolean(novoId);
+        if (novoId) await enviarLogos(novoId);
         if (copiarEapDe && novoId) {
           try {
             await copiarEapProjeto(novoId, Number(copiarEapDe));
@@ -142,13 +157,19 @@ function Projetos() {
       
       setTimeout(() => setSucesso(''), 3000);
     } catch (error) {
-      const msg = error.response?.data?.erro || 'Erro ao salvar projeto.';
+      const detalhe = error.response?.data?.erro || 'Erro ao salvar as logos do projeto.';
+      const msg = projetoPersistido ? `Projeto salvo, mas ${detalhe}` : detalhe;
       setErro(msg);
       notifyError(msg, 6000);
+      if (projetoPersistido) {
+        await carregarDados();
+        fecharModal();
+      }
     }
   };
 
   const abrirModal = (projeto = null) => {
+    setLogoFiles({ responsavel: null, executante: null });
     if (projeto) {
       setEditando(projeto);
       setFormData({
@@ -158,6 +179,10 @@ function Projetos() {
         prazo_termino: getDateKey(projeto.prazo_termino),
         cidade: projeto.cidade,
         usuarios: projeto.usuarios?.map(u => u.id) || []
+      });
+      setLogoPreviews({
+        responsavel: projeto.logo_empresa_responsavel ? getUploadUrl(projeto.logo_empresa_responsavel) : '',
+        executante: projeto.logo_empresa_executante ? getUploadUrl(projeto.logo_empresa_executante) : ''
       });
     } else {
       setEditando(null);
@@ -169,6 +194,7 @@ function Projetos() {
         cidade: '',
         usuarios: []
       });
+      setLogoPreviews({ responsavel: '', executante: '' });
     }
     setShowModal(true);
   };
@@ -178,6 +204,16 @@ function Projetos() {
     setEditando(null);
     setErro('');
     setCopiarEapDe('');
+    setLogoFiles({ responsavel: null, executante: null });
+    setLogoPreviews({ responsavel: '', executante: '' });
+  };
+
+  const selecionarLogo = (tipo, arquivo) => {
+    if (!arquivo) return;
+    setLogoFiles(prev => ({ ...prev, [tipo]: arquivo }));
+    const reader = new FileReader();
+    reader.onload = () => setLogoPreviews(prev => ({ ...prev, [tipo]: String(reader.result || '') }));
+    reader.readAsDataURL(arquivo);
   };
 
   const handleArquivar = async (id) => {
@@ -411,6 +447,41 @@ function Projetos() {
                     onChange={(e) => setFormData({ ...formData, empresa_executante: e.target.value })}
                     required
                   />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', marginBottom: '16px' }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    {formData.empresa_responsavel.trim()
+                      ? <label className="form-label">Logo da {formData.empresa_responsavel.trim()}</label>
+                      : <small style={{ color: 'var(--text-muted)', display: 'block', marginBottom: 8 }}>Informe a empresa responsável para anexar a logo.</small>}
+                    <input id="logo-empresa-responsavel" type="file" accept="image/jpeg,image/png,image/webp" disabled={!formData.empresa_responsavel.trim()} onChange={(e) => selecionarLogo('responsavel', e.target.files?.[0])} style={{ display: 'none' }} />
+                    {formData.empresa_responsavel.trim() && <label htmlFor="logo-empresa-responsavel" className="btn btn-secondary" style={{ display: 'inline-flex', marginBottom: 6 }}>
+                      {logoFiles.responsavel ? `Trocar logo da ${formData.empresa_responsavel.trim()}` : `Selecionar logo da ${formData.empresa_responsavel.trim()}`}
+                    </label>}
+                    {formData.empresa_responsavel.trim() && <>
+                      <small style={{ color: 'var(--text-muted)', display: 'block' }}>
+                        {logoFiles.responsavel ? `Arquivo selecionado: ${logoFiles.responsavel.name}` : logoPreviews.responsavel ? `Logo atual de ${formData.empresa_responsavel.trim()}` : `Aguardando o logo da ${formData.empresa_responsavel.trim()}`}
+                      </small>
+                      <small style={{ color: 'var(--text-muted)' }}>JPEG, PNG ou WebP — até 5 MB</small>
+                    </>}
+                    {logoPreviews.responsavel && <img src={logoPreviews.responsavel} alt={`Logo da ${formData.empresa_responsavel.trim()}`} style={{ display: 'block', maxWidth: '100%', height: 72, objectFit: 'contain', marginTop: 8 }} />}
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    {formData.empresa_executante.trim()
+                      ? <label className="form-label">Logo da {formData.empresa_executante.trim()}</label>
+                      : <small style={{ color: 'var(--text-muted)', display: 'block', marginBottom: 8 }}>Informe a empresa executante para anexar a logo.</small>}
+                    <input id="logo-empresa-executante" type="file" accept="image/jpeg,image/png,image/webp" disabled={!formData.empresa_executante.trim()} onChange={(e) => selecionarLogo('executante', e.target.files?.[0])} style={{ display: 'none' }} />
+                    {formData.empresa_executante.trim() && <label htmlFor="logo-empresa-executante" className="btn btn-secondary" style={{ display: 'inline-flex', marginBottom: 6 }}>
+                      {logoFiles.executante ? `Trocar logo da ${formData.empresa_executante.trim()}` : `Selecionar logo da ${formData.empresa_executante.trim()}`}
+                    </label>}
+                    {formData.empresa_executante.trim() && <>
+                      <small style={{ color: 'var(--text-muted)', display: 'block' }}>
+                        {logoFiles.executante ? `Arquivo selecionado: ${logoFiles.executante.name}` : logoPreviews.executante ? `Logo atual de ${formData.empresa_executante.trim()}` : `Aguardando o logo da ${formData.empresa_executante.trim()}`}
+                      </small>
+                      <small style={{ color: 'var(--text-muted)' }}>JPEG, PNG ou WebP — até 5 MB</small>
+                    </>}
+                    {logoPreviews.executante && <img src={logoPreviews.executante} alt={`Logo da ${formData.empresa_executante.trim()}`} style={{ display: 'block', maxWidth: '100%', height: 72, objectFit: 'contain', marginTop: 8 }} />}
+                  </div>
                 </div>
 
                 <div className="form-group">

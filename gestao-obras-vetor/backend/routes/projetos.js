@@ -1,4 +1,7 @@
 const express = require('express');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const { body, validationResult } = require('express-validator');
 const { allQuery, runQuery, getQuery } = require('../config/database');
 const { auth, isGestor } = require('../middleware/auth');
@@ -7,10 +10,104 @@ const { PERFIS, inferirPerfil } = require('../constants/access');
 
 const router = express.Router();
 
+const uploadsDir = path.join(__dirname, '..', 'uploads');
+const tenantUploadRelativeDir = (tenantId) => `tenant_${Number(tenantId)}`;
+
+const ensureTenantUploadDir = (tenantId) => {
+  const numericTenantId = Number(tenantId);
+  if (!Number.isInteger(numericTenantId) || numericTenantId <= 0) {
+    throw new Error('Tenant inválido para upload.');
+  }
+  const dir = path.join(uploadsDir, tenantUploadRelativeDir(numericTenantId));
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+};
+
+const projectLogoStorage = multer.diskStorage({
+  destination: (req, _file, cb) => {
+    try {
+      cb(null, ensureTenantUploadDir(req.tenantId));
+    } catch (error) {
+      cb(error);
+    }
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(String(file.originalname || '')).toLowerCase();
+    cb(null, `logo-projeto-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`);
+  }
+});
+
+const projectLogoUpload = multer({
+  storage: projectLogoStorage,
+  limits: { fileSize: 5 * 1024 * 1024, files: 2 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(String(file.originalname || '')).toLowerCase();
+    const validExt = /\.(jpe?g|png|webp)$/.test(ext);
+    const validMime = /^image\/(jpeg|png|webp)$/i.test(String(file.mimetype || ''));
+    if (validExt && validMime) return cb(null, true);
+    return cb(new Error('Envie uma imagem JPEG, PNG ou WebP.'));
+  }
+});
+
+const uploadProjectLogos = (req, res, next) => {
+  projectLogoUpload.fields([
+    { name: 'logo_empresa_responsavel', maxCount: 1 },
+    { name: 'logo_empresa_executante', maxCount: 1 }
+  ])(req, res, (error) => {
+    if (!error) return next();
+    if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ erro: 'Cada logo pode ter no máximo 5 MB.' });
+    }
+    return res.status(400).json({ erro: error.message || 'Arquivo de logo inválido.' });
+  });
+};
+
 const usuarioPodeVerTodosProjetos = (usuario) => {
   const perfil = inferirPerfil(usuario);
   return perfil === PERFIS.ADM || perfil === PERFIS.GESTOR_GERAL;
 };
+
+router.post('/:id/logos', [auth, isGestor, uploadProjectLogos], async (req, res) => {
+  try {
+    const { id } = req.params;
+    const tenantId = req.tenantId;
+    if (!tenantId) return res.status(400).json({ erro: 'Tenant não definido.' });
+
+    const projetoAnterior = await getQuery('SELECT * FROM projetos WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    if (!projetoAnterior) return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
+
+    const responsavel = req.files?.logo_empresa_responsavel?.[0];
+    const executante = req.files?.logo_empresa_executante?.[0];
+    if (!responsavel && !executante) {
+      return res.status(400).json({ erro: 'Envie ao menos uma logo para atualizar.' });
+    }
+
+    const logoResponsavel = responsavel
+      ? `${tenantUploadRelativeDir(tenantId)}/${responsavel.filename}`
+      : projetoAnterior.logo_empresa_responsavel;
+    const logoExecutante = executante
+      ? `${tenantUploadRelativeDir(tenantId)}/${executante.filename}`
+      : projetoAnterior.logo_empresa_executante;
+
+    await runQuery(
+      'UPDATE projetos SET logo_empresa_responsavel = ?, logo_empresa_executante = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?',
+      [logoResponsavel, logoExecutante, id, tenantId]
+    );
+    const projeto = await getQuery('SELECT * FROM projetos WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+    await registrarAuditoria('projetos', id, 'UPDATE_LOGOS', projetoAnterior, projeto, req.usuario.id);
+
+    return res.json({
+      mensagem: 'Logos do projeto atualizadas com sucesso.',
+      logos: {
+        logo_empresa_responsavel: projeto.logo_empresa_responsavel,
+        logo_empresa_executante: projeto.logo_empresa_executante
+      }
+    });
+  } catch (error) {
+    console.error('Erro ao atualizar logos do projeto:', error);
+    return res.status(500).json({ erro: 'Erro ao atualizar logos do projeto.' });
+  }
+});
 
 // Listar projetos do usuário (tenant-aware)
 router.get('/', auth, async (req, res) => {

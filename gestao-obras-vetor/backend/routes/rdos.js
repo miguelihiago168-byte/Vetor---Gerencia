@@ -430,7 +430,8 @@ router.get('/:id', auth, async (req, res) => {
       rdo = await getQuery(`
         SELECT r.*, u.nome as criado_por_nome, g.nome as aprovado_por_nome,
                gm.nome AS gestor_aprovado_por_nome, fs.nome AS fiscal_aprovado_por_nome,
-               p.nome as projeto_nome, p.empresa_responsavel, p.empresa_executante, p.cidade
+               p.nome as projeto_nome, p.empresa_responsavel, p.empresa_executante,
+               p.logo_empresa_responsavel, p.logo_empresa_executante, p.cidade
         FROM rdos r
         LEFT JOIN usuarios u ON r.criado_por = u.id
         LEFT JOIN usuarios g ON r.aprovado_por = g.id
@@ -1331,7 +1332,11 @@ router.patch('/:id/fluxo', auth, async (req, res) => {
     }
 
     const now = new Date().toISOString();
-    const isReturn = [RDO_ACTION.REQUEST_CORRECTION, RDO_ACTION.REJECT].includes(acao);
+    const isReturn = [
+      RDO_ACTION.REQUEST_CORRECTION,
+      RDO_ACTION.REJECT,
+      RDO_ACTION.RETURN_APPROVED_TO_CORRECTION
+    ].includes(acao);
     const resetApprovals = acao === RDO_ACTION.SEND_TO_MANAGER || isReturn;
     const historico = (() => {
       try { return JSON.parse(rdoAtual.historico_status || '[]'); } catch (_) { return []; }
@@ -1343,13 +1348,13 @@ router.patch('/:id/fluxo', auth, async (req, res) => {
       por: req.usuario.id,
       nome: req.usuario.nome || null,
       em: now,
-      motivo: isReturn ? String(motivo).trim() : null
+      motivo: motivo ? String(motivo).trim() : null
     });
 
     const correctionOrigin = isReturn
-      ? `${transition.stage === 'fiscal' ? 'Fiscalização' : 'Gestão'}: ${acao === RDO_ACTION.REJECT ? 'reprovado' : 'correção solicitada'}`
+      ? `${transition.stage === 'fiscal' ? 'Fiscalização' : 'Gestão'}: ${acao === RDO_ACTION.REJECT ? 'reprovado' : acao === RDO_ACTION.RETURN_APPROVED_TO_CORRECTION ? 'devolvido após aprovação' : 'correção solicitada'}`
       : null;
-    const correctionMessage = isReturn ? String(motivo).trim() : null;
+    const correctionMessage = motivo ? String(motivo).trim() : null;
 
     const updateResult = await runQuery(`
       UPDATE rdos SET
@@ -1424,10 +1429,23 @@ router.patch('/:id/fluxo', auth, async (req, res) => {
       try { await clearRdoActivityAlerts({ rdoId: id }); } catch (error) { console.warn('Falha ao encerrar alertas de RDO:', error?.message || error); }
     }
 
+    if (acao === RDO_ACTION.RETURN_APPROVED_TO_CORRECTION) {
+      const atividades = await allQuery('SELECT DISTINCT atividade_eap_id FROM rdo_atividades WHERE rdo_id = ?', [id]);
+      await recalcularEapAtividades(atividades.map((item) => item.atividade_eap_id), {
+        rdoId: id,
+        origem: ORIGINS.RDO_REVERTIDO,
+        usuarioId: req.usuario.id
+      });
+    }
+
     await registrarAuditoria('rdos', id, 'WORKFLOW_ACTION', rdoAtual, { acao, status: transition.nextStatus, motivo: correctionMessage }, req.usuario.id);
     res.json({
       mensagem: isReturn
-        ? (acao === RDO_ACTION.REJECT ? 'RDO reprovado e devolvido para correção.' : 'Correção solicitada; RDO devolvido para edição.')
+        ? (acao === RDO_ACTION.REJECT
+          ? 'RDO reprovado e devolvido para correção.'
+          : acao === RDO_ACTION.RETURN_APPROVED_TO_CORRECTION
+            ? 'RDO aprovado devolvido para correção.'
+            : 'Correção solicitada; RDO devolvido para edição.')
         : `RDO atualizado para ${transition.nextStatus}.`,
       status: transition.nextStatus,
       correcao_solicitada: isReturn ? 1 : 0,

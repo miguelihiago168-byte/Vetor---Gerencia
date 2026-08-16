@@ -140,6 +140,9 @@ export const getProjetos = () => api.get('/projetos');
 export const getProjeto = (id) => api.get(`/projetos/${id}`);
 export const createProjeto = (data) => api.post('/projetos', data);
 export const updateProjeto = (id, data) => api.put(`/projetos/${id}`, data);
+export const uploadProjetoLogos = (id, formData) => api.post(`/projetos/${id}/logos`, formData, {
+  headers: { 'Content-Type': 'multipart/form-data' }
+});
 export const arquivarProjeto = (id) => api.patch(`/projetos/${id}/arquivar`);
 export const desarquivarProjeto = (id) => api.patch(`/projetos/${id}/desarquivar`);
 export const copiarEapProjeto = (destinoId, origemProjetoId) => api.post(`/projetos/${destinoId}/copiar-eap`, { origem_projeto_id: origemProjetoId });

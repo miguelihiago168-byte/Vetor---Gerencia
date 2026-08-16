@@ -29,6 +29,54 @@
   margin-bottom: 4px;
 }
 
+.rdo-company-brands {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.rdo-company-brand {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-width: min(100%, 310px);
+  padding: 10px 14px 10px 10px;
+  border: 1px solid #d8e2ec;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.rdo-company-brand img {
+  width: 112px;
+  height: 72px;
+  object-fit: contain;
+  padding: 5px;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.rdo-company-brand span,
+.rdo-company-brand strong {
+  display: block;
+}
+
+.rdo-company-brand span {
+  margin-bottom: 3px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.rdo-company-brand strong {
+  color: #102a43;
+  font-size: 14px;
+  line-height: 1.25;
+}
+
 .rdo-header-meta {
   display: flex;
   flex-direction: column;
@@ -1082,8 +1130,9 @@
 
 .rdo-report-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 18px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  position: relative;
   margin-bottom: 18px;
   padding: 18px;
   border: 1px solid #dbe4ef;
@@ -1093,14 +1142,15 @@
 }
 
 .rdo-report-hero-main {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: start;
-  gap: 18px;
+  display: block;
+  padding: 2px 116px 0;
   min-width: 0;
 }
 
 .rdo-report-back-btn {
+  position: absolute;
+  top: 18px;
+  left: 18px;
   min-width: 0;
   min-height: 40px;
   flex-shrink: 0;
@@ -1126,8 +1176,48 @@
 
 .rdo-report-title-block {
   min-width: 0;
-  justify-self: center;
   text-align: center;
+}
+
+.rdo-report-company-brands {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  width: min(540px, 100%);
+  gap: 8px;
+  margin: 0 auto 14px;
+}
+
+.rdo-report-company-brands .rdo-company-brand {
+  min-width: 0;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.rdo-report-company-brands .rdo-company-brand img {
+  width: 56px;
+  height: 42px;
+  padding: 3px;
+  border-radius: 6px;
+}
+
+.rdo-report-company-brands .rdo-company-brand span {
+  margin-bottom: 1px;
+  font-size: 9px;
+}
+
+.rdo-report-company-brands .rdo-company-brand strong {
+  font-size: 12px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.rdo-report-actions {
+  position: absolute;
+  top: 18px;
+  right: 18px;
 }
 
 .rdo-report-eyebrow {
@@ -1230,6 +1320,32 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
+}
+
+.rdo-report-approval-summary {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 18px;
+  padding-top: 2px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.rdo-report-approval-summary span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.rdo-report-approval-summary svg {
+  color: #16a34a;
+}
+
+.rdo-report-approval-summary strong {
+  color: #0f172a;
 }
 
 .rdo-report-meta-item {
@@ -1734,6 +1850,8 @@
   }
 
   .rdo-report-actions {
+    position: static;
+    margin-top: 4px;
     justify-content: flex-start;
   }
 
@@ -1756,17 +1874,22 @@
   }
 
   .rdo-report-hero-main {
-    grid-template-columns: 1fr;
-    justify-items: center;
+    padding: 48px 0 0;
     text-align: center;
   }
 
   .rdo-report-back-btn {
-    justify-self: start;
+    top: 14px;
+    left: 14px;
   }
 
   .rdo-report-title-block {
-    justify-self: stretch;
+    width: 100%;
+  }
+
+  .rdo-report-company-brands {
+    grid-template-columns: 1fr;
+    width: 100%;
   }
 
   .rdo-report-title-row h1 {
@@ -1870,6 +1993,46 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
+}
+
+.rdo-page .rdo-company-brands {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.rdo-page .rdo-company-brand {
+  min-width: 0;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 8px;
+  padding: 6px 8px;
+  border-color: #d7e3ee;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.rdo-page .rdo-company-brand img {
+  width: 54px;
+  height: 42px;
+  padding: 3px;
+  border-radius: 6px;
+}
+
+.rdo-page .rdo-company-brand span {
+  margin-bottom: 1px;
+  font-size: 9px;
+  letter-spacing: 0.035em;
+}
+
+.rdo-page .rdo-company-brand strong {
+  font-size: 12px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.rdo-report-company-brands {
+  margin-bottom: 18px;
 }
 
 .rdo-page .rdo-header-meta {
@@ -2393,6 +2556,10 @@
 
   .rdo-page .rdo-header-right {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rdo-page .rdo-company-brands {
+    grid-template-columns: 1fr;
   }
 
   .rdo-page .rdo-header-meta-row {

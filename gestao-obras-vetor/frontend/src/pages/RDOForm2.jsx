@@ -450,6 +450,13 @@ function RDOForm2() {
               numero_nf: m.numero_nf || ''
             }))
           });
+          setDraftColab({
+            nome: '', funcao: '', tipo: 'Direta',
+            entrada: rdo.entrada_saida_inicio || '07:00',
+            saida_almoco: rdo.intervalo_almoco_inicio || '12:00',
+            retorno_almoco: rdo.intervalo_almoco_fim || '13:00',
+            saida_final: rdo.entrada_saida_fim || '17:00'
+          });
 
           // Equipamentos vêm da nova tabela
           setEquipamentosLista(rdo.equipamentos_lista || []);
@@ -845,6 +852,32 @@ function RDOForm2() {
   });
   const [colaboradorSelecionado, setColaboradorSelecionado] = useState('');
 
+  const horariosDoDia = (dados = formData) => ({
+    entrada: dados.entrada_saida_inicio,
+    saida_almoco: dados.intervalo_almoco_inicio,
+    retorno_almoco: dados.intervalo_almoco_fim,
+    saida_final: dados.entrada_saida_fim
+  });
+
+  const alterarHorarioDoDia = async (campo, valor) => {
+    const proximosDados = { ...formData, [campo]: valor };
+    const possuiColaboradores = formData.mao_obra_detalhada.length > 0;
+    const aplicarAosColaboradores = !possuiColaboradores || await confirm({
+      title: 'Aplicar horário aos colaboradores?',
+      message: 'Deseja atualizar os horários de todos os colaboradores já adicionados com a nova jornada do dia?',
+      confirmText: 'Aplicar a todos',
+      cancelText: 'Manter individuais'
+    });
+
+    if (aplicarAosColaboradores) {
+      const horarios = horariosDoDia(proximosDados);
+      proximosDados.mao_obra_detalhada = formData.mao_obra_detalhada.map((colaborador) => ({ ...colaborador, ...horarios }));
+    }
+    setFormData(proximosDados);
+    setDraftColab((atual) => ({ ...atual, ...horariosDoDia(proximosDados) }));
+    setDirty(true);
+  };
+
   const chaveColaborador = (nome, funcao) =>
     `${String(nome || '').trim().toLowerCase()}|${String(funcao || '').trim().toLowerCase()}`;
 
@@ -905,7 +938,7 @@ function RDOForm2() {
       }
     }
     setFormData({ ...formData, mao_obra_detalhada: [...formData.mao_obra_detalhada, draftColab] });
-    setDraftColab({ nome: '', funcao: '', tipo: 'Direta', entrada: '07:00', saida_almoco: '12:00', retorno_almoco: '13:00', saida_final: '17:00' });
+    setDraftColab({ nome: '', funcao: '', tipo: 'Direta', ...horariosDoDia() });
     setColaboradorSelecionado('');
     setDirty(true);
   };
@@ -1624,6 +1657,18 @@ function RDOForm2() {
         {/* ── Cabeçalho Inteligente ────────────────────── */}
         <div className="rdo-header-card" style={{ marginBottom: '16px' }}>
           <div className="rdo-header-left">
+            {(projeto?.logo_empresa_responsavel || projeto?.logo_empresa_executante) && (
+              <div className="rdo-company-brands">
+                {projeto.logo_empresa_responsavel && <div className="rdo-company-brand">
+                  <img src={getUploadUrl(projeto.logo_empresa_responsavel)} alt={`Logo ${projeto.empresa_responsavel}`} />
+                  <div><span>Contratante</span><strong>{projeto.empresa_responsavel}</strong></div>
+                </div>}
+                {projeto.logo_empresa_executante && <div className="rdo-company-brand">
+                  <img src={getUploadUrl(projeto.logo_empresa_executante)} alt={`Logo ${projeto.empresa_executante}`} />
+                  <div><span>Executante</span><strong>{projeto.empresa_executante}</strong></div>
+                </div>}
+              </div>
+            )}
             {projeto && (
               <div className="rdo-header-meta">
                 <div className="rdo-header-meta-row">
@@ -1719,17 +1764,17 @@ function RDOForm2() {
             <div className="form-group" style={{ flex: '1 1 100px', minWidth: '90px' }}>
               <label className="form-label">Entrada</label>
               <input className="form-input" type="time" value={formData.entrada_saida_inicio}
-                onChange={(e) => { setFormData({ ...formData, entrada_saida_inicio: e.target.value }); setDirty(true); }} />
+                onChange={(e) => alterarHorarioDoDia('entrada_saida_inicio', e.target.value)} />
             </div>
             <div className="form-group" style={{ flex: '1 1 115px', minWidth: '105px' }}>
               <label className="form-label">Saída almoço</label>
               <input className="form-input" type="time" value={formData.intervalo_almoco_inicio}
-                onChange={(e) => { setFormData({ ...formData, intervalo_almoco_inicio: e.target.value }); setDirty(true); }} />
+                onChange={(e) => alterarHorarioDoDia('intervalo_almoco_inicio', e.target.value)} />
             </div>
             <div className="form-group" style={{ flex: '1 1 115px', minWidth: '105px' }}>
               <label className="form-label">Retorno almoço</label>
               <input className="form-input" type="time" value={formData.intervalo_almoco_fim}
-                onChange={(e) => { setFormData({ ...formData, intervalo_almoco_fim: e.target.value }); setDirty(true); }} />
+                onChange={(e) => alterarHorarioDoDia('intervalo_almoco_fim', e.target.value)} />
             </div>
             <div className="form-group" style={{ flex: '1 1 100px', minWidth: '90px' }}>
               <label className="form-label">Intervalo</label>
@@ -1739,7 +1784,7 @@ function RDOForm2() {
             <div className="form-group" style={{ flex: '1 1 100px', minWidth: '90px' }}>
               <label className="form-label">Saída</label>
               <input className="form-input" type="time" value={formData.entrada_saida_fim}
-                onChange={(e) => { setFormData({ ...formData, entrada_saida_fim: e.target.value }); setDirty(true); }} />
+                onChange={(e) => alterarHorarioDoDia('entrada_saida_fim', e.target.value)} />
             </div>
           </div>
         </Section>

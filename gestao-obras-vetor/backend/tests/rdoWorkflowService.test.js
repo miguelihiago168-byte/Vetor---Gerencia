@@ -4,6 +4,7 @@ const { RDO_STATUS, RDO_ACTION, assertWorkflowAction } = require('../services/rd
 const creator = { id: 10, perfil: 'Fiscal' };
 const manager = { id: 20, perfil: 'Gestor da Obra' };
 const fiscal = { id: 30, perfil: 'Fiscal' };
+const colaborador = { id: 40, perfil: 'Colaborador' };
 const rdo = (status) => ({ id: 1, criado_por: creator.id, status });
 
 const expectsError = (fn, status) => {
@@ -35,14 +36,24 @@ const main = () => {
     assertWorkflowAction({ rdo: rdo(RDO_STATUS.MANAGER_REVIEW), usuario: manager, acao: RDO_ACTION.REJECT, motivo: 'Dados inconsistentes' }).nextStatus,
     RDO_STATUS.REJECTED
   );
+  assert.strictEqual(
+    assertWorkflowAction({ rdo: rdo(RDO_STATUS.APPROVED), usuario: manager, acao: RDO_ACTION.RETURN_APPROVED_TO_CORRECTION }).nextStatus,
+    RDO_STATUS.DRAFT
+  );
+  assert.strictEqual(
+    assertWorkflowAction({ rdo: rdo(RDO_STATUS.APPROVED), usuario: fiscal, acao: RDO_ACTION.RETURN_APPROVED_TO_CORRECTION }).nextStatus,
+    RDO_STATUS.DRAFT
+  );
 
   expectsError(() => assertWorkflowAction({ rdo: rdo(RDO_STATUS.MANAGER_REVIEW), usuario: fiscal, acao: RDO_ACTION.APPROVE_FISCAL }), 409);
   expectsError(() => assertWorkflowAction({ rdo: rdo(RDO_STATUS.FISCAL_REVIEW), usuario: manager, acao: RDO_ACTION.APPROVE_MANAGER }), 409);
   expectsError(() => assertWorkflowAction({ rdo: rdo(RDO_STATUS.MANAGER_REVIEW), usuario: manager, acao: RDO_ACTION.REJECT }), 400);
   expectsError(() => assertWorkflowAction({ rdo: rdo(RDO_STATUS.DRAFT), usuario: manager, acao: RDO_ACTION.SEND_TO_MANAGER }), 403);
   expectsError(() => assertWorkflowAction({ rdo: { ...rdo(RDO_STATUS.REJECTED), correcao_solicitada: 1 }, usuario: creator, acao: RDO_ACTION.SEND_TO_MANAGER }), 409);
+  expectsError(() => assertWorkflowAction({ rdo: rdo(RDO_STATUS.APPROVED), usuario: colaborador, acao: RDO_ACTION.RETURN_APPROVED_TO_CORRECTION }), 403);
+  expectsError(() => assertWorkflowAction({ rdo: rdo(RDO_STATUS.DRAFT), usuario: manager, acao: RDO_ACTION.RETURN_APPROVED_TO_CORRECTION }), 409);
 
-  console.log(JSON.stringify({ ok: true, scenarios: 11 }));
+  console.log(JSON.stringify({ ok: true, scenarios: 15 }));
 };
 
 main();

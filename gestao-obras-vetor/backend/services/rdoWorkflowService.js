@@ -13,6 +13,7 @@ const RDO_ACTION = Object.freeze({
   APPROVE_MANAGER: 'APROVAR_GESTOR',
   APPROVE_FISCAL: 'APROVAR_FISCAL',
   REQUEST_CORRECTION: 'SOLICITAR_CORRECAO',
+  RETURN_APPROVED_TO_CORRECTION: 'VOLTAR_APROVADO_PARA_CORRECAO',
   REJECT: 'REPROVAR'
 });
 
@@ -70,6 +71,16 @@ const assertWorkflowAction = ({ rdo, usuario, acao, motivo, exigeAprovacaoFiscal
     if (!isFiscal) throw workflowError('Apenas fiscais podem aprovar a etapa de fiscalização.', 403);
     if (rdo.status !== RDO_STATUS.FISCAL_REVIEW) throw workflowError('O RDO não aguarda aprovação do fiscal.');
     return { perfil, stage: 'fiscal', nextStatus: RDO_STATUS.APPROVED };
+  }
+
+  if (acao === RDO_ACTION.RETURN_APPROVED_TO_CORRECTION) {
+    if (rdo.status !== RDO_STATUS.APPROVED) {
+      throw workflowError('Apenas RDOs aprovados podem voltar para correção.');
+    }
+    if (!isManager && !isFiscal) {
+      throw workflowError('Apenas gestores ou fiscais podem devolver um RDO aprovado para correção.', 403);
+    }
+    return { perfil, stage: 'pos_aprovacao', nextStatus: RDO_STATUS.DRAFT };
   }
 
   const stage = rdo.status === RDO_STATUS.MANAGER_REVIEW
