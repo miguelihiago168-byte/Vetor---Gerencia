@@ -182,6 +182,7 @@ async function loadRdoPdfData(id) {
            p.empresa_executante AS projeto_executante,
            p.logo_empresa_responsavel AS projeto_logo_empresa_responsavel,
            p.logo_empresa_executante AS projeto_logo_empresa_executante,
+           p.rdo_exige_aprovacao_fiscal AS projeto_exige_aprovacao_fiscal,
            p.prazo_termino AS projeto_prazo_termino,
            p.criado_em AS projeto_criado_em,
            u.nome AS criado_por_nome,
@@ -357,6 +358,7 @@ function renderHtml(data) {
   const assinaturaAprovacao = aprovacaoPath && aprovacaoPath.startsWith(uploadsRoot + path.sep)
     ? toDataUri(aprovacaoPath, 'image/png')
     : null;
+  const exigeAprovacaoFiscal = Number(rdo.projeto_exige_aprovacao_fiscal ?? 1) !== 0;
   const assinaturaGestorPath = rdo.status === 'Aprovado' && rdo.gestor_aprovado_por_assinatura_png
     ? path.resolve(uploadsDir, String(rdo.gestor_aprovado_por_assinatura_png).replace(/\\/g, '/'))
     : null;
@@ -365,6 +367,9 @@ function renderHtml(data) {
     : null;
   const assinaturaGestor = assinaturaGestorPath && assinaturaGestorPath.startsWith(uploadsRoot + path.sep) ? toDataUri(assinaturaGestorPath, 'image/png') : null;
   const assinaturaFiscal = assinaturaFiscalPath && assinaturaFiscalPath.startsWith(uploadsRoot + path.sep) ? toDataUri(assinaturaFiscalPath, 'image/png') : null;
+  const gestorAprovadoNome = rdo.gestor_aprovado_por_nome || (!exigeAprovacaoFiscal ? rdo.aprovado_por_nome : null);
+  const assinaturaGestorExibida = assinaturaGestor || (!exigeAprovacaoFiscal ? assinaturaAprovacao : null);
+  const fiscalAprovadoNome = exigeAprovacaoFiscal ? rdo.fiscal_aprovado_por_nome : null;
   const dataRelatorio = fmtDate(rdo.data_relatorio);
   const statusStyle = statusInlineStyle(rdo.status || 'Em preenchimento');
   const totalEquipe = Number(rdo.mao_obra_direta || 0) + Number(rdo.mao_obra_indireta || 0) + Number(rdo.mao_obra_terceiros || 0);
@@ -655,21 +660,24 @@ function renderHtml(data) {
             ${assinatura ? `<img class="signature-image" src="${assinatura}" alt="Assinatura de ${escapeHtml(rdo.criado_por_nome || responsavelNome)}">` : ''}
             <div class="signature-line">${escapeHtml(rdo.criado_por_nome || responsavelNome)}<br><small>Responsável pelo preenchimento</small></div>
           </div>
-          ${rdo.gestor_aprovado_por_nome || rdo.fiscal_aprovado_por_nome ? `
+          ${gestorAprovadoNome ? `
             <div class="signature-box">
-              ${assinaturaGestor ? `<img class="signature-image" src="${assinaturaGestor}" alt="Assinatura de ${escapeHtml(rdo.gestor_aprovado_por_nome || 'Gestor')}">` : ''}
-              <div class="signature-line">${escapeHtml(rdo.gestor_aprovado_por_nome || 'Gestor')}<br><small>Aprovação do gestor</small></div>
+              ${assinaturaGestorExibida ? `<img class="signature-image" src="${assinaturaGestorExibida}" alt="Assinatura de ${escapeHtml(gestorAprovadoNome)}">` : ''}
+              <div class="signature-line">${escapeHtml(gestorAprovadoNome)}<br><small>Aprovação do gestor</small></div>
             </div>
+          ` : ''}
+          ${fiscalAprovadoNome ? `
             <div class="signature-box">
-              ${assinaturaFiscal ? `<img class="signature-image" src="${assinaturaFiscal}" alt="Assinatura de ${escapeHtml(rdo.fiscal_aprovado_por_nome || 'Fiscal')}">` : ''}
-              <div class="signature-line">${escapeHtml(rdo.fiscal_aprovado_por_nome || 'Fiscal')}<br><small>Aprovação da fiscalização</small></div>
+              ${assinaturaFiscal ? `<img class="signature-image" src="${assinaturaFiscal}" alt="Assinatura de ${escapeHtml(fiscalAprovadoNome)}">` : ''}
+              <div class="signature-line">${escapeHtml(fiscalAprovadoNome)}<br><small>Aprovação da fiscalização</small></div>
             </div>
-          ` : `
+          ` : ''}
+          ${!gestorAprovadoNome && !fiscalAprovadoNome ? `
             <div class="signature-box">
               ${assinaturaAprovacao ? `<img class="signature-image" src="${assinaturaAprovacao}" alt="Assinatura de ${escapeHtml(rdo.aprovado_por_nome || 'Aprovador')}">` : ''}
               <div class="signature-line">${escapeHtml(rdo.status === 'Aprovado' && rdo.aprovado_por_nome ? rdo.aprovado_por_nome : 'Aprovação / Fiscalização')}<br><small>Responsável pela aprovação</small></div>
             </div>
-          `}
+          ` : ''}
         </div>
       </div>
     </section>
@@ -805,12 +813,15 @@ async function renderFallbackPdf(data, reason) {
     doc.image(assinaturaFallbackPath, { fit: [180, 55], align: 'center' });
     doc.font('Helvetica').fontSize(9).text(`Assinatura: ${data.rdo.criado_por_nome || data.responsavelNome || '-'}`, { align: 'center' });
   }
-  const approvalSignatures = data.rdo.gestor_aprovado_por_nome || data.rdo.fiscal_aprovado_por_nome
-    ? [
-        ['Aprovação do gestor', data.rdo.gestor_aprovado_por_nome, data.rdo.gestor_aprovado_por_assinatura_png],
-        ['Aprovação da fiscalização', data.rdo.fiscal_aprovado_por_nome, data.rdo.fiscal_aprovado_por_assinatura_png]
-      ]
-    : [['Aprovação', data.rdo.aprovado_por_nome, data.rdo.aprovado_por_assinatura_png]];
+  const exigeAprovacaoFiscal = Number(data.rdo.projeto_exige_aprovacao_fiscal ?? 1) !== 0;
+  const gestorAprovadoNome = data.rdo.gestor_aprovado_por_nome || (!exigeAprovacaoFiscal ? data.rdo.aprovado_por_nome : null);
+  const approvalSignatures = [
+    gestorAprovadoNome && ['Aprovação do gestor', gestorAprovadoNome, data.rdo.gestor_aprovado_por_assinatura_png || (!exigeAprovacaoFiscal ? data.rdo.aprovado_por_assinatura_png : null)],
+    exigeAprovacaoFiscal && data.rdo.fiscal_aprovado_por_nome && ['Aprovação da fiscalização', data.rdo.fiscal_aprovado_por_nome, data.rdo.fiscal_aprovado_por_assinatura_png]
+  ].filter(Boolean);
+  if (approvalSignatures.length === 0) {
+    approvalSignatures.push(['Aprovação', data.rdo.aprovado_por_nome, data.rdo.aprovado_por_assinatura_png]);
+  }
   for (const [label, name, signature] of approvalSignatures) {
     const approvalPath = data.rdo.status === 'Aprovado' && signature
       ? path.resolve(uploadsDir, String(signature).replace(/\\/g, '/'))

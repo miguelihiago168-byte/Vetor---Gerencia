@@ -44,6 +44,7 @@ const initDatabase = async () => {
           nome TEXT NOT NULL,
           empresa_responsavel TEXT NOT NULL,
           empresa_executante TEXT NOT NULL,
+          data_inicio DATE NOT NULL,
           prazo_termino DATE NOT NULL,
           cidade TEXT NOT NULL,
           ativo INTEGER DEFAULT 1,

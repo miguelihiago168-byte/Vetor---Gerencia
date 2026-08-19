@@ -1130,8 +1130,9 @@
 
 .rdo-report-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 14px;
+  align-items: start;
   position: relative;
   margin-bottom: 18px;
   padding: 18px;
@@ -1143,7 +1144,7 @@
 
 .rdo-report-hero-main {
   display: block;
-  padding: 2px 116px 0;
+  padding: 2px 24px 0 116px;
   min-width: 0;
 }
 
@@ -1215,9 +1216,8 @@
 }
 
 .rdo-report-actions {
-  position: absolute;
-  top: 18px;
-  right: 18px;
+  grid-column: 2;
+  grid-row: 1;
 }
 
 .rdo-report-eyebrow {
@@ -1313,6 +1313,22 @@
   justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+@media (max-width: 1200px) {
+  .rdo-report-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rdo-report-hero-main {
+    padding-right: 116px;
+  }
+
+  .rdo-report-actions {
+    grid-column: 1;
+    grid-row: auto;
+    justify-content: center;
+  }
 }
 
 .rdo-report-meta-grid {

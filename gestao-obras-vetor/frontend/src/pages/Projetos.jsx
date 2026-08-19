@@ -43,6 +43,7 @@ function Projetos() {
     nome: '',
     empresa_responsavel: '',
     empresa_executante: '',
+    data_inicio: '',
     prazo_termino: '',
     cidade: '',
     usuarios: []
@@ -176,6 +177,7 @@ function Projetos() {
         nome: projeto.nome,
         empresa_responsavel: projeto.empresa_responsavel,
         empresa_executante: projeto.empresa_executante,
+        data_inicio: getDateKey(projeto.data_inicio),
         prazo_termino: getDateKey(projeto.prazo_termino),
         cidade: projeto.cidade,
         usuarios: projeto.usuarios?.map(u => u.id) || []
@@ -190,6 +192,7 @@ function Projetos() {
         nome: '',
         empresa_responsavel: '',
         empresa_executante: '',
+        data_inicio: '',
         prazo_termino: '',
         cidade: '',
         usuarios: []
@@ -484,15 +487,28 @@ function Projetos() {
                   </div>
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label">Prazo de Término *</label>
-                  <input
-                    type="date"
-                    className="form-input"
-                    value={formData.prazo_termino}
-                    onChange={(e) => setFormData({ ...formData, prazo_termino: e.target.value })}
-                    required
-                  />
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Data de início *</label>
+                    <input
+                      type="date"
+                      className="form-input"
+                      value={formData.data_inicio}
+                      onChange={(e) => setFormData({ ...formData, data_inicio: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Prazo de término *</label>
+                    <input
+                      type="date"
+                      className="form-input"
+                      value={formData.prazo_termino}
+                      min={formData.data_inicio || undefined}
+                      onChange={(e) => setFormData({ ...formData, prazo_termino: e.target.value })}
+                      required
+                    />
+                  </div>
                 </div>
 
                 <div className="form-group">

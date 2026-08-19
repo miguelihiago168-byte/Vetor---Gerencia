@@ -294,13 +294,13 @@ router.get('/:id', auth, async (req, res) => {
         const norm = /^\d{4}-\d{2}-\d{2}$/.test(str) ? str + 'T00:00:00' : str.replace(' ', 'T');
         const d = new Date(norm); d.setHours(0, 0, 0, 0); return d;
       };
-      const criadoEm = projeto.criado_em ? toMidnight(projeto.criado_em) : null;
+      const dataInicio = projeto.data_inicio ? toMidnight(projeto.data_inicio) : (projeto.criado_em ? toMidnight(projeto.criado_em) : null);
       const prazoTermino = projeto.prazo_termino ? toMidnight(projeto.prazo_termino) : null;
-      if (criadoEm && prazoTermino) {
+      if (dataInicio && prazoTermino) {
         const msDia = 1000 * 60 * 60 * 24;
-        const prazoContratual = Math.round((prazoTermino - criadoEm) / msDia);
+        const prazoContratual = Math.round((prazoTermino - dataInicio) / msDia);
         const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-        const prazoDecorrido = Math.max(0, Math.round((hoje - criadoEm) / msDia));
+        const prazoDecorrido = Math.max(0, Math.round((hoje - dataInicio) / msDia));
         const prazoAVencer = Math.max(0, prazoContratual - prazoDecorrido);
         projeto.prazo_contratual_dias = prazoContratual;
         projeto.prazo_decorrido = prazoDecorrido;
@@ -328,7 +328,14 @@ router.post('/', [auth, isGestor], [
   body('nome').trim().notEmpty(),
   body('empresa_responsavel').trim().notEmpty(),
   body('empresa_executante').trim().notEmpty(),
+  body('data_inicio').isDate(),
   body('prazo_termino').isDate(),
+  body('prazo_termino').custom((prazoTermino, { req }) => {
+    if (String(req.body.data_inicio) > String(prazoTermino)) {
+      throw new Error('A data de inicio deve ser anterior ou igual ao prazo de termino.');
+    }
+    return true;
+  }),
   body('cidade').trim().notEmpty(),
   body('usuarios').optional().isArray()
 ], async (req, res) => {
@@ -338,16 +345,16 @@ router.post('/', [auth, isGestor], [
       return res.status(400).json({ erro: 'Dados inválidos.', detalhes: errors.array() });
     }
 
-    const { nome, empresa_responsavel, empresa_executante, prazo_termino, cidade, usuarios } = req.body;
+    const { nome, empresa_responsavel, empresa_executante, data_inicio, prazo_termino, cidade, usuarios } = req.body;
     const tenantId = req.tenantId;
     if (!tenantId) {
       return res.status(400).json({ erro: 'Tenant não definido.' });
     }
 
     const result = await runQuery(`
-      INSERT INTO projetos (nome, empresa_responsavel, empresa_executante, prazo_termino, cidade, criado_por, tenant_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `, [nome, empresa_responsavel, empresa_executante, prazo_termino, cidade, req.usuario.id, tenantId]);
+      INSERT INTO projetos (nome, empresa_responsavel, empresa_executante, data_inicio, prazo_termino, cidade, criado_por, tenant_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `, [nome, empresa_responsavel, empresa_executante, data_inicio, prazo_termino, cidade, req.usuario.id, tenantId]);
 
     const projetoId = result.lastID;
 
@@ -378,18 +385,22 @@ router.post('/', [auth, isGestor], [
 router.put('/:id', [auth, isGestor], async (req, res) => {
   try {
     const { id } = req.params;
-    const { nome, empresa_responsavel, empresa_executante, prazo_termino, cidade, usuarios } = req.body;
+    const { nome, empresa_responsavel, empresa_executante, data_inicio, prazo_termino, cidade, usuarios } = req.body;
     const tenantId = req.tenantId;
     if (!tenantId) return res.status(400).json({ erro: 'Tenant não definido.' });
+
+    if (!data_inicio || !prazo_termino || String(data_inicio) > String(prazo_termino)) {
+      return res.status(400).json({ erro: 'Informe uma data de inicio anterior ou igual ao prazo de termino.' });
+    }
 
     const projetoAnterior = await getQuery('SELECT * FROM projetos WHERE id = ? AND tenant_id = ?', [id, tenantId]);
     if (!projetoAnterior) return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
 
     await runQuery(`
       UPDATE projetos 
-      SET nome = ?, empresa_responsavel = ?, empresa_executante = ?, prazo_termino = ?, cidade = ?, atualizado_em = CURRENT_TIMESTAMP
+      SET nome = ?, empresa_responsavel = ?, empresa_executante = ?, data_inicio = ?, prazo_termino = ?, cidade = ?, atualizado_em = CURRENT_TIMESTAMP
       WHERE id = ? AND tenant_id = ?
-    `, [nome, empresa_responsavel, empresa_executante, prazo_termino, cidade, id, tenantId]);
+    `, [nome, empresa_responsavel, empresa_executante, data_inicio, prazo_termino, cidade, id, tenantId]);
 
     // Atualizar usuários do projeto
     if (usuarios) {

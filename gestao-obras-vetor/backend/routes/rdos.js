@@ -1295,7 +1295,8 @@ router.patch('/:id/fluxo', auth, async (req, res) => {
       return res.status(workflowError.status || 400).json({ erro: workflowError.message });
     }
     const isManagerApproval = acao === RDO_ACTION.APPROVE_MANAGER;
-    const isFinalApproval = acao === RDO_ACTION.APPROVE_FISCAL || (isManagerApproval && !exigeAprovacaoFiscal);
+    const isFiscalApproval = acao === RDO_ACTION.APPROVE_FISCAL;
+    const isFinalApproval = isFiscalApproval || (isManagerApproval && !exigeAprovacaoFiscal);
 
     if (acao === RDO_ACTION.SEND_TO_MANAGER) {
       const activityCount = await getQuery('SELECT COUNT(*) AS total FROM rdo_atividades WHERE rdo_id = ?', [id]);
@@ -1373,8 +1374,8 @@ router.patch('/:id/fluxo', auth, async (req, res) => {
       isFinalApproval ? now : null,
       isManagerApproval ? req.usuario.id : (resetApprovals ? null : rdoAtual.gestor_aprovado_por),
       isManagerApproval ? now : (resetApprovals ? null : rdoAtual.gestor_aprovado_em),
-      isFinalApproval ? req.usuario.id : (resetApprovals ? null : rdoAtual.fiscal_aprovado_por),
-      isFinalApproval ? now : (resetApprovals ? null : rdoAtual.fiscal_aprovado_em),
+      isFiscalApproval ? req.usuario.id : (resetApprovals ? null : rdoAtual.fiscal_aprovado_por),
+      isFiscalApproval ? now : (resetApprovals ? null : rdoAtual.fiscal_aprovado_em),
       JSON.stringify(historico),
       isReturn ? 1 : 0,
       correctionMessage,
