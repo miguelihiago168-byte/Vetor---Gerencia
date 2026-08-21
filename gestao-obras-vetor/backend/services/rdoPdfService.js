@@ -5,6 +5,7 @@ const { hydrateOccurrences } = require('./rdoOccurrenceService');
 const backendPackage = require('../package.json');
 
 const uploadsDir = path.join(__dirname, '..', 'uploads');
+const PDF_TIME_ZONE = process.env.PDF_TIME_ZONE || process.env.APP_TIME_ZONE || 'America/Sao_Paulo';
 
 const escapeHtml = (value) => String(value ?? '')
   .replace(/&/g, '&amp;')
@@ -24,8 +25,17 @@ const fmtDate = (value) => {
 
 const fmtDateTime = (value) => {
   if (!value) return '-';
-  const dt = new Date(String(value).replace(' ', 'T'));
-  return Number.isNaN(dt.getTime()) ?escapeHtml(value) : dt.toLocaleString('pt-BR');
+  const dt = value instanceof Date ? value : new Date(String(value).replace(' ', 'T'));
+  if (Number.isNaN(dt.getTime())) return escapeHtml(value);
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: PDF_TIME_ZONE,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(dt);
 };
 
 const fmtNumber = (value, digits = 2) => {
@@ -392,7 +402,7 @@ function renderHtml(data) {
       <article class="photo-card avoid-break">
         ${src ?`<img src="${src}" alt="${escapeHtml(descricao || 'Foto do RDO')}">` : '<div class="photo-missing">Imagem não encontrada</div>'}
         <div class="photo-caption">
-          ${descricao ?`<strong>${escapeHtml(descricao)}</strong>` : ''}
+          <strong>Descrição: ${escapeHtml(descricao || 'Não informada')}</strong>
           <span>Atividade: ${escapeHtml(atividade)}</span>
           <span>Data/Hora: ${fmtDateTime(foto.criado_em)}</span>
           <span>Autor: ${escapeHtml(foto.autor_nome || '-')}</span>
