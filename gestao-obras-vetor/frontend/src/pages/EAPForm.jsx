@@ -21,6 +21,10 @@ function EAPForm() {
   const [unidades, setUnidades] = useState([]);
   const [activeTab, setActiveTab] = useState('dados');
   const [historico, setHistorico] = useState([]);
+  const [datasOriginais, setDatasOriginais] = useState({
+    data_inicio_planejada: '',
+    data_fim_planejada: ''
+  });
   const [formData, setFormData] = useState({
     codigo_eap: '',
     nome: '',
@@ -117,13 +121,23 @@ function EAPForm() {
       const response = await getAtividadesEAP(projetoId);
       const atividade = response.data.find(a => a.id == atividadeId);
       if (atividade) {
+        const normalizarDataParaInput = (data) => {
+          const match = String(data || '').match(/^\d{4}-\d{2}-\d{2}/);
+          return match ? match[0] : '';
+        };
+        const dataInicio = normalizarDataParaInput(atividade.data_inicio_planejada);
+        const dataFim = normalizarDataParaInput(atividade.data_fim_planejada);
+        setDatasOriginais({
+          data_inicio_planejada: dataInicio,
+          data_fim_planejada: dataFim
+        });
         setFormData({
           codigo_eap: atividade.codigo_eap || '',
           nome: atividade.nome || '',
           descricao: atividade.descricao || '',
           peso_percentual_projeto: String(atividade.peso_percentual_projeto ?? atividade.percentual_previsto ?? ''),
-          data_inicio_planejada: atividade.data_inicio_planejada || '',
-          data_fim_planejada: atividade.data_fim_planejada || '',
+          data_inicio_planejada: dataInicio,
+          data_fim_planejada: dataFim,
           pai_id: atividade.pai_id || '',
           predecessora_id: atividade.predecessora_id || '',
           tipo_vinculo_dependencia: atividade.tipo_vinculo_dependencia || 'FS',
@@ -176,6 +190,11 @@ function EAPForm() {
           : Number(formData.peso_percentual_projeto),
         quantidade_total: formData.quantidade_total === '' ? null : Number(formData.quantidade_total)
       };
+
+      if (atividadeId) {
+        dataToSend.data_inicio_planejada = formData.data_inicio_planejada || datasOriginais.data_inicio_planejada || null;
+        dataToSend.data_fim_planejada = formData.data_fim_planejada || datasOriginais.data_fim_planejada || null;
+      }
 
       if (atividadeId) {
         const resp = await updateAtividade(atividadeId, dataToSend);

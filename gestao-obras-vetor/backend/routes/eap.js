@@ -1056,12 +1056,21 @@ router.put('/:id', auth, async (req, res) => {
       }
     }
 
-    if (unidade_medida && !EAP_UNIDADES_PADRAO.includes(String(unidade_medida).trim())) {
+    const novaUnidadeMedida = (typeof unidade_medida === 'undefined')
+      ? (atividadeAnterior.unidade_medida || null)
+      : (String(unidade_medida || '').trim() || null);
+    if (novaUnidadeMedida && !EAP_UNIDADES_PADRAO.includes(novaUnidadeMedida)) {
       return res.status(400).json({ erro: `Unidade de medida invalida. Use uma das opcoes: ${EAP_UNIDADES_PADRAO.join(', ')}.` });
     }
 
-    const dataInicioRaw = (typeof data_inicio_planejada !== 'undefined') ? data_inicio_planejada : atividadeAnterior.data_inicio_planejada;
-    const dataFimRaw = (typeof data_fim_planejada !== 'undefined') ? data_fim_planejada : atividadeAnterior.data_fim_planejada;
+    // A edição não pode apagar acidentalmente o cronograma existente quando
+    // o formulário não enviar uma data (por exemplo, após uma falha de carga).
+    const dataInicioRaw = (typeof data_inicio_planejada !== 'undefined' && String(data_inicio_planejada || '').trim())
+      ? data_inicio_planejada
+      : atividadeAnterior.data_inicio_planejada;
+    const dataFimRaw = (typeof data_fim_planejada !== 'undefined' && String(data_fim_planejada || '').trim())
+      ? data_fim_planejada
+      : atividadeAnterior.data_fim_planejada;
     const dataInicio = parseDateOnly(dataInicioRaw);
     const dataFim = parseDateOnly(dataFimRaw);
     if (ehFilha && (!dataInicio || !dataFim)) {
@@ -1096,11 +1105,27 @@ router.put('/:id', auth, async (req, res) => {
       }
     }
 
+    const novoCodigoEap = (typeof codigo_eap === 'string' && codigo_eap.trim())
+      ? codigo_eap.trim()
+      : atividadeAnterior.codigo_eap;
     const novaDescricao = (typeof descricao === 'string')
       ? descricao.trim()
       : (atividadeAnterior.descricao || '');
+    const novaOrdem = (typeof ordem !== 'undefined' && ordem !== null && ordem !== '')
+      ? Number(ordem)
+      : Number(atividadeAnterior.ordem || 0);
+    const novaQuantidadeTotal = (typeof quantidade_total !== 'undefined' && quantidade_total !== null && quantidade_total !== '')
+      ? Number(quantidade_total)
+      : 0;
 
-    const novoIdentificador = (id_atividade && String(id_atividade).trim()) || atividadeAnterior.id_atividade || `ATV-${atividadeAnterior.projeto_id}-${codigo_eap || atividadeAnterior.codigo_eap}`;
+    if (!Number.isFinite(novaOrdem)) {
+      return res.status(400).json({ erro: 'ordem deve ser um número válido.' });
+    }
+    if (!Number.isFinite(novaQuantidadeTotal) || novaQuantidadeTotal < 0) {
+      return res.status(400).json({ erro: 'quantidade_total deve ser um número maior ou igual a zero.' });
+    }
+
+    const novoIdentificador = (id_atividade && String(id_atividade).trim()) || atividadeAnterior.id_atividade || `ATV-${atividadeAnterior.projeto_id}-${novoCodigoEap}`;
     const novoNome = (nome && String(nome).trim()) || novaDescricao || atividadeAnterior.descricao;
     const novoNivel = ehFilha ? Number(novoPai?.nivel || 1) + 1 : 1;
 
@@ -1108,7 +1133,7 @@ router.put('/:id', auth, async (req, res) => {
       UPDATE atividades_eap 
       SET codigo_eap = ?, descricao = ?, percentual_previsto = ?, ordem = ?, unidade_medida = ?, quantidade_total = ?, pai_id = ?, id_atividade = ?, nome = ?, data_inicio_planejada = ?, data_fim_planejada = ?, peso_percentual_projeto = ?, nivel = ?, atualizado_em = CURRENT_TIMESTAMP
       WHERE id = ?
-    `, [codigo_eap, novaDescricao, peso, ordem, unidade_medida || null, quantidade_total || 0, novoPaiId, novoIdentificador, novoNome, dataInicio || null, dataFim || null, peso, novoNivel, id]);
+    `, [novoCodigoEap, novaDescricao, peso, novaOrdem, novaUnidadeMedida, novaQuantidadeTotal, novoPaiId, novoIdentificador, novoNome, dataInicio || null, dataFim || null, peso, novoNivel, id]);
 
     if (typeof predecessora_id !== 'undefined') {
       if (predecessora_id) {
@@ -1225,7 +1250,14 @@ router.put('/:id', auth, async (req, res) => {
 
   } catch (error) {
     console.error('Erro ao atualizar atividade:', error);
-    res.status(500).json({ erro: 'Erro ao atualizar atividade.' });
+    if (error?.code === 'DATABASE_SCHEMA_OUTDATED') {
+      return res.status(503).json({
+        erro: 'A estrutura do banco precisa ser atualizada antes de editar atividades.',
+        codigo: error.code,
+        ausentes: error.missing || []
+      });
+    }
+    res.status(error?.status || 500).json({ erro: error?.status ? error.message : 'Erro ao atualizar atividade.' });
   }
 });
 
