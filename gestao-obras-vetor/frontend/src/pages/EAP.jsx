@@ -81,7 +81,7 @@ function EAP({ hideNavbar = false }) {
 
   const formatarDataBr = (valor) => {
     if (!valor) return '-';
-    const match = String(valor).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const match = String(valor).match(/^(\d{4})-(\d{2})-(\d{2})(?:T|\s|$)/);
     if (match) {
       return `${match[3]}/${match[2]}/${match[1]}`;
     }
