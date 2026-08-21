@@ -299,7 +299,11 @@ function RDODetalhes() {
   const cidadeUf = [rdo.cidade, rdo.uf].filter(Boolean).join(' - ') || 'N/A';
   const horarioInicio = rdo.horario_inicio || rdo.entrada_saida_inicio || rdo.inicio_jornada;
   const horarioFim = rdo.horario_fim || rdo.entrada_saida_fim || rdo.fim_jornada;
-  const intervalo = rdo.intervalo || rdo.intervalo_almoco || rdo.horario_intervalo;
+  const intervaloInicio = rdo.intervalo_almoco_inicio;
+  const intervaloFim = rdo.intervalo_almoco_fim;
+  const intervalo = intervaloInicio && intervaloFim
+    ? `${intervaloInicio} às ${intervaloFim}`
+    : (rdo.intervalo || rdo.intervalo_almoco || rdo.horario_intervalo);
 
   return (
     <>

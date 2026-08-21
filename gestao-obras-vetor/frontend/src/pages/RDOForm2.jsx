@@ -851,6 +851,7 @@ function RDOForm2() {
     entrada: '07:00', saida_almoco: '12:00', retorno_almoco: '13:00', saida_final: '17:00'
   });
   const [colaboradorSelecionado, setColaboradorSelecionado] = useState('');
+  const [editingColabIndex, setEditingColabIndex] = useState(null);
 
   const horariosDoDia = (dados = formData) => ({
     entrada: dados.entrada_saida_inicio,
@@ -859,22 +860,12 @@ function RDOForm2() {
     saida_final: dados.entrada_saida_fim
   });
 
-  const alterarHorarioDoDia = async (campo, valor) => {
+  const alterarHorarioDoDia = (campo, valor) => {
     const proximosDados = { ...formData, [campo]: valor };
-    const possuiColaboradores = formData.mao_obra_detalhada.length > 0;
-    const aplicarAosColaboradores = !possuiColaboradores || await confirm({
-      title: 'Aplicar horário aos colaboradores?',
-      message: 'Deseja atualizar os horários de todos os colaboradores já adicionados com a nova jornada do dia?',
-      confirmText: 'Aplicar a todos',
-      cancelText: 'Manter individuais'
-    });
-
-    if (aplicarAosColaboradores) {
-      const horarios = horariosDoDia(proximosDados);
-      proximosDados.mao_obra_detalhada = formData.mao_obra_detalhada.map((colaborador) => ({ ...colaborador, ...horarios }));
-    }
+    const horarios = horariosDoDia(proximosDados);
+    proximosDados.mao_obra_detalhada = formData.mao_obra_detalhada.map((colaborador) => ({ ...colaborador, ...horarios }));
     setFormData(proximosDados);
-    setDraftColab((atual) => ({ ...atual, ...horariosDoDia(proximosDados) }));
+    setDraftColab((atual) => ({ ...atual, ...horarios }));
     setDirty(true);
   };
 
@@ -898,6 +889,20 @@ function RDOForm2() {
 
   const addColab = async () => {
     if (!draftColab.nome) return;
+    if (editingColabIndex !== null) {
+      const colaboradorAtualizado = { ...draftColab, nome: String(draftColab.nome).trim(), funcao: String(draftColab.funcao || '').trim() };
+      setFormData((atual) => ({
+        ...atual,
+        mao_obra_detalhada: atual.mao_obra_detalhada.map((colaborador, indice) => (
+          indice === editingColabIndex ? colaboradorAtualizado : colaborador
+        ))
+      }));
+      setDraftColab({ nome: '', funcao: '', tipo: 'Direta', ...horariosDoDia() });
+      setEditingColabIndex(null);
+      setColaboradorSelecionado('');
+      setDirty(true);
+      return;
+    }
     const nomeDigitado = String(draftColab.nome || '').trim();
     const funcaoDigitada = String(draftColab.funcao || '').trim();
     const nomeExisteNaLista = colaboradoresDisponiveis.some(
@@ -947,6 +952,28 @@ function RDOForm2() {
     const arr = [...formData.mao_obra_detalhada];
     arr.splice(idx, 1);
     setFormData({ ...formData, mao_obra_detalhada: arr });
+  };
+
+  const editarColab = (idx) => {
+    const colaborador = formData.mao_obra_detalhada[idx];
+    if (!colaborador) return;
+    setDraftColab({
+      nome: colaborador.nome || '',
+      funcao: colaborador.funcao || '',
+      tipo: colaborador.tipo || 'Direta',
+      entrada: colaborador.entrada || formData.entrada_saida_inicio,
+      saida_almoco: colaborador.saida_almoco || formData.intervalo_almoco_inicio,
+      retorno_almoco: colaborador.retorno_almoco || formData.intervalo_almoco_fim,
+      saida_final: colaborador.saida_final || formData.entrada_saida_fim
+    });
+    setEditingColabIndex(idx);
+    setColaboradorSelecionado('');
+  };
+
+  const cancelarEdicaoColab = () => {
+    setDraftColab({ nome: '', funcao: '', tipo: 'Direta', ...horariosDoDia() });
+    setEditingColabIndex(null);
+    setColaboradorSelecionado('');
   };
 
   const calcHorasColab = (c) => {
@@ -1188,7 +1215,7 @@ function RDOForm2() {
       return;
     }
 
-    const criarFotoParaFila = async (file) => {
+    const criarFotoParaFila = async (file, ordemSelecao) => {
       const arquivoFoto = await prepararFotoRdo(file);
       return {
         file: arquivoFoto,
@@ -1198,7 +1225,8 @@ function RDOForm2() {
         atividadeTipo: atividadeSelecionada?.tipo || null,
         atividade_eap_id: atividadeSelecionada?.tipo === 'eap' ? atividadeSelecionada.atividade_eap_id : null,
         atividade_avulsa_descricao: atividadeSelecionada?.tipo === 'avulsa' ? atividadeSelecionada.atividade_avulsa_descricao : null,
-        atividade_label: atividadeSelecionada?.label || ''
+        atividade_label: atividadeSelecionada?.label || '',
+        ordem_selecao: ordemSelecao
       };
     };
 
@@ -1238,7 +1266,7 @@ function RDOForm2() {
 
     if (rdoId) {
       if (atividadeSelecionada?.tipo === 'eap' && !atividadeSelecionada?.rdo_atividade_id) {
-        const fotosParaFila = await Promise.all(files.map(criarFotoParaFila));
+        const fotosParaFila = await Promise.all(files.map((file, ordemSelecao) => criarFotoParaFila(file, ordemSelecao)));
         setFotosQueue(prev => [...prev, ...fotosParaFila]);
         notifyInfo(`${fotosParaFila.length} foto(s) adicionada(s) à fila. Elas serão enviadas ao salvar o RDO.`, 4500);
         resetFotoPendente();
@@ -1267,7 +1295,7 @@ function RDOForm2() {
         setIsUploadingFoto(false);
       }
     } else {
-      const fotosParaFila = await Promise.all(files.map(criarFotoParaFila));
+      const fotosParaFila = await Promise.all(files.map((file, ordemSelecao) => criarFotoParaFila(file, ordemSelecao)));
       setFotosQueue(prev => [...prev, ...fotosParaFila]);
     }
     resetFotoPendente();
@@ -1899,8 +1927,11 @@ function RDOForm2() {
               <input className="form-input" type="time" value={draftColab.saida_final}
                 onChange={(e) => setDraftColab({ ...draftColab, saida_final: e.target.value })} />
             </div>
-            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <Button tone="primary" variant="solid" startIcon={Plus} onClick={addColab}>Adicionar</Button>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '6px' }}>
+              <Button tone="primary" variant="solid" startIcon={editingColabIndex !== null ? Save : Plus} onClick={addColab}>
+                {editingColabIndex !== null ? 'Salvar edição' : 'Adicionar'}
+              </Button>
+              {editingColabIndex !== null && <Button tone="neutral" variant="ghost" startIcon={X} onClick={cancelarEdicaoColab}>Cancelar</Button>}
             </div>
           </div>
           {formData.mao_obra_detalhada.length === 0 ? (
@@ -1921,6 +1952,7 @@ function RDOForm2() {
                     <td>{c.entrada}</td><td>{c.saida_almoco}</td><td>{c.retorno_almoco}</td><td>{c.saida_final}</td>
                     <td><strong>{calcHorasColab(c)}h</strong></td>
                     <td className="td-actions">
+                      <IconButton size="sm" tone="primary" variant="ghost" icon={Pencil} label={`Editar ${c.nome}`} onClick={() => editarColab(idx)} />
                       <IconButton size="sm" tone="danger" variant="ghost" icon={Trash2} label={`Remover ${c.nome}`} onClick={() => removeColab(idx)} />
                     </td>
                   </tr>
@@ -2275,8 +2307,8 @@ function RDOForm2() {
               </select>
             </div>
             <div className="form-group" style={{ flex: '2' }}>
-              <label className="form-label">Descrição</label>
-              <input className="form-input" type="text" placeholder="Legenda da foto..."
+              <label className="form-label">Comentário da foto</label>
+              <input className="form-input" type="text" placeholder="Descreva o que a foto registra..."
                 value={fotoPendente.descricao}
                 onChange={(e) => setFotoPendente(prev => ({ ...prev, descricao: e.target.value }))} />
             </div>
@@ -2288,7 +2320,7 @@ function RDOForm2() {
           </div>
           {fotosQueue.length > 0 && (
             <div className="alert alert-info" style={{ marginBottom: '8px', fontSize: '12px' }}>
-              {fotosQueue.length} foto(s) na fila — serão enviadas ao salvar o RDO.
+              {fotosQueue.length} foto(s) na fila — serão enviadas ao salvar o RDO, na mesma ordem em que foram selecionadas.
             </div>
           )}
           {rdoFotos.length === 0 && fotosQueue.length === 0 ? (
@@ -2332,12 +2364,13 @@ function RDOForm2() {
                         <div style={{ padding: '8px 10px' }}>
                           {editingFotoId === f.id ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                              <input
+                              <label className="form-label" style={{ margin: 0 }}>Comentário da foto</label>
+                              <textarea
                                 className="form-input"
-                                type="text"
+                                rows="2"
                                 value={editingFotoDescricao}
                                 onChange={(e) => setEditingFotoDescricao(e.target.value)}
-                                placeholder="Descrição da foto"
+                                placeholder="Descreva o que esta foto registra"
                               />
                               <div style={{ display: 'flex', gap: '6px' }}>
                                 <Button size="sm" tone="primary" variant="solid" startIcon={Save} loading={isSavingFotoDescricao} onClick={() => salvarFotoDescricao(f.id)}>Salvar</Button>
@@ -2345,14 +2378,12 @@ function RDOForm2() {
                               </div>
                             </div>
                           ) : (
-                            <button
-                              type="button"
-                              onClick={() => startEditarFotoDescricao(f)}
-                              style={{ border: 0, background: 'transparent', padding: 0, textAlign: 'left', cursor: 'pointer', width: '100%' }}
-                              title="Clique para editar descrição"
-                            >
-                              <div style={{ fontSize: '12px', fontWeight: 600, color: '#1f2937' }}>{f.descricao || 'Clique para adicionar descrição'}</div>
-                            </button>
+                            <div>
+                              <div style={{ fontSize: '12px', fontWeight: 600, color: '#1f2937', marginBottom: '5px' }}>{f.descricao || 'Sem comentário'}</div>
+                              <Button size="sm" tone="neutral" variant="ghost" startIcon={Pencil} onClick={() => startEditarFotoDescricao(f)}>
+                                {f.descricao ? 'Editar comentário' : 'Adicionar comentário'}
+                              </Button>
+                            </div>
                           )}
                           <div style={{ marginTop: '4px', fontSize: '11px', color: '#64748b' }}>{(() => {
                             const a = atividadesEap.find(x => String(x.id) === String(f.atividade_eap_id));
