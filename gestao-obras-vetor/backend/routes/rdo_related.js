@@ -515,14 +515,22 @@ router.post('/:rdoId/foto', auth, uploadFotoSingle, async (req, res) => {
       [rdoId, rdoAtividadeId, originalname, caminhoArquivo, descricao || null, atividadeAvulsaDescricao || null, ordem, req.usuario.id, req.tenantId, mimetype || null, size || null]
     );
 
+    // Retornar os metadados já persistidos. Assim o cliente não precisa
+    // inferir data ou descrição a partir do relógio local após o upload.
+    const foto = await getQuery(
+      'SELECT id, rdo_id, rdo_atividade_id, nome_arquivo, caminho_arquivo, descricao, atividade_avulsa_descricao, ordem, criado_em, tipo, tamanho FROM rdo_fotos WHERE id = ? AND rdo_id = ?',
+      [result.lastID, rdoId]
+    );
+
     // Retornar informação do arquivo para o frontend
     res.status(201).json({
       mensagem: 'Foto enviada.',
       id: result.lastID,
-      arquivo: { nome_arquivo: originalname, caminho_arquivo: caminhoArquivo },
-      ordem,
-      tipo: mimetype || null,
-      tamanho: size || null,
+      arquivo: { nome_arquivo: foto?.nome_arquivo || originalname, caminho_arquivo: foto?.caminho_arquivo || caminhoArquivo },
+      foto,
+      ordem: foto?.ordem ?? ordem,
+      tipo: foto?.tipo ?? mimetype ?? null,
+      tamanho: foto?.tamanho ?? size ?? null,
       url: `/api/rdo/${rdoId}/foto/${result.lastID}/download`
     });
   } catch (err) {
@@ -573,7 +581,11 @@ router.patch('/:rdoId/foto/:fotoId', auth, async (req, res) => {
     if (!foto) return res.status(404).json({ erro: 'Foto não encontrada.' });
 
     await runQuery('UPDATE rdo_fotos SET descricao = ? WHERE id = ? AND rdo_id = ?', [descricao, fotoId, rdoId]);
-    res.json({ mensagem: 'Descrição da foto atualizada.' });
+    const fotoAtualizada = await getQuery(
+      'SELECT id, rdo_id, rdo_atividade_id, nome_arquivo, caminho_arquivo, descricao, atividade_avulsa_descricao, ordem, criado_em, tipo, tamanho FROM rdo_fotos WHERE id = ? AND rdo_id = ?',
+      [fotoId, rdoId]
+    );
+    res.json({ mensagem: 'Descrição da foto atualizada.', foto: fotoAtualizada });
   } catch (err) {
     console.error('Erro ao atualizar descrição da foto', err);
     res.status(500).json({ erro: 'Erro ao atualizar descrição da foto.' });

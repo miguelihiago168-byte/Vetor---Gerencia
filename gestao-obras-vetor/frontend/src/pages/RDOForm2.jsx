@@ -1222,15 +1222,17 @@ function RDOForm2() {
       }
       if (descricao) fd.append('descricao', descricao);
       const resp = await uploadRdoFoto(rdoId, fd);
+      const fotoPersistida = resp.data?.foto || {};
       return {
-        id: resp.data?.id,
-        nome_arquivo: resp.data?.arquivo?.nome_arquivo || arquivoFoto.name || file.name,
-        caminho_arquivo: resp.data?.arquivo?.caminho_arquivo,
-        descricao: descricao || '',
+        ...fotoPersistida,
+        id: fotoPersistida.id || resp.data?.id,
+        nome_arquivo: fotoPersistida.nome_arquivo || resp.data?.arquivo?.nome_arquivo || arquivoFoto.name || file.name,
+        caminho_arquivo: fotoPersistida.caminho_arquivo || resp.data?.arquivo?.caminho_arquivo,
+        descricao: fotoPersistida.descricao ?? descricao ?? '',
         atividade_eap_id: atividadeSelecionada?.tipo === 'eap' ? atividadeSelecionada.atividade_eap_id : null,
-        atividade_avulsa_descricao: atividadeSelecionada?.tipo === 'avulsa' ? atividadeSelecionada.atividade_avulsa_descricao : null,
-        ordem: resp.data?.ordem,
-        criado_em: new Date().toISOString()
+        atividade_avulsa_descricao: fotoPersistida.atividade_avulsa_descricao ?? (atividadeSelecionada?.tipo === 'avulsa' ? atividadeSelecionada.atividade_avulsa_descricao : null),
+        ordem: fotoPersistida.ordem ?? resp.data?.ordem,
+        criado_em: fotoPersistida.criado_em
       };
     };
 
@@ -1285,9 +1287,10 @@ function RDOForm2() {
     if (!rdoId || !fotoId) return;
     try {
       setIsSavingFotoDescricao(true);
-      await updateRdoFoto(rdoId, fotoId, { descricao: editingFotoDescricao });
+      const response = await updateRdoFoto(rdoId, fotoId, { descricao: editingFotoDescricao });
+      const fotoAtualizada = response.data?.foto;
       setRdoFotos((prev) => prev.map((f) => (
-        f.id === fotoId ? { ...f, descricao: editingFotoDescricao } : f
+        f.id === fotoId ? { ...f, ...fotoAtualizada, descricao: fotoAtualizada?.descricao ?? editingFotoDescricao } : f
       )));
       cancelarEditarFotoDescricao();
     } catch (e) {
