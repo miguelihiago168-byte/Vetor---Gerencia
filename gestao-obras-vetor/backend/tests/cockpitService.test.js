@@ -29,6 +29,12 @@ const main = async () => {
   const fridayRdo = summarizeExecution([{ id: 3, data_relatorio: '2026-07-17', status: 'Aprovado' }], new Date('2026-07-20T15:00:00-03:00'));
   assert.strictEqual(fridayRdo.days_since_latest, 1, 'segunda-feira deve ser o primeiro dia útil sem RDO após sexta-feira');
 
+  const weekendRdo = summarizeExecution([
+    { id: 4, data_relatorio: '2026-07-09', criado_em: '2026-07-12T10:30:00-03:00', status: 'Aprovado' }
+  ], new Date('2026-07-14T15:00:00-03:00'));
+  assert.strictEqual(weekendRdo.latest_rdo_activity_date, '2026-07-12', 'RDO lançado no fim de semana deve atualizar a referência de novo RDO');
+  assert.strictEqual(weekendRdo.days_since_latest, 2, 'somente segunda e terça devem contar como dias úteis após o RDO de domingo');
+
   const unavailable = summarizeWorkforce(rdos, [], now);
   assert.strictEqual(unavailable.hh, null);
   assert.strictEqual(unavailable.hh_available, false);

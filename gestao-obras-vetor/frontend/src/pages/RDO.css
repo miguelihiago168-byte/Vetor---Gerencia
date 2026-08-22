@@ -1121,6 +1121,29 @@
   z-index: 2;
 }
 
+.rdo-photo-description-editor {
+  display: grid;
+  gap: 6px;
+}
+
+.rdo-photo-description-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  resize: vertical;
+}
+
+.rdo-photo-description-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.rdo-photo-description-actions .ui-button {
+  width: 100%;
+  justify-content: center;
+}
+
 /* RDO detalhes como relatorio operacional */
 .rdo-report-page {
   max-width: 1220px;
@@ -1315,19 +1338,42 @@
   flex-wrap: wrap;
 }
 
+.rdo-report-actions-menu {
+  position: relative;
+}
+
+.rdo-report-actions-menu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  display: grid;
+  width: min(270px, calc(100vw - 36px));
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #dbe4ef;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, .16);
+}
+
+.rdo-report-menu-item {
+  justify-content: flex-start;
+}
+
 @media (max-width: 1200px) {
   .rdo-report-hero {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .rdo-report-hero-main {
-    padding-right: 116px;
+    padding-right: 82px;
   }
 
   .rdo-report-actions {
-    grid-column: 1;
-    grid-row: auto;
-    justify-content: center;
+    position: absolute;
+    top: 18px;
+    right: 18px;
   }
 }
 
@@ -1399,6 +1445,29 @@
 
 .rdo-report-alert {
   margin-bottom: 16px;
+}
+
+.rdo-report-success-toast {
+  position: fixed;
+  right: 24px;
+  top: 24px;
+  z-index: 200;
+  width: min(420px, calc(100vw - 32px));
+  margin: 0;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, .18);
+  animation: rdo-report-toast-in .24s ease-out;
+}
+
+@keyframes rdo-report-toast-in {
+  from { opacity: 0; transform: translateX(24px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@media (max-width: 600px) {
+  .rdo-report-success-toast {
+    right: 16px;
+    top: 16px;
+  }
 }
 
 .rdo-report-inline-actions {
@@ -2548,6 +2617,74 @@
   font-weight: 650;
 }
 
+.rdo-page .rdo-actions-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.rdo-page .rdo-status-chip--center {
+  grid-column: 2;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.rdo-actions-menu {
+  position: relative;
+  grid-column: 3;
+  justify-self: end;
+}
+
+.rdo-actions-menu-panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 110;
+  display: grid;
+  width: min(264px, calc(100vw - 24px));
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid #dbe4ef;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, .16);
+}
+
+.rdo-actions-menu-item {
+  justify-content: flex-start;
+}
+
+.rdo-actions-menu-meta {
+  padding: 2px 3px 6px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.rdo-actions-menu-divider {
+  height: 1px;
+  margin: 2px 0;
+  background: #e2e8f0;
+}
+
+.rdo-actions-menu-link {
+  width: 100%;
+  padding: 6px 4px;
+  border: 0;
+  background: transparent;
+  color: #0369a1;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rdo-actions-menu-link:hover {
+  color: #075985;
+  text-decoration: underline;
+}
+
 .rdo-page .rdo-actions-links a {
   color: #0369a1 !important;
   font-size: 12px !important;
@@ -2601,6 +2738,7 @@
 
   .rdo-page .rdo-actions-bar {
     padding: 10px 12px;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   }
 }
 
@@ -2874,4 +3012,32 @@ body.dark-mode .rdo-page .rdo-actions-bar .rdo-status-chip {
 
 body.dark-mode .rdo-page .rdo-actions-links a {
   color: #7dd3fc !important;
+}
+
+body.dark-mode .rdo-actions-menu-panel {
+  background: #132235;
+  border-color: #2a4060;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .3);
+}
+
+body.dark-mode .rdo-actions-menu-meta {
+  color: #8fa3b9;
+}
+
+body.dark-mode .rdo-actions-menu-divider {
+  background: #2a4060;
+}
+
+body.dark-mode .rdo-actions-menu-link {
+  color: #7dd3fc;
+}
+
+body.dark-mode .rdo-actions-menu-link:hover {
+  color: #bae6fd;
+}
+
+body.dark-mode .rdo-report-actions-menu-panel {
+  background: #132235;
+  border-color: #2a4060;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .3);
 }

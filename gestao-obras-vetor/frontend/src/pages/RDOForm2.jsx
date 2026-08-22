@@ -15,7 +15,7 @@ import {
   getRdoEquipamentosCatalogo, getRdoEquipamentos, addRdoEquipamento, deleteRdoEquipamento,
   getAnexos, uploadAnexo, deleteAnexo, getUploadUrl, getRdoOcorrenciasConfiguracao, vincularEvidenciaOcorrencia, desvincularEvidenciaOcorrencia
 } from '../services/api';
-import { ArrowLeft, ChevronDown, Plus, Save, Send, Trash2, Upload, FileText, Pencil, X } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Menu, Plus, Save, Send, Trash2, Upload, FileText, Pencil, X } from 'lucide-react';
 import './RDO.css';
 import Modal from '../components/Modal';
 import { getRdoLogs } from '../services/api';
@@ -150,6 +150,9 @@ function RDOForm2() {
   const [editingFotoId, setEditingFotoId] = useState(null);
   const [editingFotoDescricao, setEditingFotoDescricao] = useState('');
   const [isSavingFotoDescricao, setIsSavingFotoDescricao] = useState(false);
+  const [editingQueuedPhotoIndex, setEditingQueuedPhotoIndex] = useState(null);
+  const [editingQueuedPhotoDescription, setEditingQueuedPhotoDescription] = useState('');
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const [anexos, setAnexos] = useState([]);
   const [anexosQueue, setAnexosQueue] = useState([]);
   const [isUploadingAnexo, setIsUploadingAnexo] = useState(false);
@@ -1328,6 +1331,31 @@ function RDOForm2() {
     }
   };
 
+  const iniciarEdicaoDescricaoFotoFila = (index) => {
+    setEditingQueuedPhotoIndex(index);
+    setEditingQueuedPhotoDescription(fotosQueue[index]?.descricao || '');
+  };
+
+  const cancelarEdicaoDescricaoFotoFila = () => {
+    setEditingQueuedPhotoIndex(null);
+    setEditingQueuedPhotoDescription('');
+  };
+
+  const salvarDescricaoFotoFila = (index) => {
+    setFotosQueue((prev) => prev.map((foto, fotoIndex) => (
+      fotoIndex === index ? { ...foto, descricao: editingQueuedPhotoDescription } : foto
+    )));
+    setDirty(true);
+    cancelarEdicaoDescricaoFotoFila();
+  };
+
+  const obterAtividadeVinculadaFoto = (foto) => {
+    const atividade = atividadesEap.find((item) => String(item.id) === String(foto.atividade_eap_id));
+    if (atividade) return `${atividade.codigo_eap} — ${atividade.nome || atividade.descricao || ''}`;
+    if (foto.atividade_avulsa_descricao) return `Avulsa — ${foto.atividade_avulsa_descricao}`;
+    return foto.atividade_descricao || 'Atividade vinculada';
+  };
+
   const removerFotoPersistida = async (foto) => {
     if (!rdoId || !foto?.id) return;
     const ok = await confirm({
@@ -1348,6 +1376,10 @@ function RDOForm2() {
   };
 
   const removerFotoFila = (index) => {
+    if (editingQueuedPhotoIndex === index) cancelarEdicaoDescricaoFotoFila();
+    else if (editingQueuedPhotoIndex !== null && editingQueuedPhotoIndex > index) {
+      setEditingQueuedPhotoIndex((current) => current - 1);
+    }
     setFotosQueue(prev => {
       const item = prev[index];
       if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
@@ -2333,7 +2365,9 @@ function RDOForm2() {
                     Arraste e solte para reorganizar a ordem das fotos.
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: '12px' }}>
-                    {rdoFotos.map((f, idx) => (
+                    {rdoFotos.map((f, idx) => {
+                      const atividadeVinculada = obterAtividadeVinculadaFoto(f);
+                      return (
                       <div
                         key={f.id}
                         className="rdo-photo-card-edit"
@@ -2363,37 +2397,32 @@ function RDOForm2() {
                         </a>
                         <div style={{ padding: '8px 10px' }}>
                           {editingFotoId === f.id ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <div className="rdo-photo-description-editor">
                               <label className="form-label" style={{ margin: 0 }}>Comentário da foto</label>
                               <textarea
-                                className="form-input"
+                                className="form-input rdo-photo-description-input"
                                 rows="2"
                                 value={editingFotoDescricao}
                                 onChange={(e) => setEditingFotoDescricao(e.target.value)}
                                 placeholder="Descreva o que esta foto registra"
                               />
-                              <div style={{ display: 'flex', gap: '6px' }}>
+                              <div className="rdo-photo-description-actions">
                                 <Button size="sm" tone="primary" variant="solid" startIcon={Save} loading={isSavingFotoDescricao} onClick={() => salvarFotoDescricao(f.id)}>Salvar</Button>
                                 <Button size="sm" startIcon={X} onClick={cancelarEditarFotoDescricao}>Cancelar</Button>
                               </div>
                             </div>
                           ) : (
                             <div>
-                              <div style={{ fontSize: '12px', fontWeight: 600, color: '#1f2937', marginBottom: '5px' }}>{f.descricao || 'Sem comentário'}</div>
+                              <div style={{ fontSize: '12px', fontWeight: 600, color: '#1f2937', marginBottom: '5px' }}>{f.descricao || atividadeVinculada}</div>
                               <Button size="sm" tone="neutral" variant="ghost" startIcon={Pencil} onClick={() => startEditarFotoDescricao(f)}>
                                 {f.descricao ? 'Editar comentário' : 'Adicionar comentário'}
                               </Button>
                             </div>
                           )}
-                          <div style={{ marginTop: '4px', fontSize: '11px', color: '#64748b' }}>{(() => {
-                            const a = atividadesEap.find(x => String(x.id) === String(f.atividade_eap_id));
-                            if (a) return `${a.codigo_eap} — ${a.nome || a.descricao || ''}`;
-                            if (f.atividade_avulsa_descricao) return `Avulsa — ${f.atividade_avulsa_descricao}`;
-                            return (f.atividade_descricao || '—');
-                          })()}</div>
+                          {f.descricao && <div style={{ marginTop: '4px', fontSize: '11px', color: '#64748b' }}>{atividadeVinculada}</div>}
                         </div>
                       </div>
-                    ))}
+                    ); })}
                   </div>
                 </div>
               )}
@@ -2401,7 +2430,9 @@ function RDOForm2() {
               {fotosQueue.length > 0 && (
                 <div style={{ marginTop: '10px' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: '12px' }}>
-                    {fotosQueue.map((f, i) => (
+                    {fotosQueue.map((f, i) => {
+                      const atividadeVinculada = f.atividade_label || 'Atividade vinculada';
+                      return (
                       <div key={`q-${i}`} className="rdo-photo-card-edit" style={{ border: '1px solid #fde68a', borderRadius: '10px', overflow: 'hidden', background: '#fffbeb', position: 'relative' }}>
                         <IconButton
                           className="rdo-photo-delete-btn"
@@ -2420,12 +2451,34 @@ function RDOForm2() {
                           />
                         </div>
                         <div style={{ padding: '8px 10px' }}>
-                          <div style={{ fontSize: '12px', fontWeight: 600, color: '#1f2937' }}>{f.descricao || 'Sem descrição'}</div>
-                          <div style={{ marginTop: '4px', fontSize: '11px', color: '#64748b' }}>{f.atividade_label || 'Atividade vinculada'}</div>
+                          {editingQueuedPhotoIndex === i ? (
+                            <div className="rdo-photo-description-editor">
+                              <label className="form-label" style={{ margin: 0 }}>Descrição da foto</label>
+                              <textarea
+                                className="form-input rdo-photo-description-input"
+                                rows="2"
+                                value={editingQueuedPhotoDescription}
+                                onChange={(e) => setEditingQueuedPhotoDescription(e.target.value)}
+                                placeholder="Descreva o que esta foto registra"
+                              />
+                              <div className="rdo-photo-description-actions">
+                                <Button size="sm" tone="primary" variant="solid" startIcon={Save} onClick={() => salvarDescricaoFotoFila(i)}>Salvar</Button>
+                                <Button size="sm" startIcon={X} onClick={cancelarEdicaoDescricaoFotoFila}>Cancelar</Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <div style={{ fontSize: '12px', fontWeight: 600, color: '#1f2937', marginBottom: '5px' }}>{f.descricao || atividadeVinculada}</div>
+                              <Button size="sm" tone="neutral" variant="ghost" startIcon={Pencil} onClick={() => iniciarEdicaoDescricaoFotoFila(i)}>
+                                {f.descricao ? 'Editar descrição' : 'Adicionar descrição'}
+                              </Button>
+                            </div>
+                          )}
+                          {f.descricao && <div style={{ marginTop: '4px', fontSize: '11px', color: '#64748b' }}>{atividadeVinculada}</div>}
                           <div style={{ marginTop: '6px', fontSize: '11px', color: '#b45309', fontWeight: 600 }}>Pronta para envio ao salvar o RDO</div>
                         </div>
                       </div>
-                    ))}
+                    ); })}
                   </div>
                 </div>
               )}
@@ -2626,50 +2679,51 @@ function RDOForm2() {
 
         {/* ── Barra de ações ───────────────────────────── */}
         <div className="rdo-actions-bar">
-          <div className="rdo-status-chip">
+          <span aria-hidden="true" />
+          <div className="rdo-status-chip rdo-status-chip--center">
             <span>RDO {rdoId ? `#${rdoId}` : 'novo'}</span>
             {formData.data_relatorio && (
               <span style={{ color: '#94a3b8' }}>— {new Date(formData.data_relatorio + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
             )}
           </div>
-          <div className="rdo-actions-bar-right">
-            {rdoId && (
-              <>
-                {ultimaAlteracao && (
-                  <div style={{ fontSize: 12, color: '#64748b', textAlign: 'right' }}>
+          <div className="rdo-actions-menu">
+            <IconButton
+              icon={Menu}
+              label="Opções do RDO"
+              title="Opções do RDO"
+              variant="outline"
+              onClick={() => setActionsMenuOpen((open) => !open)}
+              aria-expanded={actionsMenuOpen}
+            />
+            {actionsMenuOpen && (
+              <div className="rdo-actions-menu-panel" role="menu" aria-label="Opções do RDO">
+                {rdoId && ultimaAlteracao && (
+                  <div className="rdo-actions-menu-meta">
                     Última alteração: {ultimaAlteracao.usuario_nome || 'Usuário removido'} em {parseTS(ultimaAlteracao.criado_em)?.toLocaleString('pt-BR') ?? '—'}
                   </div>
                 )}
-                <div className="rdo-actions-links">
-                  <a href="#" style={{ color: '#2563eb', fontSize: 13, textDecoration: 'underline' }} onClick={(e) => { e.preventDefault(); setShowLogModal('edicao'); }}>
+                <Button className="rdo-actions-menu-item" fullWidth startIcon={ArrowLeft} onClick={() => navigate(`/projeto/${projetoId}/rdos`)}>
+                  Voltar para RDOs
+                </Button>
+                {canEditRdo && <>
+                  <Button className="rdo-actions-menu-item" fullWidth tone="primary" variant="solid" startIcon={Save} onClick={() => { setActionsMenuOpen(false); salvar('rascunho'); }} loading={isSaving} disabled={!formData.data_relatorio}>
+                    Salvar RDO
+                  </Button>
+                  <Button className="rdo-actions-menu-item" fullWidth tone="primary" variant="outline" startIcon={Send} onClick={() => { setActionsMenuOpen(false); salvar('analise'); }} loading={isSaving} disabled={!formData.data_relatorio}>
+                    Enviar para aprovação
+                  </Button>
+                </>}
+                {rdoId && <>
+                  <div className="rdo-actions-menu-divider" />
+                  <button type="button" className="rdo-actions-menu-link" onClick={() => { setActionsMenuOpen(false); setShowLogModal('edicao'); }}>
                     Log de edições {logsEdicao.length > 0 ? `(${logsEdicao.length})` : ''}
-                  </a>
-                  <a href="#" style={{ color: '#2563eb', fontSize: 13, textDecoration: 'underline' }} onClick={(e) => { e.preventDefault(); setShowLogModal('visualizacao'); }}>
+                  </button>
+                  <button type="button" className="rdo-actions-menu-link" onClick={() => { setActionsMenuOpen(false); setShowLogModal('visualizacao'); }}>
                     Visualizações {logsVisualizacao.length > 0 ? `(${logsVisualizacao.length})` : '(0)'}
-                  </a>
-                </div>
-              </>
+                  </button>
+                </>}
+              </div>
             )}
-            <div className="rdo-actions-buttons">
-              <Button className="rdo-action-btn" startIcon={ArrowLeft} onClick={() => navigate(`/projeto/${projetoId}/rdos`)}>
-                <span className="rdo-action-label-desktop">Voltar</span>
-                <span className="rdo-action-label-mobile">Voltar</span>
-              </Button>
-              {canEditRdo && (
-                <>
-                  <Button className="rdo-action-btn" tone="primary" variant="solid" startIcon={Save} onClick={() => salvar('rascunho')}
-                    loading={isSaving} disabled={!formData.data_relatorio}>
-                    <span className="rdo-action-label-desktop">Salvar RDO</span>
-                    <span className="rdo-action-label-mobile">Salvar</span>
-                  </Button>
-                  <Button className="rdo-action-btn" tone="primary" variant="outline" startIcon={Send} onClick={() => salvar('analise')}
-                    loading={isSaving} disabled={!formData.data_relatorio}>
-                    <span className="rdo-action-label-desktop">Enviar para aprovação</span>
-                    <span className="rdo-action-label-mobile">Enviar</span>
-                  </Button>
-                </>
-              )}
-            </div>
           </div>
         </div>
 

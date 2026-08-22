@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import CockpitReturnButton from '../components/CockpitReturnButton';
-import Button from '../components/ui/Button';
+import Button, { IconButton } from '../components/ui/Button';
 import {
   getRDO,
   listRdoMaoObra,
@@ -27,6 +27,7 @@ import {
   FileText,
   Image as ImageIcon,
   MapPin,
+  Menu,
   MessageSquare,
   Package,
   Paperclip,
@@ -155,6 +156,7 @@ function RDODetalhes() {
   const [acaoDevolucao, setAcaoDevolucao] = useState('SOLICITAR_CORRECAO');
   const [textoCorrecao, setTextoCorrecao] = useState('');
   const [isEnviandoCorrecao, setIsEnviandoCorrecao] = useState(false);
+  const [reportActionsMenuOpen, setReportActionsMenuOpen] = useState(false);
 
   useEffect(() => {
     carregarDados();
@@ -337,22 +339,21 @@ function RDODetalhes() {
           </div>
 
           <div className="rdo-report-actions">
-            <Button tone="primary" variant="outline" startIcon={Download} className="rdo-view-action-btn" onClick={handleDownloadPDF}>PDF</Button>
-            {canDecidirGestor && rdo.status === 'Em aprovação do gestor' && (
-              <Button tone="success" variant="solid" startIcon={CheckCircle2} className="rdo-view-action-btn" onClick={() => aprovarRDO('APROVAR_GESTOR')}>Aprovar como gestor</Button>
-            )}
-            {canDecidirFiscal && rdo.status === 'Em aprovação do fiscal' && (
-              <Button tone="success" variant="solid" startIcon={CheckCircle2} className="rdo-view-action-btn" onClick={() => aprovarRDO('APROVAR_FISCAL')}>Aprovar como fiscal</Button>
-            )}
-            {((canDecidirGestor && rdo.status === 'Em aprovação do gestor') || (canDecidirFiscal && rdo.status === 'Em aprovação do fiscal')) && (
-              <>
-                <Button tone="warning" variant="soft" startIcon={RotateCcw} className="rdo-view-action-btn" onClick={() => { setAcaoDevolucao('SOLICITAR_CORRECAO'); setShowSolicitarCorrecaoModal(true); }}>Solicitar correção</Button>
-                <Button tone="danger" variant="solid" startIcon={XCircle} className="rdo-view-action-btn" onClick={() => { setAcaoDevolucao('REPROVAR'); setShowSolicitarCorrecaoModal(true); }}>Reprovar</Button>
-              </>
-            )}
-            {rdo.status === 'Aprovado' && (canDecidirGestor || canDecidirFiscal) && (
-              <Button tone="warning" variant="soft" startIcon={RotateCcw} className="rdo-view-action-btn" onClick={voltarAprovadoParaCorrecao}>Voltar para correção</Button>
-            )}
+            <div className="rdo-report-actions-menu">
+              <IconButton icon={Menu} label="Opções do RDO" title="Opções do RDO" tone="primary" variant="outline" onClick={() => setReportActionsMenuOpen((open) => !open)} aria-expanded={reportActionsMenuOpen} />
+              {reportActionsMenuOpen && (
+                <div className="rdo-report-actions-menu-panel" role="menu" aria-label="Opções do RDO">
+                  <Button fullWidth tone="primary" variant="outline" startIcon={Download} className="rdo-report-menu-item" onClick={() => { setReportActionsMenuOpen(false); handleDownloadPDF(); }}>Baixar PDF</Button>
+                  {canDecidirGestor && rdo.status === 'Em aprovação do gestor' && <Button fullWidth tone="success" variant="solid" startIcon={CheckCircle2} className="rdo-report-menu-item" onClick={() => { setReportActionsMenuOpen(false); aprovarRDO('APROVAR_GESTOR'); }}>Aprovar como gestor</Button>}
+                  {canDecidirFiscal && rdo.status === 'Em aprovação do fiscal' && <Button fullWidth tone="success" variant="solid" startIcon={CheckCircle2} className="rdo-report-menu-item" onClick={() => { setReportActionsMenuOpen(false); aprovarRDO('APROVAR_FISCAL'); }}>Aprovar como fiscal</Button>}
+                  {((canDecidirGestor && rdo.status === 'Em aprovação do gestor') || (canDecidirFiscal && rdo.status === 'Em aprovação do fiscal')) && <>
+                    <Button fullWidth tone="warning" variant="soft" startIcon={RotateCcw} className="rdo-report-menu-item" onClick={() => { setReportActionsMenuOpen(false); setAcaoDevolucao('SOLICITAR_CORRECAO'); setShowSolicitarCorrecaoModal(true); }}>Solicitar correção</Button>
+                    <Button fullWidth tone="danger" variant="solid" startIcon={XCircle} className="rdo-report-menu-item" onClick={() => { setReportActionsMenuOpen(false); setAcaoDevolucao('REPROVAR'); setShowSolicitarCorrecaoModal(true); }}>Reprovar</Button>
+                  </>}
+                  {rdo.status === 'Aprovado' && (canDecidirGestor || canDecidirFiscal) && <Button fullWidth tone="warning" variant="soft" startIcon={RotateCcw} className="rdo-report-menu-item" onClick={() => { setReportActionsMenuOpen(false); voltarAprovadoParaCorrecao(); }}>Voltar para correção</Button>}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="rdo-report-meta-grid">
@@ -386,7 +387,7 @@ function RDODetalhes() {
         </div>
 
         {erro && <div className="alert alert-error rdo-report-alert">{erro}</div>}
-        {sucesso && <div className="alert alert-success rdo-report-alert">{sucesso}</div>}
+        {sucesso && <div className="alert alert-success rdo-report-success-toast" role="status" aria-live="polite">{sucesso}</div>}
         {Number(rdo.correcao_solicitada || 0) === 1 && (
           <div className="rdo-correction-alert">
             <div className="rdo-correction-alert-icon">
@@ -539,8 +540,8 @@ function RDODetalhes() {
                       <img src={getUploadUrl(foto.caminho_arquivo)} alt={foto.descricao || 'Foto do RDO'} />
                     </div>
                     <div className="rdo-report-photo-info">
-                      <strong>{foto.descricao || 'Foto sem descrição'}</strong>
-                      {linkedActivity && <span>{linkedActivity}</span>}
+                      <strong>{foto.descricao || linkedActivity || 'Atividade vinculada'}</strong>
+                      {foto.descricao && linkedActivity && <span>{linkedActivity}</span>}
                     </div>
                   </a>
                 );

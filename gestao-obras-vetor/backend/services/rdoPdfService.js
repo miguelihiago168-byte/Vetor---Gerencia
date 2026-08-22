@@ -398,12 +398,13 @@ function renderHtml(data) {
     const atividade = foto.atividade_descricao
       ?`${foto.atividade_codigo ?`${foto.atividade_codigo} - ` : ''}${foto.atividade_descricao}`
       : (foto.atividade_avulsa_descricao || '-');
+    const legenda = descricao || atividade;
     return `
       <article class="photo-card avoid-break">
         ${src ?`<img src="${src}" alt="${escapeHtml(descricao || 'Foto do RDO')}">` : '<div class="photo-missing">Imagem não encontrada</div>'}
         <div class="photo-caption">
-          <strong>Descrição: ${escapeHtml(descricao || 'Não informada')}</strong>
-          <span>Atividade: ${escapeHtml(atividade)}</span>
+          <strong>${descricao ? 'Descrição' : 'Atividade'}: ${escapeHtml(legenda)}</strong>
+          ${descricao && atividade !== '-' ? `<span>Atividade: ${escapeHtml(atividade)}</span>` : ''}
           <span>Data/Hora: ${fmtDateTime(foto.criado_em)}</span>
           <span>Autor: ${escapeHtml(foto.autor_nome || '-')}</span>
         </div>
@@ -428,11 +429,11 @@ function renderHtml(data) {
     .doc-title { position: relative; min-height: 34px; margin-bottom: 12px; padding-right: 110px; }
     .doc-title h1 { margin: 0; text-align: center; }
     .doc-title .status { position: absolute; top: 0; right: 0; }
-    .company-brands { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0 0 14px; }
-    .company-brand { display: grid; grid-template-columns: 132px 1fr; align-items: center; gap: 14px; min-height: 92px; padding: 10px; border: 1px solid #b9cddd; border-radius: 7px; background: #f8fbfd; }
-    .company-brand img { width: 132px; height: 70px; object-fit: contain; background: white; border-radius: 5px; }
+    .company-brands { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0 0 14px; }
+    .company-brand { display: grid; grid-template-columns: 118px minmax(0, 1fr); align-items: center; gap: 12px; min-width: 0; min-height: 84px; padding: 9px; border: 1px solid #b9cddd; border-radius: 7px; background: #f8fbfd; }
+    .company-brand img { width: 118px; height: 62px; object-fit: contain; background: white; border-radius: 5px; }
     .company-brand span { display: block; margin-bottom: 3px; color: #475569; font-size: 7.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
-    .company-brand strong { display: block; color: #06263a; font-size: 10.5pt; line-height: 1.25; }
+    .company-brand strong { display: block; min-width: 0; color: #06263a; font-size: 10.5pt; line-height: 1.25; overflow-wrap: anywhere; }
     .doc-title h1 { margin: 0; font-size: 15pt; letter-spacing: .03em; color: #06263a; text-transform: uppercase; }
     .status { border: 1px solid #0b5f86; color: #0b5f86; padding: 4px 8px; border-radius: 4px; font-weight: 700; }
     .section { margin-bottom: 9px; break-inside: avoid; page-break-inside: avoid; }
@@ -762,13 +763,13 @@ async function renderWithPuppeteer(html, rdo, displayId) {
 
     const headerStatusStyle = statusInlineStyle(rdo.status || '-');
     const headerTemplate = `
-      <div style="font-size:7px;color:#334155;width:100%;padding:0 38px;font-family:Arial,sans-serif;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #d7dee8;height:22px;">
+      <div style="box-sizing:border-box;font-size:7px;color:#334155;width:100%;padding:0 28px;font-family:Arial,sans-serif;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #d7dee8;height:22px;">
         <span>${escapeHtml(rdo.projeto_nome || '-')}</span>
         <span>${displayId} | ${fmtDate(rdo.data_relatorio)} | <span style="display:inline-block;border:1px solid #0b5f86;border-radius:3px;padding:1px 4px;font-weight:700;${headerStatusStyle}">${escapeHtml(rdo.status || '-')}</span></span>
       </div>
     `;
     const footerTemplate = `
-      <div style="font-size:7px;color:#64748b;width:100%;padding:0 38px;font-family:Arial,sans-serif;display:flex;justify-content:space-between;align-items:center;border-top:1px solid #d7dee8;height:22px;">
+      <div style="box-sizing:border-box;font-size:7px;color:#64748b;width:100%;padding:0 28px;font-family:Arial,sans-serif;display:flex;justify-content:space-between;align-items:center;border-top:1px solid #d7dee8;height:22px;">
         <span>${escapeHtml(rdo.projeto_nome || '-')} | ${displayId} | Gerado em ${new Date().toLocaleString('pt-BR')} | ${escapeHtml(getPdfVersionLabel())}</span>
         <span>Página <span class="pageNumber"></span> de <span class="totalPages"></span></span>
       </div>

@@ -34,6 +34,14 @@ const businessDaysBetween = (from, to) => {
   return days;
 };
 
+const rdoActivityDate = (rdo, timeZone = DEFAULT_TIME_ZONE) => {
+  const reportDate = dateKey(rdo?.data_relatorio, timeZone);
+  const createdDate = dateKey(rdo?.criado_em, timeZone);
+  if (!reportDate) return createdDate;
+  if (!createdDate) return reportDate;
+  return reportDate > createdDate ? reportDate : createdDate;
+};
+
 const inWindow = (value, from, to, timeZone) => {
   const key = dateKey(value, timeZone);
   return Boolean(key && key >= from && key <= to);
@@ -45,12 +53,14 @@ const summarizeExecution = (rdos = [], now = new Date(), timeZone = DEFAULT_TIME
   const today = dateKey(now, timeZone);
   const from = shiftDateKey(today, -6);
   const ordered = [...rdos].sort((a, b) => String(b.data_relatorio || '').localeCompare(String(a.data_relatorio || '')));
+  const orderedByActivity = [...rdos].sort((a, b) => String(rdoActivityDate(b, timeZone) || '').localeCompare(String(rdoActivityDate(a, timeZone) || '')));
   const period = ordered.filter((rdo) => inWindow(rdo.data_relatorio, from, today, timeZone));
-  const latestDate = dateKey(ordered[0]?.data_relatorio, timeZone);
+  const latestDate = rdoActivityDate(orderedByActivity[0], timeZone);
   const daysSinceLatest = latestDate ? businessDaysBetween(latestDate, today) : null;
   return {
     period: { from, to: today, days: 7 },
     latest_rdo_date: ordered[0]?.data_relatorio || null,
+    latest_rdo_activity_date: latestDate,
     days_since_latest: daysSinceLatest,
     recent: ordered.slice(0, 5),
     totals: {
