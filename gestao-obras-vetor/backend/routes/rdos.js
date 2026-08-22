@@ -1768,6 +1768,9 @@ router.get('/:id/pdf', auth, async (req, res) => {
     await ensureRdoOptionalColumns();
     const pdf = await generateRdoPdfBuffer(req.params.id);
     res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.setHeader('Content-Disposition', `attachment; filename="${pdf.filename}"`);
     res.setHeader('X-PDF-Engine', pdf.engine);
     if (pdf.fallbackReason) res.setHeader('X-PDF-Fallback-Reason', pdf.fallbackReason.replace(/[\r\n]+/g, ' '));

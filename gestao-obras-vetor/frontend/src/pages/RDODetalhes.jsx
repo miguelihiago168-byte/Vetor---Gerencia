@@ -206,9 +206,9 @@ function RDODetalhes() {
 
   const handleDownloadPDF = async () => {
     const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
-    const url = token
-      ? `/api/rdos/${rdoId}/pdf?token=${encodeURIComponent(token)}`
-      : `/api/rdos/${rdoId}/pdf`;
+    const query = new URLSearchParams({ download: String(Date.now()) });
+    if (token) query.set('token', token);
+    const url = `/api/rdos/${rdoId}/pdf?${query.toString()}`;
     const link = document.createElement('a');
     link.href = url;
     link.download = `RDO-${numeroRdoExibicao}.pdf`;
