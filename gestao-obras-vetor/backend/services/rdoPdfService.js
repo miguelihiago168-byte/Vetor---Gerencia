@@ -426,10 +426,10 @@ function renderHtml(data) {
     body { margin: 0; font-family: Arial, "Segoe UI", sans-serif; color: #111827; font-size: 9pt; line-height: 1.35; }
     .page { padding: 0; }
     .brand-line { height: 4px; background: #0b5f86; margin-bottom: 10px; }
-    .doc-title { position: relative; min-height: 34px; margin-bottom: 12px; padding-right: 116px; overflow: hidden; }
+    .doc-title { position: relative; min-height: 56px; margin-bottom: 12px; overflow: hidden; }
     .doc-title h1 { margin: 0; min-width: 0; text-align: center; }
-    .doc-title .status { position: absolute; top: 0; right: 0; max-width: 110px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .company-brands { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; max-width: 100%; gap: 10px; margin: 0 0 14px; overflow: hidden; }
+    .doc-title .status { position: absolute; right: 0; bottom: 0; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .company-brands { display: grid; grid-template-columns: minmax(0, 1fr); width: 100%; max-width: 100%; gap: 8px; margin: 0 0 14px; overflow: hidden; }
     .company-brand { display: grid; grid-template-columns: minmax(88px, 112px) minmax(0, 1fr); align-items: center; width: 100%; max-width: 100%; min-width: 0; min-height: 84px; gap: 10px; padding: 9px; overflow: hidden; border: 1px solid #b9cddd; border-radius: 7px; background: #f8fbfd; }
     .company-brand img { width: 100%; max-width: 112px; height: 62px; min-width: 0; object-fit: contain; background: white; border-radius: 5px; }
     .company-brand > div { min-width: 0; }
