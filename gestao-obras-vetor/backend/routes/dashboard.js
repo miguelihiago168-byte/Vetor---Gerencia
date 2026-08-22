@@ -4,6 +4,7 @@ const { auth } = require('../middleware/auth');
 const { PERMISSIONS, hasPermission, assertProjectAccess } = require('../middleware/rbac');
 const ganttService = require('../services/ganttService');
 const { loadCockpit } = require('../services/cockpitService');
+const { calculateProjectProgress } = require('../services/eapProgressService');
 
 const router = express.Router();
 
@@ -96,6 +97,8 @@ router.get('/projeto/:projetoId/avanco', auth, async (req, res) => {
     const atividadesRaw = await allQuery(`
       SELECT * FROM atividades_eap WHERE projeto_id = ? ORDER BY ordem, codigo_eap
     `, [projetoId]);
+    const progressoConsolidado = calculateProjectProgress(atividadesRaw);
+    resultado.avanco_medio = progressoConsolidado.percentual;
     // montar map por id
     const byId = {};
     atividadesRaw.forEach(a => { byId[a.id] = { ...a, previsto_agregado: a.quantidade_total || 0, executado_agregado: (a.percentual_executado || 0) * ((a.quantidade_total||0)/100) }; });
@@ -110,6 +113,9 @@ router.get('/projeto/:projetoId/avanco', auth, async (req, res) => {
         }
       }
     });
+    const percentuaisPrincipais = new Map(
+      progressoConsolidado.atividadesPrincipais.map((atividade) => [String(atividade.id), atividade.percentual_executado])
+    );
     const atividadesPrincipais = atividadesRaw.filter(a => !a.pai_id).map(a => {
       const copy = { ...a };
       const agg = byId[a.id] || {};
@@ -121,7 +127,7 @@ router.get('/projeto/:projetoId/avanco', auth, async (req, res) => {
       } else {
         percentual_agregado = a.percentual_executado || 0;
       }
-      copy.percentual_executado = percentual_agregado;
+      copy.percentual_executado = percentuaisPrincipais.get(String(a.id)) ?? percentual_agregado;
       copy.percentual_previsto = a.percentual_previsto || 0;
       return copy;
     });

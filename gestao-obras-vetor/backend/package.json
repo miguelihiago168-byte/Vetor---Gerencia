@@ -25,6 +25,7 @@
     "test:rls": "node tests/rlsArchitecture.test.js",
     "test:service-auth": "node tests/serviceAccountAuth.test.js && node tests/oauthRoute.test.js && node tests/serviceSessionRoute.test.js",
     "test:contact": "node tests/contactRoute.test.js",
+    "test:eap-progress": "node tests/eapProgressService.test.js",
     "service-account": "node scripts/service_accounts.js",
     "migrate-curva-s": "node scripts/migrate_add_curva_s_fields.js"
   },

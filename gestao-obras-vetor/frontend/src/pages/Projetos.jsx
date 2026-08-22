@@ -310,14 +310,17 @@ function Projetos() {
         <div className="projetos-grid">
           {projetosFiltrados.map((projeto) => {
             const pct = Math.round(projeto.percentual_progresso || 0);
+            const concluido = pct >= 100;
             const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
             const prazo = parseProjectDeadline(projeto.prazo_termino);
             const diasRestantes = prazo ? Math.round((prazo - hoje) / (1000 * 60 * 60 * 24)) : null;
-            const prazoTone = diasRestantes === null ? 'muted'
+            const prazoTone = concluido ? 'ok'
+              : diasRestantes === null ? 'muted'
               : diasRestantes > 30 ? 'ok'
               : diasRestantes > 0  ? 'soon'
               : 'late';
-            const prazoLabel = diasRestantes === null ? 'Sem prazo'
+            const prazoLabel = concluido ? 'Concluído'
+              : diasRestantes === null ? 'Sem prazo'
               : diasRestantes > 0 ? `Restam ${diasRestantes}d`
               : diasRestantes === 0 ? 'Vence hoje'
               : `Vencido há ${Math.abs(diasRestantes)}d`;
