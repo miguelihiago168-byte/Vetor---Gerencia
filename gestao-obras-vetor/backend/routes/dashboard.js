@@ -38,6 +38,59 @@ const isDiaUtil = (dateOnly) => {
   return dow >= 1 && dow <= 5;
 };
 
+const getEapStatusByPercentual = (percentual) => {
+  const valor = Number(percentual || 0);
+  if (valor >= 100) return 'Concluída';
+  if (valor > 0) return 'Em andamento';
+  return 'Não iniciada';
+};
+
+// Mantém a Curva S coerente com o Gantt: os nós-pai recebem o avanço
+// calculado pelos filhos antes de qualquer análise de prazo.
+const aplicarPercentualEfetivoEap = (atividades = []) => {
+  const porId = new Map();
+  const filhosPorPai = new Map();
+
+  atividades.forEach((atividade) => {
+    const copia = { ...atividade };
+    porId.set(Number(copia.id), copia);
+    if (copia.pai_id) {
+      const paiId = Number(copia.pai_id);
+      if (!filhosPorPai.has(paiId)) filhosPorPai.set(paiId, []);
+      filhosPorPai.get(paiId).push(copia);
+    }
+  });
+
+  const calcularPercentual = (atividade) => {
+    const filhos = filhosPorPai.get(Number(atividade.id)) || [];
+    if (!filhos.length) return Math.min(100, Math.max(0, Number(atividade.percentual_executado || 0)));
+
+    const percentuaisFilhos = filhos.map(calcularPercentual);
+    if (percentuaisFilhos.every((percentual) => percentual >= 100)) return 100;
+
+    let somaContribuicao = 0;
+    let somaPeso = 0;
+    let somaSimples = 0;
+    filhos.forEach((filho, index) => {
+      const percentual = Number(percentuaisFilhos[index] || 0);
+      const peso = Number(filho.peso_percentual_projeto || filho.percentual_previsto || 0);
+      somaSimples += percentual;
+      if (peso > 0) {
+        somaContribuicao += (percentual * peso) / 100;
+        somaPeso += peso;
+      }
+    });
+
+    return Math.min(100, somaPeso > 0 ? somaContribuicao : somaSimples / filhos.length);
+  };
+
+  return atividades.map((atividade) => {
+    const copia = porId.get(Number(atividade.id));
+    const percentual = calcularPercentual(copia);
+    return { ...copia, percentual_executado: percentual, status: getEapStatusByPercentual(percentual) };
+  });
+};
+
 // Cockpit da Obra - camada consolidada estritamente de leitura.
 router.get('/projeto/:projetoId/cockpit', auth, async (req, res) => {
   try {
@@ -265,20 +318,25 @@ router.get('/projeto/:projetoId/curva-s', auth, async (req, res) => {
     if (!projeto) {
       return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
     }
-    const atividades = await allQuery(`
+    const atividadesEap = await allQuery(`
       SELECT a.id,
              COALESCE(a.id_atividade, ('ATV-' || a.id)) AS id_atividade,
              COALESCE(a.nome, a.descricao) AS nome,
+             a.codigo_eap,
+             a.pai_id,
              a.data_inicio_planejada,
              a.data_fim_planejada,
              COALESCE(a.peso_percentual_projeto, a.percentual_previsto, 0) AS peso_percentual_projeto,
              COALESCE(a.percentual_executado, 0) AS percentual_executado,
-             a.data_conclusao_real
+             a.data_conclusao_real,
+             a.status
       FROM atividades_eap a
       WHERE a.projeto_id = ?
-        AND NOT EXISTS (SELECT 1 FROM atividades_eap c WHERE c.pai_id = a.id)
       ORDER BY a.ordem, a.codigo_eap
     `, [projetoId]);
+    const atividadesComProgresso = aplicarPercentualEfetivoEap(atividadesEap);
+    const atividadesComFilhos = new Set(atividadesComProgresso.map((atividade) => Number(atividade.pai_id)).filter(Number.isFinite));
+    const atividades = atividadesComProgresso.filter((atividade) => !atividadesComFilhos.has(Number(atividade.id)));
     if (!atividades.length) {
       return res.json({
         projeto,
@@ -455,34 +513,26 @@ router.get('/projeto/:projetoId/curva-s', auth, async (req, res) => {
     if (spi < 1) spiStatus = 'vermelho';
     if (spi > 1) spiStatus = 'verde';
 
-    const atrasos = atividades
+    const atrasadasIds = new Set(ganttService.detectarAtividadesAtrasadas(atividadesComProgresso, {
+      exigirImpactoNoPrazo: false,
+      apenasCaminhoCritico: false
+    }));
+    const atrasos = atividadesComProgresso
+      .filter((atividade) => atrasadasIds.has(atividade.id))
       .map(atividade => {
         const inicio = atividade.data_inicio_planejada;
         const fim = atividade.data_fim_planejada;
         const executado = Number(atividade.percentual_executado || 0);
 
-        let statusAtraso = null;
-        let diasAtraso = 0;
-
-        if (hoje > fim && executado < 100) {
-          statusAtraso = 'Atraso Crítico';
-          diasAtraso = diffDays(fim, hoje);
-        } else if (hoje > inicio && executado === 0) {
-          statusAtraso = 'Atrasada';
-          diasAtraso = diffDays(inicio, hoje);
-        }
-
-        if (!statusAtraso) return null;
         return {
-          id_atividade: atividade.id_atividade,
+          id_atividade: atividade.codigo_eap || atividade.id_atividade,
           nome: atividade.nome,
-          status: statusAtraso,
-          dias_atraso: Math.max(0, diasAtraso),
+          status: 'Atraso Crítico',
+          dias_atraso: Math.max(0, diffDays(fim || inicio, hoje)),
           responsavel: projeto.responsavel,
           percentual_executado: Math.round(executado * 100) / 100
         };
       })
-      .filter(Boolean)
       .sort((a, b) => b.dias_atraso - a.dias_atraso);
 
     res.json({
