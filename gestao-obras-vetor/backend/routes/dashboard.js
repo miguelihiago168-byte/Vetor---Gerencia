@@ -25,8 +25,11 @@ const addDays = (dateOnly, days) => {
 };
 
 const diffDays = (fromDateOnly, toDateOnlyValue) => {
-  const from = new Date(`${fromDateOnly}T00:00:00`);
-  const to = new Date(`${toDateOnlyValue}T00:00:00`);
+  const fromKey = toDateOnly(fromDateOnly);
+  const toKey = toDateOnly(toDateOnlyValue);
+  if (!fromKey || !toKey) return 0;
+  const from = new Date(`${fromKey}T00:00:00`);
+  const to = new Date(`${toKey}T00:00:00`);
   return Math.floor((to - from) / (24 * 60 * 60 * 1000));
 };
 
