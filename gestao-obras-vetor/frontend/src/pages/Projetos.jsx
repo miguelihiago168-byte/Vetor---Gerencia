@@ -31,6 +31,8 @@ const parseProjectDeadline = (value) => {
     : null;
 };
 
+const isProjectCompleted = (project) => Number(project?.percentual_progresso || 0) >= 100;
+
 function Projetos() {
   const { confirm } = useDialog();
   const { success: notifySuccess, error: notifyError } = useNotification();
@@ -59,7 +61,9 @@ function Projetos() {
   const navigate = useNavigate();
   const podeListarUsuarios = perfil === 'ADM' || perfil === 'Gestor Geral';
 
-  const projetosFiltrados = projetos.filter((p) => showArquivados ? p.arquivado === 1 : p.arquivado === 0);
+  const projetosFiltrados = projetos
+    .filter((p) => showArquivados ? p.arquivado === 1 : p.arquivado === 0)
+    .sort((a, b) => showArquivados ? 0 : Number(isProjectCompleted(a)) - Number(isProjectCompleted(b)));
 
   useEffect(() => {
     carregarDados();
@@ -310,7 +314,7 @@ function Projetos() {
         <div className="projetos-grid">
           {projetosFiltrados.map((projeto) => {
             const pct = Math.round(projeto.percentual_progresso || 0);
-            const concluido = pct >= 100;
+            const concluido = isProjectCompleted(projeto);
             const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
             const prazo = parseProjectDeadline(projeto.prazo_termino);
             const diasRestantes = prazo ? Math.round((prazo - hoje) / (1000 * 60 * 60 * 24)) : null;
@@ -455,14 +459,14 @@ function Projetos() {
                   />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', marginBottom: '16px' }}>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
+                <div className="projeto-logo-grid">
+                  <div className="form-group projeto-logo-field" style={{ marginBottom: 0 }}>
                     {formData.empresa_responsavel.trim()
                       ? <label className="form-label">Logo da {formData.empresa_responsavel.trim()}</label>
                       : <small style={{ color: 'var(--text-muted)', display: 'block', marginBottom: 8 }}>Informe a empresa responsável para anexar a logo.</small>}
                     <input id="logo-empresa-responsavel" type="file" accept="image/jpeg,image/png,image/webp" disabled={!formData.empresa_responsavel.trim()} onChange={(e) => selecionarLogo('responsavel', e.target.files?.[0])} style={{ display: 'none' }} />
-                    {formData.empresa_responsavel.trim() && <label htmlFor="logo-empresa-responsavel" className="btn btn-secondary" style={{ display: 'inline-flex', marginBottom: 6 }}>
-                      {logoFiles.responsavel ? `Trocar logo da ${formData.empresa_responsavel.trim()}` : `Selecionar logo da ${formData.empresa_responsavel.trim()}`}
+                    {formData.empresa_responsavel.trim() && <label htmlFor="logo-empresa-responsavel" className="btn btn-secondary projeto-logo-select" style={{ marginBottom: 6 }}>
+                      {logoFiles.responsavel ? 'Trocar logo' : 'Selecionar logo'}
                     </label>}
                     {formData.empresa_responsavel.trim() && <>
                       <small style={{ color: 'var(--text-muted)', display: 'block' }}>
@@ -470,15 +474,15 @@ function Projetos() {
                       </small>
                       <small style={{ color: 'var(--text-muted)' }}>JPEG, PNG ou WebP — até 5 MB</small>
                     </>}
-                    {logoPreviews.responsavel && <img src={logoPreviews.responsavel} alt={`Logo da ${formData.empresa_responsavel.trim()}`} style={{ display: 'block', maxWidth: '100%', height: 72, objectFit: 'contain', marginTop: 8 }} />}
+                    {logoPreviews.responsavel && <img className="projeto-logo-preview" src={logoPreviews.responsavel} alt={`Logo da ${formData.empresa_responsavel.trim()}`} />}
                   </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
+                  <div className="form-group projeto-logo-field" style={{ marginBottom: 0 }}>
                     {formData.empresa_executante.trim()
                       ? <label className="form-label">Logo da {formData.empresa_executante.trim()}</label>
                       : <small style={{ color: 'var(--text-muted)', display: 'block', marginBottom: 8 }}>Informe a empresa executante para anexar a logo.</small>}
                     <input id="logo-empresa-executante" type="file" accept="image/jpeg,image/png,image/webp" disabled={!formData.empresa_executante.trim()} onChange={(e) => selecionarLogo('executante', e.target.files?.[0])} style={{ display: 'none' }} />
-                    {formData.empresa_executante.trim() && <label htmlFor="logo-empresa-executante" className="btn btn-secondary" style={{ display: 'inline-flex', marginBottom: 6 }}>
-                      {logoFiles.executante ? `Trocar logo da ${formData.empresa_executante.trim()}` : `Selecionar logo da ${formData.empresa_executante.trim()}`}
+                    {formData.empresa_executante.trim() && <label htmlFor="logo-empresa-executante" className="btn btn-secondary projeto-logo-select" style={{ marginBottom: 6 }}>
+                      {logoFiles.executante ? 'Trocar logo' : 'Selecionar logo'}
                     </label>}
                     {formData.empresa_executante.trim() && <>
                       <small style={{ color: 'var(--text-muted)', display: 'block' }}>
@@ -486,7 +490,7 @@ function Projetos() {
                       </small>
                       <small style={{ color: 'var(--text-muted)' }}>JPEG, PNG ou WebP — até 5 MB</small>
                     </>}
-                    {logoPreviews.executante && <img src={logoPreviews.executante} alt={`Logo da ${formData.empresa_executante.trim()}`} style={{ display: 'block', maxWidth: '100%', height: 72, objectFit: 'contain', marginTop: 8 }} />}
+                    {logoPreviews.executante && <img className="projeto-logo-preview" src={logoPreviews.executante} alt={`Logo da ${formData.empresa_executante.trim()}`} />}
                   </div>
                 </div>
 

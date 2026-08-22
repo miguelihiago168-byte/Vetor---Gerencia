@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite --port 3000",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:cockpit": "node src/components/cockpit/cockpitTransforms.test.js"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -184,6 +184,43 @@
   font-size: 12px;
 }
 
+.projeto-logo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.projeto-logo-field {
+  min-width: 0;
+}
+
+.projeto-logo-field .form-label,
+.projeto-logo-field small {
+  overflow-wrap: anywhere;
+}
+
+label.btn.btn.projeto-logo-select {
+  display: inline-flex;
+  width: 100%;
+  min-height: var(--button-height-md);
+  height: auto;
+  padding: 9px 12px;
+  white-space: normal;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.projeto-logo-preview {
+  display: block;
+  width: 100%;
+  max-width: 160px;
+  height: 72px;
+  margin-top: 8px;
+  object-fit: contain;
+}
+
 @media (max-width: 768px) {
   .projetos-page {
     padding-top: 20px;
@@ -206,6 +243,12 @@
   }
 
   .projetos-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .projeto-logo-grid {
     grid-template-columns: 1fr;
   }
 }

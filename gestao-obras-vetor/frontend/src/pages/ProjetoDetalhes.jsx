@@ -166,10 +166,15 @@ function ProjetoDetalhes() {
   }, [projetoId]);
 
   const activityView = useMemo(() => buildActivityView(gantt), [gantt]);
+  const projectCompleted = Boolean(activityView?.total)
+    && activityView.counts.completed === activityView.total;
   const procurement = useMemo(() => buildProcurementView(kanban), [kanban]);
   const attention = useMemo(() => buildAttentionPoints({ cockpit, activities: activityView, procurement, assets, curve }), [cockpit, activityView, procurement, assets, curve]);
   const domains = useMemo(() => buildDomainStatus({ cockpit, procurement, assets, curve }), [cockpit, procurement, assets, curve]);
-  const deadline = useMemo(() => projectDeadline(cockpit?.project), [cockpit?.project]);
+  const deadline = useMemo(
+    () => projectDeadline(cockpit?.project, new Date(), projectCompleted),
+    [cockpit?.project, projectCompleted]
+  );
   const permissions = cockpit?.permissions || {};
   const tabs = useMemo(() => TAB_DEFINITIONS.filter((tab) => {
     if (tab.permission) return permissions[tab.permission];

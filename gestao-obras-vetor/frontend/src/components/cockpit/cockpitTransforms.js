@@ -27,10 +27,10 @@ export const daysBetween = (from, to) => {
   return Math.ceil((new Date(`${b}T12:00:00`) - new Date(`${a}T12:00:00`)) / 86400000);
 };
 
-export const projectDeadline = (project, today = new Date()) => {
+export const projectDeadline = (project, today = new Date(), completed = false) => {
   const todayKey = toDateKey(today);
   const days = daysBetween(todayKey, project?.prazo_termino);
-  return { days, overdue: days !== null && days < 0 };
+  return { days, completed: Boolean(completed), overdue: !completed && days !== null && days < 0 };
 };
 
 export const buildActivityView = (payload, today = new Date()) => {

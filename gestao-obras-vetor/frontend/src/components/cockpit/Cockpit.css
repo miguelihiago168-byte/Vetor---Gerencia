@@ -201,6 +201,9 @@
 .cockpit-deadline span { color: #dbeafe; font-size: 10px; font-weight: 700; text-transform: lowercase; }
 .cockpit-deadline.is-critical { border-color: rgba(255, 179, 173, .3); background: rgba(137, 34, 34, .24); }
 .cockpit-deadline.is-critical strong { color: #ffc7c2; }
+.cockpit-deadline.is-complete { border-color: rgba(110, 231, 183, .34); background: rgba(6, 95, 70, .28); }
+.cockpit-deadline.is-complete > div { color: #86efac; }
+.cockpit-deadline.is-complete strong { color: #bbf7d0; font-size: 20px; letter-spacing: 0; }
 
 .cockpit-updated {
   display: flex;

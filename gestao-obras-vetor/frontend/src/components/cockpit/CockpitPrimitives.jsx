@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, ArrowUpRight, Building2, CalendarDays, Clock3, Gauge, MapPin, RefreshCw } from 'lucide-react';
+import { AlertCircle, ArrowUpRight, Building2, CalendarDays, CheckCircle2, Clock3, Gauge, MapPin, RefreshCw } from 'lucide-react';
 import Button from '../ui/Button';
 import { formatDate } from './cockpitTransforms';
 
@@ -45,7 +45,7 @@ export function CockpitHeader({ project, updatedAt, refreshing, onRefresh, deadl
       {Number(project?.arquivado) === 1 && <span className="cockpit-archived">Projeto arquivado</span>}
     </div>
     <div className="cockpit-header-side">
-      {deadline?.days !== null && <div className={`cockpit-deadline ${deadline.overdue ? 'is-critical' : ''}`}><small>Prazo contratual</small><div><strong>{Math.abs(deadline.days)}</strong><span>{deadline.overdue ? 'dias vencido' : 'dias restantes'}</span></div></div>}
+      {deadline?.days !== null && <div className={`cockpit-deadline ${deadline.completed ? 'is-complete' : deadline.overdue ? 'is-critical' : ''}`}><small>Prazo contratual</small>{deadline.completed ? <div><CheckCircle2 size={24} /><strong>Concluído</strong></div> : <div><strong>{Math.abs(deadline.days)}</strong><span>{deadline.overdue ? 'dias vencido' : 'dias restantes'}</span></div>}</div>}
       <small className="cockpit-updated"><Clock3 size={13} /> Atualizado em {updatedAt ? new Date(updatedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</small>
       <Button className="cockpit-refresh" variant="inverse" startIcon={RefreshCw} loading={refreshing} fullWidth onClick={onRefresh}>Atualizar dados</Button>
     </div>
