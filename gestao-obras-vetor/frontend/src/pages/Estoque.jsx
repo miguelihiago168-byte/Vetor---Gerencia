@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { ArrowRightLeft, Boxes, ChevronDown, ClipboardCheck, PackagePlus, Search, Truck, Warehouse } from 'lucide-react';
+import { ArrowRightLeft, Boxes, ChevronDown, ClipboardCheck, PackageMinus, PackagePlus, Search, Truck, Warehouse } from 'lucide-react';
 import ComprasLayout from '../components/ComprasLayout';
 import Button from '../components/ui/Button';
 import { useNotification } from '../context/NotificationContext';
@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   aprovarEstoqueTransferencia, cancelarEstoqueTransferencia, confirmarEstoqueTransferencia, criarEstoqueTransferencia, despacharEstoqueTransferencia,
   getEstoqueLotes, getEstoquePendencias, getEstoqueSaldos, getEstoqueTransferencias,
-  getProjetos, receberEstoquePendencia, rejeitarEstoqueTransferencia, separarEstoqueTransferencia
+  getProjetos, receberEstoquePendencia, registrarSaidaEstoque, rejeitarEstoqueTransferencia, separarEstoqueTransferencia
 } from '../services/api';
 import './Estoque.css';
 
@@ -45,8 +45,9 @@ export default function Estoque() {
   const [pendencias, setPendencias] = useState([]);
   const [transferencias, setTransferencias] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [recebimento, setRecebimento] = useState({ pendencia_id: '', quantidade: '', fornecedor_nome: '', nota_fiscal: '', lote: '', local_armazenamento: 'Estoque central', observacoes: '' });
+  const [recebimento, setRecebimento] = useState({ pendencia_id: '', quantidade: '', fornecedor_nome: '', nota_fiscal: '', lote: '', local_armazenamento: 'Estoque central', observacoes: '', requer_inspecao: false });
   const [transferencia, setTransferencia] = useState({ insumo_id: '', lote_id: '', quantidade: '', destino: '', justificativa: '' });
+  const [saida, setSaida] = useState({ lote_id: '', quantidade: '', frente_servico: '', elemento_construtivo: '', responsavel_nome: '', observacoes: '' });
   const [lotes, setLotes] = useState([]);
   const [menuTransferencia, setMenuTransferencia] = useState(null);
 
@@ -87,6 +88,7 @@ export default function Estoque() {
       const response = await getEstoqueLotes(saldo.insumo_id, params);
       setLotes(response.data || []);
       setTransferencia((current) => ({ ...current, insumo_id: String(saldo.insumo_id), lote_id: String(response.data?.[0]?.id || ''), quantidade: '', destino: '', justificativa: '' }));
+      setSaida({ lote_id: String(response.data?.[0]?.id || ''), quantidade: '', frente_servico: '', elemento_construtivo: '', responsavel_nome: '', observacoes: '' });
       requestAnimationFrame(() => document.getElementById('transferir-insumos')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
     } catch (err) {
       error(err?.response?.data?.erro || 'Erro ao carregar os lotes do insumo.', 6000);
@@ -98,37 +100,12 @@ export default function Estoque() {
     if (!recebimento.pendencia_id || !(Number(recebimento.quantidade) > 0)) return error('Selecione uma compra pendente e informe a quantidade recebida.', 6000);
     try {
       const resposta = await receberEstoquePendencia(recebimento.pendencia_id, { ...recebimento, quantidade: Number(recebimento.quantidade) });
-      const quantidadeRecebida = Number(recebimento.quantidade);
-      const loteRecebido = resposta.data?.lote;
       const chaveDestino = resposta.data?.local?.chave || (selectedPending?.projeto_solicitante_id ? `OBRA:${selectedPending.projeto_solicitante_id}` : 'CENTRAL');
       const nomeDestino = chaveDestino === 'CENTRAL'
         ? 'estoque central'
         : `estoque da obra ${projetos.find((projeto) => `OBRA:${projeto.id}` === chaveDestino)?.nome || ''}`.trim();
-      if (selectedPending && localAtual.chave === chaveDestino) {
-        setSaldos((atuais) => {
-          const indice = atuais.findIndex((item) => Number(item.insumo_id) === Number(loteRecebido?.insumo_id));
-          if (indice >= 0) {
-            return atuais.map((item, index) => index === indice ? {
-              ...item,
-              quantidade_fisica: Number(item.quantidade_fisica || 0) + quantidadeRecebida,
-              quantidade_disponivel: Number(item.quantidade_disponivel || 0) + quantidadeRecebida,
-              total_lotes: Number(item.total_lotes || 0) + 1
-            } : item);
-          }
-          return [...atuais, {
-            insumo_id: loteRecebido?.insumo_id || `pendencia-${selectedPending.id}`,
-            nome: selectedPending.descricao,
-            unidade: selectedPending.unidade,
-            local_chave: chaveDestino,
-            quantidade_fisica: quantidadeRecebida,
-            quantidade_reservada: 0,
-            quantidade_disponivel: quantidadeRecebida,
-            total_lotes: 1
-          }];
-        });
-      }
-      success(`Recebimento registrado no ${nomeDestino}.`, 5000);
-      setRecebimento({ pendencia_id: '', quantidade: '', fornecedor_nome: '', nota_fiscal: '', lote: '', local_armazenamento: 'Estoque central', observacoes: '' });
+      success(`Recebimento registrado no ${nomeDestino}${recebimento.requer_inspecao ? ' e enviado para quarentena da Qualidade.' : '.'}`, 5000);
+      setRecebimento({ pendencia_id: '', quantidade: '', fornecedor_nome: '', nota_fiscal: '', lote: '', local_armazenamento: 'Estoque central', observacoes: '', requer_inspecao: false });
       if (localAtual.chave === chaveDestino) await carregar();
       else setLocalSelecionado(chaveDestino);
     } catch (err) {
@@ -153,6 +130,20 @@ export default function Estoque() {
       await carregar();
     } catch (err) {
       error(err?.response?.data?.erro || 'Não foi possível criar a transferência.', 7000);
+    }
+  };
+
+  const registrarUso = async (event) => {
+    event.preventDefault();
+    if (!localAtual.projetoId) return error('A baixa para uso deve ser registrada no estoque de uma obra.', 6000);
+    if (!saida.lote_id || !(Number(saida.quantidade) > 0) || !saida.frente_servico || !saida.responsavel_nome) return error('Selecione uma entrada e informe quantidade, responsável e frente de serviço.', 6000);
+    try {
+      await registrarSaidaEstoque({ ...saida, lote_id: Number(saida.lote_id), projeto_id: localAtual.projetoId, quantidade: Number(saida.quantidade) });
+      success('Baixa para uso registrada e vinculada à obra.', 5000);
+      setSaida((current) => ({ ...current, quantidade: '', frente_servico: '', elemento_construtivo: '', responsavel_nome: '', observacoes: '' }));
+      await carregar();
+    } catch (err) {
+      error(err?.response?.data?.erro || 'Não foi possível registrar a baixa para uso.', 7000);
     }
   };
 
@@ -238,6 +229,7 @@ export default function Estoque() {
             </dl>
           </div>}
           <div className="estoque-form-grid"><input className="form-input" type="number" min="0.001" step="0.001" placeholder="Quantidade recebida" value={recebimento.quantidade} onChange={(event) => setRecebimento({ ...recebimento, quantidade: event.target.value })} /><input className="form-input" placeholder="Fornecedor" value={recebimento.fornecedor_nome} onChange={(event) => setRecebimento({ ...recebimento, fornecedor_nome: event.target.value })} /><input className="form-input" placeholder="Nota fiscal (opcional)" value={recebimento.nota_fiscal} onChange={(event) => setRecebimento({ ...recebimento, nota_fiscal: event.target.value })} /><input className="form-input" placeholder="Lote (opcional)" value={recebimento.lote} onChange={(event) => setRecebimento({ ...recebimento, lote: event.target.value })} /></div>
+          <label className="estoque-destino-recebimento"><input type="checkbox" checked={recebimento.requer_inspecao} onChange={(event) => setRecebimento({ ...recebimento, requer_inspecao: event.target.checked })} /> Exige inspeção da Qualidade (entrada fica em quarentena)</label>
           <textarea className="form-textarea" rows="2" placeholder="Observações (opcional)" value={recebimento.observacoes} onChange={(event) => setRecebimento({ ...recebimento, observacoes: event.target.value })} />
           <Button type="submit" startIcon={PackagePlus}>Registrar entrada</Button>
         </form>
@@ -253,11 +245,23 @@ export default function Estoque() {
           <textarea className="form-textarea" rows="2" placeholder="Justificativa (opcional)" value={transferencia.justificativa} onChange={(event) => setTransferencia({ ...transferencia, justificativa: event.target.value })} />
           <Button type="submit" disabled={!lotes.length} startIcon={ArrowRightLeft}>Criar transferência</Button>
         </form>
+
+        <form className="card estoque-form" onSubmit={registrarUso}>
+          <h3><PackageMinus size={18} /> Baixar para uso na obra</h3>
+          <p>Registre a retirada física vinculando o material à frente de serviço ou atividade da obra.</p>
+          {!localAtual.projetoId && <small className="estoque-destino-recebimento">Selecione uma obra acima para registrar o uso.</small>}
+          <select className="form-select" disabled={!localAtual.projetoId || !lotes.length} value={saida.lote_id} onChange={(event) => setSaida({ ...saida, lote_id: event.target.value })}>
+            <option value="">Selecione uma entrada</option>{lotes.map((lote) => <option key={lote.id} value={lote.id}>{lote.nome} · disponível {fmt(lote.quantidade_disponivel)} {lote.unidade}{Number(lote.quantidade_quarentena) ? ' · em quarentena' : ''}</option>)}
+          </select>
+          <div className="estoque-form-grid"><input className="form-input" type="number" min="0.001" step="0.001" max={lotes.find((lote) => String(lote.id) === saida.lote_id)?.quantidade_disponivel || undefined} placeholder="Quantidade utilizada" value={saida.quantidade} onChange={(event) => setSaida({ ...saida, quantidade: event.target.value })} /><input className="form-input" placeholder="Responsável pela retirada" value={saida.responsavel_nome} onChange={(event) => setSaida({ ...saida, responsavel_nome: event.target.value })} /><input className="form-input" placeholder="Frente de serviço *" value={saida.frente_servico} onChange={(event) => setSaida({ ...saida, frente_servico: event.target.value })} /><input className="form-input" placeholder="Elemento construtivo (opcional)" value={saida.elemento_construtivo} onChange={(event) => setSaida({ ...saida, elemento_construtivo: event.target.value })} /></div>
+          <textarea className="form-textarea" rows="2" placeholder="Observações (opcional)" value={saida.observacoes} onChange={(event) => setSaida({ ...saida, observacoes: event.target.value })} />
+          <Button type="submit" disabled={!localAtual.projetoId || !lotes.length} startIcon={PackageMinus}>Registrar uso</Button>
+        </form>
       </section>
 
       <section className="card estoque-list">
         <div className="estoque-list-header"><div><h3>Saldo por insumo</h3><p>Os totais agrupam compras iguais, preservando o detalhe por lote.</p></div><form onSubmit={procurar}><Search size={16} /><input className="form-input" placeholder="Insumo, NF, lote ou fornecedor" value={busca} onChange={(event) => setBusca(event.target.value)} /></form></div>
-        {loading ? <div className="loading"><div className="spinner" /></div> : <div className="table-wrap"><table className="table"><thead><tr><th>Insumo</th><th>Unidade</th><th>Físico</th><th>Reservado</th><th>Disponível</th><th>Lotes</th><th /></tr></thead><tbody>{saldos.map((item) => <tr key={`${item.insumo_id}-${item.local_chave}`}><td><strong>{item.nome}</strong></td><td>{item.unidade}</td><td>{fmt(item.quantidade_fisica)}</td><td>{fmt(item.quantidade_reservada)}</td><td><strong>{fmt(item.quantidade_disponivel)}</strong></td><td>{item.total_lotes}</td><td><Button size="sm" variant="outline" onClick={() => selecionarInsumo(item)}>Selecionar</Button></td></tr>)}{!saldos.length && <tr><td colSpan="7">Nenhum saldo encontrado neste estoque.</td></tr>}</tbody></table></div>}
+        {loading ? <div className="loading"><div className="spinner" /></div> : <div className="table-wrap"><table className="table"><thead><tr><th>Insumo</th><th>Unidade</th><th>Físico</th><th>Quarentena</th><th>Reservado</th><th>Disponível</th><th>Lotes</th><th /></tr></thead><tbody>{saldos.map((item) => <tr key={`${item.insumo_id}-${item.local_chave}`}><td><strong>{item.nome}</strong></td><td>{item.unidade}</td><td>{fmt(item.quantidade_fisica)}</td><td>{fmt(item.quantidade_quarentena)}</td><td>{fmt(item.quantidade_reservada)}</td><td><strong>{fmt(item.quantidade_disponivel)}</strong></td><td>{item.total_lotes}</td><td><Button size="sm" variant="outline" onClick={() => selecionarInsumo(item)}>Selecionar</Button></td></tr>)}{!saldos.length && <tr><td colSpan="8">Nenhum saldo encontrado neste estoque.</td></tr>}</tbody></table></div>}
       </section>
 
       <section className="card estoque-list">

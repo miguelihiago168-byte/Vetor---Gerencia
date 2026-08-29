@@ -1,84 +1,41 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Boxes, ClipboardList, MapPin, PackageCheck, Plus, Search, X } from 'lucide-react';
+import { ArrowLeft, ClipboardCheck, History, PackageCheck, Search, X } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import Button from '../components/ui/Button';
-import {
-  getMaterialRecebimentos, getMaterialTraceIndicators
-} from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { gerarRncEntradaEstoque, getEstoqueRastreabilidade, getEstoqueRastreabilidadeDetalhe, inspecionarEntradaEstoque } from '../services/api';
 import './RastreabilidadeMateriais.css';
 
-const chipTone = (status = '') => {
-  if (status.includes('Aprovado')) return 'success';
-  if (/Bloqueado|Reprovado/.test(status)) return 'danger';
-  return '';
-};
+const fmt = (value) => new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 3 }).format(Number(value || 0));
+const label = (value) => ({ NAO_APLICAVEL: 'Não exige inspeção', AGUARDANDO_INSPECAO: 'Aguardando inspeção', APROVADO: 'Aprovado', APROVADO_COM_RESSALVA: 'Aprovado com ressalva', BLOQUEADO: 'Bloqueado', REPROVADO: 'Reprovado' }[value] || value);
+const tone = (value) => /APROVADO|NAO_APLICAVEL/.test(value || '') ? 'success' : /BLOQUEADO|REPROVADO/.test(value || '') ? 'danger' : '';
 
 export default function RastreabilidadeMateriais() {
   const { projetoId } = useParams();
   const navigate = useNavigate();
-  const [items, setItems] = useState([]);
-  const [stats, setStats] = useState({});
-  const [query, setQuery] = useState('');
-  const [inspectionStatus, setInspectionStatus] = useState('');
-  const [error, setError] = useState('');
+  const { perfil } = useAuth();
+  const [items, setItems] = useState([]); const [selected, setSelected] = useState(null); const [query, setQuery] = useState(''); const [error, setError] = useState(''); const [saving, setSaving] = useState(false);
+  const [inspection, setInspection] = useState({ resultado: 'APROVADO', quantidade_aprovada: '', quantidade_bloqueada: '0', quantidade_reprovada: '0', motivo: '' });
+  const canInspect = ['ADM', 'Gestor Geral', 'Gestor da Qualidade', 'Gestor de Qualidade'].includes(perfil);
+  const load = async () => { const response = await getEstoqueRastreabilidade({ projeto_id: projetoId, q: query || undefined }); setItems(response.data || []); setError(''); };
+  const select = async (id) => { try { const response = await getEstoqueRastreabilidadeDetalhe(id); setSelected(response.data); const pending = (response.data?.saldos || []).reduce((total, saldo) => total + Number(saldo.quantidade_quarentena || 0), 0); setInspection({ resultado: 'APROVADO', quantidade_aprovada: String(pending), quantidade_bloqueada: '0', quantidade_reprovada: '0', motivo: '' }); } catch (err) { setError(err.response?.data?.erro || 'Não foi possível carregar o histórico da entrada.'); } };
+  const inspect = async (event) => { event.preventDefault(); if (!selected) return; setSaving(true); try { await inspecionarEntradaEstoque(selected.id, { ...inspection, quantidade_aprovada: Number(inspection.quantidade_aprovada || 0), quantidade_bloqueada: Number(inspection.quantidade_bloqueada || 0), quantidade_reprovada: Number(inspection.quantidade_reprovada || 0) }); await Promise.all([load(), select(selected.id)]); } catch (err) { setError(err.response?.data?.erro || 'Não foi possível registrar a inspeção.'); } finally { setSaving(false); } };
+  const createRnc = async () => { if (!selected) return; setSaving(true); try { const response = await gerarRncEntradaEstoque(selected.id, { projeto_id: Number(projetoId) }); await select(selected.id); setError(response.data?.existente ? `A RNC #${response.data.rnc_id} já está vinculada a esta entrada.` : `RNC #${response.data.rnc_id} criada e vinculada à entrada.`); } catch (err) { setError(err.response?.data?.erro || 'Não foi possível gerar a RNC.'); } finally { setSaving(false); } };
+  useEffect(() => { load().catch((err) => setError(err.response?.data?.erro || err.message)); }, [projetoId, query]);
+  const available = (selected?.saldos || []).reduce((n, s) => n + Number(s.quantidade || 0) - Number(s.quantidade_reservada || 0) - Number(s.quantidade_quarentena || 0), 0);
+  const quarantine = (selected?.saldos || []).reduce((n, s) => n + Number(s.quantidade_quarentena || 0), 0);
 
-  const load = async () => {
-    const [list, indicators] = await Promise.all([
-      getMaterialRecebimentos(projetoId, { q: query, status_inspecao: inspectionStatus || undefined }),
-      getMaterialTraceIndicators(projetoId)
-    ]);
-    setError('');
-    setItems(list.data || []);
-    setStats(indicators.data || {});
-  };
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => load().catch((error) => setError(error.response?.data?.erro || error.message)), 220);
-    return () => window.clearTimeout(timer);
-  }, [projetoId, query, inspectionStatus]);
-
-  const waiting = stats.por_inspecao?.find((item) => item.status_inspecao === 'Aguardando inspeção')?.total || 0;
-
-  return <>
-    <Navbar />
-    <main className="container quality-page">
-      <div className="page-header">
-        <div>
-          <Button className="quality-back-button" variant="outline" startIcon={ArrowLeft} onClick={() => navigate(`/projeto/${projetoId}/qualidade`)}>Voltar para Qualidade</Button>
-          <p className="eyebrow">QUALIDADE / RASTREABILIDADE</p>
-          <h1>Rastreabilidade de materiais</h1>
-          <p>Controle do recebimento à aplicação na obra.</p>
-        </div>
-        <Button startIcon={Plus} onClick={() => navigate(`/projeto/${projetoId}/rastreabilidade-materiais/novo`)}>Novo recebimento</Button>
-      </div>
-
-      <nav className="material-module-tabs" aria-label="Seções da rastreabilidade"><button className="active"><ClipboardList size={16} /> Recebidos</button><button onClick={() => navigate(`/projeto/${projetoId}/rastreabilidade-materiais/saidas`)}><Boxes size={16} /> Saídas de materiais</button></nav>
-
-      {error && <div className="alert alert-error">{error}</div>}
-      <div className="quality-kpis material-kpis">
-        <div className="quality-kpi"><PackageCheck /><div><strong>{stats.total || 0}</strong><span>Recebimentos</span></div></div>
-        <div className="quality-kpi"><Search /><div><strong>{waiting}</strong><span>Aguardando inspeção</span></div></div>
-      </div>
-
-      <div className="material-toolbar material-toolbar--filters">
-        <label className="material-search-control"><span>Buscar recebimento</span><div><Search size={17} /><input placeholder="Material, fornecedor, lote, NF, série ou código" value={query} onChange={(event) => setQuery(event.target.value)} />{query && <button type="button" onClick={() => setQuery('')} aria-label="Limpar busca"><X size={16} /></button>}</div></label>
-        <label className="material-status-control"><span>Status da inspeção</span><select value={inspectionStatus} onChange={(event) => setInspectionStatus(event.target.value)}><option value="">Todos os status</option><option value="Aguardando inspeção">Aguardando inspeção</option><option value="Em inspeção">Em inspeção</option><option value="Aprovado">Aprovado</option><option value="Aprovado com ressalva">Aprovado com ressalva</option><option value="Bloqueado">Bloqueado</option><option value="Reprovado">Reprovado</option></select></label>
-        <div className="material-filter-summary"><strong>{items.length}</strong><span>{items.length === 1 ? 'recebimento encontrado' : 'recebimentos encontrados'}</span></div>
-        {(query || inspectionStatus) && <Button variant="ghost" onClick={() => { setQuery(''); setInspectionStatus(''); }}>Limpar filtros</Button>}
-      </div>
-      <div className="material-grid">
-        {items.map((item) => <article className="material-card" key={item.id} onClick={() => navigate(`/projeto/${projetoId}/rastreabilidade-materiais/${item.id}`)}>
-          <div className="material-card-top"><span className={`material-chip ${chipTone(item.status_inspecao)}`}>{item.status_inspecao}</span></div>
-          <h3>{item.nome_material}</h3>
-          <p className="material-card-code"><span>ID do material</span><strong>{item.codigo}</strong></p>
-          <p>{item.quantidade_recebida} {item.unidade} · Lote: {item.lote || '—'}</p>
-          <p>{item.fornecedor_exibicao || 'Fornecedor não informado'} · NF {item.nota_fiscal || '—'}</p>
-          <div className="material-card-foot"><span><MapPin size={13} /> {item.local_armazenamento || 'Local não informado'}</span></div>
-        </article>)}
-      </div>
-      {!items.length && <div className="quality-empty"><PackageCheck size={38} /><h3>Nenhum recebimento encontrado</h3><p>Registre o primeiro material para iniciar a rastreabilidade.</p></div>}
-    </main>
-
-  </>;
+  return <><Navbar /><main className="container quality-page">
+    <div className="page-header"><div><Button className="quality-back-button" variant="outline" startIcon={ArrowLeft} onClick={() => navigate(`/projeto/${projetoId}/qualidade`)}>Voltar para Qualidade</Button><p className="eyebrow">QUALIDADE / RASTREABILIDADE</p><h1>Inspeção e rastreabilidade</h1><p>As entradas e saídas são feitas em Suprimentos. Aqui a Qualidade inspeciona e acompanha o uso.</p></div></div>
+    {error && <div className="alert alert-error">{error}</div>}
+    <div className="material-toolbar material-toolbar--filters"><label className="material-search-control"><span>Buscar entrada</span><div><Search size={17} /><input placeholder="Material, fornecedor, NF ou lote" value={query} onChange={(event) => setQuery(event.target.value)} />{query && <button type="button" onClick={() => setQuery('')} aria-label="Limpar busca"><X size={16} /></button>}</div></label><div className="material-filter-summary"><strong>{items.length}</strong><span>entradas com histórico nesta obra</span></div></div>
+    <div className="material-grid">{items.map((item) => <article className={`material-card ${selected?.id === item.id ? 'selected' : ''}`} key={item.id} onClick={() => select(item.id)}><div className="material-card-top"><span className={`material-chip ${tone(item.status_qualidade)}`}>{label(item.status_qualidade)}</span></div><h3>{item.nome}</h3><p>{fmt(item.quantidade_fisica)} {item.unidade} físico · disponível {fmt(item.quantidade_disponivel)}</p><p>{Number(item.quantidade_quarentena) ? `${fmt(item.quantidade_quarentena)} ${item.unidade} em quarentena` : 'Sem saldo em quarentena'}</p><p>{item.fornecedor_nome || 'Fornecedor não informado'} · NF {item.nota_fiscal || '—'}</p></article>)}</div>
+    {!items.length && <div className="quality-empty"><PackageCheck size={38} /><h3>Nenhuma entrada encontrada</h3><p>Os recebimentos feitos em Suprimentos aparecerão aqui com o histórico de movimentação.</p></div>}
+    {selected && <section className="card material-detail-card" style={{ marginTop: '1.5rem' }}><div className="material-detail-card-title"><History size={20} /><div><h2>{selected.nome}</h2><p>Entrada em {new Date(selected.recebido_em).toLocaleString('pt-BR')} · {label(selected.status_qualidade)}</p></div></div><div className="material-stock-summary"><div><span>Saldo disponível</span><strong>{fmt(available)} {selected.unidade}</strong></div><div><span>Em quarentena</span><strong>{fmt(quarantine)} {selected.unidade}</strong></div><div><span>Usos registrados</span><strong>{selected.aplicacoes?.length || 0}</strong></div></div>
+      {canInspect && selected.status_qualidade === 'AGUARDANDO_INSPECAO' && <form className="material-outbound-form material-outbound-form--page" onSubmit={inspect}><h3><ClipboardCheck size={18} /> Registrar inspeção</h3><label className="form-group"><span className="form-label">Resultado</span><select className="form-select" value={inspection.resultado} onChange={(event) => setInspection({ ...inspection, resultado: event.target.value })}><option value="APROVADO">Aprovado</option><option value="APROVADO_COM_RESSALVA">Aprovado com ressalva</option><option value="BLOQUEADO">Bloqueado</option><option value="REPROVADO">Reprovado</option></select></label><div className="estoque-form-grid"><input className="form-input" type="number" min="0" step="0.001" placeholder="Quantidade aprovada" value={inspection.quantidade_aprovada} onChange={(event) => setInspection({ ...inspection, quantidade_aprovada: event.target.value })} /><input className="form-input" type="number" min="0" step="0.001" placeholder="Quantidade bloqueada" value={inspection.quantidade_bloqueada} onChange={(event) => setInspection({ ...inspection, quantidade_bloqueada: event.target.value })} /><input className="form-input" type="number" min="0" step="0.001" placeholder="Quantidade reprovada" value={inspection.quantidade_reprovada} onChange={(event) => setInspection({ ...inspection, quantidade_reprovada: event.target.value })} /></div><textarea className="form-textarea" rows="2" placeholder="Motivo ou ressalvas" value={inspection.motivo} onChange={(event) => setInspection({ ...inspection, motivo: event.target.value })} /><Button type="submit" loading={saving}>Concluir inspeção</Button></form>}
+      {canInspect && /BLOQUEADO|REPROVADO/.test(selected.status_qualidade || '') && <div className="material-outbound-form"><h3>Não conformidade</h3><p>{selected.rncs?.length ? `RNC vinculada: #${selected.rncs[0].id} — ${selected.rncs[0].titulo}` : 'Gere uma RNC para tratar a divergência desta entrada.'}</p><Button variant="outline" loading={saving} onClick={createRnc}>{selected.rncs?.length ? 'Consultar RNC vinculada' : 'Gerar RNC'}</Button></div>}
+      <div className="material-outbound-history"><h3>Histórico de uso e movimentações</h3>{selected.aplicacoes?.map((item) => <div key={`uso-${item.id}`}><PackageCheck size={16} /><div><strong>{fmt(item.quantidade)} {item.unidade} usados em {item.frente_servico}</strong><span>{item.responsavel_nome} · {item.atividade_descricao || 'sem EAP'} · {new Date(item.aplicado_em).toLocaleString('pt-BR')}</span></div></div>)}{selected.movimentacoes?.map((item) => <div key={`mov-${item.id}`}><History size={16} /><div><strong>{item.tipo.replaceAll('_', ' ')}</strong><span>{fmt(item.quantidade)} {selected.unidade} · {item.usuario_nome || 'Sistema'} · {new Date(item.criado_em).toLocaleString('pt-BR')}</span></div></div>)}{!selected.aplicacoes?.length && !selected.movimentacoes?.length && <p>Sem movimentações registradas.</p>}</div>
+    </section>}
+  </main></>;
 }

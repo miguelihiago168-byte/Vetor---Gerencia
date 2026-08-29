@@ -369,6 +369,11 @@ export const confirmarEstoqueTransferencia = (id) => api.post(`/estoque/transfer
 export const rejeitarEstoqueTransferencia = (id, justificativa) => api.post(`/estoque/transferencias/${id}/rejeitar`, { justificativa });
 export const cancelarEstoqueTransferencia = (id, justificativa) => api.post(`/estoque/transferencias/${id}/cancelar`, { justificativa });
 export const getEstoqueMovimentacoes = (params) => api.get('/estoque/movimentacoes', { params });
+export const registrarSaidaEstoque = (data) => api.post('/estoque/saidas', data);
+export const getEstoqueRastreabilidade = (params) => api.get('/estoque/rastreabilidade', { params });
+export const getEstoqueRastreabilidadeDetalhe = (loteId) => api.get(`/estoque/rastreabilidade/${loteId}`);
+export const inspecionarEntradaEstoque = (loteId, data) => api.post(`/estoque/rastreabilidade/${loteId}/inspecoes`, data);
+export const gerarRncEntradaEstoque = (loteId, data) => api.post(`/estoque/rastreabilidade/${loteId}/rnc`, data);
 
 // Financeiro (Fluxo de Caixa)
 export const getFinanceiroDashboard = (projetoId, params) => api.get(`/financeiro/projeto/${projetoId}/dashboard`, { params });
