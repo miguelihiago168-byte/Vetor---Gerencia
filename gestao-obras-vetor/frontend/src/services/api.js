@@ -143,6 +143,7 @@ export const getProjetos = () => api.get('/projetos');
 export const getProjeto = (id) => api.get(`/projetos/${id}`);
 export const createProjeto = (data) => api.post('/projetos', data);
 export const updateProjeto = (id, data) => api.put(`/projetos/${id}`, data);
+export const deleteProjeto = (id) => api.delete(`/projetos/${id}`);
 export const uploadProjetoLogos = (id, formData) => api.post(`/projetos/${id}/logos`, formData, {
   headers: { 'Content-Type': 'multipart/form-data' }
 });

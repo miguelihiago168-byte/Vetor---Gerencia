@@ -3,7 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { body, validationResult } = require('express-validator');
-const { allQuery, runQuery, getQuery } = require('../config/database');
+const { allQuery, runQuery, getQuery, withClient, getWithClient, execWithClient } = require('../config/database');
 const { auth, isGestor } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
 const { PERFIS, inferirPerfil } = require('../constants/access');
@@ -424,16 +424,62 @@ router.put('/:id', [auth, isGestor], async (req, res) => {
   }
 });
 
-// Exclusão de projeto desabilitada: use arquivamento
-router.delete('/:id', [auth, isGestor], async (req, res) => {
+// Exclusão definitiva de projeto: somente o Gestor Geral pode executá-la.
+router.delete('/:id', auth, async (req, res) => {
   try {
-    return res.status(405).json({
-      erro: 'Exclusão de projeto não é permitida. Use o arquivamento.',
-      endpoint_recomendado: `PATCH /api/projetos/${req.params.id}/arquivar`
+    if (inferirPerfil(req.usuario) !== PERFIS.GESTOR_GERAL) {
+      return res.status(403).json({ erro: 'Apenas o Gestor Geral pode excluir projetos permanentemente.' });
+    }
+
+    const id = Number(req.params.id);
+    const tenantId = Number(req.tenantId);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({ erro: 'Projeto inválido.' });
+    }
+    if (!Number.isInteger(tenantId) || tenantId <= 0) {
+      return res.status(400).json({ erro: 'Tenant não definido.' });
+    }
+
+    const projetoExcluido = await withClient(async (client) => {
+      const projetoAnterior = await getWithClient(
+        client,
+        'SELECT * FROM projetos WHERE id = ? AND tenant_id = ? FOR UPDATE',
+        [id, tenantId]
+      );
+      if (!projetoAnterior) return null;
+
+      await execWithClient(client, `
+        INSERT INTO auditoria (tabela, registro_id, acao, dados_anteriores, dados_novos, usuario_id, tenant_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `, [
+        'projetos',
+        id,
+        'DELETE',
+        JSON.stringify(projetoAnterior),
+        null,
+        req.usuario.id,
+        tenantId
+      ]);
+
+      const result = await execWithClient(
+        client,
+        'DELETE FROM projetos WHERE id = ? AND tenant_id = ?',
+        [id, tenantId]
+      );
+      if (result.changes !== 1) {
+        throw new Error('Não foi possível excluir o projeto.');
+      }
+      return projetoAnterior;
     });
 
+    if (!projetoExcluido) {
+      return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
+    }
+
+    return res.json({ mensagem: 'Projeto excluído permanentemente com sucesso.' });
+
   } catch (error) {
-    console.error('Erro ao bloquear exclusão de projeto:', error);
+    console.error('Erro ao excluir projeto permanentemente:', error);
     res.status(500).json({ erro: 'Erro ao processar solicitação de exclusão.' });
   }
 });

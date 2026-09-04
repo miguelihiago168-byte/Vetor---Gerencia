@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
-import { getProjetos, createProjeto, updateProjeto, uploadProjetoLogos, getUploadUrl, getUsuarios, arquivarProjeto, desarquivarProjeto, getDashboardAvanco, copiarEapProjeto } from '../services/api';
+import { getProjetos, createProjeto, updateProjeto, deleteProjeto, uploadProjetoLogos, getUploadUrl, getUsuarios, arquivarProjeto, desarquivarProjeto, getDashboardAvanco, copiarEapProjeto } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
 import { useNotification } from '../context/NotificationContext';
-import { Plus, Edit, Users, Calendar, Archive, RotateCcw, Eye, EyeOff, MapPin } from 'lucide-react';
+import { Plus, Edit, Users, Calendar, Archive, RotateCcw, Eye, EyeOff, MapPin, Trash2 } from 'lucide-react';
 import { IconButton } from '../components/ui/Button';
 import './Projetos.css';
 
@@ -60,6 +60,7 @@ function Projetos() {
   const { isGestor, perfil } = useAuth();
   const navigate = useNavigate();
   const podeListarUsuarios = perfil === 'ADM' || perfil === 'Gestor Geral';
+  const podeExcluirProjeto = perfil === 'Gestor Geral';
 
   const projetosFiltrados = projetos
     .filter((p) => showArquivados ? p.arquivado === 1 : p.arquivado === 0)
@@ -265,6 +266,29 @@ function Projetos() {
     }
   };
 
+  const handleExcluir = async (projeto) => {
+    const ok = await confirm({
+      title: 'Excluir projeto permanentemente',
+      message: `Deseja excluir permanentemente o projeto “${projeto.nome}”? Todos os dados vinculados serão removidos e esta ação não poderá ser desfeita.`,
+      confirmText: 'Excluir permanentemente',
+      cancelText: 'Cancelar',
+      confirmTone: 'danger'
+    });
+    if (!ok) return;
+
+    try {
+      await deleteProjeto(projeto.id);
+      setSucesso('Projeto excluído permanentemente com sucesso!');
+      notifySuccess('Projeto excluído permanentemente com sucesso!', 4000);
+      await carregarDados();
+      setTimeout(() => setSucesso(''), 3000);
+    } catch (error) {
+      const mensagem = error.response?.data?.erro || 'Erro ao excluir projeto permanentemente.';
+      setErro(mensagem);
+      notifyError(mensagem, 6000);
+    }
+  };
+
   const handleUsuarioChange = (usuarioId) => {
     const usuariosSelecionados = formData.usuarios.includes(usuarioId)
       ? formData.usuarios.filter(id => id !== usuarioId)
@@ -387,6 +411,16 @@ function Projetos() {
                       tone="warning"
                       variant="outline"
                     />
+                    {podeExcluirProjeto && (
+                      <IconButton
+                        onClick={() => handleExcluir(projeto)}
+                        icon={Trash2}
+                        label={`Excluir permanentemente ${projeto.nome}`}
+                        size="sm"
+                        tone="danger"
+                        variant="outline"
+                      />
+                    )}
                   </div>
                 )}
               </div>
