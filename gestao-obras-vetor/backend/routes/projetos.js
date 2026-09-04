@@ -67,6 +67,83 @@ const usuarioPodeVerTodosProjetos = (usuario) => {
   return perfil === PERFIS.ADM || perfil === PERFIS.GESTOR_GERAL;
 };
 
+const tabelaExiste = async (client, tabela) => {
+  const resultado = await getWithClient(client, 'SELECT to_regclass(?) AS tabela', [`public.${tabela}`]);
+  return Boolean(resultado?.tabela);
+};
+
+const executarSeTabelaExiste = async (client, tabela, sql, params) => {
+  if (!await tabelaExiste(client, tabela)) return;
+  await execWithClient(client, sql, params);
+};
+
+// Parte do estoque e do almoxarifado preserva histórico fora da cascata padrão
+// do PostgreSQL. Esses registros precisam ser removidos antes do projeto para
+// evitar que uma chave estrangeira bloqueie a exclusão definitiva.
+const removerDependenciasOperacionaisDoProjeto = async (client, projetoId) => {
+  await executarSeTabelaExiste(client, 'estoque_aplicacoes', `
+    DELETE FROM estoque_aplicacoes
+    WHERE projeto_id = ?
+       OR saldo_id IN (SELECT id FROM estoque_saldos WHERE projeto_id = ?)
+  `, [projetoId, projetoId]);
+
+  await executarSeTabelaExiste(client, 'estoque_movimentacoes', `
+    DELETE FROM estoque_movimentacoes
+    WHERE projeto_origem_id = ?
+       OR projeto_destino_id = ?
+       OR transferencia_id IN (
+         SELECT id FROM estoque_transferencias
+         WHERE origem_projeto_id = ? OR destino_projeto_id = ?
+       )
+  `, [projetoId, projetoId, projetoId, projetoId]);
+
+  await executarSeTabelaExiste(client, 'estoque_transferencias', `
+    DELETE FROM estoque_transferencias
+    WHERE origem_projeto_id = ? OR destino_projeto_id = ?
+  `, [projetoId, projetoId]);
+
+  await executarSeTabelaExiste(client, 'estoque_saldos', `
+    DELETE FROM estoque_saldos WHERE projeto_id = ?
+  `, [projetoId]);
+
+  // Lotes centralizados podem continuar atendendo outras obras; por isso o
+  // vínculo com o projeto removido é desfeito, sem apagar o saldo central.
+  await executarSeTabelaExiste(client, 'estoque_pendencias_recebimento', `
+    UPDATE estoque_pendencias_recebimento
+    SET projeto_solicitante_id = NULL
+    WHERE projeto_solicitante_id = ?
+  `, [projetoId]);
+
+  await executarSeTabelaExiste(client, 'rdo_ferramentas', `
+    DELETE FROM rdo_ferramentas
+    WHERE rdo_id IN (SELECT id FROM rdos WHERE projeto_id = ?)
+       OR alocacao_id IN (SELECT id FROM almox_alocacoes WHERE projeto_id = ?)
+  `, [projetoId, projetoId]);
+
+  await executarSeTabelaExiste(client, 'almox_movimentacoes', `
+    DELETE FROM almox_movimentacoes
+    WHERE projeto_origem_id = ?
+       OR projeto_destino_id = ?
+       OR alocacao_id IN (SELECT id FROM almox_alocacoes WHERE projeto_id = ?)
+  `, [projetoId, projetoId, projetoId]);
+
+  await executarSeTabelaExiste(client, 'almox_manutencoes', `
+    DELETE FROM almox_manutencoes
+    WHERE projeto_id = ?
+       OR alocacao_id IN (SELECT id FROM almox_alocacoes WHERE projeto_id = ?)
+  `, [projetoId, projetoId]);
+
+  await executarSeTabelaExiste(client, 'almox_perdas', `
+    DELETE FROM almox_perdas
+    WHERE projeto_id = ?
+       OR alocacao_id IN (SELECT id FROM almox_alocacoes WHERE projeto_id = ?)
+  `, [projetoId, projetoId]);
+
+  await executarSeTabelaExiste(client, 'almox_alocacoes', `
+    DELETE FROM almox_alocacoes WHERE projeto_id = ?
+  `, [projetoId]);
+};
+
 router.post('/:id/logos', [auth, isGestor, uploadProjectLogos], async (req, res) => {
   try {
     const { id } = req.params;
@@ -448,6 +525,8 @@ router.delete('/:id', auth, async (req, res) => {
       );
       if (!projetoAnterior) return null;
 
+      await removerDependenciasOperacionaisDoProjeto(client, id);
+
       await execWithClient(client, `
         INSERT INTO auditoria (tabela, registro_id, acao, dados_anteriores, dados_novos, usuario_id, tenant_id)
         VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -480,6 +559,12 @@ router.delete('/:id', auth, async (req, res) => {
 
   } catch (error) {
     console.error('Erro ao excluir projeto permanentemente:', error);
+    if (error?.code === '23503') {
+      return res.status(409).json({
+        erro: 'Ainda existem dados vinculados que impedem a exclusão deste projeto.',
+        codigo: 'PROJECT_DELETE_DEPENDENCY'
+      });
+    }
     res.status(500).json({ erro: 'Erro ao processar solicitação de exclusão.' });
   }
 });
