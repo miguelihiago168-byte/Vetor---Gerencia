@@ -81,6 +81,10 @@ const executarSeTabelaExiste = async (client, tabela, sql, params) => {
 // do PostgreSQL. Esses registros precisam ser removidos antes do projeto para
 // evitar que uma chave estrangeira bloqueie a exclusão definitiva.
 const removerDependenciasOperacionaisDoProjeto = async (client, projetoId) => {
+  await executarSeTabelaExiste(client, 'mao_obra_direta', `
+    DELETE FROM mao_obra_direta WHERE projeto_id = ?
+  `, [projetoId]);
+
   await executarSeTabelaExiste(client, 'estoque_aplicacoes', `
     DELETE FROM estoque_aplicacoes
     WHERE projeto_id = ?
