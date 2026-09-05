@@ -560,8 +560,9 @@ router.delete('/:id', auth, async (req, res) => {
   } catch (error) {
     console.error('Erro ao excluir projeto permanentemente:', error);
     if (error?.code === '23503') {
+      const dependencia = error.constraint || error.table || 'não identificada';
       return res.status(409).json({
-        erro: 'Ainda existem dados vinculados que impedem a exclusão deste projeto.',
+        erro: `Ainda existem dados vinculados que impedem a exclusão deste projeto (${dependencia}).`,
         codigo: 'PROJECT_DELETE_DEPENDENCY'
       });
     }
