@@ -5,6 +5,11 @@ const { auth, isGestor } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
 const { PERFIS, inferirPerfil } = require('../constants/access');
 const { RDO_STATUS, RDO_ACTION, assertWorkflowAction } = require('../services/rdoWorkflowService');
+const {
+  normalizarHorarioRdo,
+  calcularHorasTrabalhadas,
+  houveAlteracaoHorario
+} = require('../services/rdoHorarioService');
 const backendPackage = require('../package.json');
 const { ensureRdoCorrectionColumns, clearRdoCorrection } = require('../services/rdoCorrectionService');
 const { generateRdoPdfBuffer } = require('../services/rdoPdfService');
@@ -1011,7 +1016,7 @@ router.put('/:id', auth, async (req, res) => {
     await ensureRdoOptionalColumns();
     const { id } = req.params;
 
-    const rdoAtual = await getQuery('SELECT * FROM rdos WHERE id = ?', [id]);
+    const rdoAtual = await getQuery('SELECT * FROM rdos WHERE id = ? AND tenant_id = ?', [id, req.tenantId]);
 
     if (!rdoAtual) {
       return res.status(404).json({ erro: 'RDO não encontrado.' });
@@ -1045,6 +1050,13 @@ router.put('/:id', auth, async (req, res) => {
       comentarios,
       atividades
     } = req.body;
+    const horarioAtualizado = normalizarHorarioRdo({
+      entrada_saida_inicio,
+      entrada_saida_fim,
+      intervalo_almoco_inicio,
+      intervalo_almoco_fim
+    });
+    const horarioFoiAlterado = houveAlteracaoHorario(rdoAtual, horarioAtualizado);
 
     if (Array.isArray(atividades)) {
       for (const atividade of atividades) {
@@ -1109,8 +1121,9 @@ router.put('/:id', auth, async (req, res) => {
       WHERE id = ?
     `, [
       dia_semana,
-      entrada_saida_inicio || '07:00', entrada_saida_fim || '17:00',
-      intervalo_almoco_inicio || '12:00', intervalo_almoco_fim || '13:00', horas_trabalhadas || 0,
+      horarioAtualizado.entrada_saida_inicio, horarioAtualizado.entrada_saida_fim,
+      horarioAtualizado.intervalo_almoco_inicio, horarioAtualizado.intervalo_almoco_fim,
+      horarioFoiAlterado ? calcularHorasTrabalhadas(horarioAtualizado) : (horas_trabalhadas || 0),
       clima_manha || 'Claro', tempo_manha || '★', praticabilidade_manha || 'Praticável',
       clima_tarde || 'Claro', tempo_tarde || '★', praticabilidade_tarde || 'Praticável',
       mao_obra_direta, mao_obra_indireta, mao_obra_terceiros,
@@ -1125,6 +1138,36 @@ router.put('/:id', auth, async (req, res) => {
       ),
       id
     ]);
+
+    // Horários alterados em um RDO passam a ser a referência dos próximos RDOs
+    // editáveis do mesmo autor. Registros anteriores e já enviados/aprovados ficam intactos.
+    let rdosHorarioAtualizados = 0;
+    if (horarioFoiAlterado) {
+      const propagacao = await runQuery(`
+        UPDATE rdos SET
+          entrada_saida_inicio = ?, entrada_saida_fim = ?,
+          intervalo_almoco_inicio = ?, intervalo_almoco_fim = ?,
+          horas_trabalhadas = ?, atualizado_em = CURRENT_TIMESTAMP
+        WHERE tenant_id = ?
+          AND projeto_id = ?
+          AND criado_por = ?
+          AND data_relatorio > ?
+          AND status IN (?, ?)
+      `, [
+        horarioAtualizado.entrada_saida_inicio,
+        horarioAtualizado.entrada_saida_fim,
+        horarioAtualizado.intervalo_almoco_inicio,
+        horarioAtualizado.intervalo_almoco_fim,
+        calcularHorasTrabalhadas(horarioAtualizado),
+        req.tenantId,
+        rdoAtual.projeto_id,
+        req.usuario.id,
+        rdoAtual.data_relatorio,
+        RDO_STATUS.DRAFT,
+        RDO_STATUS.REJECTED
+      ]);
+      rdosHorarioAtualizados = Number(propagacao.changes || 0);
+    }
 
     if (Array.isArray(req.body.ocorrencias_lista) || typeof req.body.sem_ocorrencias !== 'undefined') {
       await syncOccurrences({
@@ -1261,7 +1304,7 @@ router.put('/:id', auth, async (req, res) => {
       }
     }
 
-    res.json({ mensagem: 'RDO atualizado com sucesso.' });
+    res.json({ mensagem: 'RDO atualizado com sucesso.', rdos_horario_atualizados: rdosHorarioAtualizados });
 
   } catch (error) {
     console.error('Erro ao atualizar RDO:', error);

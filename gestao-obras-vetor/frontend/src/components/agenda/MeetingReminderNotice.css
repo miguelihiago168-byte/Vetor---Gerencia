@@ -1,0 +1,10 @@
+.meeting-reminder-notice { position: fixed; bottom: 24px; right: 24px; z-index: 1050; width: min(380px, calc(100vw - 32px)); display: flex; align-items: flex-start; gap: 12px; padding: 18px; box-sizing: border-box; border: 1px solid #339a82; border-radius: 14px; background: var(--bg-primary); color: var(--text-primary); box-shadow: 0 12px 40px #0003; }
+.meeting-reminder-notice > svg { flex-shrink: 0; color: #269b80; }
+.meeting-reminder-notice > div { flex: 1; min-width: 0; }
+.meeting-reminder-notice strong { display: block; font-size: .9rem; }
+.meeting-reminder-notice p { margin: 6px 0; font-size: .86rem; overflow-wrap: anywhere; }
+.meeting-reminder-notice small { color: var(--text-secondary); font-size: .75rem; }
+.meeting-reminder-notice .btn { margin-top: 12px; }
+.meeting-reminder-close { background: transparent; border: 0; color: var(--text-secondary); cursor: pointer; padding: 4px; }
+.meeting-reminder-close:focus-visible { outline: 2px solid #339a82; }
+@media (max-width: 600px) { .meeting-reminder-notice { bottom: 16px; right: 16px; } }

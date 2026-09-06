@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Bell, LogOut, User, ChevronDown, Menu, X, CalendarDays } from 'lucide-react';
@@ -9,6 +9,7 @@ import {
 } from '../services/api';
 import { useDialog } from '../context/DialogContext';
 import ThemeToggle from './ThemeToggle';
+import MeetingReminderNotice from './agenda/MeetingReminderNotice';
 
 function Navbar() {
   const { usuario, logout, selecionarTenant, isGestor, perfil } = useAuth();
@@ -56,6 +57,7 @@ function Navbar() {
   });
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const perfilDropdownRef = useRef(null);
+  const notificationRequest = useRef(0);
   const mobileDrawerRef = useRef(null);
 
   useEffect(() => {
@@ -140,21 +142,30 @@ function Navbar() {
     return () => clearInterval(id);
   }, [usuario?.id]);
 
-  const carregarNotificacoes = async () => {
+  const carregarNotificacoes = useCallback(async () => {
     if (!usuario?.id) return;
+    const request = ++notificationRequest.current;
     try {
       const response = await getNotificacoes();
-      setNotificacoes(response.data || []);
+      if (request === notificationRequest.current) setNotificacoes(response.data || []);
     } catch (_) {
-      setNotificacoes([]);
+      // Preserva os avisos na falha de rede; a próxima consulta tenta novamente.
     }
-  };
+  }, [usuario?.id, usuario?.tenant_id]);
 
   useEffect(() => {
+    setNotificacoes([]);
     carregarNotificacoes();
     const id = setInterval(carregarNotificacoes, 30000);
-    return () => clearInterval(id);
-  }, [usuario?.id]);
+    const onVisible = () => { if (document.visibilityState === 'visible') carregarNotificacoes(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('vetor:notificacoes-atualizar', carregarNotificacoes);
+    return () => {
+      clearInterval(id); notificationRequest.current++;
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('vetor:notificacoes-atualizar', carregarNotificacoes);
+    };
+  }, [carregarNotificacoes]);
 
   const confirmNav = async (e, to) => {
     if (!isDirty) return true;
@@ -327,6 +338,7 @@ function Navbar() {
 
   const abrirNotificacao = async (notificacao) => {
     if (notificacao?.referencia_tipo === 'reuniao' && notificacao?.projeto_id) {
+      if (!await confirmNav()) return;
       await marcarNotificacao(notificacao.id);
       setNotifOpen(false);
       navigate(`/projeto/${notificacao.projeto_id}/mensagens?tab=agenda&reuniao=${notificacao.referencia_id}`);
@@ -669,6 +681,7 @@ function Navbar() {
           </aside>
         </>
       )}
+      <MeetingReminderNotice key={`${usuario?.tenant_id}:${usuario?.id}`} scope={`${usuario?.tenant_id}:${usuario?.id}`} notifications={notificacoes} onOpen={abrirNotificacao} />
     </nav>
   );
 }

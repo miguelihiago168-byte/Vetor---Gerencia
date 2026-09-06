@@ -7,7 +7,8 @@
     "dev": "vite --port 3000",
     "build": "vite build",
     "preview": "vite preview",
-    "test:cockpit": "node src/components/cockpit/cockpitTransforms.test.js"
+    "test:cockpit": "node src/components/cockpit/cockpitTransforms.test.js",
+    "test:agenda": "node src/components/agenda/agendaUtils.test.js"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -514,6 +514,10 @@ function RDOForm2() {
 
                   setFormData(prev => ({
                     ...prev,
+                    entrada_saida_inicio: detalheUltimo.entrada_saida_inicio || prev.entrada_saida_inicio,
+                    entrada_saida_fim: detalheUltimo.entrada_saida_fim || prev.entrada_saida_fim,
+                    intervalo_almoco_inicio: detalheUltimo.intervalo_almoco_inicio || prev.intervalo_almoco_inicio,
+                    intervalo_almoco_fim: detalheUltimo.intervalo_almoco_fim || prev.intervalo_almoco_fim,
                     atividades: (detalheUltimo.atividades || [])
                       .filter(a => atividadeEstaAberta(a.atividade_eap_id))
                       .map(a => ({
@@ -549,6 +553,14 @@ function RDOForm2() {
                     mao_obra_detalhada: Array.isArray(detalheUltimo.mao_obra_detalhada)
                       ? detalheUltimo.mao_obra_detalhada.map(({ id, ...colaborador }) => ({ ...colaborador }))
                       : []
+                  }));
+
+                  setDraftColab(prev => ({
+                    ...prev,
+                    entrada: detalheUltimo.entrada_saida_inicio || prev.entrada,
+                    saida_almoco: detalheUltimo.intervalo_almoco_inicio || prev.saida_almoco,
+                    retorno_almoco: detalheUltimo.intervalo_almoco_fim || prev.retorno_almoco,
+                    saida_final: detalheUltimo.entrada_saida_fim || prev.saida_final
                   }));
 
                   setEquipamentosLista(
@@ -1658,7 +1670,8 @@ function RDOForm2() {
 
       let finalId = rdoId;
       if (rdoId) {
-        await updateRDO(rdoId, body);
+        const respostaAtualizacao = await updateRDO(rdoId, body);
+        const rdosHorarioAtualizados = Number(respostaAtualizacao.data?.rdos_horario_atualizados || 0);
         for (const c of formData.climaRegistros) {
           await addRdoClima(rdoId, { periodo: c.periodo, condicao_tempo: c.condicao_tempo, condicao_trabalho: c.condicao_trabalho, pluviometria_mm: Number(c.pluviometria_mm || 0) });
         }
@@ -1684,7 +1697,10 @@ function RDOForm2() {
           }
         }
         await carregarLogsRdo(rdoId);
-        const msgRdo = targetStatus === 'analise' ? 'RDO enviado para aprovação.' : 'RDO salvo com sucesso.';
+        const resumoPropagacao = rdosHorarioAtualizados > 0
+          ? ` Horário aplicado a ${rdosHorarioAtualizados} RDO(s) futuro(s) em preenchimento.`
+          : '';
+        const msgRdo = (targetStatus === 'analise' ? 'RDO enviado para aprovação.' : 'RDO salvo com sucesso.') + resumoPropagacao;
         setSucesso(msgRdo);
         notifySuccess(msgRdo, 4500);
       } else {
@@ -1912,6 +1928,11 @@ function RDOForm2() {
                 onChange={(e) => alterarHorarioDoDia('entrada_saida_fim', e.target.value)} />
             </div>
           </div>
+          {rdoId && (
+            <small style={{ display: 'block', marginTop: '8px', color: 'var(--gray-500)' }}>
+              Ao salvar, uma alteração de horário é aplicada aos seus RDOs futuros que ainda estão em preenchimento.
+            </small>
+          )}
         </Section>
 
         {/* ══ SEÇÃO 2 — Condições Climáticas ═══════════ */}

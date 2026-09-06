@@ -281,6 +281,7 @@ export const anexarArquivoMensagem = (mensagemId, formData) =>
     headers: { 'Content-Type': 'multipart/form-data' }
   });
 export const listarReunioesMensagens = (params) => api.get('/mensagens/reunioes', { params });
+export const getReuniaoMensagem = (id) => api.get(`/mensagens/reunioes/${encodeURIComponent(id)}`);
 export const listarReunioesHoje = (params) => api.get('/mensagens/reunioes/hoje', { params });
 export const criarReuniaoMensagem = (data) => api.post('/mensagens/reunioes', data);
 export const editarReuniaoMensagem = (id, data) => api.patch(`/mensagens/reunioes/${id}`, data);

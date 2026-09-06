@@ -16,13 +16,10 @@ import {
   Pencil,
   Trash2,
   Info,
-  CalendarDays,
-  Clock,
-  Users,
-  XCircle,
-  Save
+  CalendarDays
 } from 'lucide-react';
 import Navbar from '../components/Navbar';
+import Agenda from '../components/agenda/Agenda';
 import {
   anexarArquivoMensagem,
   criarConversaDireta,
@@ -30,10 +27,6 @@ import {
   enviarMensagemConversa,
   getProjetos,
   getUsuarios,
-  listarReunioesMensagens,
-  criarReuniaoMensagem,
-  editarReuniaoMensagem,
-  cancelarReuniaoMensagem,
   patchUsuarioPresenca,
   listarConversas,
   listarMensagensConversa,
@@ -78,54 +71,6 @@ const formatTs = (value) => {
   });
 };
 
-const pad2 = (value) => String(value).padStart(2, '0');
-
-const toDateInputValue = (date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
-
-const toMonthInputValue = (date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}`;
-
-const parseDateOnlyLocal = (value) => {
-  const [year, month, day] = String(value || '').split('-').map(Number);
-  if (!year || !month || !day) return new Date();
-  return new Date(year, month - 1, day, 12, 0, 0);
-};
-
-const formatHora = (value) => {
-  const parsed = parseBackendTimestamp(value);
-  if (!parsed || Number.isNaN(parsed.getTime())) return '--:--';
-  return parsed.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-};
-
-const formatDataCurta = (value) => {
-  const parsed = parseBackendTimestamp(value);
-  if (!parsed || Number.isNaN(parsed.getTime())) return '-';
-  return parsed.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' });
-};
-
-const diffMinutos = (inicio, fim) => {
-  const ini = parseBackendTimestamp(inicio);
-  const end = parseBackendTimestamp(fim);
-  if (!ini || !end || Number.isNaN(ini.getTime()) || Number.isNaN(end.getTime())) return 0;
-  return Math.max(0, Math.round((end.getTime() - ini.getTime()) / 60000));
-};
-
-const buildCalendarDays = (monthValue) => {
-  const [year, month] = String(monthValue || toMonthInputValue(new Date())).split('-').map(Number);
-  const base = new Date(year, month - 1, 1);
-  const start = new Date(base);
-  start.setDate(start.getDate() - start.getDay());
-
-  return Array.from({ length: 42 }, (_, index) => {
-    const date = new Date(start);
-    date.setDate(start.getDate() + index);
-    return {
-      date,
-      value: toDateInputValue(date),
-      inMonth: date.getMonth() === base.getMonth()
-    };
-  });
-};
-
 const podeEditarOuApagarMensagem = (msg) => {
   if (Number(msg?.dentro_prazo_edicao) === 1) return true;
 
@@ -164,7 +109,6 @@ export default function Mensagens() {
   const { usuario, atualizarUsuarioLogado } = useAuth();
   const { success, error, info } = useNotification();
   const { prompt, confirm } = useDialog();
-  const hojeInput = useMemo(() => toDateInputValue(new Date()), []);
 
   const [loading, setLoading] = useState(true);
   const [projetos, setProjetos] = useState([]);
@@ -183,23 +127,6 @@ export default function Mensagens() {
   const [menuMensagemId, setMenuMensagemId] = useState(null);
   const [menuMensagemDirecao, setMenuMensagemDirecao] = useState('down');
   const [modoMensagens, setModoMensagens] = useState(() => searchParams.get('tab') === 'agenda' ? 'agenda' : 'conversas');
-  const [agendaMes, setAgendaMes] = useState(() => toMonthInputValue(new Date()));
-  const [agendaDia, setAgendaDia] = useState(() => hojeInput);
-  const [reunioes, setReunioes] = useState([]);
-  const [usuariosAgenda, setUsuariosAgenda] = useState([]);
-  const [loadingAgenda, setLoadingAgenda] = useState(false);
-  const [salvandoReuniao, setSalvandoReuniao] = useState(false);
-  const [reuniaoEditandoId, setReuniaoEditandoId] = useState(null);
-  const [reuniaoFocoId, setReuniaoFocoId] = useState(() => searchParams.get('reuniao') || '');
-  const [formReuniao, setFormReuniao] = useState({
-    assunto: '',
-    descricao: '',
-    data: hojeInput,
-    hora: '09:00',
-    duracao_minutos: 60,
-    participantes_ids: []
-  });
-
   const socketRef = useRef(null);
 
   const projetoOrigemId = useMemo(() => Number(projetoId || 0), [projetoId]);
@@ -217,36 +144,6 @@ export default function Mensagens() {
     setMensagens(response.data || []);
     await marcarConversaComoLida(conversaId);
     await carregarConversas();
-  };
-
-  const getPeriodoAgenda = (monthValue = agendaMes) => {
-    const [year, month] = String(monthValue).split('-').map(Number);
-    const first = new Date(year, month - 1, 1);
-    const last = new Date(year, month, 0);
-    return {
-      data_inicio: toDateInputValue(first),
-      data_fim: toDateInputValue(last)
-    };
-  };
-
-  const carregarReunioes = async (monthValue = agendaMes) => {
-    if (!projetoOrigemId) return [];
-    try {
-      setLoadingAgenda(true);
-      const response = await listarReunioesMensagens({
-        projeto_id: projetoOrigemId,
-        ...getPeriodoAgenda(monthValue)
-      });
-      const lista = response.data || [];
-      setReunioes(lista);
-      return lista;
-    } catch (e) {
-      error(`Erro ao carregar agenda: ${e.response?.data?.erro || e.message}`);
-      setReunioes([]);
-      return [];
-    } finally {
-      setLoadingAgenda(false);
-    }
   };
 
   const carregarDadosIniciais = async () => {
@@ -283,12 +180,6 @@ export default function Mensagens() {
   }, [projetoOrigemId]);
 
   useEffect(() => {
-    if (modoMensagens === 'agenda') {
-      carregarReunioes(agendaMes);
-    }
-  }, [modoMensagens, agendaMes, projetoOrigemId]);
-
-  useEffect(() => {
     const projeto = Number(destinoProjetoId);
     if (!projeto) {
       setUsuariosDestino([]);
@@ -302,20 +193,7 @@ export default function Mensagens() {
 
   useEffect(() => {
     if (searchParams.get('tab') === 'agenda') setModoMensagens('agenda');
-    const reuniaoId = searchParams.get('reuniao');
-    if (reuniaoId) setReuniaoFocoId(reuniaoId);
   }, [searchParams]);
-
-  useEffect(() => {
-    if (!projetoOrigemId) {
-      setUsuariosAgenda([]);
-      return;
-    }
-
-    getUsuarios({ projeto_id: projetoOrigemId, ativo: 1 })
-      .then((res) => setUsuariosAgenda(res.data || []))
-      .catch(() => setUsuariosAgenda([]));
-  }, [projetoOrigemId]);
 
   useEffect(() => {
     const token = getToken();
@@ -407,139 +285,6 @@ export default function Mensagens() {
       success('Conversa pronta para envio de mensagens.');
     } catch (e2) {
       error(`Erro ao criar conversa: ${e2.response?.data?.erro || e2.message}`);
-    }
-  };
-
-  const reunioesPorDia = useMemo(() => {
-    const map = new Map();
-    for (const reuniao of reunioes) {
-      const parsed = parseBackendTimestamp(reuniao.inicio_em);
-      if (!parsed || Number.isNaN(parsed.getTime())) continue;
-      const key = toDateInputValue(parsed);
-      if (!map.has(key)) map.set(key, []);
-      map.get(key).push(reuniao);
-    }
-    return map;
-  }, [reunioes]);
-
-  const reunioesDiaSelecionado = useMemo(() => {
-    return [...(reunioesPorDia.get(agendaDia) || [])].sort((a, b) => {
-      const da = parseBackendTimestamp(a.inicio_em)?.getTime() || 0;
-      const db = parseBackendTimestamp(b.inicio_em)?.getTime() || 0;
-      return da - db;
-    });
-  }, [reunioesPorDia, agendaDia]);
-
-  const calendarioDias = useMemo(() => buildCalendarDays(agendaMes), [agendaMes]);
-
-  useEffect(() => {
-    if (!reuniaoFocoId || reunioes.length === 0) return;
-    const reuniao = reunioes.find((item) => Number(item.id) === Number(reuniaoFocoId));
-    if (!reuniao?.inicio_em) return;
-    const data = toDateInputValue(parseBackendTimestamp(reuniao.inicio_em));
-    setAgendaDia(data);
-    setAgendaMes(toMonthInputValue(parseBackendTimestamp(reuniao.inicio_em)));
-  }, [reuniaoFocoId, reunioes]);
-
-  const handleSelecionarDiaAgenda = (dayValue) => {
-    setAgendaDia(dayValue);
-    setFormReuniao((prev) => ({ ...prev, data: dayValue }));
-    setReuniaoFocoId('');
-  };
-
-  const resetFormReuniao = () => {
-    setReuniaoEditandoId(null);
-    setFormReuniao({
-      assunto: '',
-      descricao: '',
-      data: agendaDia,
-      hora: '09:00',
-      duracao_minutos: 60,
-      participantes_ids: []
-    });
-  };
-
-  const toggleParticipanteReuniao = (id) => {
-    setFormReuniao((prev) => {
-      const idNum = Number(id);
-      const atuais = new Set((prev.participantes_ids || []).map(Number));
-      if (atuais.has(idNum)) atuais.delete(idNum);
-      else atuais.add(idNum);
-      return { ...prev, participantes_ids: Array.from(atuais) };
-    });
-  };
-
-  const handleEditarReuniao = (reuniao) => {
-    const inicio = parseBackendTimestamp(reuniao.inicio_em) || new Date();
-    setModoMensagens('agenda');
-    setAgendaDia(toDateInputValue(inicio));
-    setReuniaoEditandoId(reuniao.id);
-    setFormReuniao({
-      assunto: reuniao.assunto || '',
-      descricao: reuniao.descricao || '',
-      data: toDateInputValue(inicio),
-      hora: `${pad2(inicio.getHours())}:${pad2(inicio.getMinutes())}`,
-      duracao_minutos: diffMinutos(reuniao.inicio_em, reuniao.fim_em) || 60,
-      participantes_ids: (reuniao.participantes || [])
-        .filter((p) => Number(p.id) !== Number(usuario?.id))
-        .map((p) => Number(p.id))
-    });
-  };
-
-  const handleSalvarReuniao = async (e) => {
-    e.preventDefault();
-    if (!projetoOrigemId) return;
-    if (!formReuniao.assunto.trim()) {
-      error('Informe o assunto da reunião.');
-      return;
-    }
-    if (!formReuniao.participantes_ids.length) {
-      error('Selecione pelo menos um participante.');
-      return;
-    }
-
-    const payload = {
-      projeto_id: projetoOrigemId,
-      assunto: formReuniao.assunto.trim(),
-      descricao: formReuniao.descricao.trim(),
-      inicio_em: `${formReuniao.data}T${formReuniao.hora}:00`,
-      duracao_minutos: Number(formReuniao.duracao_minutos || 60),
-      participantes_ids: formReuniao.participantes_ids.map(Number)
-    };
-
-    try {
-      setSalvandoReuniao(true);
-      if (reuniaoEditandoId) {
-        await editarReuniaoMensagem(reuniaoEditandoId, payload);
-        success('Reunião atualizada e convidados notificados.');
-      } else {
-        await criarReuniaoMensagem(payload);
-        success('Reunião marcada e convidados notificados.');
-      }
-      resetFormReuniao();
-      await carregarReunioes(agendaMes);
-    } catch (e2) {
-      error(`Erro ao salvar reunião: ${e2.response?.data?.erro || e2.message}`);
-    } finally {
-      setSalvandoReuniao(false);
-    }
-  };
-
-  const handleCancelarReuniao = async (reuniao) => {
-    const ok = await confirm({
-      title: 'Cancelar reunião',
-      message: `Cancelar "${reuniao.assunto}" e avisar os convidados?`,
-      confirmText: 'Cancelar reunião',
-      cancelText: 'Manter'
-    });
-    if (!ok) return;
-
-    try {
-      await cancelarReuniaoMensagem(reuniao.id);
-      success('Reunião cancelada.');
-      await carregarReunioes(agendaMes);
-    } catch (e) {
-      error(`Erro ao cancelar reunião: ${e.response?.data?.erro || e.message}`);
     }
   };
 
@@ -654,194 +399,6 @@ export default function Mensagens() {
     }
   };
 
-  const renderAgendaSidebar = () => (
-    <>
-      <div className="mensagens-agenda-head">
-        <div>
-          <span className="mensagens-new-title">Agenda do projeto</span>
-          <span className="mensagens-new-subtitle">Marque reuniões e avise os envolvidos.</span>
-        </div>
-        <input
-          type="month"
-          value={agendaMes}
-          onChange={(e) => setAgendaMes(e.target.value || toMonthInputValue(new Date()))}
-          aria-label="Mês da agenda"
-        />
-      </div>
-
-      <div className="mensagens-calendar-grid" aria-label="Calendário de reuniões">
-        {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((label, index) => (
-          <span key={`${label}-${index}`} className="mensagens-calendar-weekday">{label}</span>
-        ))}
-        {calendarioDias.map((day) => {
-          const count = reunioesPorDia.get(day.value)?.length || 0;
-          const active = day.value === agendaDia;
-          return (
-            <button
-              type="button"
-              key={day.value}
-              className={`mensagens-calendar-day${day.inMonth ? '' : ' muted'}${active ? ' active' : ''}${count ? ' has-events' : ''}`}
-              onClick={() => handleSelecionarDiaAgenda(day.value)}
-              title={count ? `${count} reunião(ões)` : 'Sem reuniões'}
-            >
-              <span>{day.date.getDate()}</span>
-              {count > 0 && <i>{count}</i>}
-            </button>
-          );
-        })}
-      </div>
-
-      <form className="mensagens-meeting-form" onSubmit={handleSalvarReuniao}>
-        <div className="mensagens-new-head">
-          <span className="mensagens-new-title">{reuniaoEditandoId ? 'Editar reunião' : 'Nova reunião'}</span>
-          <span className="mensagens-new-subtitle">O criador também entra como participante.</span>
-        </div>
-
-        <label className="mensagens-field">
-          <span className="mensagens-field-label"><CalendarDays size={14} /> Assunto</span>
-          <input
-            value={formReuniao.assunto}
-            maxLength={160}
-            onChange={(e) => setFormReuniao((prev) => ({ ...prev, assunto: e.target.value }))}
-            placeholder="Ex: alinhamento de medição"
-          />
-        </label>
-
-        <div className="mensagens-meeting-row">
-          <label className="mensagens-field">
-            <span className="mensagens-field-label"><CalendarDays size={14} /> Dia</span>
-            <input
-              type="date"
-              value={formReuniao.data}
-              onChange={(e) => {
-                setFormReuniao((prev) => ({ ...prev, data: e.target.value }));
-                setAgendaDia(e.target.value);
-              }}
-            />
-          </label>
-          <label className="mensagens-field">
-            <span className="mensagens-field-label"><Clock size={14} /> Hora</span>
-            <input
-              type="time"
-              value={formReuniao.hora}
-              onChange={(e) => setFormReuniao((prev) => ({ ...prev, hora: e.target.value }))}
-            />
-          </label>
-        </div>
-
-        <label className="mensagens-field">
-          <span className="mensagens-field-label"><Clock size={14} /> Duração</span>
-          <select
-            value={formReuniao.duracao_minutos}
-            onChange={(e) => setFormReuniao((prev) => ({ ...prev, duracao_minutos: Number(e.target.value) }))}
-          >
-            <option value={15}>15 minutos</option>
-            <option value={30}>30 minutos</option>
-            <option value={45}>45 minutos</option>
-            <option value={60}>1 hora</option>
-            <option value={90}>1h30</option>
-            <option value={120}>2 horas</option>
-          </select>
-        </label>
-
-        <label className="mensagens-field">
-          <span className="mensagens-field-label"><Info size={14} /> Descrição</span>
-          <textarea
-            rows={3}
-            value={formReuniao.descricao}
-            maxLength={1000}
-            onChange={(e) => setFormReuniao((prev) => ({ ...prev, descricao: e.target.value }))}
-            placeholder="Pauta, local ou link da chamada..."
-          />
-        </label>
-
-        <div className="mensagens-field">
-          <span className="mensagens-field-label"><Users size={14} /> Participantes</span>
-          <div className="mensagens-participants-list">
-            {usuariosAgenda
-              .filter((u) => Number(u.id) !== Number(usuario?.id))
-              .map((u) => {
-                const checked = formReuniao.participantes_ids.map(Number).includes(Number(u.id));
-                return (
-                  <label key={u.id} className={`mensagens-participant-option${checked ? ' active' : ''}`}>
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleParticipanteReuniao(u.id)}
-                    />
-                    <span>{u.nome}</span>
-                  </label>
-                );
-              })}
-          </div>
-        </div>
-
-        <div className="mensagens-meeting-actions">
-          {reuniaoEditandoId && (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={resetFormReuniao}>
-              <XCircle size={14} /> Cancelar edição
-            </button>
-          )}
-          <button type="submit" className="btn btn-primary btn-sm mensagens-start-btn" disabled={salvandoReuniao}>
-            <Save size={14} /> {salvandoReuniao ? 'Salvando...' : reuniaoEditandoId ? 'Salvar' : 'Marcar'}
-          </button>
-        </div>
-      </form>
-    </>
-  );
-
-  const renderAgendaPanel = () => (
-    <>
-      <header className="mensagens-chat-header mensagens-agenda-panel-header">
-        <div className="mensagens-chat-userhead">
-          <span className="mensagens-agenda-icon"><CalendarDays size={22} /></span>
-          <div className="mensagens-chat-usertext">
-            <h3>{formatDataCurta(`${agendaDia}T12:00:00`)}</h3>
-            <span>{loadingAgenda ? 'Atualizando agenda...' : `${reunioesDiaSelecionado.length} reunião(ões) no dia`}</span>
-          </div>
-        </div>
-      </header>
-
-      <div className="mensagens-meeting-list">
-        {reunioesDiaSelecionado.length === 0 ? (
-          <div className="mensagens-empty-chat">Nenhuma reunião marcada para este dia.</div>
-        ) : reunioesDiaSelecionado.map((reuniao) => {
-          const minha = Number(reuniao.criada_por) === Number(usuario?.id);
-          const focada = Number(reuniaoFocoId) === Number(reuniao.id);
-          return (
-            <article key={reuniao.id} className={`mensagens-meeting-card${reuniao.status === 'cancelada' ? ' cancelled' : ''}${focada ? ' focused' : ''}`}>
-              <div className="mensagens-meeting-time">
-                <strong>{formatHora(reuniao.inicio_em)}</strong>
-                <span>{diffMinutos(reuniao.inicio_em, reuniao.fim_em)} min</span>
-              </div>
-              <div className="mensagens-meeting-body">
-                <div className="mensagens-meeting-title-row">
-                  <h4>{reuniao.assunto}</h4>
-                  <span className={`mensagens-meeting-status status-${reuniao.status}`}>{reuniao.status === 'cancelada' ? 'Cancelada' : 'Ativa'}</span>
-                </div>
-                {reuniao.descricao && <p>{reuniao.descricao}</p>}
-                <div className="mensagens-meeting-meta">
-                  <span><UserRound size={13} /> {reuniao.criador_nome || 'Criador'}</span>
-                  <span><Users size={13} /> {(reuniao.participantes || []).map((p) => p.nome).join(', ')}</span>
-                </div>
-              </div>
-              {minha && reuniao.status !== 'cancelada' && (
-                <div className="mensagens-meeting-card-actions">
-                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleEditarReuniao(reuniao)}>
-                    <Pencil size={14} /> Editar
-                  </button>
-                  <button type="button" className="btn btn-danger btn-sm" onClick={() => handleCancelarReuniao(reuniao)}>
-                    <XCircle size={14} /> Cancelar
-                  </button>
-                </div>
-              )}
-            </article>
-          );
-        })}
-      </div>
-    </>
-  );
-
   if (loading) {
     return (
       <div className="page-shell">
@@ -852,6 +409,12 @@ export default function Mensagens() {
       </div>
     );
   }
+
+  if (modoMensagens === 'agenda') return (
+    <div className="page-shell"><Navbar /><main className="page-content mensagens-page agenda-page">
+      <Agenda key={projetoOrigemId} projetoId={projetoOrigemId} onConversas={() => { setModoMensagens('conversas'); setSearchParams({}); }} />
+    </main></div>
+  );
 
   return (
     <div className="page-shell">
@@ -904,7 +467,7 @@ export default function Mensagens() {
             </div>
           </header>
 
-          {modoMensagens === 'agenda' ? renderAgendaSidebar() : (
+          {(
             <>
           <form className="mensagens-new-form" onSubmit={handleCriarConversa}>
             <div className="mensagens-new-head">
@@ -979,7 +542,7 @@ export default function Mensagens() {
         </section>
 
         <section className="mensagens-chat card">
-          {modoMensagens === 'agenda' ? renderAgendaPanel() : !conversaAtiva ? (
+          {!conversaAtiva ? (
             <div className="mensagens-empty-chat">Selecione uma conversa para começar.</div>
           ) : (
             <>

@@ -3,7 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const { body, validationResult } = require('express-validator');
-const { allQuery, getQuery, runQuery } = require('../config/database');
+const { allQuery, getQuery, runQuery, withClient, execWithClient, getWithClient } = require('../config/database');
+const { lembreteValido, resolverLembrete, limparLembretesObsoletos, getReadColumn } = require('../services/reuniaoLembretes');
 const { auth } = require('../middleware/auth');
 const { hasProjectAccess } = require('../middleware/rbac');
 const { emitMensageriaEvent } = require('../services/mensageriaRealtime');
@@ -64,7 +65,7 @@ const ensureReunioesSchema = async (tenantId) => {
   await ensureSchemaReady({ getQuery, allQuery }, {
     tables: ['mensagem_reunioes', 'mensagem_reuniao_participantes'],
     columns: {
-      mensagem_reunioes: ['tenant_id', 'projeto_id', 'criada_por', 'assunto', 'descricao', 'inicio_em', 'fim_em', 'status', 'criado_em', 'atualizado_em', 'cancelado_em', 'cancelado_por'],
+      mensagem_reunioes: ['tenant_id', 'projeto_id', 'criada_por', 'assunto', 'descricao', 'inicio_em', 'fim_em', 'status', 'criado_em', 'atualizado_em', 'cancelado_em', 'cancelado_por', 'lembrete_minutos', 'lembrete_revisao'],
       mensagem_reuniao_participantes: ['tenant_id', 'reuniao_id', 'usuario_id', 'criado_em']
     }
   });
@@ -103,10 +104,7 @@ const parseDateTimeValue = (value) => {
   return parsed;
 };
 
-const toSqlDateTime = (date) => {
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-};
+const toSqlDateTime = (date) => date.toISOString();
 
 const toDateOnly = (date) => {
   const pad = (n) => String(n).padStart(2, '0');
@@ -136,7 +134,7 @@ const getReuniaoComParticipantes = async (reuniaoId, tenantId) => {
      FROM mensagem_reuniao_participantes mrp
      INNER JOIN usuarios u ON u.id = mrp.usuario_id
      WHERE mrp.reuniao_id = ? AND mrp.tenant_id = ?
-     ORDER BY u.nome COLLATE NOCASE ASC`,
+     ORDER BY LOWER(u.nome) ASC`,
     [reuniaoId, tenantId]
   );
 
@@ -966,6 +964,20 @@ router.get('/reunioes/hoje', async (req, res) => {
   }
 });
 
+router.get('/reunioes/:id', async (req, res) => {
+  try {
+    if (!/^[1-9]\d*$/.test(req.params.id)) return res.status(400).json({ erro: 'Reunião inválida.' });
+    const reuniao = await getReuniaoComParticipantes(Number(req.params.id), req.tenantId);
+    if (!reuniao || !assertReuniaoVisible(reuniao, req.usuario.id)) return res.status(404).json({ erro: 'Reunião não encontrada.' });
+    const acesso = await validateProjetoForReuniao(req, reuniao.projeto_id);
+    if (!acesso.ok) return res.status(acesso.status).json({ erro: acesso.erro });
+    res.json(reuniao);
+  } catch (error) {
+    console.error('Erro ao consultar reunião:', error);
+    res.status(500).json({ erro: 'Erro ao consultar reunião.' });
+  }
+});
+
 router.get('/reunioes', async (req, res) => {
   try {
     const projetoId = Number(req.query.projeto_id || 0);
@@ -983,11 +995,20 @@ router.get('/reunioes', async (req, res) => {
       req.usuario.id
     ];
     let filtroDatas = '';
-    if (dataInicio) {
+    const inicioPeriodo = parseDateTimeValue(req.query.inicio_em);
+    const fimPeriodo = parseDateTimeValue(req.query.fim_em);
+    if ((req.query.inicio_em && !inicioPeriodo) || (req.query.fim_em && !fimPeriodo)) return res.status(400).json({ erro: 'Período inválido.' });
+    if (inicioPeriodo) {
+      filtroDatas += ' AND mr.inicio_em >= ?';
+      filtros.push(inicioPeriodo.toISOString());
+    } else if (dataInicio) {
       filtroDatas += ' AND date(mr.inicio_em) >= date(?)';
       filtros.push(dataInicio);
     }
-    if (dataFim) {
+    if (fimPeriodo) {
+      filtroDatas += ' AND mr.inicio_em < ?';
+      filtros.push(fimPeriodo.toISOString());
+    } else if (dataFim) {
       filtroDatas += ' AND date(mr.inicio_em) <= date(?)';
       filtros.push(dataFim);
     }
@@ -1027,7 +1048,8 @@ router.post(
     body('descricao').optional({ nullable: true }).isString().trim().isLength({ max: 1000 }),
     body('inicio_em').isString().trim().isLength({ min: 10, max: 40 }),
     body('duracao_minutos').isInt({ min: DURACAO_REUNIAO_MIN, max: DURACAO_REUNIAO_MAX }),
-    body('participantes_ids').isArray({ min: 1 })
+    body('participantes_ids').isArray({ min: 1 }),
+    body('lembrete_minutos').optional({ nullable: true }).custom(lembreteValido)
   ],
   async (req, res) => {
     try {
@@ -1049,10 +1071,11 @@ router.post(
       const faltando = participantesSolicitados.some((id) => !idsValidos.has(Number(id)));
       if (faltando) return res.status(400).json({ erro: 'Todos os participantes devem estar ativos e vinculados ao projeto.' });
 
-      const insert = await runQuery(
+      const insert = await withClient(async (client) => {
+      const insert = await execWithClient(client,
         `INSERT INTO mensagem_reunioes
-         (tenant_id, projeto_id, criada_por, assunto, descricao, inicio_em, fim_em)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         (tenant_id, projeto_id, criada_por, assunto, descricao, inicio_em, fim_em, lembrete_minutos)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           req.tenantId,
           projetoId,
@@ -1060,18 +1083,21 @@ router.post(
           req.body.assunto.trim(),
           String(req.body.descricao || '').trim() || null,
           toSqlDateTime(inicio),
-          toSqlDateTime(fim)
+          toSqlDateTime(fim),
+          resolverLembrete(req.body.lembrete_minutos)
         ]
       );
 
       for (const participante of participantes) {
-        await runQuery(
+        await execWithClient(client,
           `INSERT OR IGNORE INTO mensagem_reuniao_participantes (tenant_id, reuniao_id, usuario_id)
            VALUES (?, ?, ?)`,
           [req.tenantId, insert.lastID, participante.id]
         );
       }
 
+      return insert;
+      });
       const reuniao = await getReuniaoComParticipantes(insert.lastID, req.tenantId);
       const horario = inicio.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
       await notificarParticipantesReuniao({
@@ -1097,7 +1123,8 @@ router.patch(
     body('descricao').optional({ nullable: true }).isString().trim().isLength({ max: 1000 }),
     body('inicio_em').isString().trim().isLength({ min: 10, max: 40 }),
     body('duracao_minutos').isInt({ min: DURACAO_REUNIAO_MIN, max: DURACAO_REUNIAO_MAX }),
-    body('participantes_ids').isArray({ min: 1 })
+    body('participantes_ids').isArray({ min: 1 }),
+    body('lembrete_minutos').optional({ nullable: true }).custom(lembreteValido)
   ],
   async (req, res) => {
     try {
@@ -1116,6 +1143,8 @@ router.patch(
         return res.status(400).json({ erro: 'Reunião cancelada não pode ser editada.' });
       }
 
+      const acesso = await validateProjetoForReuniao(req, reuniaoAtual.projeto_id);
+      if (!acesso.ok) return res.status(acesso.status).json({ erro: acesso.erro });
       const inicio = parseDateTimeValue(req.body.inicio_em);
       if (!inicio) return res.status(400).json({ erro: 'Data e hora da reunião são inválidas.' });
       const duracao = Number(req.body.duracao_minutos);
@@ -1126,28 +1155,41 @@ router.patch(
       const faltando = participantesSolicitados.some((id) => !idsValidos.has(Number(id)));
       if (faltando) return res.status(400).json({ erro: 'Todos os participantes devem estar ativos e vinculados ao projeto.' });
 
-      await runQuery(
-        `UPDATE mensagem_reunioes
-         SET assunto = ?, descricao = ?, inicio_em = ?, fim_em = ?, atualizado_em = CURRENT_TIMESTAMP
-         WHERE id = ? AND tenant_id = ?`,
-        [
-          req.body.assunto.trim(),
-          String(req.body.descricao || '').trim() || null,
-          toSqlDateTime(inicio),
-          toSqlDateTime(fim),
-          reuniaoId,
-          req.tenantId
-        ]
-      );
-      await runQuery('DELETE FROM mensagem_reuniao_participantes WHERE reuniao_id = ? AND tenant_id = ?', [reuniaoId, req.tenantId]);
-      for (const participante of participantes) {
-        await runQuery(
-          `INSERT OR IGNORE INTO mensagem_reuniao_participantes (tenant_id, reuniao_id, usuario_id)
-           VALUES (?, ?, ?)`,
-          [req.tenantId, reuniaoId, participante.id]
-        );
-      }
+      await withClient(async (client) => {
+        const atual = await getWithClient(client, 'SELECT * FROM mensagem_reunioes WHERE id = ? AND tenant_id = ? FOR UPDATE', [reuniaoId, req.tenantId]);
+        if (!atual || atual.status !== 'ativa') throw Object.assign(new Error('Reunião cancelada ou indisponível.'), { status: 409 });
+        const lembrete = resolverLembrete(req.body.lembrete_minutos, atual.lembrete_minutos);
 
+        // Cada edição cria uma nova revisão. Isso também torna seguro remover e
+        // readicionar convidados: um aviso pendente da lista anterior não bloqueia
+        // o lembrete da lista atual.
+        const revisao = Number(atual.lembrete_revisao) + 1;
+        await execWithClient(client,
+          `UPDATE mensagem_reunioes
+         SET assunto = ?, descricao = ?, inicio_em = ?, fim_em = ?, lembrete_minutos = ?, lembrete_revisao = ?, atualizado_em = CURRENT_TIMESTAMP
+         WHERE id = ? AND tenant_id = ?`,
+          [
+            req.body.assunto.trim(),
+            String(req.body.descricao || '').trim() || null,
+            toSqlDateTime(inicio),
+            toSqlDateTime(fim),
+            lembrete,
+            revisao,
+            reuniaoId,
+            req.tenantId
+          ]
+        );
+        await execWithClient(client, 'DELETE FROM mensagem_reuniao_participantes WHERE reuniao_id = ? AND tenant_id = ?', [reuniaoId, req.tenantId]);
+        for (const participante of participantes) {
+          await execWithClient(client,
+            `INSERT OR IGNORE INTO mensagem_reuniao_participantes (tenant_id, reuniao_id, usuario_id)
+           VALUES (?, ?, ?)`,
+            [req.tenantId, reuniaoId, participante.id]
+          );
+        }
+
+        await limparLembretesObsoletos(client, req.tenantId, await getReadColumn(client), reuniaoId);
+      });
       const horario = inicio.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
       await notificarParticipantesReuniao({
         participantes,
@@ -1161,7 +1203,7 @@ router.patch(
       res.json(reuniao);
     } catch (error) {
       console.error('Erro ao editar reunião:', error);
-      res.status(500).json({ erro: 'Erro ao editar reunião.' });
+      res.status(error.status || 500).json({ erro: error.status ? error.message : 'Erro ao editar reunião.' });
     }
   }
 );
@@ -1180,13 +1222,20 @@ router.patch('/reunioes/:id/cancelar', async (req, res) => {
       return res.json(reuniaoAtual);
     }
 
-    await runQuery(
-      `UPDATE mensagem_reunioes
+    const acesso = await validateProjetoForReuniao(req, reuniaoAtual.projeto_id);
+    if (!acesso.ok) return res.status(acesso.status).json({ erro: acesso.erro });
+    await withClient(async (client) => {
+      const atual = await getWithClient(client, 'SELECT status FROM mensagem_reunioes WHERE id = ? AND tenant_id = ? FOR UPDATE', [reuniaoId, req.tenantId]);
+      if (!atual || atual.status !== 'ativa') throw Object.assign(new Error('Reunião cancelada ou indisponível.'), { status: 409 });
+      await execWithClient(client,
+        `UPDATE mensagem_reunioes
        SET status = 'cancelada', cancelado_em = CURRENT_TIMESTAMP, cancelado_por = ?, atualizado_em = CURRENT_TIMESTAMP
        WHERE id = ? AND tenant_id = ?`,
-      [req.usuario.id, reuniaoId, req.tenantId]
-    );
+        [req.usuario.id, reuniaoId, req.tenantId]
+      );
 
+      await limparLembretesObsoletos(client, req.tenantId, await getReadColumn(client), reuniaoId);
+    });
     await notificarParticipantesReuniao({
       participantes: reuniaoAtual.participantes || [],
       tipo: 'reuniao_cancelada',
@@ -1199,7 +1248,7 @@ router.patch('/reunioes/:id/cancelar', async (req, res) => {
     res.json(reuniao);
   } catch (error) {
     console.error('Erro ao cancelar reunião:', error);
-    res.status(500).json({ erro: 'Erro ao cancelar reunião.' });
+    res.status(error.status || 500).json({ erro: error.status ? error.message : 'Erro ao cancelar reunião.' });
   }
 });
 

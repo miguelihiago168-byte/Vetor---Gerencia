@@ -4,7 +4,15 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { body, validationResult } = require('express-validator');
-const { allQuery, runQuery, getQuery, runQueryMain, getQueryMain } = require('../config/database');
+const {
+  allQuery,
+  runQuery,
+  getQuery,
+  runQueryMain,
+  getQueryMain,
+  withClient,
+  execWithClient
+} = require('../config/database');
 const { auth } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
 const { PERMISSIONS, requirePermission } = require('../middleware/rbac');
@@ -668,59 +676,44 @@ router.post('/', [
 
     const legado = mapPerfilParaLegado(perfil);
 
-    // Gravar no banco principal PRIMEIRO para obter o ID canônico.
-    // Inserir com INSERT OR IGNORE usando id explícito causava falha silenciosa
-    // quando o banco principal já tinha outro registro com o mesmo id gerado pelo tenant.
-    const mainResult = await runQueryMain(`
-      INSERT INTO usuarios (login, senha, pin, nome, email, perfil, funcao, setor, setor_outro, is_gestor, is_adm, perfil_almoxarifado, tenant_id, ativo, criado_por, primeiro_acesso_pendente)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 0)
-    `, [
-      login,
-      senhaHash,
-      pinFinal,
-      nome,
-      email,
-      perfil,
-      funcao || perfil,
-      setor,
-      setor === SETORES.OUTRO ? setorOutro : null,
-      legado.is_gestor,
-      legado.is_adm,
-      legado.perfil_almoxarifado,
-      req.usuario.tenant_id,
-      req.usuario.id
-    ]);
+    // Usuário, acesso à empresa e obras precisam ser gravados juntos. Assim, um
+    // erro não deixa um cadastro invisível e sem seus vínculos.
+    const usuarioId = await withClient(async (client) => {
+      const novoUsuario = await execWithClient(client, `
+        INSERT INTO usuarios (login, senha, pin, nome, email, perfil, funcao, setor, setor_outro, is_gestor, is_adm, perfil_almoxarifado, tenant_id, ativo, criado_por, primeiro_acesso_pendente)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 0)
+      `, [
+        login,
+        senhaHash,
+        pinFinal,
+        nome,
+        email,
+        perfil,
+        funcao || perfil,
+        setor,
+        setor === SETORES.OUTRO ? setorOutro : null,
+        legado.is_gestor,
+        legado.is_adm,
+        legado.perfil_almoxarifado,
+        req.usuario.tenant_id,
+        req.usuario.id
+      ]);
+      const id = novoUsuario.lastID;
 
-    const usuarioId = mainResult.lastID;
-
-    // Gravar no banco do tenant usando o ID já gerado no banco principal
-    await runQuery(`
-      INSERT OR REPLACE INTO usuarios (id, login, senha, pin, nome, email, perfil, funcao, setor, setor_outro, is_gestor, is_adm, perfil_almoxarifado, tenant_id, criado_por, primeiro_acesso_pendente)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-    `, [
-      usuarioId,
-      login,
-      senhaHash,
-      pinFinal,
-      nome,
-      email,
-      perfil,
-      funcao || perfil,
-      setor,
-      setor === SETORES.OUTRO ? setorOutro : null,
-      legado.is_gestor,
-      legado.is_adm,
-      legado.perfil_almoxarifado,
-      req.usuario.tenant_id,
-      req.usuario.id
-    ]);
-
-    await runQueryMain(
-      'INSERT OR IGNORE INTO usuario_tenants (usuario_id, tenant_id, ativo) VALUES (?, ?, 1)',
-      [usuarioId, req.usuario.tenant_id]
-    );
-
-    await sincronizarVinculosProjeto(usuarioId, projetoIds);
+      await execWithClient(
+        client,
+        'INSERT INTO usuario_tenants (usuario_id, tenant_id, ativo) VALUES (?, ?, 1) ON CONFLICT DO NOTHING',
+        [id, req.usuario.tenant_id]
+      );
+      for (const projetoId of projetoIds) {
+        await execWithClient(
+          client,
+          'INSERT INTO projeto_usuarios (projeto_id, usuario_id) VALUES (?, ?) ON CONFLICT DO NOTHING',
+          [projetoId, id]
+        );
+      }
+      return id;
+    });
 
     const usuarioCriado = await carregarUsuarioComProjetos(usuarioId);
     await registrarAuditoria('usuarios', usuarioId, 'CREATE', null, usuarioCriado, req.usuario.id);
