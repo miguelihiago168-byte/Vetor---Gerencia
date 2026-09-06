@@ -146,7 +146,7 @@ const safeAll = async (sql, params = []) => {
   try {
     return await allQuery(sql, params);
   } catch (error) {
-    if (/no such table|no such column/i.test(String(error?.message || ''))) return [];
+    if (/no such table|no such column|relation .+ does not exist|column .+ does not exist/i.test(String(error?.message || ''))) return [];
     throw error;
   }
 };
@@ -268,6 +268,42 @@ async function loadRdoPdfData(id) {
     ORDER BY ae.codigo_eap, ra.id
   `, [id]);
 
+  // Recursos do RDO são vinculados à atividade, não ao cabeçalho. As consultas
+  // seguras mantêm a geração de PDFs de RDOs legados compatível antes da migration.
+  const [recursosMaoObra, recursosFerramentas, recursosInsumos] = await Promise.all([
+    safeAll(`
+      SELECT r.rdo_atividade_id, m.nome, COALESCE(r.funcao_snapshot, m.funcao) AS funcao, r.horas_utilizadas
+      FROM rdo_atividade_mao_obra r
+      JOIN rdo_atividades ra ON ra.id = r.rdo_atividade_id
+      JOIN mao_obra_direta m ON m.id = r.mao_obra_direta_id
+      WHERE ra.rdo_id = ?
+      ORDER BY r.rdo_atividade_id, r.id
+    `, [id]),
+    safeAll(`
+      SELECT r.rdo_atividade_id, f.nome, COALESCE(r.codigo_snapshot, f.codigo) AS codigo, r.horas_utilizadas
+      FROM rdo_atividade_ferramentas r
+      JOIN rdo_atividades ra ON ra.id = r.rdo_atividade_id
+      JOIN almox_ferramentas f ON f.id = r.ferramenta_id
+      WHERE ra.rdo_id = ?
+      ORDER BY r.rdo_atividade_id, r.id
+    `, [id]),
+    safeAll(`
+      SELECT a.rdo_atividade_id, i.nome AS nome_material, l.lote, a.quantidade, a.unidade
+      FROM estoque_aplicacoes a
+      JOIN rdo_atividades ra ON ra.id = a.rdo_atividade_id
+      JOIN estoque_lotes l ON l.id = a.lote_id
+      JOIN estoque_insumos i ON i.id = l.insumo_id
+      WHERE ra.rdo_id = ? AND a.rdo_atividade_id IS NOT NULL
+      ORDER BY a.rdo_atividade_id, a.id
+    `, [id])
+  ]);
+  const recursosPorAtividade = new Map(atividades.map((atividade) => [Number(atividade.id), {
+    maoObra: [], ferramentas: [], insumos: []
+  }]));
+  recursosMaoObra.forEach((item) => recursosPorAtividade.get(Number(item.rdo_atividade_id))?.maoObra.push(item));
+  recursosFerramentas.forEach((item) => recursosPorAtividade.get(Number(item.rdo_atividade_id))?.ferramentas.push(item));
+  recursosInsumos.forEach((item) => recursosPorAtividade.get(Number(item.rdo_atividade_id))?.insumos.push(item));
+
   const maoObraTabela = await safeAll(`
     SELECT rmo.*, mo.nome AS nome_colaborador, mo.funcao AS funcao_colaborador
     FROM rdo_mao_obra rmo
@@ -329,6 +365,7 @@ async function loadRdoPdfData(id) {
         ?Math.min(Math.round((executado / total) * 10000) / 100, 100)
         : Number(atividade.percentual_executado || 0);
       return {
+        id: atividade.id,
         codigo: atividade.codigo_eap || '-',
         atividade: atividade.atividade_descricao || 'Atividade',
         descricao: atividade.observacao || '-',
@@ -336,7 +373,8 @@ async function loadRdoPdfData(id) {
         executada: executado,
         unidade: atividade.unidade_medida || '-',
         percentualDia,
-        percentualAcumulado: Number(atividade.percentual_eap || 0)
+        percentualAcumulado: Number(atividade.percentual_eap || 0),
+        recursos: recursosPorAtividade.get(Number(atividade.id)) || { maoObra: [], ferramentas: [], insumos: [] }
       };
     }),
     ...atividadesAvulsas.map((atividade) => {
@@ -351,7 +389,8 @@ async function loadRdoPdfData(id) {
         executada,
         unidade: atividade.unidade_medida || '-',
         percentualDia,
-        percentualAcumulado: percentualDia
+        percentualAcumulado: percentualDia,
+        recursos: { maoObra: [], ferramentas: [], insumos: [] }
       };
     })
   ];
@@ -445,6 +484,32 @@ function renderHtml(data) {
     fotoRows.push(`<div class="photo-row avoid-break">${fotoCards.slice(i, i + 2).join('')}</div>`);
   }
 
+  const atividadesComRecursos = atividadesPdf.filter((item) => {
+    const recursos = item.recursos || {};
+    return recursos.maoObra?.length || recursos.insumos?.length || recursos.ferramentas?.length;
+  });
+  const listaRecursos = (items, renderItem, emptyText) => items?.length
+    ? `<ul>${items.map((item) => `<li>${renderItem(item)}</li>`).join('')}</ul>`
+    : `<span class="resource-empty">${escapeHtml(emptyText)}</span>`;
+  const recursosPorAtividadeHtml = atividadesComRecursos.length ? `
+    <section class="section">
+      <div class="section-title">Recursos utilizados por atividade</div>
+      <div class="resource-activities">
+        ${atividadesComRecursos.map((item) => {
+          const recursos = item.recursos || {};
+          return `<article class="resource-activity avoid-break">
+            <div class="resource-activity-title"><strong>${escapeHtml(item.codigo)} — ${escapeHtml(item.atividade)}</strong></div>
+            <div class="resource-columns">
+              <div><strong>Mão de obra</strong>${listaRecursos(recursos.maoObra, (pessoa) => `${escapeHtml(pessoa.nome || '-')}${pessoa.funcao ? ` <small>(${escapeHtml(pessoa.funcao)})</small>` : ''} — ${fmtNumber(pessoa.horas_utilizadas)} h`, 'Nenhuma mão de obra vinculada.')}</div>
+              <div><strong>Insumos</strong>${listaRecursos(recursos.insumos, (insumo) => `${escapeHtml(insumo.nome_material || '-')} ${insumo.lote ? `<small>(Lote ${escapeHtml(insumo.lote)})</small>` : ''} — ${fmtNumber(insumo.quantidade)} ${escapeHtml(insumo.unidade || '')}`, 'Nenhum insumo vinculado.')}</div>
+              <div><strong>Ferramentas/equipamentos</strong>${listaRecursos(recursos.ferramentas, (ferramenta) => `${escapeHtml(ferramenta.nome || '-')}${ferramenta.codigo ? ` <small>(${escapeHtml(ferramenta.codigo)})</small>` : ''} — ${fmtNumber(ferramenta.horas_utilizadas)} h`, 'Nenhuma ferramenta vinculada.')}</div>
+            </div>
+          </article>`;
+        }).join('')}
+      </div>
+    </section>
+  ` : '';
+
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -489,6 +554,17 @@ function renderHtml(data) {
     .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; }
     .summary div { border: 1px solid #cbd5e1; padding: 7px; text-align: center; }
     .summary strong { display: block; font-size: 13pt; color: #0b5f86; }
+    .resource-activities { border: 1px solid #cbd5e1; border-top: 0; }
+    .resource-activity { padding: 8px; border-bottom: 1px solid #d7dee8; }
+    .resource-activity:last-child { border-bottom: 0; }
+    .resource-activity-title { margin-bottom: 6px; color: #06263a; font-size: 8.6pt; }
+    .resource-columns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .resource-columns > div { min-width: 0; padding: 6px; border: 1px solid #e2e8f0; background: #f8fafc; color: #334155; font-size: 8pt; overflow-wrap: anywhere; }
+    .resource-columns > div > strong { display: block; margin-bottom: 3px; color: #0b5f86; font-size: 7.7pt; text-transform: uppercase; }
+    .resource-columns ul { margin: 0; padding-left: 14px; }
+    .resource-columns li { margin: 0 0 2px; }
+    .resource-columns small { color: #64748b; }
+    .resource-empty { color: #64748b; font-style: italic; }
     .section.photo-section { break-inside: auto; page-break-inside: auto; }
     .photo-section { break-before: auto; page-break-before: auto; }
     .photo-grid { display: flex; flex-direction: column; gap: 10px; break-inside: auto; page-break-inside: auto; }
@@ -624,6 +700,8 @@ function renderHtml(data) {
         }, 'Nenhuma atividade informada.', 9)}</tbody>
       </table>
     </section>
+
+    ${recursosPorAtividadeHtml}
 
     <section class="section">
       <div class="section-title">Materiais Recebidos</div>
@@ -879,6 +957,26 @@ async function renderFallbackPdf(data, reason) {
     if (doc.y > 760) doc.addPage();
     doc.text(`${atividade.codigo} - ${atividade.atividade}: ${fmtNumber(atividade.executada)} ${atividade.unidade} (${fmtNumber(atividade.percentualDia)}%)`);
   });
+  const atividadesComRecursos = data.atividadesPdf.filter((atividade) => {
+    const recursos = atividade.recursos || {};
+    return recursos.maoObra?.length || recursos.insumos?.length || recursos.ferramentas?.length;
+  });
+  if (atividadesComRecursos.length) {
+    doc.moveDown();
+    if (doc.y > 710) doc.addPage();
+    doc.font('Helvetica-Bold').fontSize(11).text('Recursos utilizados por atividade');
+    doc.font('Helvetica').fontSize(9);
+    atividadesComRecursos.forEach((atividade) => {
+      const recursos = atividade.recursos || {};
+      if (doc.y > 700) doc.addPage();
+      doc.font('Helvetica-Bold').text(`${atividade.codigo} - ${atividade.atividade}`);
+      doc.font('Helvetica');
+      if (recursos.maoObra?.length) doc.text(`Mão de obra: ${recursos.maoObra.map((item) => `${item.nome || '-'}${item.funcao ? ` (${item.funcao})` : ''} — ${fmtNumber(item.horas_utilizadas)} h`).join('; ')}`);
+      if (recursos.insumos?.length) doc.text(`Insumos: ${recursos.insumos.map((item) => `${item.nome_material || '-'}${item.lote ? ` (Lote ${item.lote})` : ''} — ${fmtNumber(item.quantidade)} ${item.unidade || ''}`).join('; ')}`);
+      if (recursos.ferramentas?.length) doc.text(`Ferramentas/equipamentos: ${recursos.ferramentas.map((item) => `${item.nome || '-'}${item.codigo ? ` (${item.codigo})` : ''} — ${fmtNumber(item.horas_utilizadas)} h`).join('; ')}`);
+      doc.moveDown(0.35);
+    });
+  }
   doc.moveDown();
   doc.font('Helvetica-Bold').fontSize(11).text(`Fotos persistidas: ${data.fotos.length}`);
   doc.text(`Anexos persistidos: ${data.anexos.length}`);

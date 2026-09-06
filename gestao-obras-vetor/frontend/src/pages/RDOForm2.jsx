@@ -9,6 +9,7 @@ import { useNotification } from '../context/NotificationContext';
 import {
   getProjeto,
   getAtividadesEAP, getRDO, getRDOs, createRDO, updateRDO,
+  getRdoRecursosAtividadeDisponiveis,
   addRdoClima, addRdoComentario, addRdoMaterial,
   uploadRdoFoto, updateRdoFoto, deleteRdoFoto, reorderRdoFotos, executeRdoWorkflow, getExecucaoAcumulada,
   getRdoColaboradores, createRdoColaborador,
@@ -137,6 +138,7 @@ function RDOForm2() {
   const [loadedRdoStatus, setLoadedRdoStatus] = useState('');
   const [execucaoAcum, setExecucaoAcum] = useState({});
   const [colaboradoresDisponiveis, setColaboradoresDisponiveis] = useState([]);
+  const [recursosAtividadeDisponiveis, setRecursosAtividadeDisponiveis] = useState({ mao_obra: [], insumos: [], ferramentas: [] });
 
   /* ── Novo estado ────────────────────────────────── */
   const [projeto, setProjeto] = useState(null);
@@ -197,12 +199,16 @@ function RDOForm2() {
     quantidade_executada: '',
     unidade_medida: '',
     percentual_executada: '',
-    observacao: ''
+    observacao: '',
+    mao_obra_utilizada: [],
+    insumos_utilizados: [],
+    ferramentas_utilizadas: []
   });
   const [ocorrenciaConfig, setOcorrenciaConfig] = useState({ categorias: [], impactos: [], gravidades: ['Baixa', 'Média', 'Alta', 'Crítica'] });
   const [draftOcorrencia, setDraftOcorrencia] = useState(NOVA_OCORRENCIA);
   const [ocorrenciaAberta, setOcorrenciaAberta] = useState(null);
   const [editAtividade, setEditAtividade] = useState(null);
+  const [atividadeResumoAberta, setAtividadeResumoAberta] = useState(null);
 
   const normalizarAcaoLog = (log) => {
     const acao = String(log?.acao || log?.tipo || '').toUpperCase();
@@ -364,6 +370,13 @@ function RDOForm2() {
         }
 
         try {
+          const recursosRes = await getRdoRecursosAtividadeDisponiveis(projetoId);
+          setRecursosAtividadeDisponiveis({ mao_obra: [], insumos: [], ferramentas: [], ...(recursosRes.data || {}) });
+        } catch {
+          setRecursosAtividadeDisponiveis({ mao_obra: [], insumos: [], ferramentas: [] });
+        }
+
+        try {
           const equipRes = await getRdoEquipamentosCatalogo(projetoId);
           setEquipamentosCatalogo(Array.isArray(equipRes.data) ? equipRes.data : []);
         } catch {
@@ -413,7 +426,10 @@ function RDOForm2() {
                 const sel = eapRes.data?.find(x => String(x.id) === String(a.atividade_eap_id));
                 return sel ? (sel.unidade_medida || '') : '';
               })(),
-              observacao: a.observacao || ''
+              observacao: a.observacao || '',
+              mao_obra_utilizada: Array.isArray(a.mao_obra_utilizada) ? a.mao_obra_utilizada : [],
+              insumos_utilizados: Array.isArray(a.insumos_utilizados) ? a.insumos_utilizados : [],
+              ferramentas_utilizadas: Array.isArray(a.ferramentas_utilizadas) ? a.ferramentas_utilizadas : []
             })),
             climaRegistros: (rdo.clima || []).map(c => ({
               periodo: c.periodo,
@@ -666,12 +682,17 @@ function RDOForm2() {
       quantidade_executada: '',
       unidade_medida: '',
       percentual_executada: '',
-      observacao: ''
+      observacao: '',
+      mao_obra_utilizada: [],
+      insumos_utilizados: [],
+      ferramentas_utilizadas: []
     });
+    setDraftRecursosAtividade({});
     setEditAtividade(null);
   };
 
   const startEditAtividadeEap = (atividade) => {
+    setAtividadeResumoAberta(null);
     const sel = atividadesEap.find(x => String(x.id) === String(atividade.atividade_eap_id));
     setDraftAtividade({
       atividade_eap_id: String(atividade.atividade_eap_id || ''),
@@ -680,7 +701,10 @@ function RDOForm2() {
       quantidade_executada: atividade.quantidade_executada ?? '',
       unidade_medida: atividade.unidade_medida || sel?.unidade_medida || '',
       percentual_executada: atividade.percentual_executado ?? '',
-      observacao: atividade.observacao || ''
+      observacao: atividade.observacao || '',
+      mao_obra_utilizada: atividade.mao_obra_utilizada || [],
+      insumos_utilizados: atividade.insumos_utilizados || [],
+      ferramentas_utilizadas: atividade.ferramentas_utilizadas || []
     });
     setEditAtividade({ tipo: 'eap', atividade_eap_id: atividade.atividade_eap_id });
   };
@@ -793,12 +817,17 @@ function RDOForm2() {
     if (qtdExec !== null && quantidadeTotal > 0) {
       percAuto = Math.min(Math.round((qtdExec / quantidadeTotal) * 10000) / 100, 100);
     }
+    const atividadeAnterior = formData.atividades.find((atividade) => String(atividade.atividade_eap_id) === String(draftAtividade.atividade_eap_id));
     const item = {
+      ...(atividadeAnterior || {}),
       atividade_eap_id: draftAtividade.atividade_eap_id,
       quantidade_executada: draftAtividade.quantidade_executada,
       unidade_medida: draftAtividade.unidade_medida || (atividadeSel ? (atividadeSel.unidade_medida || '') : ''),
       percentual_executado: percAuto,
-      observacao: draftAtividade.observacao || ''
+      observacao: draftAtividade.observacao || '',
+      mao_obra_utilizada: draftAtividade.mao_obra_utilizada || [],
+      insumos_utilizados: draftAtividade.insumos_utilizados || [],
+      ferramentas_utilizadas: draftAtividade.ferramentas_utilizadas || []
     };
     let novaLista = [...formData.atividades];
     let novasAvulsas = [...formData.atividades_avulsas];
@@ -816,6 +845,7 @@ function RDOForm2() {
       : [...novaLista, item];
 
     setFormData({ ...formData, atividades: novaLista, atividades_avulsas: novasAvulsas });
+    setAtividadeResumoAberta(String(item.atividade_eap_id));
     setErro('');
     resetDraftAtividade();
     setDirty(true);
@@ -826,6 +856,50 @@ function RDOForm2() {
       resetDraftAtividade();
     }
     setFormData({ ...formData, atividades: formData.atividades.filter(a => a.atividade_eap_id !== id) });
+  };
+
+  const [draftRecursosAtividade, setDraftRecursosAtividade] = useState({});
+  const normalizarDecimal = (valor) => Number(String(valor ?? '').trim().replace(',', '.'));
+  const atualizarRecursoAtividade = (_atividadeId, chave, indice, campo, valor) => {
+    setDraftAtividade((atual) => ({
+      ...atual,
+      [chave]: (atual[chave] || []).map((item, itemIndice) => itemIndice === indice ? { ...item, [campo]: valor } : item)
+    }));
+    setDirty(true);
+  };
+  const removerRecursoAtividade = (_atividadeId, chave, indice) => {
+    setDraftAtividade((atual) => ({ ...atual, [chave]: (atual[chave] || []).filter((_, itemIndice) => itemIndice !== indice) }));
+    setDirty(true);
+  };
+  const atualizarDraftRecurso = (atividadeId, chave, campo, valor) => setDraftRecursosAtividade((atual) => ({
+    ...atual, [atividadeId]: { ...(atual[atividadeId] || {}), [chave]: { ...(atual[atividadeId]?.[chave] || {}), [campo]: valor } }
+  }));
+  const adicionarRecursoAtividade = (atividadeId, tipo) => {
+    const chave = tipo === 'mao_obra' ? 'mao_obra_utilizada' : tipo === 'insumo' ? 'insumos_utilizados' : 'ferramentas_utilizadas';
+    const draft = draftRecursosAtividade[atividadeId]?.[tipo] || {};
+    const idChave = tipo === 'mao_obra' ? 'mao_obra_direta_id' : tipo === 'insumo' ? 'lote_id' : 'ferramenta_id';
+    const catalogo = tipo === 'mao_obra' ? recursosAtividadeDisponiveis.mao_obra : tipo === 'insumo' ? recursosAtividadeDisponiveis.insumos : recursosAtividadeDisponiveis.ferramentas;
+    const recursoId = Number(draft[idChave]);
+    const valor = normalizarDecimal(tipo === 'insumo' ? draft.quantidade : draft.horas_utilizadas);
+    if (!recursoId || !Number.isFinite(valor) || valor <= 0) {
+      showRdoError(tipo === 'insumo' ? 'Selecione o lote e informe uma quantidade maior que zero.' : 'Selecione o recurso e informe horas maiores que zero.');
+      return;
+    }
+    const catalogIdChave = tipo === 'insumo' ? 'lote_id' : 'id';
+    const selecionado = catalogo.find((item) => Number(item[catalogIdChave]) === recursoId);
+    if (!selecionado) { showRdoError('Recurso indisponível para esta obra.'); return; }
+    if ((draftAtividade[chave] || []).some((item) => Number(item[idChave]) === recursoId)) {
+      showRdoError('Este recurso já foi lançado nesta atividade. Edite a linha existente.'); return;
+    }
+    const novo = tipo === 'mao_obra'
+      ? { mao_obra_direta_id: recursoId, nome: selecionado.nome, funcao: selecionado.funcao || '', horas_utilizadas: valor }
+      : tipo === 'insumo'
+        ? { lote_id: recursoId, nome_material: selecionado.nome, unidade: selecionado.unidade, lote: selecionado.lote, quantidade: valor }
+        : { ferramenta_id: recursoId, nome: selecionado.nome, codigo: selecionado.codigo || '', horas_utilizadas: valor };
+    setDraftAtividade((atual) => ({ ...atual, [chave]: [...(atual[chave] || []), novo] }));
+    atualizarDraftRecurso(atividadeId, tipo, idChave, '');
+    atualizarDraftRecurso(atividadeId, tipo, tipo === 'insumo' ? 'quantidade' : 'horas_utilizadas', '');
+    setDirty(true);
   };
 
   const removerAtividadeAvulsa = (index) => {
@@ -1589,7 +1663,10 @@ function RDOForm2() {
             atividade_eap_id: Number(a.atividade_eap_id),
             percentual_executado: perc,
             quantidade_executada: q,
-            observacao: a.observacao || ''
+            observacao: a.observacao || '',
+            mao_obra_utilizada: (a.mao_obra_utilizada || []).map((item) => ({ mao_obra_direta_id: Number(item.mao_obra_direta_id), horas_utilizadas: normalizarDecimal(item.horas_utilizadas) })),
+            insumos_utilizados: (a.insumos_utilizados || []).map((item) => ({ lote_id: Number(item.lote_id), quantidade: normalizarDecimal(item.quantidade), observacoes: item.observacoes || null })),
+            ferramentas_utilizadas: (a.ferramentas_utilizadas || []).map((item) => ({ ferramenta_id: Number(item.ferramenta_id), horas_utilizadas: normalizarDecimal(item.horas_utilizadas) }))
           };
         }),
         atividades_avulsas: formData.atividades_avulsas.map(a => ({
@@ -1609,6 +1686,12 @@ function RDOForm2() {
         }
         if (quantidadeTotal > 0 && restante != null && atividade.quantidade_executada > restante) {
           throw new Error(`Atividade ${atividadeSel?.codigo_eap || atividade.atividade_eap_id}: quantidade maior que restante (${formatQtd(restante)} ${atividadeSel?.unidade_medida || ''}).`);
+        }
+        for (const item of [...atividade.mao_obra_utilizada, ...atividade.ferramentas_utilizadas]) {
+          if (!Number.isFinite(item.horas_utilizadas) || item.horas_utilizadas <= 0) throw new Error('Horas dos recursos da atividade devem ser maiores que zero.');
+        }
+        for (const item of atividade.insumos_utilizados) {
+          if (!Number.isFinite(item.quantidade) || item.quantidade <= 0) throw new Error('Quantidade de insumo deve ser maior que zero.');
         }
       }
 
@@ -2315,6 +2398,25 @@ function RDOForm2() {
               value={draftAtividade.observacao}
               onChange={(e) => setDraftAtividade({ ...draftAtividade, observacao: e.target.value })} />
           </div>
+          {!isDraftAvulsa && (
+            <div className="rdo-activity-resources rdo-activity-resources-editor">
+              <div className="rdo-activity-resource-block">
+                <h4>Mão de obra utilizada</h4>
+                {(draftAtividade.mao_obra_utilizada || []).map((item, indice) => <div className="rdo-resource-line" key={`mao-${item.mao_obra_direta_id}`}><span>{item.nome} {item.funcao ? `· ${item.funcao}` : ''}</span><input className="form-input" inputMode="decimal" value={item.horas_utilizadas} onChange={(event) => atualizarRecursoAtividade(draftAtividade.atividade_eap_id, 'mao_obra_utilizada', indice, 'horas_utilizadas', event.target.value)} /><small>h</small><IconButton size="sm" tone="danger" variant="ghost" icon={Trash2} label={`Remover ${item.nome}`} onClick={() => removerRecursoAtividade(draftAtividade.atividade_eap_id, 'mao_obra_utilizada', indice)} /></div>)}
+                <div className="rdo-resource-add"><select className="form-select" value={draftRecursosAtividade[draftAtividade.atividade_eap_id]?.mao_obra?.mao_obra_direta_id || ''} onChange={(event) => atualizarDraftRecurso(draftAtividade.atividade_eap_id, 'mao_obra', 'mao_obra_direta_id', event.target.value)}><option value="">Selecionar mão de obra...</option>{recursosAtividadeDisponiveis.mao_obra.map((item) => <option key={item.id} value={item.id}>{item.nome}{item.funcao ? ` · ${item.funcao}` : ''}</option>)}</select><input className="form-input" inputMode="decimal" placeholder="Horas" value={draftRecursosAtividade[draftAtividade.atividade_eap_id]?.mao_obra?.horas_utilizadas || ''} onChange={(event) => atualizarDraftRecurso(draftAtividade.atividade_eap_id, 'mao_obra', 'horas_utilizadas', event.target.value)} /><Button size="sm" startIcon={Plus} onClick={() => adicionarRecursoAtividade(draftAtividade.atividade_eap_id, 'mao_obra')}>Adicionar mão de obra</Button></div>
+              </div>
+              <div className="rdo-activity-resource-block">
+                <h4>Insumos utilizados</h4>
+                {(draftAtividade.insumos_utilizados || []).map((item, indice) => <div className="rdo-resource-line" key={`insumo-${item.lote_id}`}><span>{item.nome_material} · {item.unidade}{item.lote ? ` · Lote ${item.lote}` : ''}</span><input className="form-input" inputMode="decimal" value={item.quantidade} onChange={(event) => atualizarRecursoAtividade(draftAtividade.atividade_eap_id, 'insumos_utilizados', indice, 'quantidade', event.target.value)} /><small>{item.unidade}</small><IconButton size="sm" tone="danger" variant="ghost" icon={Trash2} label={`Remover ${item.nome_material}`} onClick={() => removerRecursoAtividade(draftAtividade.atividade_eap_id, 'insumos_utilizados', indice)} /></div>)}
+                <div className="rdo-resource-add"><select className="form-select" value={draftRecursosAtividade[draftAtividade.atividade_eap_id]?.insumo?.lote_id || ''} onChange={(event) => atualizarDraftRecurso(draftAtividade.atividade_eap_id, 'insumo', 'lote_id', event.target.value)}><option value="">Selecionar insumo/lote...</option>{recursosAtividadeDisponiveis.insumos.map((item) => <option key={item.lote_id} value={item.lote_id}>{item.nome} · {item.quantidade_disponivel} {item.unidade}{item.lote ? ` · Lote ${item.lote}` : ''}</option>)}</select><input className="form-input" inputMode="decimal" placeholder="Quantidade" value={draftRecursosAtividade[draftAtividade.atividade_eap_id]?.insumo?.quantidade || ''} onChange={(event) => atualizarDraftRecurso(draftAtividade.atividade_eap_id, 'insumo', 'quantidade', event.target.value)} /><Button size="sm" startIcon={Plus} onClick={() => adicionarRecursoAtividade(draftAtividade.atividade_eap_id, 'insumo')}>Adicionar insumo</Button></div>
+              </div>
+              <div className="rdo-activity-resource-block">
+                <h4>Ferramentas/equipamentos utilizados</h4>
+                {(draftAtividade.ferramentas_utilizadas || []).map((item, indice) => <div className="rdo-resource-line" key={`ferramenta-${item.ferramenta_id}`}><span>{item.nome}{item.codigo ? ` · ${item.codigo}` : ''}</span><input className="form-input" inputMode="decimal" value={item.horas_utilizadas} onChange={(event) => atualizarRecursoAtividade(draftAtividade.atividade_eap_id, 'ferramentas_utilizadas', indice, 'horas_utilizadas', event.target.value)} /><small>h</small><IconButton size="sm" tone="danger" variant="ghost" icon={Trash2} label={`Remover ${item.nome}`} onClick={() => removerRecursoAtividade(draftAtividade.atividade_eap_id, 'ferramentas_utilizadas', indice)} /></div>)}
+                <div className="rdo-resource-add"><select className="form-select" value={draftRecursosAtividade[draftAtividade.atividade_eap_id]?.ferramenta?.ferramenta_id || ''} onChange={(event) => atualizarDraftRecurso(draftAtividade.atividade_eap_id, 'ferramenta', 'ferramenta_id', event.target.value)}><option value="">Selecionar ferramenta/equipamento...</option>{recursosAtividadeDisponiveis.ferramentas.map((item) => <option key={item.id} value={item.id}>{item.codigo ? `${item.codigo} · ` : ''}{item.nome}</option>)}</select><input className="form-input" inputMode="decimal" placeholder="Horas" value={draftRecursosAtividade[draftAtividade.atividade_eap_id]?.ferramenta?.horas_utilizadas || ''} onChange={(event) => atualizarDraftRecurso(draftAtividade.atividade_eap_id, 'ferramenta', 'horas_utilizadas', event.target.value)} /><Button size="sm" startIcon={Plus} onClick={() => adicionarRecursoAtividade(draftAtividade.atividade_eap_id, 'ferramenta')}>Adicionar ferramenta/equipamento</Button></div>
+              </div>
+            </div>
+          )}
           <div className="rdo-activity-toolbar" style={{ marginBottom: '10px' }}>
             {editAtividade ? (
               <div className="rdo-activity-edit-hint">
@@ -2351,8 +2453,8 @@ function RDOForm2() {
                   return (
                     <React.Fragment key={a.atividade_eap_id}>
                       <tr
-                        className={`rdo-activity-main-row${editAtividade?.tipo === 'eap' && String(editAtividade.atividade_eap_id) === String(a.atividade_eap_id) ? ' is-selected' : ''}`}
-                        onClick={() => startEditAtividadeEap(a)}
+                        className={`rdo-activity-main-row${atividadeResumoAberta === String(a.atividade_eap_id) ? ' is-selected' : ''}`}
+                        onClick={() => setAtividadeResumoAberta((atual) => atual === String(a.atividade_eap_id) ? null : String(a.atividade_eap_id))}
                       >
                         <td><span className="rdo-badge em-analise">EAP</span></td>
                         <td>
@@ -2375,6 +2477,62 @@ function RDOForm2() {
                         <td className="td-actions">
                           <IconButton size="sm" variant="ghost" icon={Pencil} label={`Editar ${a.nome || a.descricao}`} style={{ marginRight: '6px' }} onClick={(e) => { e.stopPropagation(); startEditAtividadeEap(a); }} />
                           <IconButton size="sm" tone="danger" variant="ghost" icon={Trash2} label={`Remover ${a.nome || a.descricao}`} onClick={(e) => { e.stopPropagation(); removerAtividade(a.atividade_eap_id); }} />
+                        </td>
+                      </tr>
+                      {atividadeResumoAberta === String(a.atividade_eap_id) && (
+                        <tr className="rdo-activity-summary-row">
+                          <td colSpan="9">
+                            <div className="rdo-activity-summary">
+                              <div><h4>Mão de obra utilizada</h4>{(a.mao_obra_utilizada || []).length ? (a.mao_obra_utilizada || []).map((item) => <p key={item.mao_obra_direta_id}>{item.nome}{item.funcao ? ` · ${item.funcao}` : ''}<strong>{item.horas_utilizadas} h</strong></p>) : <span>Nenhuma mão de obra vinculada.</span>}</div>
+                              <div><h4>Insumos utilizados</h4>{(a.insumos_utilizados || []).length ? (a.insumos_utilizados || []).map((item) => <p key={item.lote_id}>{item.nome_material}{item.lote ? ` · Lote ${item.lote}` : ''}<strong>{item.quantidade} {item.unidade}</strong></p>) : <span>Nenhum insumo vinculado.</span>}</div>
+                              <div><h4>Ferramentas/equipamentos utilizados</h4>{(a.ferramentas_utilizadas || []).length ? (a.ferramentas_utilizadas || []).map((item) => <p key={item.ferramenta_id}>{item.nome}{item.codigo ? ` · ${item.codigo}` : ''}<strong>{item.horas_utilizadas} h</strong></p>) : <span>Nenhuma ferramenta/equipamento vinculado.</span>}</div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      <tr className="rdo-activity-resources-row" style={{ display: 'none' }}>
+                        <td colSpan="9">
+                          <div className="rdo-activity-resources" onClick={(event) => event.stopPropagation()}>
+                            <div className="rdo-activity-resource-block">
+                              <h4>Mão de obra utilizada</h4>
+                              {(a.mao_obra_utilizada || []).map((item, indice) => <div className="rdo-resource-line" key={`mao-${item.mao_obra_direta_id}`}>
+                                <span>{item.nome} {item.funcao ? `· ${item.funcao}` : ''}</span>
+                                <input className="form-input" inputMode="decimal" value={item.horas_utilizadas} aria-label="Horas utilizadas" onChange={(event) => atualizarRecursoAtividade(a.atividade_eap_id, 'mao_obra_utilizada', indice, 'horas_utilizadas', event.target.value)} />
+                                <small>h</small><IconButton size="sm" tone="danger" variant="ghost" icon={Trash2} label={`Remover ${item.nome}`} onClick={() => removerRecursoAtividade(a.atividade_eap_id, 'mao_obra_utilizada', indice)} />
+                              </div>)}
+                              <div className="rdo-resource-add">
+                                <select className="form-select" value={draftRecursosAtividade[a.atividade_eap_id]?.mao_obra?.mao_obra_direta_id || ''} onChange={(event) => atualizarDraftRecurso(a.atividade_eap_id, 'mao_obra', 'mao_obra_direta_id', event.target.value)}><option value="">Selecionar mão de obra...</option>{recursosAtividadeDisponiveis.mao_obra.map((item) => <option key={item.id} value={item.id}>{item.nome}{item.funcao ? ` · ${item.funcao}` : ''}</option>)}</select>
+                                <input className="form-input" inputMode="decimal" placeholder="Horas" value={draftRecursosAtividade[a.atividade_eap_id]?.mao_obra?.horas_utilizadas || ''} onChange={(event) => atualizarDraftRecurso(a.atividade_eap_id, 'mao_obra', 'horas_utilizadas', event.target.value)} />
+                                <Button size="sm" startIcon={Plus} onClick={() => adicionarRecursoAtividade(a.atividade_eap_id, 'mao_obra')}>Adicionar mão de obra</Button>
+                              </div>
+                            </div>
+                            <div className="rdo-activity-resource-block">
+                              <h4>Insumos utilizados</h4>
+                              {(a.insumos_utilizados || []).map((item, indice) => <div className="rdo-resource-line" key={`insumo-${item.lote_id}`}>
+                                <span>{item.nome_material} · {item.unidade}{item.lote ? ` · Lote ${item.lote}` : ''}</span>
+                                <input className="form-input" inputMode="decimal" value={item.quantidade} aria-label="Quantidade utilizada" onChange={(event) => atualizarRecursoAtividade(a.atividade_eap_id, 'insumos_utilizados', indice, 'quantidade', event.target.value)} />
+                                <small>{item.unidade}</small><IconButton size="sm" tone="danger" variant="ghost" icon={Trash2} label={`Remover ${item.nome_material}`} onClick={() => removerRecursoAtividade(a.atividade_eap_id, 'insumos_utilizados', indice)} />
+                              </div>)}
+                              <div className="rdo-resource-add">
+                                <select className="form-select" value={draftRecursosAtividade[a.atividade_eap_id]?.insumo?.lote_id || ''} onChange={(event) => atualizarDraftRecurso(a.atividade_eap_id, 'insumo', 'lote_id', event.target.value)}><option value="">Selecionar insumo/lote...</option>{recursosAtividadeDisponiveis.insumos.map((item) => <option key={item.lote_id} value={item.lote_id}>{item.nome} · {item.quantidade_disponivel} {item.unidade}{item.lote ? ` · Lote ${item.lote}` : ''}</option>)}</select>
+                                <input className="form-input" inputMode="decimal" placeholder="Quantidade" value={draftRecursosAtividade[a.atividade_eap_id]?.insumo?.quantidade || ''} onChange={(event) => atualizarDraftRecurso(a.atividade_eap_id, 'insumo', 'quantidade', event.target.value)} />
+                                <Button size="sm" startIcon={Plus} onClick={() => adicionarRecursoAtividade(a.atividade_eap_id, 'insumo')}>Adicionar insumo</Button>
+                              </div>
+                            </div>
+                            <div className="rdo-activity-resource-block">
+                              <h4>Ferramentas/equipamentos utilizados</h4>
+                              {(a.ferramentas_utilizadas || []).map((item, indice) => <div className="rdo-resource-line" key={`ferramenta-${item.ferramenta_id}`}>
+                                <span>{item.nome}{item.codigo ? ` · ${item.codigo}` : ''}</span>
+                                <input className="form-input" inputMode="decimal" value={item.horas_utilizadas} aria-label="Horas utilizadas" onChange={(event) => atualizarRecursoAtividade(a.atividade_eap_id, 'ferramentas_utilizadas', indice, 'horas_utilizadas', event.target.value)} />
+                                <small>h</small><IconButton size="sm" tone="danger" variant="ghost" icon={Trash2} label={`Remover ${item.nome}`} onClick={() => removerRecursoAtividade(a.atividade_eap_id, 'ferramentas_utilizadas', indice)} />
+                              </div>)}
+                              <div className="rdo-resource-add">
+                                <select className="form-select" value={draftRecursosAtividade[a.atividade_eap_id]?.ferramenta?.ferramenta_id || ''} onChange={(event) => atualizarDraftRecurso(a.atividade_eap_id, 'ferramenta', 'ferramenta_id', event.target.value)}><option value="">Selecionar ferramenta/equipamento...</option>{recursosAtividadeDisponiveis.ferramentas.map((item) => <option key={item.id} value={item.id}>{item.codigo ? `${item.codigo} · ` : ''}{item.nome}</option>)}</select>
+                                <input className="form-input" inputMode="decimal" placeholder="Horas" value={draftRecursosAtividade[a.atividade_eap_id]?.ferramenta?.horas_utilizadas || ''} onChange={(event) => atualizarDraftRecurso(a.atividade_eap_id, 'ferramenta', 'horas_utilizadas', event.target.value)} />
+                                <Button size="sm" startIcon={Plus} onClick={() => adicionarRecursoAtividade(a.atividade_eap_id, 'ferramenta')}>Adicionar ferramenta/equipamento</Button>
+                              </div>
+                            </div>
+                          </div>
                         </td>
                       </tr>
                     </React.Fragment>
