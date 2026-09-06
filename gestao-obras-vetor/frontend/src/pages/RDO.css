@@ -1653,6 +1653,43 @@
   min-width: 0;
 }
 
+.rdo-report-activity-content {
+  min-width: 0;
+}
+
+.rdo-report-activity-resources {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.rdo-report-activity-resource {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid #dbe7ef;
+  border-radius: 9px;
+  background: #f8fbfd;
+}
+
+.rdo-report-activity-resource strong {
+  color: #31536d;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+
+.rdo-report-activity-resource span {
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
 .rdo-report-tag {
   display: inline-flex;
   margin-bottom: 8px;
@@ -1946,6 +1983,10 @@
 
   .rdo-report-activity-numbers {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rdo-report-activity-resources {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -2446,6 +2487,44 @@
 
 .rdo-page .rdo-table .td-actions {
   width: 92px;
+}
+
+.rdo-activity-resources-row td {
+  padding: 0 10px 12px;
+  background: #fbfdff;
+}
+.rdo-activity-summary-row td { padding: 0 10px 12px; background: #f8fbff; }
+.rdo-activity-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.rdo-activity-summary > div { border-left: 3px solid #bfdbfe; padding: 8px 10px; background: #fff; border-radius: 6px; }
+.rdo-activity-summary h4 { margin: 0 0 6px; font-size: 12px; color: #334155; }
+.rdo-activity-summary p { display: flex; justify-content: space-between; gap: 8px; margin: 4px 0; font-size: 12px; color: #475569; }
+.rdo-activity-summary p strong { white-space: nowrap; color: #0f172a; }
+.rdo-activity-summary span { font-size: 12px; color: #64748b; }
+.rdo-activity-resources {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.rdo-activity-resource-block {
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  padding: 10px;
+  min-width: 0;
+}
+.rdo-activity-resource-block h4 { margin: 0 0 8px; font-size: 12px; color: #334155; }
+.rdo-resource-line, .rdo-resource-add { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.rdo-resource-line span { flex: 1; min-width: 0; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rdo-resource-line input { width: 64px; min-width: 64px; }
+.rdo-resource-line small { color: #64748b; min-width: 16px; }
+.rdo-resource-add { align-items: flex-end; flex-wrap: wrap; }
+.rdo-resource-add select { flex: 1 1 150px; min-width: 0; }
+.rdo-resource-add input { width: 78px; }
+
+@media (max-width: 900px) {
+  .rdo-activity-resources { grid-template-columns: 1fr; }
+  .rdo-activity-summary { grid-template-columns: 1fr; }
+  .rdo-activity-resources-row td { padding: 0 6px 10px; }
+  .rdo-resource-add .btn { width: 100%; }
 }
 
 .rdo-page .rdo-activities-table {

@@ -72,6 +72,13 @@ const valueOrDash = (value) => {
   return value;
 };
 
+const formatDecimal = (value) => {
+  const number = Number(String(value ?? '').replace(',', '.'));
+  return Number.isFinite(number)
+    ? number.toLocaleString('pt-BR', { maximumFractionDigits: 2 })
+    : valueOrDash(value);
+};
+
 const formatBytes = (value) => {
   const size = Number(value || 0);
   if (!size) return 'Tamanho não informado';
@@ -491,15 +498,55 @@ function RDODetalhes() {
             <div className="rdo-report-activity-list">
               {atividadesRelatorio.map((atividade, index) => (
                 <article key={`${atividade.tipo_relatorio}-${atividade.id || index}`} className="rdo-report-activity-item">
-                  <div className="rdo-report-activity-main">
-                    <span className={`rdo-report-tag ${atividade.tipo_relatorio === 'Avulsa' ? 'is-loose' : ''}`}>
-                      {atividade.tipo_relatorio}
-                    </span>
-                    <h3>
-                      {atividade.codigo_eap ? `${atividade.codigo_eap} - ` : ''}
-                      {atividade.descricao || '-'}
-                    </h3>
-                    {atividade.observacao && <p>{atividade.observacao}</p>}
+                  <div className="rdo-report-activity-content">
+                    <div className="rdo-report-activity-main">
+                      <span className={`rdo-report-tag ${atividade.tipo_relatorio === 'Avulsa' ? 'is-loose' : ''}`}>
+                        {atividade.tipo_relatorio}
+                      </span>
+                      <h3>
+                        {atividade.codigo_eap ? `${atividade.codigo_eap} - ` : ''}
+                        {atividade.descricao || '-'}
+                      </h3>
+                      {atividade.observacao && <p>{atividade.observacao}</p>}
+                    </div>
+                    {(
+                      arrayOf(atividade.mao_obra_utilizada).length > 0 ||
+                      arrayOf(atividade.insumos_utilizados).length > 0 ||
+                      arrayOf(atividade.ferramentas_utilizadas).length > 0
+                    ) && (
+                      <div className="rdo-report-activity-resources">
+                        {arrayOf(atividade.mao_obra_utilizada).length > 0 && (
+                          <div className="rdo-report-activity-resource">
+                            <strong>Mão de obra utilizada</strong>
+                            {arrayOf(atividade.mao_obra_utilizada).map((item, resourceIndex) => (
+                              <span key={item.id || item.mao_obra_direta_id || resourceIndex}>
+                                {item.nome || '-'}{item.funcao ? ` · ${item.funcao}` : ''} · {formatDecimal(item.horas_utilizadas)} h
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {arrayOf(atividade.insumos_utilizados).length > 0 && (
+                          <div className="rdo-report-activity-resource">
+                            <strong>Insumos utilizados</strong>
+                            {arrayOf(atividade.insumos_utilizados).map((item, resourceIndex) => (
+                              <span key={item.id || item.lote_id || resourceIndex}>
+                                {item.nome_material || item.nome || '-'}{item.lote ? ` · Lote ${item.lote}` : ''} · {formatDecimal(item.quantidade)} {item.unidade || ''}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {arrayOf(atividade.ferramentas_utilizadas).length > 0 && (
+                          <div className="rdo-report-activity-resource">
+                            <strong>Ferramentas/equipamentos utilizados</strong>
+                            {arrayOf(atividade.ferramentas_utilizadas).map((item, resourceIndex) => (
+                              <span key={item.id || item.ferramenta_id || resourceIndex}>
+                                {item.nome || '-'}{item.codigo ? ` · ${item.codigo}` : ''} · {formatDecimal(item.horas_utilizadas)} h
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="rdo-report-activity-numbers">
                     <div>

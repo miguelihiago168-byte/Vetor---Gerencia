@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const { allQuery, runQuery, getQuery } = require('../config/database');
+const { allQuery, runQuery, getQuery, withClient, getWithClient, execWithClient } = require('../config/database');
 const { auth, isGestor } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
 const { PERFIS, inferirPerfil } = require('../constants/access');
@@ -74,6 +74,144 @@ const ensureRdoOptionalColumns = async () => {
       rdo_clima: ['rdo_id', 'periodo', 'condicao_tempo', 'condicao_trabalho', 'pluviometria_mm']
     }
   }, '000005_rdo_project_settings');
+};
+
+const recursoLista = (atividade, chave) => Array.isArray(atividade?.[chave]) ? atividade[chave] : [];
+const recursoNumero = (value) => Number(String(value ?? '').replace(',', '.'));
+const atividadeTemRecursos = (atividade) => ['mao_obra_utilizada', 'insumos_utilizados', 'ferramentas_utilizadas']
+  .some((chave) => recursoLista(atividade, chave).length > 0);
+
+// RDOs sem recursos continuam funcionando antes da migration ser aplicada. A
+// migration só é exigida quando houver algo para vincular (ou para remover).
+const activityResourcesSchemaExists = async () => {
+  const resourceTable = await getQuery(`
+    SELECT table_name
+    FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'rdo_atividade_mao_obra'
+  `);
+  return Boolean(resourceTable);
+};
+
+const ensureActivityResourcesSchema = async () => ensureSchemaReady({ getQuery, allQuery }, {
+  tables: ['rdo_atividade_mao_obra', 'rdo_atividade_ferramentas', 'estoque_aplicacoes'],
+  columns: {
+    rdo_atividade_mao_obra: ['tenant_id', 'rdo_atividade_id', 'mao_obra_direta_id', 'funcao_snapshot', 'horas_utilizadas'],
+    rdo_atividade_ferramentas: ['tenant_id', 'rdo_atividade_id', 'ferramenta_id', 'codigo_snapshot', 'horas_utilizadas'],
+    estoque_aplicacoes: ['tenant_id', 'lote_id', 'saldo_id', 'rdo_atividade_id', 'quantidade', 'unidade']
+  }
+}, '000016_rdo_activity_resources');
+
+const hydrateActivityResources = async (atividades, tenantId) => {
+  if (!atividades.length) return atividades;
+  const ids = atividades.map((a) => Number(a.id)).filter(Boolean);
+  const marks = ids.map(() => '?').join(',');
+  const [maoObra, ferramentas, insumos] = await Promise.all([
+    allQuery(`SELECT r.*, m.nome, COALESCE(r.funcao_snapshot, m.funcao) AS funcao
+      FROM rdo_atividade_mao_obra r JOIN mao_obra_direta m ON m.id=r.mao_obra_direta_id
+      WHERE r.tenant_id=? AND r.rdo_atividade_id IN (${marks}) ORDER BY r.id`, [tenantId, ...ids]),
+    allQuery(`SELECT r.*, f.nome, COALESCE(r.codigo_snapshot, f.codigo) AS codigo
+      FROM rdo_atividade_ferramentas r JOIN almox_ferramentas f ON f.id=r.ferramenta_id
+      WHERE r.tenant_id=? AND r.rdo_atividade_id IN (${marks}) ORDER BY r.id`, [tenantId, ...ids]),
+    allQuery(`SELECT a.*, i.nome AS nome_material, l.lote, l.nota_fiscal
+      FROM estoque_aplicacoes a JOIN estoque_lotes l ON l.id=a.lote_id JOIN estoque_insumos i ON i.id=l.insumo_id
+      WHERE a.tenant_id=? AND a.rdo_atividade_id IN (${marks}) ORDER BY a.id`, [tenantId, ...ids])
+  ]);
+  const byActivity = new Map(ids.map((id) => [id, { mao_obra_utilizada: [], insumos_utilizados: [], ferramentas_utilizadas: [] }]));
+  maoObra.forEach((item) => byActivity.get(Number(item.rdo_atividade_id))?.mao_obra_utilizada.push(item));
+  ferramentas.forEach((item) => byActivity.get(Number(item.rdo_atividade_id))?.ferramentas_utilizadas.push(item));
+  insumos.forEach((item) => byActivity.get(Number(item.rdo_atividade_id))?.insumos_utilizados.push(item));
+  return atividades.map((atividade) => ({ ...atividade, ...(byActivity.get(Number(atividade.id)) || {}) }));
+};
+
+const ajustarInsumoAtividade = async ({ tenantId, projetoId, rdoAtividadeId, atividadeEapId, item, anterior, usuario }) => {
+  const quantidade = item ? recursoNumero(item.quantidade) : 0;
+  if (item && (!Number.isFinite(quantidade) || quantidade <= 0)) throw new Error('Quantidade de insumo deve ser maior que zero.');
+  await withClient(async (client) => {
+    let aplicacao = anterior;
+    if (aplicacao) {
+      aplicacao = await getWithClient(client, 'SELECT * FROM estoque_aplicacoes WHERE id=? AND tenant_id=? FOR UPDATE', [aplicacao.id, tenantId]);
+      if (!aplicacao) throw new Error('Insumo utilizado não encontrado.');
+    }
+    const loteId = Number(item?.lote_id || aplicacao?.lote_id);
+    const saldo = await getWithClient(client, `SELECT s.*, l.insumo_id, i.unidade
+      FROM estoque_saldos s JOIN estoque_lotes l ON l.id=s.lote_id JOIN estoque_insumos i ON i.id=l.insumo_id
+      WHERE s.tenant_id=? AND s.lote_id=? AND s.projeto_id=? FOR UPDATE`, [tenantId, loteId, projetoId]);
+    if (!saldo) throw new Error('Lote de insumo indisponível nesta obra.');
+    const anteriorQuantidade = Number(aplicacao?.quantidade || 0);
+    const diferenca = quantidade - anteriorQuantidade;
+    if (diferenca > 0 && Number(saldo.quantidade) - Number(saldo.quantidade_reservada) - Number(saldo.quantidade_quarentena || 0) + 0.000001 < diferenca) {
+      throw new Error('Saldo disponível insuficiente para o insumo.');
+    }
+    if (diferenca !== 0) {
+      await execWithClient(client, 'UPDATE estoque_saldos SET quantidade=quantidade-?, atualizado_em=NOW() WHERE id=?', [diferenca, saldo.id]);
+      await execWithClient(client, `INSERT INTO estoque_movimentacoes
+        (tenant_id,lote_id,insumo_id,tipo,quantidade,origem_chave,projeto_origem_id,observacoes,usuario_id)
+        VALUES (?,?,?,?,?,?,?,?,?)`, [tenantId, loteId, saldo.insumo_id, diferenca > 0 ? 'SAIDA_USO' : 'ESTORNO_SAIDA_USO', Math.abs(diferenca), `OBRA:${projetoId}`, projetoId, 'Uso em atividade do RDO', usuario.id]);
+    }
+    if (!item) {
+      await execWithClient(client, 'DELETE FROM estoque_aplicacoes WHERE id=?', [aplicacao.id]);
+    } else if (aplicacao) {
+      await execWithClient(client, 'UPDATE estoque_aplicacoes SET quantidade=?, aplicado_em=NOW(), observacoes=? WHERE id=?', [quantidade, item.observacoes || null, aplicacao.id]);
+    } else {
+      await execWithClient(client, `INSERT INTO estoque_aplicacoes
+        (tenant_id,lote_id,saldo_id,projeto_id,frente_servico,atividade_eap_id,rdo_atividade_id,responsavel_nome,quantidade,unidade,aplicado_em,observacoes,criado_por)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?, ?,?)`, [tenantId, loteId, saldo.id, projetoId, 'Atividade do RDO', atividadeEapId, rdoAtividadeId, usuario.nome || 'Usuário do RDO', quantidade, saldo.unidade, new Date().toISOString(), item.observacoes || null, usuario.id]);
+    }
+  }, { tenantId, userId: usuario.id, role: usuario.perfil });
+};
+
+const syncActivityResources = async ({ atividade, rdoAtividadeId, projetoId, tenantId, usuario }) => {
+  if (!await activityResourcesSchemaExists()) {
+    if (atividadeTemRecursos(atividade)) await ensureActivityResourcesSchema();
+    return;
+  }
+  await ensureActivityResourcesSchema();
+  const maoObra = recursoLista(atividade, 'mao_obra_utilizada');
+  const ferramentas = recursoLista(atividade, 'ferramentas_utilizadas');
+  const insumos = recursoLista(atividade, 'insumos_utilizados');
+  const assertUnique = (items, key, label) => {
+    const seen = new Set();
+    items.forEach((item) => { const id = Number(item?.[key]); if (!id || seen.has(id)) throw new Error(`${label} duplicado na atividade.`); seen.add(id); });
+  };
+  assertUnique(maoObra, 'mao_obra_direta_id', 'Colaborador');
+  assertUnique(ferramentas, 'ferramenta_id', 'Ferramenta');
+  assertUnique(insumos, 'lote_id', 'Lote de insumo');
+  for (const item of maoObra) {
+    const horas = recursoNumero(item.horas_utilizadas);
+    if (!Number.isFinite(horas) || horas <= 0) throw new Error('Horas de mão de obra devem ser maiores que zero.');
+    const pessoa = await getQuery('SELECT id, funcao FROM mao_obra_direta WHERE id=? AND (projeto_id=? OR projeto_id IS NULL) AND COALESCE(ativo,1)=1', [Number(item.mao_obra_direta_id), projetoId]);
+    if (!pessoa) throw new Error('Colaborador inválido ou inativo para esta obra.');
+    await runQuery(`INSERT INTO rdo_atividade_mao_obra (tenant_id,rdo_atividade_id,mao_obra_direta_id,funcao_snapshot,horas_utilizadas,criado_por)
+      VALUES (?,?,?,?,?,?) ON CONFLICT (tenant_id,rdo_atividade_id,mao_obra_direta_id)
+      DO UPDATE SET funcao_snapshot=EXCLUDED.funcao_snapshot, horas_utilizadas=EXCLUDED.horas_utilizadas, atualizado_em=NOW()`, [tenantId, rdoAtividadeId, pessoa.id, pessoa.funcao || null, horas, usuario.id]);
+  }
+  const maoIds = maoObra.map((item) => Number(item.mao_obra_direta_id));
+  await runQuery(`DELETE FROM rdo_atividade_mao_obra WHERE tenant_id=? AND rdo_atividade_id=?${maoIds.length ? ` AND mao_obra_direta_id NOT IN (${maoIds.map(() => '?').join(',')})` : ''}`, [tenantId, rdoAtividadeId, ...maoIds]);
+  for (const item of ferramentas) {
+    const horas = recursoNumero(item.horas_utilizadas);
+    if (!Number.isFinite(horas) || horas <= 0) throw new Error('Horas de ferramenta/equipamento devem ser maiores que zero.');
+    const ferramenta = await getQuery('SELECT id, codigo FROM almox_ferramentas WHERE id=? AND projeto_id=? AND COALESCE(ativo,1)=1', [Number(item.ferramenta_id), projetoId]);
+    if (!ferramenta) throw new Error('Ferramenta/equipamento inválido ou inativo para esta obra.');
+    await runQuery(`INSERT INTO rdo_atividade_ferramentas (tenant_id,rdo_atividade_id,ferramenta_id,codigo_snapshot,horas_utilizadas,criado_por)
+      VALUES (?,?,?,?,?,?) ON CONFLICT (tenant_id,rdo_atividade_id,ferramenta_id)
+      DO UPDATE SET codigo_snapshot=EXCLUDED.codigo_snapshot, horas_utilizadas=EXCLUDED.horas_utilizadas, atualizado_em=NOW()`, [tenantId, rdoAtividadeId, ferramenta.id, ferramenta.codigo || null, horas, usuario.id]);
+  }
+  const ferramentaIds = ferramentas.map((item) => Number(item.ferramenta_id));
+  await runQuery(`DELETE FROM rdo_atividade_ferramentas WHERE tenant_id=? AND rdo_atividade_id=?${ferramentaIds.length ? ` AND ferramenta_id NOT IN (${ferramentaIds.map(() => '?').join(',')})` : ''}`, [tenantId, rdoAtividadeId, ...ferramentaIds]);
+  const atuais = await allQuery('SELECT * FROM estoque_aplicacoes WHERE tenant_id=? AND rdo_atividade_id=?', [tenantId, rdoAtividadeId]);
+  const porLote = new Map(atuais.map((item) => [Number(item.lote_id), item]));
+  for (const item of insumos) await ajustarInsumoAtividade({ tenantId, projetoId, rdoAtividadeId, atividadeEapId: atividade.atividade_eap_id, item, anterior: porLote.get(Number(item.lote_id)), usuario });
+  const lotes = new Set(insumos.map((item) => Number(item.lote_id)));
+  for (const anterior of atuais.filter((item) => !lotes.has(Number(item.lote_id)))) await ajustarInsumoAtividade({ tenantId, projetoId, rdoAtividadeId, atividadeEapId: atividade.atividade_eap_id, item: null, anterior, usuario });
+};
+
+const clearActivityResources = async ({ rdoAtividadeId, projetoId, tenantId, usuario }) => {
+  if (!await activityResourcesSchemaExists()) return;
+  await ensureActivityResourcesSchema();
+  const insumos = await allQuery('SELECT * FROM estoque_aplicacoes WHERE tenant_id=? AND rdo_atividade_id=?', [tenantId, rdoAtividadeId]);
+  for (const anterior of insumos) await ajustarInsumoAtividade({ tenantId, projetoId, rdoAtividadeId, atividadeEapId: anterior.atividade_eap_id, item: null, anterior, usuario });
+  await runQuery('DELETE FROM rdo_atividade_mao_obra WHERE tenant_id=? AND rdo_atividade_id=?', [tenantId, rdoAtividadeId]);
+  await runQuery('DELETE FROM rdo_atividade_ferramentas WHERE tenant_id=? AND rdo_atividade_id=?', [tenantId, rdoAtividadeId]);
 };
 
 const getRdoProjectConfig = async (projetoId, tenantId) => getQuery(`
@@ -425,6 +563,28 @@ router.get('/projeto/:projetoId', auth, async (req, res) => {
 });
 
 // Obter detalhes de um RDO
+router.get('/projeto/:projetoId/recursos-atividade/disponiveis', auth, async (req, res) => {
+  try {
+    const projetoId = Number(req.params.projetoId);
+    await assertRdoProjectAccess(req, projetoId);
+    const [maoObra, insumos, ferramentas] = await Promise.all([
+      allQuery(`SELECT id, identificador, nome, funcao FROM mao_obra_direta
+        WHERE (projeto_id=? OR projeto_id IS NULL) AND COALESCE(ativo,1)=1 ORDER BY nome`, [projetoId]).catch(() => []),
+      allQuery(`SELECT l.id AS lote_id, s.id AS saldo_id, l.insumo_id, i.nome, i.unidade, l.lote, l.nota_fiscal,
+          (s.quantidade-s.quantidade_reservada-COALESCE(s.quantidade_quarentena,0)) AS quantidade_disponivel
+        FROM estoque_saldos s JOIN estoque_lotes l ON l.id=s.lote_id JOIN estoque_insumos i ON i.id=l.insumo_id
+        WHERE s.tenant_id=? AND s.projeto_id=?
+          AND s.quantidade-s.quantidade_reservada-COALESCE(s.quantidade_quarentena,0)>0
+        ORDER BY i.nome, l.lote, l.id`, [req.tenantId, projetoId]).catch(() => []),
+      allQuery(`SELECT id, codigo, nome, categoria FROM almox_ferramentas
+        WHERE projeto_id=? AND COALESCE(ativo,1)=1 AND COALESCE(quantidade_total,0)>0 ORDER BY codigo, nome`, [projetoId]).catch(() => [])
+    ]);
+    res.json({ mao_obra: maoObra, insumos, ferramentas });
+  } catch (error) {
+    res.status(error.status || 500).json({ erro: error.message || 'Erro ao carregar recursos disponíveis.' });
+  }
+});
+
 router.get('/:id', auth, async (req, res) => {
   try {
     await ensureRdoOptionalColumns();
@@ -490,6 +650,13 @@ router.get('/:id', auth, async (req, res) => {
       } catch (_) {
         atividades = [];
       }
+    }
+
+    try {
+      atividades = await hydrateActivityResources(atividades, req.tenantId);
+    } catch (resourceError) {
+      // RDOs legados continuam acessíveis mesmo antes da migration ser aplicada.
+      atividades = atividades.map((atividade) => ({ ...atividade, mao_obra_utilizada: [], insumos_utilizados: [], ferramentas_utilizadas: [] }));
     }
 
     // Buscar anexos
@@ -941,10 +1108,18 @@ router.post('/', auth, [
           percentual = percentual !== undefined && percentual !== null && percentual !== '' ? parseFloat(percentual) : 0;
         }
 
-        await runQuery(`
+        const atividadeCriada = await runQuery(`
           INSERT INTO rdo_atividades (rdo_id, atividade_eap_id, percentual_executado, quantidade_executada, observacao)
           VALUES (?, ?, ?, ?, ?)
         `, [rdoId, atividade.atividade_eap_id, percentual, quantidadeExec || null, atividade.observacao || null]);
+
+        await syncActivityResources({
+          atividade,
+          rdoAtividadeId: atividadeCriada.lastID,
+          projetoId: Number(projeto_id),
+          tenantId: req.tenantId,
+          usuario: req.usuario
+        });
 
         try {
           await recordActivityEvent({
@@ -1202,6 +1377,7 @@ router.put('/:id', auth, async (req, res) => {
           await runQuery(`
             UPDATE rdo_atividades SET percentual_executado = ?, quantidade_executada = ?, observacao = ? WHERE id = ?
           `, [atividade.percentual_executado, atividade.quantidade_executada || null, atividade.observacao || null, existente.id]);
+          await syncActivityResources({ atividade, rdoAtividadeId: existente.id, projetoId: Number(rdoAtual.projeto_id), tenantId: req.tenantId, usuario: req.usuario });
           const percentualAnterior = Number(existente.percentual_executado || 0);
           const quantidadeAnterior = existente.quantidade_executada === null || typeof existente.quantidade_executada === 'undefined'
             ? null
@@ -1225,10 +1401,11 @@ router.put('/:id', auth, async (req, res) => {
             }
           }
         } else {
-          await runQuery(`
+          const atividadeCriada = await runQuery(`
             INSERT INTO rdo_atividades (rdo_id, atividade_eap_id, percentual_executado, quantidade_executada, observacao)
             VALUES (?, ?, ?, ?, ?)
           `, [id, atividade.atividade_eap_id, atividade.percentual_executado, atividade.quantidade_executada || null, atividade.observacao || null]);
+          await syncActivityResources({ atividade, rdoAtividadeId: atividadeCriada.lastID, projetoId: Number(rdoAtual.projeto_id), tenantId: req.tenantId, usuario: req.usuario });
           try {
             await recordActivityEvent({
               atividadeId: atividadeEapId,
@@ -1249,6 +1426,7 @@ router.put('/:id', auth, async (req, res) => {
       // Remover atividades que não estão mais presentes (pode remover fotos vinculadas por FK)
       const toDelete = existentes.filter(row => !enviadosIds.has(Number(row.atividade_eap_id)));
       for (const row of toDelete) {
+        await clearActivityResources({ rdoAtividadeId: row.id, projetoId: Number(rdoAtual.projeto_id), tenantId: req.tenantId, usuario: req.usuario });
         try {
           await recordActivityEvent({
             atividadeId: row.atividade_eap_id,
@@ -1308,7 +1486,8 @@ router.put('/:id', auth, async (req, res) => {
 
   } catch (error) {
     console.error('Erro ao atualizar RDO:', error);
-    res.status(500).json({ erro: 'Erro ao atualizar RDO.' });
+    const detalhe = process.env.NODE_ENV === 'production' ? null : (error.message || String(error));
+    res.status(500).json({ erro: detalhe ? `Erro ao atualizar RDO: ${detalhe}` : 'Erro ao atualizar RDO.' });
   }
 });
 
