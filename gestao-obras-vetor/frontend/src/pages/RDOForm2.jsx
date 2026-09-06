@@ -1890,7 +1890,8 @@ function RDOForm2() {
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <div className="form-group" style={{ flex: '1 1 140px', minWidth: '130px' }}>
               <label className="form-label">Data *</label>
-              <input className="form-input" type="date" value={formData.data_relatorio}
+              <input className="form-input" type="date" value={formData.data_relatorio} disabled={Boolean(rdoId)}
+                title={rdoId ? 'A data é definida no cadastro do RDO e não pode ser alterada.' : undefined}
                 onChange={(e) => {
                   const val = e.target.value;
                   setFormData({ ...formData, data_relatorio: val, dia_semana: weekdayFromLocalDateInput(val) });

@@ -19,8 +19,40 @@ const nl2br = (value) => escapeHtml(value).replace(/\r?\n/g, '<br>');
 const fmtDate = (value) => {
   if (!value) return '-';
   const raw = String(value);
-  const dt = new Date(raw.includes('T') ?raw : `${raw.slice(0, 10)}T00:00:00`);
-  return Number.isNaN(dt.getTime()) ?escapeHtml(raw) : dt.toLocaleDateString('pt-BR');
+  const dateOnly = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  // A data do RDO é um dia-calendário. Não converta o timestamp pelo fuso,
+  // pois 00:00 UTC pode virar o dia anterior para quem gera o PDF no Brasil.
+  if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
+
+  const dt = new Date(raw);
+  return Number.isNaN(dt.getTime())
+    ? escapeHtml(raw)
+    : new Intl.DateTimeFormat('pt-BR', { timeZone: PDF_TIME_ZONE }).format(dt);
+};
+
+const dataCalendario = (value) => {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return match ? new Date(`${match[1]}-${match[2]}-${match[3]}T12:00:00`) : null;
+};
+
+const dataAtualNoFusoDoPdf = () => {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: PDF_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(new Date());
+  const value = Object.fromEntries(parts.filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]));
+  return new Date(`${value.year}-${value.month}-${value.day}T12:00:00`);
+};
+
+// O dashboard mostra o prazo contratual em relação ao dia atual. O PDF usa a
+// mesma referência, em vez da data histórica do RDO.
+const calcularDiasRestantesProjeto = (prazoTermino, hoje = dataAtualNoFusoDoPdf()) => {
+  const prazo = dataCalendario(prazoTermino);
+  return prazo && !Number.isNaN(prazo.getTime())
+    ? Math.ceil((prazo - hoje) / 86400000)
+    : null;
 };
 
 const fmtDateTime = (value) => {
@@ -383,11 +415,7 @@ function renderHtml(data) {
   const dataRelatorio = fmtDate(rdo.data_relatorio);
   const statusStyle = statusInlineStyle(rdo.status || 'Em preenchimento');
   const totalEquipe = Number(rdo.mao_obra_direta || 0) + Number(rdo.mao_obra_indireta || 0) + Number(rdo.mao_obra_terceiros || 0);
-  const prazoFim = rdo.projeto_prazo_termino ?new Date(`${String(rdo.projeto_prazo_termino).slice(0, 10)}T00:00:00`) : null;
-  const dataRdo = rdo.data_relatorio ?new Date(`${String(rdo.data_relatorio).slice(0, 10)}T00:00:00`) : new Date();
-  const diasRestantes = prazoFim && !Number.isNaN(prazoFim.getTime())
-    ?Math.ceil((prazoFim - dataRdo) / 86400000)
-    : null;
+  const diasRestantes = calcularDiasRestantesProjeto(rdo.projeto_prazo_termino);
   const horasHomem = maoObra.reduce((total, item) => total + calcularHorasColaboradorValor(item), 0);
   const horasTrabalhadas = horasHomem || Number(rdo.horas_trabalhadas || 0);
 
@@ -886,5 +914,7 @@ async function generateRdoPdfBuffer(rdoId) {
 }
 
 module.exports = {
-  generateRdoPdfBuffer
+  generateRdoPdfBuffer,
+  formatRdoDate: fmtDate,
+  calcularDiasRestantesProjeto
 };

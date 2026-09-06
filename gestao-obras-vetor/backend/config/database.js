@@ -1,5 +1,10 @@
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
 const { AsyncLocalStorage } = require('async_hooks');
+
+// PostgreSQL DATE representa somente um dia do calendário. Deixá-lo chegar
+// como Date faz o Node serializar meia-noite em UTC e pode exibir o dia
+// anterior no navegador. Preserve-o sempre como YYYY-MM-DD.
+types.setTypeParser(1082, (value) => value);
 
 const resolvedDbName = process.env.DB_NAME || process.env.POSTGRES_DB;
 if (!resolvedDbName) throw new Error('DB_NAME (ou POSTGRES_DB) deve ser definido no ambiente.');

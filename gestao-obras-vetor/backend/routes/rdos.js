@@ -151,6 +151,29 @@ const gerarNumeroRDO = async (projetoId) => {
   return Number(row?.proximo_numero || 1);
 };
 
+// Datas de RDO representam um dia de trabalho, não um instante no tempo. Por
+// isso, preservamos o valor YYYY-MM-DD informado no formulário e calculamos o
+// dia da semana a partir dele, sem conversão de fuso horário.
+const normalizarDataRelatorio = (valor) => {
+  const match = String(valor || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return null;
+
+  const data = new Date(`${match[1]}-${match[2]}-${match[3]}T12:00:00`);
+  if (
+    Number.isNaN(data.getTime()) ||
+    data.getFullYear() !== Number(match[1]) ||
+    data.getMonth() !== Number(match[2]) - 1 ||
+    data.getDate() !== Number(match[3])
+  ) return null;
+
+  return `${match[1]}-${match[2]}-${match[3]}`;
+};
+
+const diaSemanaDaDataRelatorio = (dataRelatorio) => {
+  const dias = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+  return dias[new Date(`${dataRelatorio}T12:00:00`).getDay()];
+};
+
 const attachActivityAlerts = async (rdos = []) => {
   const list = Array.isArray(rdos) ? rdos : [rdos].filter(Boolean);
   if (list.length === 0) return rdos;
@@ -708,7 +731,6 @@ router.post('/', auth, [
 
     const {
       projeto_id,
-      data_relatorio,
       entrada_saida_inicio,
       entrada_saida_fim,
       intervalo_almoco_inicio,
@@ -828,15 +850,7 @@ router.post('/', auth, [
     })();
     const effectiveDateStr = `${effectiveDateObj.getFullYear()}-${String(effectiveDateObj.getMonth()+1).padStart(2,'0')}-${String(effectiveDateObj.getDate()).padStart(2,'0')}`;
 
-    const normalizeInputDate = (val) => {
-      if (!val) return null;
-      const m = String(val).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-      if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-      const d = new Date(val);
-      if (isNaN(d.getTime())) return null;
-      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    };
-    const dataRelatorioStr = normalizeInputDate(data_relatorio) || effectiveDateStr;
+    const dataRelatorioStr = normalizarDataRelatorio(data_relatorio) || effectiveDateStr;
 
     // Verificar se já existe RDO para a data informada (ou fallback)
     const rdoExistente = await getQuery(
@@ -852,9 +866,7 @@ router.post('/', auth, [
     const numero_rdo = await gerarNumeroRDO(projeto_id);
 
     // Calcular dia da semana em pt-BR a partir da data escolhida
-    const dias = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
-    const dataRelObj = new Date(`${dataRelatorioStr}T00:00:00`);
-    const dia_semana_calc = dias[dataRelObj.getDay()];
+    const dia_semana_calc = diaSemanaDaDataRelatorio(dataRelatorioStr);
 
     // Calcular horas trabalhadas a partir de horários (HH:MM)
     const toMinutes = (t) => {
@@ -1030,7 +1042,7 @@ router.put('/:id', auth, async (req, res) => {
     }
 
     const {
-      dia_semana,
+      data_relatorio,
       entrada_saida_inicio,
       entrada_saida_fim,
       intervalo_almoco_inicio,
@@ -1050,6 +1062,10 @@ router.put('/:id', auth, async (req, res) => {
       comentarios,
       atividades
     } = req.body;
+    // A data é definida no cadastro do RDO e não deve ser deslocada nem
+    // substituída por uma edição posterior.
+    const dataRelatorioSalva = normalizarDataRelatorio(rdoAtual.data_relatorio);
+    const diaSemanaSalvo = diaSemanaDaDataRelatorio(dataRelatorioSalva);
     const horarioAtualizado = normalizarHorarioRdo({
       entrada_saida_inicio,
       entrada_saida_fim,
@@ -1120,7 +1136,7 @@ router.put('/:id', auth, async (req, res) => {
         atualizado_em = CURRENT_TIMESTAMP
       WHERE id = ?
     `, [
-      dia_semana,
+      diaSemanaSalvo,
       horarioAtualizado.entrada_saida_inicio, horarioAtualizado.entrada_saida_fim,
       horarioAtualizado.intervalo_almoco_inicio, horarioAtualizado.intervalo_almoco_fim,
       horarioFoiAlterado ? calcularHorasTrabalhadas(horarioAtualizado) : (horas_trabalhadas || 0),
@@ -1162,7 +1178,7 @@ router.put('/:id', auth, async (req, res) => {
         req.tenantId,
         rdoAtual.projeto_id,
         req.usuario.id,
-        rdoAtual.data_relatorio,
+        dataRelatorioSalva,
         RDO_STATUS.DRAFT,
         RDO_STATUS.REJECTED
       ]);
@@ -1304,7 +1320,12 @@ router.put('/:id', auth, async (req, res) => {
       }
     }
 
-    res.json({ mensagem: 'RDO atualizado com sucesso.', rdos_horario_atualizados: rdosHorarioAtualizados });
+    res.json({
+      mensagem: 'RDO atualizado com sucesso.',
+      data_relatorio: dataRelatorioSalva,
+      dia_semana: diaSemanaSalvo,
+      rdos_horario_atualizados: rdosHorarioAtualizados
+    });
 
   } catch (error) {
     console.error('Erro ao atualizar RDO:', error);
@@ -1977,7 +1998,10 @@ router.get('/:id/pdf', auth, async (req, res) => {
 
     const fmtDate = (d) => {
       if (!d) return '—';
-      const dt = new Date(String(d).includes('T') ? d : d + 'T00:00:00');
+      const raw = String(d);
+      const dateOnly = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
+      const dt = new Date(raw);
       return dt.toLocaleDateString('pt-BR');
     };
 
@@ -2470,8 +2494,11 @@ ${anexosSection}
 
       const fmtDate = (d) => {
         if (!d) return '—';
-        const dt = new Date(String(d).includes('T') ? d : `${d}T00:00:00`);
-        return Number.isNaN(dt.getTime()) ? String(d) : dt.toLocaleDateString('pt-BR');
+        const raw = String(d);
+        const dateOnly = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (dateOnly) return `${dateOnly[3]}/${dateOnly[2]}/${dateOnly[1]}`;
+        const dt = new Date(raw);
+        return Number.isNaN(dt.getTime()) ? raw : dt.toLocaleDateString('pt-BR');
       };
       const fmtNum = (v) => Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
       const pdfVersionLabel = getPdfVersionLabel();
