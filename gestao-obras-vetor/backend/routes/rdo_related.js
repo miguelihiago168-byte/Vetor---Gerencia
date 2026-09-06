@@ -5,6 +5,8 @@ const fs = require('fs');
 const { runQuery, allQuery, getQuery } = require('../config/database');
 const { auth, isGestor } = require('../middleware/auth');
 const { ensureSchemaReady } = require('../utils/schemaGuard');
+const { createEquipmentCatalogService } = require('../services/rdoEquipmentCatalogService');
+const equipmentCatalog = createEquipmentCatalogService(require('../config/database'));
 
 const router = express.Router();
 
@@ -392,31 +394,26 @@ const garantirTabelaEquipamentos = async () => {
 router.get('/projeto/:projetoId/equipamentos-catalogo', auth, async (req, res) => {
   try {
     await garantirTabelaEquipamentos();
-    const { projetoId } = req.params;
-
-    const projeto = await getQuery(
-      'SELECT id, tenant_id FROM projetos WHERE id = ? LIMIT 1',
-      [projetoId]
-    );
-    if (!projeto || Number(projeto.tenant_id) !== Number(req.tenantId)) {
-      return res.status(403).json({ erro: 'Projeto fora do tenant ativo.' });
-    }
-
-    const rows = await allQuery(`
-      SELECT MIN(TRIM(e.nome)) AS nome, COUNT(*) AS usos, MAX(r.data_relatorio) AS ultimo_uso
-      FROM rdo_equipamentos e
-      INNER JOIN rdos r ON r.id = e.rdo_id
-      WHERE r.projeto_id = ?
-        AND r.tenant_id = ?
-        AND TRIM(COALESCE(e.nome, '')) <> ''
-      GROUP BY LOWER(TRIM(e.nome))
-      ORDER BY LOWER(TRIM(e.nome))
-    `, [projetoId, req.tenantId]);
-
-    res.json(rows || []);
+    res.json(await equipmentCatalog.list(req.params.projetoId, req.tenantId));
   } catch (err) {
     console.error('Erro ao listar catálogo de equipamentos do RDO', err);
-    res.status(500).json({ erro: 'Erro ao listar equipamentos salvos.' });
+    res.status(err.status || 500).json({ erro: err.status ? err.message : 'Erro ao listar equipamentos salvos.' });
+  }
+});
+
+router.patch('/projeto/:projetoId/equipamentos-catalogo', auth, async (req, res) => {
+  try {
+    res.json(await equipmentCatalog.change(req.params.projetoId, req.tenantId, req.body?.nome_original, req.body?.nome));
+  } catch (err) {
+    res.status(err.status || 500).json({ erro: err.status ? err.message : 'Erro ao editar equipamento salvo.' });
+  }
+});
+
+router.delete('/projeto/:projetoId/equipamentos-catalogo', auth, async (req, res) => {
+  try {
+    res.json(await equipmentCatalog.change(req.params.projetoId, req.tenantId, req.body?.nome, null, true));
+  } catch (err) {
+    res.status(err.status || 500).json({ erro: err.status ? err.message : 'Erro ao excluir equipamento salvo.' });
   }
 });
 

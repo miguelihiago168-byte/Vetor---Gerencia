@@ -13,6 +13,7 @@ import {
   uploadRdoFoto, updateRdoFoto, deleteRdoFoto, reorderRdoFotos, executeRdoWorkflow, getExecucaoAcumulada,
   getRdoColaboradores, createRdoColaborador,
   getRdoEquipamentosCatalogo, getRdoEquipamentos, addRdoEquipamento, deleteRdoEquipamento,
+  updateRdoEquipamentoCatalogo, deleteRdoEquipamentoCatalogo,
   getAnexos, uploadAnexo, deleteAnexo, getUploadUrl, getRdoOcorrenciasConfiguracao, vincularEvidenciaOcorrencia, desvincularEvidenciaOcorrencia
 } from '../services/api';
 import { ArrowLeft, ChevronDown, Menu, Plus, Save, Send, Trash2, Upload, FileText, Pencil, X } from 'lucide-react';
@@ -270,16 +271,12 @@ function RDOForm2() {
     }
     return Math.round((total / 60) * 100) / 100;
   };
-  const calcDuracaoHoras = (inicio, fim) => {
+  const duracaoIntervalo = (inicio, fim) => {
     const inicioM = toMinutes(inicio || null);
     const fimM = toMinutes(fim || null);
-    if (inicioM == null || fimM == null) return null;
+    if (inicioM == null || fimM == null) return '';
     const total = fimM >= inicioM ? fimM - inicioM : (24 * 60 - inicioM) + fimM;
-    return Math.round((total / 60) * 100) / 100;
-  };
-  const formatHoras = (horas) => {
-    if (horas == null) return '—';
-    return `${Number(horas).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} h`;
+    return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
   };
 
   /* ── Helpers de formatação ───────────────────────── */
@@ -872,6 +869,19 @@ function RDOForm2() {
     setDirty(true);
   };
 
+  const alterarDuracaoIntervalo = (valor) => {
+    const inicio = toMinutes(formData.intervalo_almoco_inicio);
+    const duracao = toMinutes(valor);
+    if (duracao == null) {
+      alterarHorarioDoDia('intervalo_almoco_fim', '');
+      return;
+    }
+    if (inicio == null) return;
+    const retorno = (inicio + duracao) % (24 * 60);
+    alterarHorarioDoDia('intervalo_almoco_fim',
+      `${String(Math.floor(retorno / 60)).padStart(2, '0')}:${String(retorno % 60).padStart(2, '0')}`);
+  };
+
   const chaveColaborador = (nome, funcao) =>
     `${String(nome || '').trim().toLowerCase()}|${String(funcao || '').trim().toLowerCase()}`;
 
@@ -992,6 +1002,56 @@ function RDOForm2() {
   /* ── Equipamentos ───────────────────────────────── */
   const [draftEquip, setDraftEquip] = useState({ nome: '', quantidade: 1, horario_inicio: '', horario_fim: '', observacao: '' });
   const [equipamentoPickerAberto, setEquipamentoPickerAberto] = useState(false);
+  const [editEquipamentoCatalogo, setEditEquipamentoCatalogo] = useState(null);
+  const [salvandoCatalogo, setSalvandoCatalogo] = useState(false);
+  const [erroCatalogo, setErroCatalogo] = useState('');
+
+  const salvarEquipamentoCatalogo = async () => {
+    if (salvandoCatalogo || !editEquipamentoCatalogo?.nome.trim()) return;
+    setSalvandoCatalogo(true);
+    setErroCatalogo('');
+    const { original } = editEquipamentoCatalogo;
+    const nome = editEquipamentoCatalogo.nome.trim();
+    try {
+      await updateRdoEquipamentoCatalogo(projetoId, original, nome);
+      setEquipamentosCatalogo(atual => {
+        const merged = new Map();
+        atual.forEach(item => {
+          const next = item.nome === original ? { ...item, nome } : item;
+          const key = next.nome.trim().toLowerCase();
+          const previous = merged.get(key);
+          merged.set(key, previous ? { ...previous, nome, usos: Number(previous.usos || 0) + Number(next.usos || 0) } : next);
+        });
+        return [...merged.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+      });
+      setDraftEquip(atual => atual.nome === original ? { ...atual, nome } : atual);
+      setEditEquipamentoCatalogo(null);
+    } catch (error) {
+      setErroCatalogo(error?.response?.data?.erro || 'Não foi possível editar o equipamento. Tente novamente.');
+    } finally {
+      setSalvandoCatalogo(false);
+    }
+  };
+
+  const excluirEquipamentoCatalogo = async (nome) => {
+    if (salvandoCatalogo) return;
+    setEquipamentoPickerAberto(false);
+    if (!await confirm({
+      title: 'Excluir equipamento salvo?',
+      message: `Excluir "${nome}" da lista de sugestões desta obra? Os equipamentos dos RDOs já registrados serão preservados.`,
+      confirmText: 'Excluir', cancelText: 'Cancelar'
+    })) return;
+    setSalvandoCatalogo(true);
+    try {
+      await deleteRdoEquipamentoCatalogo(projetoId, nome);
+      setEquipamentosCatalogo(atual => atual.filter(item => item.nome !== nome));
+      setDraftEquip(atual => atual.nome === nome ? { ...atual, nome: '' } : atual);
+    } catch (error) {
+      showRdoError(error?.response?.data?.erro || 'Não foi possível excluir o equipamento. Tente novamente.');
+    } finally {
+      setSalvandoCatalogo(false);
+    }
+  };
 
   const calcularHorasEquipamento = (inicio, fim) => {
     const toMin = (valor) => {
@@ -1840,9 +1900,11 @@ function RDOForm2() {
                 onChange={(e) => alterarHorarioDoDia('intervalo_almoco_fim', e.target.value)} />
             </div>
             <div className="form-group" style={{ flex: '1 1 100px', minWidth: '90px' }}>
-              <label className="form-label">Intervalo</label>
-              <input className="form-input" type="text" readOnly
-                value={formatHoras(calcDuracaoHoras(formData.intervalo_almoco_inicio, formData.intervalo_almoco_fim))} />
+              <label className="form-label" htmlFor="duracao-intervalo">Intervalo</label>
+              <input id="duracao-intervalo" className="form-input" type="time"
+                disabled={!formData.intervalo_almoco_inicio}
+                value={duracaoIntervalo(formData.intervalo_almoco_inicio, formData.intervalo_almoco_fim)}
+                onChange={(e) => alterarDuracaoIntervalo(e.target.value)} />
             </div>
             <div className="form-group" style={{ flex: '1 1 100px', minWidth: '90px' }}>
               <label className="form-label">Saída</label>
@@ -1996,27 +2058,50 @@ function RDOForm2() {
 
         {/* ══ SEÇÃO 4 — Equipamentos ═══════════════════ */}
         <Section id="equip" num="4" title="Equipamentos" badge={equipamentosLista.length || null} isOpen={openSections.equip} onToggle={toggleSection}>
+          <Modal open={Boolean(editEquipamentoCatalogo)} title="Editar equipamento salvo"
+            onClose={() => { if (!salvandoCatalogo) setEditEquipamentoCatalogo(null); }}>
+            <p>A alteração vale para a lista de sugestões desta obra. Os RDOs já registrados serão preservados.</p>
+            <label className="form-label" htmlFor="nome-equipamento-salvo">Nome do equipamento</label>
+            <input id="nome-equipamento-salvo" className="form-input" autoFocus maxLength={200}
+              value={editEquipamentoCatalogo?.nome || ''} disabled={salvandoCatalogo}
+              onChange={(e) => setEditEquipamentoCatalogo(atual => ({ ...atual, nome: e.target.value }))}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); salvarEquipamentoCatalogo(); } }} />
+            {erroCatalogo && <p role="alert" className="alert alert-danger">{erroCatalogo}</p>}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+              <Button disabled={salvandoCatalogo} onClick={() => setEditEquipamentoCatalogo(null)}>Cancelar</Button>
+              <Button tone="primary" variant="solid" loading={salvandoCatalogo}
+                disabled={!editEquipamentoCatalogo?.nome.trim()} onClick={salvarEquipamentoCatalogo}>Salvar</Button>
+            </div>
+          </Modal>
           <div className="rdo-add-row">
-            <div className="form-group rdo-equipment-picker" style={{ flex: '3' }}>
+            <div className="form-group rdo-equipment-picker" style={{ flex: '3' }}
+              onBlur={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget)) setEquipamentoPickerAberto(false);
+              }}>
               <label className="form-label">Equipamento</label>
               <input className="form-input" type="text" placeholder="Buscar ou digitar equipamento"
                 value={draftEquip.nome} onChange={(e) => setDraftEquip({ ...draftEquip, nome: e.target.value })}
                 onFocus={() => setEquipamentoPickerAberto(true)}
-                onBlur={() => window.setTimeout(() => setEquipamentoPickerAberto(false), 120)}
                 onKeyDown={(e) => e.key === 'Enter' && addEquip()} />
               {equipamentoPickerAberto && equipamentosCatalogoFiltrado.length > 0 && (
                 <div className="rdo-equipment-options">
                   {equipamentosCatalogoFiltrado.map((item) => (
-                    <button
-                      key={item.nome}
-                      className="rdo-equipment-option"
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => selecionarEquipamentoCatalogo(item.nome)}
-                    >
-                      <span>{item.nome}</span>
-                      {Number(item.usos || 0) > 0 && <small>{Number(item.usos)} uso(s)</small>}
-                    </button>
+                    <div key={item.nome} className="rdo-equipment-option-row">
+                      <button className="rdo-equipment-option" type="button"
+                        onClick={() => selecionarEquipamentoCatalogo(item.nome)}>
+                        <span>{item.nome}</span>
+                        {Number(item.usos || 0) > 0 && <small>{Number(item.usos)} uso(s)</small>}
+                      </button>
+                      <IconButton size="sm" variant="ghost" icon={Pencil} label={`Editar ${item.nome} na lista salva`}
+                        disabled={salvandoCatalogo} onClick={() => {
+                          setErroCatalogo('');
+                          setEditEquipamentoCatalogo({ original: item.nome, nome: item.nome });
+                          setEquipamentoPickerAberto(false);
+                        }} />
+                      <IconButton size="sm" tone="danger" variant="ghost" icon={Trash2}
+                        label={`Excluir ${item.nome} da lista salva`} disabled={salvandoCatalogo}
+                        onClick={() => excluirEquipamentoCatalogo(item.nome)} />
+                    </div>
                   ))}
                 </div>
               )}

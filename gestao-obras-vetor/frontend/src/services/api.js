@@ -212,6 +212,8 @@ export const deleteRdoFoto = (rdoId, fotoId) => api.delete(`/rdo/${rdoId}/foto/$
 export const reorderRdoFotos = (rdoId, fotoIds) => api.patch(`/rdo/${rdoId}/fotos/ordem`, { foto_ids: fotoIds });
 // Equipamentos
 export const getRdoEquipamentosCatalogo = (projetoId) => api.get(`/rdo/projeto/${projetoId}/equipamentos-catalogo`);
+export const updateRdoEquipamentoCatalogo = (projetoId, nomeOriginal, nome) => api.patch(`/rdo/projeto/${projetoId}/equipamentos-catalogo`, { nome_original: nomeOriginal, nome });
+export const deleteRdoEquipamentoCatalogo = (projetoId, nome) => api.delete(`/rdo/projeto/${projetoId}/equipamentos-catalogo`, { data: { nome } });
 export const getRdoEquipamentos = (rdoId) => api.get(`/rdo/${rdoId}/equipamentos`);
 export const addRdoEquipamento = (rdoId, data) => api.post(`/rdo/${rdoId}/equipamentos`, data);
 export const deleteRdoEquipamento = (rdoId, equipId) => api.delete(`/rdo/${rdoId}/equipamentos/${equipId}`);

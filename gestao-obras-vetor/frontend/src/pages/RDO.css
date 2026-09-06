@@ -2337,6 +2337,26 @@
   border-bottom: 0;
 }
 
+.rdo-page .rdo-equipment-option-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 6px;
+  border-bottom: 1px solid #edf2f7;
+}
+
+.rdo-page .rdo-equipment-option-row:last-child {
+  border-bottom: 0;
+}
+
+.rdo-page .rdo-equipment-option-row .rdo-equipment-option {
+  flex: 1;
+  min-width: 0;
+  border-bottom: 0;
+  flex-wrap: wrap;
+  overflow-wrap: anywhere;
+}
+
 .rdo-page .rdo-equipment-option:hover {
   background: #eff6ff;
 }
