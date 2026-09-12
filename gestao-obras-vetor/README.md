@@ -180,30 +180,15 @@ Na raiz do projeto:
 - **Health Check:** https://localhost/api/health
 - **pgAdmin local (suporte):** http://127.0.0.1:5050
 
-## Produção com Docker e HTTPS
+## Publicação no GitHub Pages
 
-O deploy de produção é automático: a mesclagem de uma pull request **para** a
-branch `main` gera um `push` que inicia o workflow **Deploy Vetor** no GitHub
-Actions. Não faça deploy, rebuild ou reinício manual na EC2/VPS.
+O frontend estático é publicado automaticamente pelo workflow **Deploy para
+GitHub Pages** a cada push na branch `main`. A URL de publicação fica disponível
+nos detalhes da execução em **GitHub → Actions**.
 
-O workflow acessa o servidor por SSH, atualiza o checkout para `origin/main`,
-recria o `.env` a partir dos secrets do repositório, constrói as imagens, cria
-backup do PostgreSQL, valida/aplica migrations, sobe os containers e confirma o
-health check. Consulte `INSTALLACAO.md` para os secrets, a preparação inicial do
-servidor e como acompanhar uma execução.
-
-O Caddy publica as portas 80/443, redireciona HTTP para HTTPS e gerencia a
-emissão e renovação do certificado Let's Encrypt. O frontend, backend e banco
-não são expostos diretamente. Consulte `INSTALLACAO.md` para o procedimento de
-DNS, firewall e validação.
-
-Para acompanhar o deploy, abra **GitHub → Actions → Deploy Vetor** e verifique
-os logs e o health check final. Novos pushes na `main` cancelam a execução de
-deploy ainda em andamento para priorizar a versão mais recente.
-
-O pgAdmin de produção é acessado em `https://vetor.damjam.com.br/pgadmin/`.
-Ele passa pelo Caddy com HTTPS; não publique a porta `5050` nem a porta
-PostgreSQL no firewall.
+O GitHub Pages não executa a API, o banco de dados ou processos de backend.
+Funcionalidades autenticadas e o formulário de contato precisam de uma API
+externa configurada separadamente.
 
 ---
 

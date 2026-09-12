@@ -544,7 +544,7 @@ function Navbar() {
         <div className="navbar-content">
           <NavLink to="/projetos" className="navbar-brand">
             <div className="navbar-brand-left">
-              <img src="/logo_vetor.png" alt="Vetor" className="navbar-logo-img" />
+              <img src={`${import.meta.env.BASE_URL}logo_vetor.png`} alt="Vetor" className="navbar-logo-img" />
               <span className="navbar-brand-name">Vetor</span>
               <span className="navbar-brand-subtitle">Gestão de Obras</span>
             </div>

@@ -6,14 +6,14 @@ export default function AuthShell({ mode = 'login', children }) {
   const creating = mode === 'register';
   const visual = creating
     ? {
-      image: '/auth-substation.png',
+      image: `${import.meta.env.BASE_URL}auth-substation.png`,
       label: 'OPERAÇÃO CONECTADA',
       title: <>Conecte pessoas,<br /><em>projetos e decisões.</em></>,
       description: 'Comece com uma base organizada para acompanhar cada etapa da obra.',
       mantra: <>CONECTAR<br />PADRONIZAR<br />COORDENAR<br />ENTREGAR</>,
     }
     : {
-      image: '/auth-solar-plant.png',
+      image: `${import.meta.env.BASE_URL}auth-solar-plant.png`,
       label: 'ENERGIA PARA EXECUTAR',
       title: <>Sua obra em movimento,<br /><em>todos os dias.</em></>,
       description: 'Tenha visibilidade para planejar, controlar e entregar com confiança.',
@@ -25,7 +25,7 @@ export default function AuthShell({ mode = 'login', children }) {
       <aside className={`auth-showcase auth-showcase-${mode}`}>
         <img className="auth-showcase-art" src={visual.image} alt="" aria-hidden="true" />
         <Link className="auth-showcase-brand" to="/" aria-label="Vetor Gestão de Obras — início">
-          <img src="/logo_vetor_transparente.png" alt="" />
+          <img src={`${import.meta.env.BASE_URL}logo_vetor_transparente.png`} alt="" />
           <span><b>Vetor</b><small>Gestão de Obras</small></span>
         </Link>
         <div className="auth-showcase-copy">

@@ -46,13 +46,13 @@ function RedefinirSenha() {
   return (
     <div className="login-page login-split-layout">
       <div className="login-image-col">
-        <img src="/foto_para_gestao.png" alt="Equipe em campo" className="login-image-full" />
+        <img src={`${import.meta.env.BASE_URL}foto_para_gestao.png`} alt="Equipe em campo" className="login-image-full" />
       </div>
 
       <div className="login-card login-card-split">
         <div className="login-brand">
           <div className="login-logo-wrap">
-            <img src="/logo_vetor.png" alt="Vetor" className="login-logo-img" />
+            <img src={`${import.meta.env.BASE_URL}logo_vetor.png`} alt="Vetor" className="login-logo-img" />
           </div>
           <div>
             <p className="login-brand-sub">Gestão de Obras</p>

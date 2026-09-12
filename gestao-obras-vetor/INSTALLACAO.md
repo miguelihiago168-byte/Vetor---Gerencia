@@ -167,49 +167,13 @@ e não deve ser liberada no firewall. Não exponha a porta do PostgreSQL na inte
 
 ### Deploy automático pelo GitHub Actions
 
-O deploy de produção não é manual na EC2/VPS. Ao mesclar uma pull request
-**para** `main`, o `push` resultante dispara o workflow **Deploy Vetor** no
-GitHub Actions. A execução acessa o servidor por SSH, atualiza o código para
-`origin/main`, recria o `.env`, constrói as imagens, faz backup do PostgreSQL,
-valida/aplica migrations, sobe os containers e confirma o health check.
+O workflow **Deploy para GitHub Pages** publica o frontend estático a cada push
+na branch `main`. Antes do primeiro deploy, em **GitHub → Settings → Pages**,
+selecione **GitHub Actions** como fonte de publicação.
 
-O workflow recria o `.env` da raiz do projeto a cada deploy. Portanto, não
-crie nem edite esse arquivo manualmente no servidor depois da preparação
-inicial: configure os valores em **GitHub → Settings → Secrets and variables →
-Actions → New repository secret**.
+Após o push, acompanhe **GitHub → Actions → Deploy para GitHub Pages**. A etapa
+final mostra a URL publicada.
 
-Crie estes secrets antes do primeiro merge para `main`:
-
-- `VPS_HOST`
-- `VPS_USER`
-- `VPS_SSH_KEY`
-- `VPS_PORT`
-- `APP_DIR`
-- `HEALTH_URL`
-- `APP_DOMAIN`
-- `LETSENCRYPT_EMAIL`
-- `POSTGRES_DB`
-- `POSTGRES_USER`
-- `POSTGRES_PASSWORD`
-- `PGADMIN_DEFAULT_EMAIL`
-- `PGADMIN_DEFAULT_PASSWORD`
-
-Use valores fortes para as duas senhas; em Linux, gere cada uma com
-`openssl rand -hex 32`. Em uma instalação PostgreSQL que já possui dados, os
-valores de `POSTGRES_DB`, `POSTGRES_USER` e `POSTGRES_PASSWORD` devem ser os
-mesmos usados na criação inicial do banco. Alterar apenas o secret não altera a
-senha já gravada no banco.
-
-Após o merge, acompanhe **GitHub → Actions → Deploy Vetor**. O workflow possui
-controle de concorrência: se houver um novo `push` na `main`, a execução de
-deploy em andamento é cancelada para priorizar a versão mais recente. Não rode
-`docker compose up`, rebuilds, scripts de restart ou comandos de deploy
-diretamente na EC2/VPS; investigue os logs do Actions caso a execução falhe.
-
-**Acesso remoto em desenvolvimento**
-
-Para testes somente na rede local, o Vite pode ser acessado em
-`http://<IP_DA_MAQUINA>:3000/` e a API em
-`http://<IP_DA_MAQUINA>:3001/api/health`. Não encaminhe essas portas para a
-internet. Em produção, use exclusivamente o fluxo Docker HTTPS acima; somente
-as portas TCP 80 e 443 do Caddy devem estar publicadas.
+O GitHub Pages não hospeda a API, o banco de dados ou uploads. Para recursos
+que dependem deles, configure uma API externa e os respectivos CORS e URLs de
+acesso.

@@ -80,7 +80,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <UserPreferencesProvider>
           <LeaveGuardProvider>
             <DialogProvider>
-              <BrowserRouter>
+              <BrowserRouter basename={import.meta.env.BASE_URL}>
                 <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/acesso" element={<Navigate to="/login" replace />} />
