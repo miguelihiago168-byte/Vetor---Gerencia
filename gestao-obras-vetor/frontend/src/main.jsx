@@ -10,6 +10,7 @@ import PrivateRoute from './components/PrivateRoute';
 import NotificationContainer from './components/NotificationContainer';
 import ModalBackdropGuard from './components/ModalBackdropGuard';
 import Landing from './pages/Landing';
+import Login from './pages/Login';
 import CriarConta from './pages/CriarConta';
 import RedefinirSenha from './pages/RedefinirSenha';
 // Dashboard removido como página inicial; manter rota para compatibilidade opcional
@@ -81,11 +82,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <DialogProvider>
               <BrowserRouter>
                 <Routes>
-          <Route path="/login" element={<Landing />} />
-          <Route path="/acesso" element={<Landing initialAccess />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/acesso" element={<Navigate to="/login" replace />} />
           <Route path="/register/:token" element={<CriarConta />} />
           <Route path="/redefinir-senha/:token" element={<RedefinirSenha />} />
-          <Route path="/criar-conta" element={<Navigate to="/acesso" replace />} />
+          <Route path="/criar-conta" element={<Login initialMode="cadastro" />} />
           <Route path="/primeiro-acesso" element={<PrivateRoute allowPendingFirstAccess><PrimeiroAcesso /></PrivateRoute>} />
           <Route path="/perfil" element={<PrivateRoute><MeuPerfil /></PrivateRoute>} />
           {/* Redirecionar Dashboard para Projetos */}

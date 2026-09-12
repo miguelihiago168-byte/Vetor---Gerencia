@@ -1,70 +1,33 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AlertCircle, ArrowLeft, ArrowRight, CalendarX, Eye, EyeOff, RotateCw, Trash2, X } from 'lucide-react';
+import { cancelarConta, esqueciSenha, login as loginAPI, registerTrialAccount, renovarTrial } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { login as loginAPI, registerTrialAccount, esqueciSenha, cancelarConta, renovarTrial } from '../services/api';
-import { ArrowLeft, ArrowRight, Eye, EyeOff, CalendarX, RotateCw, Trash2, X } from 'lucide-react';
-import { Button, IconButton } from '../components/ui/Button';
+import AuthShell from '../components/AuthShell';
 import './Login.css';
-
-const getPasswordStrength = (value) => {
-  const pwd = String(value || '');
-  if (!pwd) return { level: 'fraca', score: 0, label: 'Fraca', color: '#ef4444' };
-
-  const upper = (pwd.match(/[A-Z]/g) || []).length;
-  const lower = (pwd.match(/[a-z]/g) || []).length;
-  const digits = (pwd.match(/\d/g) || []).length;
-  const special = (pwd.match(/[^A-Za-z0-9]/g) || []).length;
-
-  let score = 0;
-  if (pwd.length >= 6) score += 1;
-  if (pwd.length >= 8) score += 1;
-  if (pwd.length >= 12) score += 1;
-  if (upper > 0) score += 1;
-  if (upper >= 2) score += 1;
-  if (lower > 0) score += 1;
-  if (digits > 0) score += 1;
-  if (digits >= 3) score += 1;
-  if (special > 0) score += 1;
-  if (special >= 2) score += 1;
-
-  if (score <= 3) return { level: 'fraca', score, label: 'Fraca', color: '#ef4444' };
-  if (score <= 6) return { level: 'medio', score, label: 'Médio', color: '#f59e0b' };
-  if (score <= 8) return { level: 'forte', score, label: 'Forte', color: '#10b981' };
-  return { level: 'extraforte', score, label: 'Extraforte', color: '#0ea5e9' };
-};
 
 const isSequentialPassword = (value) => {
   const pwd = String(value || '').toLowerCase().replace(/\s+/g, '');
-  if (!pwd) return false;
-  const banned = [
-    '123456', '1234567', '12345678', '123456789', '0123456789',
-    'qwerty', 'qwertyu', 'qwertyuiop', 'asdfgh', 'asdfghj', 'zxcvbn',
-    'abcdef', 'abcdefg', 'abcdefgh', 'abcdefghi', 'password'
+  return ['123456', '1234567', '12345678', '123456789', '0123456789', 'qwerty', 'qwertyu', 'qwertyuiop', 'asdfgh', 'asdfghj', 'zxcvbn', 'abcdef', 'abcdefg', 'abcdefgh', 'abcdefghi', 'password'].some((sequence) => pwd.includes(sequence));
+};
+
+const getPasswordRequirements = (value) => {
+  const password = String(value || '');
+  return [
+    { label: '8 ou mais caracteres', met: password.length >= 8 },
+    { label: 'Uma letra e um número', met: /[a-zA-Z]/.test(password) && /\d/.test(password) },
+    { label: 'Um caractere especial', met: /[^a-zA-Z0-9]/.test(password) },
+    { label: 'Sem sequências comuns', met: password.length > 0 && !isSequentialPassword(password) },
   ];
-  return banned.some((seq) => pwd.includes(seq));
 };
 
-const normalizeName = (value) => {
-  return String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/\s+/g, '')
-    .replace(/[^a-z0-9]/g, '');
-};
+const normalizeName = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
+const buildUsernameFromName = (name) => `${normalizeName(name).slice(0, 14) || 'usuario'}${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`;
 
-const buildUsernameFromName = (name) => {
-  const base = normalizeName(name).slice(0, 14) || 'usuario';
-  const suffix = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
-  return `${base}${suffix}`;
-};
-
-const normalizeAuthErrorMessage = (msg) => {
-  return String(msg || '');
-};
-
-function Login() {
-  const [modo, setModo] = useState('login');
+export default function Login({ initialMode = 'login' }) {
+  const navigate = useNavigate();
+  const { loginAuth } = useAuth();
+  const [modo, setModo] = useState(initialMode);
   const [loginForm, setLoginForm] = useState({ usuario: '', senha: '' });
   const [cadastroForm, setCadastroForm] = useState({ nome: '', empresa: '', email: '', usuario: '', senha: '', codigo_acesso: '' });
   const [usuarioManual, setUsuarioManual] = useState(false);
@@ -75,596 +38,116 @@ function Login() {
   const [sucesso, setSucesso] = useState('');
   const [loading, setLoading] = useState(false);
   const [esqueciLogin, setEsqueciLogin] = useState('');
-  const [trialExpirado, setTrialExpirado] = useState(null); // { tenant_id, login, senha }
+  const [trialExpirado, setTrialExpirado] = useState(null);
   const [confirmarExclusao, setConfirmarExclusao] = useState(false);
   const [cancelandoConta, setCancelandoConta] = useState(false);
   const [codigoRenovacao, setCodigoRenovacao] = useState('');
   const [tentandoRenovar, setTentandoRenovar] = useState(false);
 
-  const { loginAuth } = useAuth();
-  const navigate = useNavigate();
+  useEffect(() => { setModo(initialMode); }, [initialMode]);
+  const clearFeedback = () => { setErro(''); setSucesso(''); };
 
-  const handleEsqueciSenha = async (e) => {
-    e.preventDefault();
-    setErro('');
-    setSucesso('');
-    if (!esqueciLogin.trim()) {
-      setErro('Informe seu login ou e-mail.');
-      return;
-    }
-    setLoading(true);
-    try {
-      await esqueciSenha(esqueciLogin.trim());
-      setSucesso('Se o usuário existir, as instruções foram enviadas ao e-mail cadastrado.');
-      setEsqueciLogin('');
-    } catch {
-      setSucesso('Se o usuário existir, as instruções foram enviadas ao e-mail cadastrado.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setErro('');
-    setSucesso('');
-
+  const handleLogin = async (event) => {
+    event.preventDefault(); clearFeedback();
     const credential = loginForm.usuario.trim();
-    if (!credential) {
-      setErro('Informe seu usuário ou e-mail.');
-      return;
-    }
-
-    if (!loginForm.senha) {
-      setErro('Informe a senha.');
-      return;
-    }
-
+    if (!credential) return setErro('Informe seu usuário ou e-mail.');
+    if (!loginForm.senha) return setErro('Informe a senha.');
     setLoading(true);
-
     try {
-      const response = await loginAPI({
-        usuario: credential,
-        senha: loginForm.senha,
-        manterLogin,
-      });
+      const response = await loginAPI({ usuario: credential, senha: loginForm.senha, manterLogin });
       loginAuth(response.data.token, response.data.usuario, manterLogin);
       navigate(response.data?.usuario?.primeiro_acesso_pendente ? '/primeiro-acesso' : '/projetos');
     } catch (error) {
-      const codigo = error.response?.data?.codigo;
-      if (codigo === 'TRIAL_EXPIRADO') {
-        setTrialExpirado({
-          tenant_id: error.response.data.tenant_id,
-          login: loginForm.usuario.trim(),
-          senha: loginForm.senha,
-        });
-      } else {
-        setErro(normalizeAuthErrorMessage(error.response?.data?.erro || 'Erro ao fazer login.'));
-      }
-    } finally {
-      setLoading(false);
-    }
+      if (error.response?.data?.codigo === 'TRIAL_EXPIRADO') setTrialExpirado({ tenant_id: error.response.data.tenant_id, login: credential, senha: loginForm.senha });
+      else setErro(String(error.response?.data?.erro || 'Erro ao fazer login.'));
+    } finally { setLoading(false); }
   };
 
-  const handleRenovarTrial = async (e) => {
-    e.preventDefault();
-    setTentandoRenovar(true);
-    setErro('');
+  const handleEsqueciSenha = async (event) => {
+    event.preventDefault(); clearFeedback();
+    if (!esqueciLogin.trim()) return setErro('Informe seu login ou e-mail.');
+    setLoading(true);
+    try { await esqueciSenha(esqueciLogin.trim()); setSucesso('Se o usuário existir, as instruções foram enviadas ao e-mail cadastrado.'); setEsqueciLogin(''); }
+    catch { setSucesso('Se o usuário existir, as instruções foram enviadas ao e-mail cadastrado.'); }
+    finally { setLoading(false); }
+  };
+
+  const handleCadastro = async (event) => {
+    event.preventDefault(); clearFeedback();
+    const usuario = cadastroForm.usuario.trim();
+    if (!cadastroForm.nome.trim()) return setErro('Nome é obrigatório.');
+    if (!cadastroForm.empresa.trim()) return setErro('Empresa é obrigatória.');
+    if (!cadastroForm.email.trim()) return setErro('E-mail é obrigatório.');
+    if (!usuario) return setErro('Usuário é obrigatório.');
+    if (!cadastroForm.senha) return setErro('Senha é obrigatória.');
+    if (!getPasswordRequirements(cadastroForm.senha).every(({ met }) => met)) return setErro('Conclua todos os requisitos da senha para continuar.');
+    if (!cadastroForm.codigo_acesso.trim()) return setErro('Código global é obrigatório para criar conta.');
+    setLoading(true);
     try {
-      await renovarTrial({
-        tenant_id: trialExpirado.tenant_id,
-        codigo: codigoRenovacao.trim(),
-      });
-      const response = await loginAPI({
-        usuario: trialExpirado.login,
-        senha: trialExpirado.senha,
-        manterLogin,
-      });
-      setTrialExpirado(null);
-      setCodigoRenovacao('');
-      loginAuth(response.data.token, response.data.usuario, manterLogin);
+      const response = await registerTrialAccount({ nome: cadastroForm.nome.trim(), empresa: cadastroForm.empresa.trim(), email: cadastroForm.email.trim(), usuario, senha: cadastroForm.senha, codigo_acesso: cadastroForm.codigo_acesso.trim() });
+      const loginCriado = response.data?.usuario || usuario;
+      setSucesso(`Conta criada com sucesso. Usuário: ${loginCriado}`);
+      setModo('login'); setLoginForm((current) => ({ ...current, usuario: loginCriado }));
+      setCadastroForm({ nome: '', empresa: '', email: '', usuario: '', senha: '', codigo_acesso: '' }); setUsuarioManual(false);
+    } catch (error) { setErro(String(error.response?.data?.erro || 'Erro ao criar conta.')); }
+    finally { setLoading(false); }
+  };
+
+  const handleRenovarTrial = async (event) => {
+    event.preventDefault(); setTentandoRenovar(true); setErro('');
+    try {
+      await renovarTrial({ tenant_id: trialExpirado.tenant_id, codigo: codigoRenovacao.trim() });
+      const response = await loginAPI({ usuario: trialExpirado.login, senha: trialExpirado.senha, manterLogin });
+      setTrialExpirado(null); setCodigoRenovacao(''); loginAuth(response.data.token, response.data.usuario, manterLogin);
       navigate(response.data?.usuario?.primeiro_acesso_pendente ? '/primeiro-acesso' : '/projetos');
-    } catch (error) {
-      setErro(normalizeAuthErrorMessage(error.response?.data?.erro || 'Erro ao renovar trial.'));
-    } finally {
-      setTentandoRenovar(false);
-    }
+    } catch (error) { setErro(String(error.response?.data?.erro || 'Erro ao renovar trial.')); }
+    finally { setTentandoRenovar(false); }
   };
 
   const handleCancelarConta = async () => {
-    setCancelandoConta(true);
-    setErro('');
-    try {
-      await cancelarConta(trialExpirado);
-      setTrialExpirado(null);
-      setConfirmarExclusao(false);
-      setSucesso('Conta excluída com sucesso.');
-    } catch {
-      setErro('Erro ao excluir conta. Tente novamente.');
-    } finally {
-      setCancelandoConta(false);
-    }
+    setCancelandoConta(true); setErro('');
+    try { await cancelarConta(trialExpirado); setTrialExpirado(null); setConfirmarExclusao(false); setSucesso('Conta excluída com sucesso.'); }
+    catch { setErro('Erro ao excluir conta. Tente novamente.'); }
+    finally { setCancelandoConta(false); }
   };
 
-  const handleCadastro = async (e) => {
-    e.preventDefault();
-    setErro('');
-    setSucesso('');
-
-    const usuario = cadastroForm.usuario.trim();
-
-    if (!cadastroForm.nome.trim()) {
-      setErro('Nome é obrigatório.');
-      return;
-    }
-
-    if (!cadastroForm.empresa.trim()) {
-      setErro('Empresa é obrigatória.');
-      return;
-    }
-
-    if (!cadastroForm.email.trim()) {
-      setErro('E-mail é obrigatório.');
-      return;
-    }
-
-    if (!usuario) {
-      setErro('Usuário é obrigatório.');
-      return;
-    }
-
-    if (!cadastroForm.senha) {
-      setErro('Senha é obrigatória.');
-      return;
-    }
-
-    if (isSequentialPassword(cadastroForm.senha)) {
-      setErro('Senhas sequenciais (ex.: 123456789, qwertyuiop, abcdefgh) não são aceitas.');
-      return;
-    }
-
-    const senhaStrength = getPasswordStrength(cadastroForm.senha);
-    if (senhaStrength.level === 'fraca') {
-      setErro('Senha muito fraca. Use uma senha com nível mínimo Médio (mais caracteres, números e símbolos).');
-      return;
-    }
-
-    if (!cadastroForm.codigo_acesso.trim()) {
-      setErro('Código global é obrigatório para criar conta.');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const response = await registerTrialAccount({
-        nome: cadastroForm.nome.trim(),
-        empresa: cadastroForm.empresa.trim(),
-        email: cadastroForm.email.trim(),
-        usuario,
-        senha: cadastroForm.senha,
-        codigo_acesso: cadastroForm.codigo_acesso.trim(),
-      });
-
-      const loginCriado = response.data?.usuario || usuario;
-      setSucesso(`Conta criada com sucesso. Usuário: ${loginCriado}`);
-      setModo('login');
-      setLoginForm((prev) => ({ ...prev, usuario: loginCriado }));
-      setCadastroForm({ nome: '', empresa: '', email: '', usuario: '', senha: '', codigo_acesso: '' });
-      setUsuarioManual(false);
-    } catch (error) {
-      setErro(normalizeAuthErrorMessage(error.response?.data?.erro || 'Erro ao criar conta.'));
-    } finally {
-      setLoading(false);
-    }
-  };
+  const isRegister = modo === 'cadastro';
+  const title = modo === 'esqueci' ? 'Recupere seu acesso' : isRegister ? 'Crie sua conta' : 'Bem-vindo de volta';
+  const subtitle = modo === 'esqueci' ? 'Informe seu login ou e-mail para receber as instruções.' : isRegister ? 'Organize sua operação desde o primeiro projeto.' : 'Acesse seu painel e acompanhe suas obras com clareza.';
+  const passwordRequirements = getPasswordRequirements(cadastroForm.senha);
+  const passwordValid = passwordRequirements.every(({ met }) => met);
 
   return (
     <>
-    <div className="login-page login-split-layout">
-      {/* Coluna esquerda: Imagem */}
-      <div className="login-image-col">
-        <img src="/foto_para_gestao.png" alt="Equipe em campo" className="login-image-full" />
-      </div>
-      {/* Coluna direita: Card de login */}
-      <div className="login-card login-card-split">
-        <div className="login-brand">
-          <div className="login-logo-wrap">
-            <img src="/logo_vetor.png" alt="Vetor" className="login-logo-img" />
-          </div>
-          <div>
-            <p className="login-brand-sub">Gestão de Obras</p>
-          </div>
+      <AuthShell mode={isRegister ? 'register' : 'login'}>
+        <div className={`auth-card ${isRegister ? 'auth-card-register' : ''} ${modo === 'login' ? 'auth-card-login' : ''}`}>
+          <div className="auth-card-heading"><h2>{title}</h2><p>{subtitle}</p></div>
+          {erro && <div className="auth-alert auth-alert-error" role="alert"><AlertCircle size={17} />{erro}</div>}
+          {sucesso && <div className="auth-alert auth-alert-success" role="status">{sucesso}</div>}
+          {modo === 'login' && <form className="auth-form" onSubmit={handleLogin}>
+            <label>Usuário ou e-mail<input type="text" maxLength="120" value={loginForm.usuario} onChange={(event) => setLoginForm((current) => ({ ...current, usuario: event.target.value.trimStart() }))} placeholder="Seu usuário ou e-mail" autoComplete="username" autoFocus required /></label>
+            <label>Senha<span className="auth-password-input"><input type={showLoginSenha ? 'text' : 'password'} maxLength="72" value={loginForm.senha} onChange={(event) => setLoginForm((current) => ({ ...current, senha: event.target.value }))} placeholder="Digite sua senha" autoComplete="current-password" required /><button type="button" aria-label={showLoginSenha ? 'Ocultar senha' : 'Mostrar senha'} onClick={() => setShowLoginSenha((value) => !value)}>{showLoginSenha ? <EyeOff size={18} /> : <Eye size={18} />}</button></span></label>
+            <div className="auth-form-row"><label className="auth-check"><input type="checkbox" checked={manterLogin} onChange={(event) => setManterLogin(event.target.checked)} />Manter minha sessão ativa</label><button type="button" className="auth-text-button" onClick={() => { setModo('esqueci'); clearFeedback(); }}>Esqueceu sua senha?</button></div>
+            <button className="auth-submit" type="submit" disabled={loading}>{loading ? 'Entrando...' : 'Entrar'}<ArrowRight size={18} /></button>
+          </form>}
+          {modo === 'esqueci' && <form className="auth-form" onSubmit={handleEsqueciSenha}>
+            <label>Login ou e-mail<input type="text" maxLength="120" value={esqueciLogin} onChange={(event) => setEsqueciLogin(event.target.value.trimStart())} placeholder="Seu login ou e-mail" autoFocus required /></label>
+            <button className="auth-submit" type="submit" disabled={loading}>{loading ? 'Enviando...' : 'Enviar instruções'}<ArrowRight size={18} /></button>
+            <button type="button" className="auth-back" onClick={() => { setModo('login'); clearFeedback(); }}><ArrowLeft size={16} />Voltar ao login</button>
+          </form>}
+          {isRegister && <form className="auth-form auth-form-register" onSubmit={handleCadastro}>
+            <label className="auth-field-wide">Nome completo<input type="text" maxLength="80" value={cadastroForm.nome} onChange={(event) => { const nome = event.target.value; setCadastroForm((current) => ({ ...current, nome, usuario: usuarioManual ? current.usuario : buildUsernameFromName(nome) })); }} placeholder="Seu nome" autoComplete="name" autoFocus required /></label>
+            <label>Empresa<input type="text" maxLength="80" value={cadastroForm.empresa} onChange={(event) => setCadastroForm((current) => ({ ...current, empresa: event.target.value }))} placeholder="Nome da empresa" autoComplete="organization" required /></label>
+            <label>E-mail<input type="email" maxLength="120" value={cadastroForm.email} onChange={(event) => setCadastroForm((current) => ({ ...current, email: event.target.value }))} placeholder="seuemail@empresa.com" autoComplete="email" required /></label>
+            <label>Usuário<input type="text" maxLength="40" value={cadastroForm.usuario} onChange={(event) => { setUsuarioManual(true); setCadastroForm((current) => ({ ...current, usuario: event.target.value.replace(/\s+/g, '') })); }} placeholder="seunome1234" autoComplete="username" required /></label>
+            <label>Código global<input type="text" value={cadastroForm.codigo_acesso} onChange={(event) => setCadastroForm((current) => ({ ...current, codigo_acesso: event.target.value }))} placeholder="Informe o código" required /></label>
+            <label className="auth-field-wide">Senha<span className="auth-password-input"><input type={showCadastroSenha ? 'text' : 'password'} maxLength="72" value={cadastroForm.senha} onChange={(event) => setCadastroForm((current) => ({ ...current, senha: event.target.value }))} placeholder="Crie uma senha segura" autoComplete="new-password" required /><button type="button" aria-label={showCadastroSenha ? 'Ocultar senha' : 'Mostrar senha'} onClick={() => setShowCadastroSenha((value) => !value)}>{showCadastroSenha ? <EyeOff size={18} /> : <Eye size={18} />}</button></span></label>
+            <div className="auth-password-requirements auth-field-wide" role="status" aria-live="polite">{passwordRequirements.map(({ label, met }) => <span className={met ? 'is-met' : ''} key={label}>{label}</span>)}</div>
+            <button className="auth-submit auth-field-wide" type="submit" disabled={loading || !passwordValid}>{loading ? 'Criando conta...' : 'Criar conta'}<ArrowRight size={18} /></button>
+          </form>}
         </div>
-
-        <div className="login-tabs">
-          <button
-            type="button"
-            className={`login-tab-btn ${modo === 'login' ? 'active' : ''}`}
-            onClick={() => { setModo('login'); setErro(''); setSucesso(''); }}
-          >
-            Entrar
-          </button>
-          <button
-            type="button"
-            className={`login-tab-btn ${modo === 'cadastro' ? 'active' : ''}`}
-            onClick={() => { setModo('cadastro'); setErro(''); setSucesso(''); }}
-          >
-            Criar conta
-          </button>
-        </div>
-
-        {erro && <div className="login-error">{erro}</div>}
-        {sucesso && <div className="login-success">{sucesso}</div>}
-
-        {modo === 'login' && (
-          <form onSubmit={handleLogin}>
-            <div className="login-field">
-              <label className="login-label">Usuário ou e-mail</label>
-              <input
-                type="text"
-                className="login-input"
-                maxLength="40"
-                value={loginForm.usuario}
-                onChange={(e) => setLoginForm((prev) => ({ ...prev, usuario: e.target.value.trimStart() }))}
-                placeholder="Insira seu usuário ou e-mail"
-                required
-              />
-            </div>
-
-            <div className="login-field">
-              <label className="login-label">Senha</label>
-              <div className="password-wrap">
-                <input
-                  type={showLoginSenha ? 'text' : 'password'}
-                  className="login-input"
-                  maxLength="72"
-                  value={loginForm.senha}
-                  onChange={(e) => setLoginForm((prev) => ({ ...prev, senha: e.target.value }))}
-                  placeholder="Insira sua senha"
-                  required
-                />
-                <IconButton
-                  className="password-toggle"
-                  tone="neutral"
-                  variant="ghost"
-                  size="sm"
-                  aria-label={showLoginSenha ? 'Ocultar senha' : 'Mostrar senha'}
-                  onClick={() => setShowLoginSenha((v) => !v)}
-                >
-                  {showLoginSenha ? <EyeOff size={16} /> : <Eye size={16} />}
-                </IconButton>
-              </div>
-            </div>
-
-            <Button type="submit" className="login-btn" fullWidth size="lg" loading={loading}>
-              {loading ? 'Entrando...' : 'Entrar'}
-              <ArrowRight size={18} />
-            </Button>
-
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, cursor: 'pointer', fontSize: '0.85rem', color: 'var(--text-secondary, #6b7280)' }}>
-              <input
-                type="checkbox"
-                checked={manterLogin}
-                onChange={(e) => setManterLogin(e.target.checked)}
-                style={{ width: 16, height: 16, cursor: 'pointer', accentColor: 'var(--primary, #6366f1)' }}
-              />
-              Manter minha sessão ativa
-            </label>
-            
-
-            <div style={{ textAlign: 'center', marginTop: 16 }}>
-              <button
-                type="button"
-                className="login-link-btn"
-                onClick={() => { setModo('esqueci'); setErro(''); setSucesso(''); }}
-              >
-                Esqueci minha senha
-              </button>
-            </div>
-          </form>
-        )}
-
-        {modo === 'esqueci' && (
-          <form onSubmit={handleEsqueciSenha}>
-            <p style={{ fontSize: '0.9rem', color: '#475569', marginBottom: 16, marginTop: 0 }}>
-              Informe seu login ou e-mail cadastrado. Se encontrarmos sua conta, enviaremos as instruções de recuperação.
-            </p>
-            <div className="login-field">
-              <label className="login-label">Login ou e-mail</label>
-              <input
-                type="text"
-                className="login-input"
-                maxLength="120"
-                value={esqueciLogin}
-                onChange={(e) => setEsqueciLogin(e.target.value.trimStart())}
-                placeholder="Seu login ou e-mail"
-                autoFocus
-                required
-              />
-            </div>
-
-            <Button type="submit" className="login-btn" fullWidth size="lg" loading={loading}>
-              {loading ? 'Enviando...' : 'Enviar instruções'}
-              <ArrowRight size={18} />
-            </Button>
-
-            <div style={{ textAlign: 'center', marginTop: 16 }}>
-              <button
-                type="button"
-                className="login-link-btn"
-                onClick={() => { setModo('login'); setErro(''); setSucesso(''); }}
-              >
-                ← Voltar ao login
-              </button>
-            </div>
-          </form>
-        )}
-
-        {modo === 'cadastro' && (
-          <form onSubmit={handleCadastro}>
-            <div className="login-field">
-              <label className="login-label">Nome completo</label>
-              <input
-                type="text"
-                className="login-input"
-                maxLength="80"
-                value={cadastroForm.nome}
-                onChange={(e) => {
-                  const nome = e.target.value;
-                  setCadastroForm((prev) => ({
-                    ...prev,
-                    nome,
-                    usuario: usuarioManual ? prev.usuario : buildUsernameFromName(nome),
-                  }));
-                }}
-                placeholder="Seu nome"
-                required
-              />
-            </div>
-
-            <div className="login-field">
-              <label className="login-label">Empresa</label>
-              <input
-                type="text"
-                className="login-input"
-                maxLength="80"
-                value={cadastroForm.empresa}
-                onChange={(e) => setCadastroForm((prev) => ({ ...prev, empresa: e.target.value }))}
-                placeholder="Nome da empresa"
-                required
-              />
-            </div>
-
-            <div className="login-field">
-              <label className="login-label">E-mail</label>
-              <input
-                type="email"
-                className="login-input"
-                maxLength="120"
-                value={cadastroForm.email}
-                onChange={(e) => setCadastroForm((prev) => ({ ...prev, email: e.target.value }))}
-                placeholder="seuemail@empresa.com"
-                required
-              />
-            </div>
-
-            <div className="login-field">
-              <label className="login-label">Usuário</label>
-              <input
-                type="text"
-                className="login-input"
-                maxLength="40"
-                value={cadastroForm.usuario}
-                onChange={(e) => {
-                  setUsuarioManual(true);
-                  setCadastroForm((prev) => ({ ...prev, usuario: e.target.value.replace(/\s+/g, '') }));
-                }}
-                placeholder="seunome1234"
-                required
-              />
-            </div>
-
-            <div className="login-field">
-              <label className="login-label">Senha</label>
-              <div className="password-wrap">
-                <input
-                  type={showCadastroSenha ? 'text' : 'password'}
-                  className="login-input"
-                  maxLength="72"
-                  value={cadastroForm.senha}
-                  onChange={(e) => setCadastroForm((prev) => ({ ...prev, senha: e.target.value }))}
-                  placeholder="Digite sua senha"
-                  required
-                />
-                <IconButton
-                  className="password-toggle"
-                  tone="neutral"
-                  variant="ghost"
-                  size="sm"
-                  aria-label={showCadastroSenha ? 'Ocultar senha' : 'Mostrar senha'}
-                  onClick={() => setShowCadastroSenha((v) => !v)}
-                >
-                  {showCadastroSenha ? <EyeOff size={16} /> : <Eye size={16} />}
-                </IconButton>
-              </div>
-              {(() => {
-                const strength = getPasswordStrength(cadastroForm.senha);
-                const width = strength.level === 'fraca' ? '25%' : strength.level === 'medio' ? '50%' : strength.level === 'forte' ? '75%' : '100%';
-                return (
-                  <>
-                    <div className="password-strength">
-                      <div className="password-strength-bar" style={{ width, backgroundColor: strength.color }} />
-                    </div>
-                    <small className="login-helper" style={{ color: strength.color }}>
-                      Nível da senha: {strength.label}{strength.level === 'fraca' ? ' - Sugestão: adicione mais letras maiúsculas, números e caracteres especiais.' : ''}
-                    </small>
-                    <small className="login-helper" style={{ color: 'var(--text-secondary, #6b7280)', display: 'block', marginTop: 6 }}>
-                      Senhas sequenciais (ex.: 123456789, qwertyuiop, abcdefgh) não são aceitas. Mínimo requerido: Nível Médio.
-                    </small>
-                  </>
-                );
-              })()}
-            </div>
-
-            <div className="login-field">
-              <label className="login-label">Código global de criação</label>
-              <input
-                type="text"
-                className="login-input"
-                value={cadastroForm.codigo_acesso}
-                onChange={(e) => setCadastroForm((prev) => ({ ...prev, codigo_acesso: e.target.value }))}
-                placeholder="Informe o código"
-                required
-              />
-            </div>
-
-            <Button type="submit" className="login-btn" fullWidth size="lg" loading={loading}>
-              {loading ? 'Criando conta...' : 'Criar conta'}
-              <ArrowRight size={18} />
-            </Button>
-          </form>
-        )}
-      </div>
-    </div>
-
-    {/* Modal: Trial expirado */}
-    {trialExpirado && (
-      <div style={{
-        position: 'fixed', inset: 0, zIndex: 9999,
-        background: 'rgba(15,23,42,0.65)', backdropFilter: 'blur(4px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16
-      }}>
-        <div style={{
-          background: '#fff', borderRadius: 20, padding: '40px 36px',
-          maxWidth: 440, width: '100%',
-          boxShadow: '0 24px 64px rgba(0,0,0,0.22)',
-          display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center'
-        }}>
-          <div style={{
-            width: 64, height: 64, borderRadius: '50%',
-            background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            marginBottom: 20
-          }}>
-            <CalendarX size={30} color="#d97706" />
-          </div>
-
-          <h2 style={{ margin: '0 0 10px', fontSize: '1.2rem', fontWeight: 800, color: '#0f172a' }}>
-            Período de teste encerrado
-          </h2>
-          <p style={{ margin: '0 0 24px', fontSize: '0.9rem', color: '#475569', lineHeight: 1.55 }}>
-            Seu período de <strong>30 dias gratuitos</strong> expirou. Seus dados estão preservados.
-            Informe o código de liberação para continuar usando o sistema, assine quando a opção estiver disponível, ou encerre a conta.
-          </p>
-
-          {erro && <div style={{ marginBottom: 16, padding: '12px 14px', borderRadius: 10, background: '#fef2f2', border: '1px solid #fecaca', fontSize: '0.85rem', color: '#dc2626', textAlign: 'left', width: '100%' }}>{erro}</div>}
-
-          {!confirmarExclusao ? (
-            <>
-              <form onSubmit={handleRenovarTrial} style={{ width: '100%', marginBottom: 16 }}>
-                <input
-                  type="text"
-                  placeholder="Código de renovação"
-                  value={codigoRenovacao}
-                  onChange={(e) => setCodigoRenovacao(e.target.value)}
-                  style={{
-                    width: '100%', height: 44, borderRadius: 12, border: '1.5px solid #cbd5e1',
-                    padding: '0 14px', fontSize: 14, marginBottom: 12, boxSizing: 'border-box',
-                    fontFamily: 'inherit'
-                  }}
-                />
-                <Button
-                  type="submit"
-                  disabled={tentandoRenovar || !codigoRenovacao.trim()}
-                  tone="success"
-                  fullWidth
-                  loading={tentandoRenovar}
-                  startIcon={<RotateCw size={16} />}
-                  style={{ marginBottom: 12 }}
-                >
-                  {tentandoRenovar ? 'Renovando...' : 'Renovar trial'}
-                </Button>
-              </form>
-
-              <Button
-                disabled
-                tone="neutral"
-                variant="soft"
-                fullWidth
-                style={{ marginBottom: 12 }}
-              >
-                Assinar serviço
-                <span style={{
-                  background: '#0ea5e9', color: '#fff', fontSize: 10, fontWeight: 700,
-                  borderRadius: 99, padding: '2px 8px', letterSpacing: '0.05em'
-                }}>EM BREVE</span>
-              </Button>
-
-              <Button
-                type="button"
-                onClick={() => setConfirmarExclusao(true)}
-                tone="danger"
-                variant="outline"
-                fullWidth
-                startIcon={<Trash2 size={16} />}
-                style={{ marginBottom: 16 }}
-              >
-                Encerrar minha conta
-              </Button>
-
-              <Button
-                type="button"
-                tone="neutral"
-                variant="ghost"
-                size="sm"
-                startIcon={<X size={15} />}
-                onClick={() => { setTrialExpirado(null); setCodigoRenovacao(''); setErro(''); }}
-              >
-                Fechar
-              </Button>
-            </>
-          ) : (
-            <>
-              <div style={{
-                background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10,
-                padding: '12px 16px', marginBottom: 20, width: '100%', textAlign: 'left'
-              }}>
-                <p style={{ margin: 0, fontSize: 13, color: '#dc2626', fontWeight: 600 }}>
-                  ⚠️ Atenção: esta ação é irreversível.
-                </p>
-                <p style={{ margin: '6px 0 0', fontSize: 13, color: '#7f1d1d' }}>
-                  Todos os seus projetos, RDOs, EAP, compras e demais dados serão excluídos permanentemente, sem backup e sem possibilidade de recuperação. O e-mail poderá ser usado em uma nova conta futuramente.
-                </p>
-              </div>
-
-              <Button
-                type="button"
-                onClick={handleCancelarConta}
-                tone="danger"
-                fullWidth
-                loading={cancelandoConta}
-                startIcon={<Trash2 size={16} />}
-                style={{ marginBottom: 12 }}
-              >
-                {cancelandoConta ? 'Excluindo...' : 'Confirmar exclusão definitiva'}
-              </Button>
-
-              <Button
-                type="button"
-                tone="neutral"
-                variant="ghost"
-                size="sm"
-                startIcon={<ArrowLeft size={15} />}
-                onClick={() => { setConfirmarExclusao(false); setErro(''); }}
-              >
-                ← Voltar
-              </Button>
-            </>
-          )}
-        </div>
-      </div>
-    )}
+      </AuthShell>
+      {trialExpirado && <div className="auth-modal" role="dialog" aria-modal="true" aria-label="Período de teste encerrado"><div className="auth-modal-card"><span className="auth-modal-icon"><CalendarX size={28} /></span><h2>Período de teste encerrado</h2><p>Seu período de 30 dias gratuitos expirou. Seus dados estão preservados.</p>{erro && <div className="auth-alert auth-alert-error" role="alert">{erro}</div>}{!confirmarExclusao ? <><form className="auth-form" onSubmit={handleRenovarTrial}><label>Código de renovação<input type="text" value={codigoRenovacao} onChange={(event) => setCodigoRenovacao(event.target.value)} placeholder="Informe o código" /></label><button className="auth-submit" type="submit" disabled={tentandoRenovar || !codigoRenovacao.trim()}>{tentandoRenovar ? 'Renovando...' : 'Renovar trial'}<RotateCw size={17} /></button></form><button className="auth-disabled-button" type="button" disabled>Assinar serviço <small>EM BREVE</small></button><button className="auth-danger-button" type="button" onClick={() => setConfirmarExclusao(true)}><Trash2 size={16} />Encerrar minha conta</button><button className="auth-back" type="button" onClick={() => { setTrialExpirado(null); setCodigoRenovacao(''); setErro(''); }}><X size={16} />Fechar</button></> : <><div className="auth-alert auth-alert-error">Esta ação é irreversível. Todos os dados serão excluídos permanentemente, sem possibilidade de recuperação.</div><button className="auth-danger-button auth-danger-solid" type="button" disabled={cancelandoConta} onClick={handleCancelarConta}>{cancelandoConta ? 'Excluindo...' : 'Confirmar exclusão definitiva'}<Trash2 size={16} /></button><button className="auth-back" type="button" onClick={() => { setConfirmarExclusao(false); setErro(''); }}><ArrowLeft size={16} />Voltar</button></>}</div></div>}
     </>
   );
 }
-
-export default Login;
