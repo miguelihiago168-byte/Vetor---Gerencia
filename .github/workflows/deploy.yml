@@ -1,210 +1,56 @@
-name: Deploy Vetor
+name: Deploy para GitHub Pages
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
 
 concurrency:
-  group: deploy-vetor-main
-  cancel-in-progress: true
+  group: github-pages
+  cancel-in-progress: false
 
 jobs:
-  deploy:
-    name: Deploy via SSH
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
     steps:
-      - name: Deploy no servidor
-        uses: appleboy/ssh-action@v1.0.3
-        env:
-          APP_DOMAIN: ${{ secrets.APP_DOMAIN }}
-          LETSENCRYPT_EMAIL: ${{ secrets.LETSENCRYPT_EMAIL }}
-          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
-          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          PGADMIN_DEFAULT_EMAIL: ${{ secrets.PGADMIN_DEFAULT_EMAIL }}
-          PGADMIN_DEFAULT_PASSWORD: ${{ secrets.PGADMIN_DEFAULT_PASSWORD }}
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_PORT }}
-          timeout: 60s
-          command_timeout: 15m
-          envs: APP_DOMAIN,LETSENCRYPT_EMAIL,POSTGRES_DB,POSTGRES_USER,POSTGRES_PASSWORD,PGADMIN_DEFAULT_EMAIL,PGADMIN_DEFAULT_PASSWORD
-          script_stop: false
-          script: |
-            set -Eeuo pipefail
+          node-version: 20
+          cache: npm
+          cache-dependency-path: gestao-obras-vetor/frontend/package-lock.json
 
-            cd "${{ secrets.APP_DIR }}"
-            export APP_DATA_DIR="/home/ubuntu/app_data/gestao-obras-vetor"
+      - name: Configurar GitHub Pages
+        uses: actions/configure-pages@v5
 
-            CURRENT_BRANCH="$(git branch --show-current)"
-            if [ "$CURRENT_BRANCH" != "main" ]; then
-              echo "Branch inesperada no servidor: $CURRENT_BRANCH"
-              exit 1
-            fi
+      - name: Instalar dependencias
+        working-directory: gestao-obras-vetor/frontend
+        run: npm ci --legacy-peer-deps --no-audit --no-fund
 
-            if [ -n "$(git status --porcelain)" ]; then
-              echo "Servidor possui alteracoes locais. Abortando deploy."
-              git status --short
-              exit 1
-            fi
+      - name: Gerar frontend
+        working-directory: gestao-obras-vetor/frontend
+        run: npm run build
 
-            git fetch origin main
-            git reset --hard origin/main
+      - name: Enviar artefato
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: gestao-obras-vetor/frontend/dist
 
-            if [ -f docker-compose.yml ]; then
-              COMPOSE_DIR="$PWD"
-            elif [ -f gestao-obras-vetor/docker-compose.yml ]; then
-              COMPOSE_DIR="$PWD/gestao-obras-vetor"
-            else
-              echo "docker-compose.yml nao encontrado no APP_DIR nem em gestao-obras-vetor/."
-              exit 1
-            fi
-
-            cd "$COMPOSE_DIR"
-
-            # O .env raiz e ignorado pelo Git. Recria-o a cada deploy a partir
-            # dos segredos do repositório, antes de validar o Docker Compose.
-            cat > .env <<EOF
-            APP_DOMAIN=$APP_DOMAIN
-            LETSENCRYPT_EMAIL=$LETSENCRYPT_EMAIL
-            APP_DATA_DIR=$APP_DATA_DIR
-            POSTGRES_DB=$POSTGRES_DB
-            POSTGRES_USER=$POSTGRES_USER
-            POSTGRES_PASSWORD=$POSTGRES_PASSWORD
-            PGADMIN_DEFAULT_EMAIL=$PGADMIN_DEFAULT_EMAIL
-            PGADMIN_DEFAULT_PASSWORD=$PGADMIN_DEFAULT_PASSWORD
-            EOF
-            chmod 600 .env
-
-            required_root_env_vars="APP_DOMAIN LETSENCRYPT_EMAIL APP_DATA_DIR POSTGRES_DB POSTGRES_USER POSTGRES_PASSWORD PGADMIN_DEFAULT_EMAIL PGADMIN_DEFAULT_PASSWORD"
-            for required_var in $required_root_env_vars; do
-              if ! grep -q "^${required_var}=." .env; then
-                echo "Variavel obrigatoria ausente ou vazia no .env: $required_var"
-                exit 1
-              fi
-            done
-
-            BACKEND_STOPPED=0
-            restore_backend_on_failure() {
-              status=$?
-              if [ "$status" -ne 0 ] && [ "$BACKEND_STOPPED" = "1" ]; then
-                echo "Deploy falhou apos parar o backend. Tentando religar o backend existente sem alterar dados..."
-                docker compose start backend || true
-                docker compose ps || true
-                docker compose logs --tail=100 backend || true
-              fi
-              exit "$status"
-            }
-            trap restore_backend_on_failure EXIT
-
-            node <<'NODE'
-            const fs = require('fs');
-            const crypto = require('crypto');
-
-            const envPath = 'backend/.env';
-            if (!fs.existsSync(envPath)) {
-              console.error('Arquivo backend/.env ausente. Abortando deploy.');
-              process.exit(1);
-            }
-
-            const jwtSecrets = fs.readFileSync(envPath, 'utf8')
-              .split(/\r?\n/)
-              .filter((line) => line.trim().startsWith('JWT_SECRET='))
-              .map((line) => line.slice('JWT_SECRET='.length).trim());
-
-            if (jwtSecrets.length !== 1) {
-              console.error(`backend/.env deve conter exatamente um JWT_SECRET. Encontrados: ${jwtSecrets.length}`);
-              process.exit(1);
-            }
-
-            const jwtSecret = jwtSecrets[0];
-            if (jwtSecret.length < 32) {
-              console.error(`JWT_SECRET muito curto para producao: ${jwtSecret.length} caracteres.`);
-              process.exit(1);
-            }
-
-            const fingerprint = crypto.createHash('sha256').update(jwtSecret).digest('hex').slice(0, 16);
-            console.log(`JWT_SECRET validado: len=${jwtSecret.length} sha256=${fingerprint}`);
-            NODE
-            docker compose config >/dev/null
-
-            DEPLOY_COMMIT="$(git rev-parse --short HEAD)"
-            echo "Commit a implantar: $DEPLOY_COMMIT"
-
-            echo "Construindo imagens antes das migrations..."
-            docker compose build
-
-            echo "Parando apenas o backend antes de backup e migrations..."
-            docker compose stop backend || true
-            BACKEND_STOPPED=1
-
-            BACKUP_DIR="/home/ubuntu/backups/gestao-obras-vetor/deploy-${DEPLOY_COMMIT}-$(date -u +%Y%m%dT%H%M%SZ)"
-            echo "Criando backup pre-deploy em $BACKUP_DIR"
-            mkdir -p "$BACKUP_DIR"
-
-            docker compose exec -T postgres sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > "$BACKUP_DIR/postgres.sql"
-            test -s "$BACKUP_DIR/postgres.sql"
-
-            echo "Validando migrations pendentes antes do startup..."
-            CHECK_STATUS=0
-            # Migrations usam a role administrativa. A role do backend e
-            # propositalmente sem BYPASSRLS e nao pode alterar o schema.
-            if docker compose run --rm --no-deps \
-              -e DB_USER="$POSTGRES_USER" \
-              -e DB_PASSWORD="$POSTGRES_PASSWORD" \
-              backend npm run db:check; then
-              CHECK_STATUS=0
-            else
-              CHECK_STATUS=$?
-            fi
-            echo "db:check pre-startup finalizou com status $CHECK_STATUS"
-
-            if [ "$CHECK_STATUS" -eq 2 ]; then
-              echo "Migrations pendentes detectadas. Aplicando pelo runner centralizado..."
-              docker compose run --rm --no-deps \
-                -e DB_USER="$POSTGRES_USER" \
-                -e DB_PASSWORD="$POSTGRES_PASSWORD" \
-                -e MIGRATIONS_ALLOW_PRODUCTION=true \
-                backend npm run db:migrate
-            elif [ "$CHECK_STATUS" -ne 0 ]; then
-              echo "Falha ao validar migrations antes do deploy. Abortando."
-              exit "$CHECK_STATUS"
-            else
-              echo "Nenhuma migration pendente."
-            fi
-
-            echo "Validando migrations apos etapa de migracao..."
-            docker compose run --rm --no-deps \
-              -e DB_USER="$POSTGRES_USER" \
-              -e DB_PASSWORD="$POSTGRES_PASSWORD" \
-              backend npm run db:check
-
-            echo "Executando integrity_check e foreign_key_check..."
-            docker compose run --rm backend npm run db:integrity
-
-            echo "Subindo containers apos backup e migrations..."
-            docker compose up -d
-            # Caddy le o Caddyfile apenas no startup. Reiniciar garante que
-            # novas rotas, como /pgadmin/, entrem em vigor no mesmo deploy.
-            docker compose restart caddy
-            BACKEND_STOPPED=0
-            docker compose ps
-
-            for i in $(seq 1 30); do
-              if curl -fsS "${{ secrets.HEALTH_URL }}"; then
-                echo "Deploy concluido e sistema online. Commit implantado: $DEPLOY_COMMIT"
-                exit 0
-              fi
-
-              echo "Aguardando sistema subir... tentativa $i"
-              sleep 5
-            done
-
-            echo "Health check falhou apos deploy."
-            docker compose logs --tail=100
-            exit 1
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Publicar no GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
