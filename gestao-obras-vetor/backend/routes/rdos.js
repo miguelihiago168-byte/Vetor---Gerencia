@@ -13,7 +13,7 @@ const {
 const backendPackage = require('../package.json');
 const { ensureRdoCorrectionColumns, clearRdoCorrection } = require('../services/rdoCorrectionService');
 const { generateRdoPdfBuffer } = require('../services/rdoPdfService');
-const { ensureSchemaReady } = require('../utils/schemaGuard');
+const { ensureSchemaReady, sendSchemaOutdated } = require('../utils/schemaGuard');
 const { hydrateOccurrences, syncOccurrences, assertApprovalOccurrenceDeclaration } = require('../services/rdoOccurrenceService');
 const {
   ORIGINS,
@@ -1252,6 +1252,7 @@ router.post('/', auth, [
 
   } catch (error) {
     console.error('Erro ao criar RDO:', error);
+    if (sendSchemaOutdated(res, error, 'Schema de RDO desatualizado. Execute as migrations pendentes.')) return;
     const status = Number(error.status) || (error.code === 'DATABASE_SCHEMA_OUTDATED' ? 503 : 500);
     const detalhe = status < 500 ? (error.message || String(error)) : null;
     res.status(status).json({ erro: detalhe ? `Erro ao criar RDO: ${detalhe}` : 'Erro ao criar RDO.' });
