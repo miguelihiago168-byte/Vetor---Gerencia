@@ -2263,6 +2263,13 @@
   box-shadow: none;
 }
 
+/* Permite que a lista de executores se sobreponha à próxima seção sem ser cortada. */
+.rdo-page .rdo-section.rdo-section--overflow-visible {
+  position: relative;
+  z-index: 30;
+  overflow: visible;
+}
+
 .rdo-page .rdo-section-header {
   min-height: 48px;
   padding: 12px 16px;

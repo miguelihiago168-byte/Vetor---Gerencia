@@ -67,8 +67,8 @@ const toDateInputValue = (value) => {
   return match ? match[1] : '';
 };
 
-const Section = ({ id, num, title, badge, children, isOpen, onToggle }) => (
-  <div className="rdo-section">
+const Section = ({ id, num, title, badge, children, isOpen, onToggle, allowOverflow = false }) => (
+  <div className={`rdo-section${allowOverflow ? ' rdo-section--overflow-visible' : ''}`}>
     <div className="rdo-section-header" onClick={() => onToggle(id)}>
       <div className="rdo-section-header-left">
         {num != null && <span className="rdo-section-number">{num}</span>}
@@ -2375,7 +2375,7 @@ function RDOForm2() {
         </Section>
 
         {/* ══ SEÇÃO 5 — Atividades Executadas ══════════ */}
-        <Section id="atividades" num="5" title="Atividades Executadas" badge={(formData.atividades.length + formData.atividades_avulsas.length) || null} isOpen={openSections.atividades} onToggle={toggleSection}>
+        <Section id="atividades" num="5" title="Atividades Executadas" badge={(formData.atividades.length + formData.atividades_avulsas.length) || null} isOpen={openSections.atividades} onToggle={toggleSection} allowOverflow>
           <div className="rdo-grid-3" style={{ marginBottom: '8px' }}>
             <div className="form-group" style={{ gridColumn: 'span 2' }}>
               <label className="form-label">Atividade</label>
