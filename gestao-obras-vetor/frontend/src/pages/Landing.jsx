@@ -5,7 +5,7 @@ import { enviarContato } from '../services/api';
 import './Landing.css';
 
 const RECAPTCHA_SITE_KEY = import.meta.env.VITE_RECAPTCHA_SITE_KEY || '';
-const publicAsset = (filename) => `${import.meta.env.BASE_URL}${filename}`;
+const publicAsset = (filename) => `${import.meta.env.BASE_URL}${filename === 'hero-construction-blueprint.png' ? `${filename}?v=da4d1d8` : filename}`;
 const modules = [
   { icon: CalendarDays, title: 'Planejamento', text: 'EAP, cronograma, Curva S e acompanhamento físico-financeiro.' },
   { icon: ClipboardCheck, title: 'Diário de Obra', text: 'RDOs, equipe, equipamentos, ocorrências e evidências de campo.' },
