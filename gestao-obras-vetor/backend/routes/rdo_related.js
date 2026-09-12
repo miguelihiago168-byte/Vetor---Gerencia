@@ -9,6 +9,10 @@ const { createEquipmentCatalogService } = require('../services/rdoEquipmentCatal
 const equipmentCatalog = createEquipmentCatalogService(require('../config/database'));
 
 const router = express.Router();
+const PERFIS_NAO_EXECUCAO = /gestor|fiscal|qualidade|administrador|admin|diretor|coordenador/i;
+const ehMaoObraDeExecucao = (item) => {
+  return !PERFIS_NAO_EXECUCAO.test(`${item?.perfil || ''} ${item?.funcao || ''}`);
+};
 
 // Uploads config (reusing backend/uploads)
 const uploadsDir = path.join(__dirname, '..', 'uploads');
@@ -141,7 +145,8 @@ router.get('/projeto/:projetoId/colaboradores', auth, async (req, res) => {
     await garantirTabelaMaoObraDireta();
 
     const usuariosSistema = await allQuery(`
-      SELECT DISTINCT TRIM(u.nome) AS nome, TRIM(COALESCE(u.funcao, '')) AS funcao, 'usuario_sistema' AS origem
+            SELECT DISTINCT TRIM(u.nome) AS nome, TRIM(COALESCE(u.funcao, '')) AS funcao,
+              TRIM(COALESCE(u.perfil, '')) AS perfil, 'usuario_sistema' AS origem
       FROM usuarios u
       INNER JOIN projeto_usuarios pu ON pu.usuario_id = u.id
       WHERE pu.projeto_id = ?
@@ -153,7 +158,8 @@ router.get('/projeto/:projetoId/colaboradores', auth, async (req, res) => {
     let maoObraDireta = [];
     try {
       maoObraDireta = await allQuery(`
-        SELECT TRIM(nome) AS nome, TRIM(COALESCE(funcao, '')) AS funcao, 'mao_obra_direta' AS origem
+         SELECT TRIM(nome) AS nome, TRIM(COALESCE(funcao, '')) AS funcao,
+           '' AS perfil, 'mao_obra_direta' AS origem
         FROM mao_obra_direta
         WHERE COALESCE(ativo, 1) = 1
           AND projeto_id = ?
@@ -164,13 +170,13 @@ router.get('/projeto/:projetoId/colaboradores', auth, async (req, res) => {
     }
 
     const mapaUnico = new Map();
-    [...usuariosSistema, ...maoObraDireta].forEach((item) => {
+    [...usuariosSistema, ...maoObraDireta].filter(ehMaoObraDeExecucao).forEach((item) => {
       const nome = String(item.nome || '').trim();
       const funcao = String(item.funcao || '').trim();
       if (!nome) return;
       const chave = `${nome.toLowerCase()}|${funcao.toLowerCase()}`;
       if (!mapaUnico.has(chave)) {
-        mapaUnico.set(chave, { nome, funcao, origem: item.origem });
+        mapaUnico.set(chave, { nome, funcao, origem: item.origem, perfil: item.perfil || null });
       }
     });
 

@@ -83,6 +83,52 @@ const Section = ({ id, num, title, badge, children, isOpen, onToggle }) => (
   </div>
 );
 
+const ExecutorPicker = ({ options, value, onChange }) => {
+  const [aberto, setAberto] = useState(false);
+  const selecionado = options.find((item) => item.opcao_id === value);
+
+  return (
+    <div className="rdo-executor-picker" onBlur={(event) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) setAberto(false);
+    }}>
+      <button type="button" className={`rdo-executor-trigger${aberto ? ' is-open' : ''}`} onClick={() => setAberto((atual) => !atual)} aria-expanded={aberto}>
+        <span className="rdo-executor-trigger-copy">
+          <strong>{selecionado?.nome || 'Selecionar executor por saldo...'}</strong>
+          {selecionado?.funcao && <small>{selecionado.funcao}</small>}
+        </span>
+        {selecionado && <span className="rdo-executor-trigger-balance">{selecionado.horas_restantes}h</span>}
+        <ChevronDown size={16} />
+      </button>
+      {aberto && (
+        <div className="rdo-executor-menu" role="listbox">
+          <div className="rdo-executor-menu-title">Executores disponíveis</div>
+          {options.length === 0 ? (
+            <div className="rdo-executor-empty">Adicione mão de obra de execução na equipe do RDO.</div>
+          ) : options.map((item) => (
+            <button
+              type="button"
+              role="option"
+              aria-selected={item.opcao_id === value}
+              className="rdo-executor-option"
+              disabled={item.horas_restantes <= 0}
+              key={item.opcao_id}
+              onClick={() => { onChange(item.opcao_id); setAberto(false); }}
+            >
+              <span className="rdo-executor-option-main">
+                <strong>{item.nome}</strong>
+                <small>{item.funcao || 'Função não informada'}</small>
+              </span>
+              <span className={`rdo-executor-balance${item.horas_restantes <= 0 ? ' is-empty' : ''}`}>
+                {item.horas_restantes > 0 ? `${item.horas_restantes}h disponíveis` : 'Sem saldo'}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const prepararFotoRdo = async (file) => {
   if (!file || !String(file.type || '').startsWith('image/')) return file;
   if (/image\/(gif|heic|heif)/i.test(file.type) || /\.(gif|heic|heif)$/i.test(file.name || '')) return file;
@@ -898,6 +944,9 @@ function RDOForm2() {
     if (recursoJaLancado) {
       showRdoError('Este recurso já foi lançado nesta atividade. Edite a linha existente.'); return;
     }
+    if (tipo === 'mao_obra' && Number.isFinite(selecionado.horas_restantes) && valor > selecionado.horas_restantes) {
+      showRdoError(`Horas acima do saldo de ${selecionado.nome}: restam ${selecionado.horas_restantes}h.`); return;
+    }
     const novo = tipo === 'mao_obra'
       ? { mao_obra_direta_id: selecionado.id ? Number(selecionado.id) : null, nome: selecionado.nome, funcao: selecionado.funcao || '', horas_utilizadas: valor }
       : tipo === 'insumo'
@@ -977,29 +1026,58 @@ function RDOForm2() {
 
   const chaveColaborador = (nome, funcao) =>
     `${String(nome || '').trim().toLowerCase()}|${String(funcao || '').trim().toLowerCase()}`;
+  const colaboradorEhExecucao = (item) => {
+    return !/gestor|fiscal|qualidade|administrador|admin|diretor|coordenador/i.test(`${item?.perfil || ''} ${item?.funcao || ''}`);
+  };
 
   const colaboradoresSelecionaveis = useMemo(() => {
-    return colaboradoresDisponiveis.filter(item => {
+    return colaboradoresDisponiveis.filter(colaboradorEhExecucao).filter(item => {
       const chaveItem = chaveColaborador(item?.nome, item?.funcao);
       return !formData.mao_obra_detalhada.some(c => chaveColaborador(c?.nome, c?.funcao) === chaveItem);
     });
   }, [colaboradoresDisponiveis, formData.mao_obra_detalhada]);
 
+  const calcularHorasJornadaColaborador = (colaborador) => {
+    const minutos = (valor) => {
+      const correspondencia = String(valor || '').match(/^(\d{1,2}):(\d{2})$/);
+      return correspondencia ? Number(correspondencia[1]) * 60 + Number(correspondencia[2]) : null;
+    };
+    const entrada = minutos(colaborador?.entrada);
+    const saida = minutos(colaborador?.saida_final);
+    const inicioIntervalo = minutos(colaborador?.saida_almoco);
+    const fimIntervalo = minutos(colaborador?.retorno_almoco);
+    if (entrada == null || saida == null) return 0;
+    let total = Math.max(0, saida - entrada);
+    if (inicioIntervalo != null && fimIntervalo != null && fimIntervalo > inicioIntervalo) {
+      total = Math.max(0, total - (fimIntervalo - inicioIntervalo));
+    }
+    return Math.round((total / 60) * 100) / 100;
+  };
+
+  const horasAlocadasEmOutrasAtividades = (colaborador, atividadeAtualId) => (formData.atividades || [])
+    .filter((atividade) => String(atividade.atividade_eap_id) !== String(atividadeAtualId))
+    .flatMap((atividade) => atividade.mao_obra_utilizada || [])
+    .filter((item) => chaveColaborador(item?.nome, item?.funcao) === chaveColaborador(colaborador?.nome, colaborador?.funcao))
+    .reduce((total, item) => total + (Number(item.horas_utilizadas) || 0), 0);
+
   // A origem do vínculo é exclusivamente a lista de presença deste RDO.
   // Pessoas já alocadas em outra atividade não podem ser selecionadas de novo.
   const maoObraParaAtividade = useMemo(() => {
     const atividadeAtual = String(draftAtividade.atividade_eap_id || '');
-    const jaAlocados = new Set(
-      (formData.atividades || [])
-        .filter((atividade) => String(atividade.atividade_eap_id) !== atividadeAtual)
-        .flatMap((atividade) => atividade.mao_obra_utilizada || [])
-        .map((item) => chaveColaborador(item?.nome, item?.funcao))
-    );
     const porChave = new Map();
-    (formData.mao_obra_detalhada || []).forEach((item, indice) => {
+    (formData.mao_obra_detalhada || []).filter(colaboradorEhExecucao).forEach((item, indice) => {
       const chave = chaveColaborador(item?.nome, item?.funcao);
-      if (!item?.nome || jaAlocados.has(chave) || porChave.has(chave)) return;
-      porChave.set(chave, { ...item, id: null, opcao_id: `rdo:${indice}` });
+      if (!item?.nome || porChave.has(chave)) return;
+      const horasDiarias = calcularHorasJornadaColaborador(item);
+      const horasAlocadas = horasAlocadasEmOutrasAtividades(item, atividadeAtual);
+      porChave.set(chave, {
+        ...item,
+        id: null,
+        opcao_id: `rdo:${indice}`,
+        horas_diarias: horasDiarias,
+        horas_alocadas: horasAlocadas,
+        horas_restantes: Math.max(0, Math.round((horasDiarias - horasAlocadas) * 100) / 100)
+      });
     });
     return Array.from(porChave.values());
   }, [draftAtividade.atividade_eap_id, formData.atividades, formData.mao_obra_detalhada]);
@@ -1009,11 +1087,15 @@ function RDOForm2() {
     if (valorSelecionado === '') return;
     const item = colaboradoresSelecionaveis.find(c => chaveColaborador(c?.nome, c?.funcao) === valorSelecionado);
     if (!item) return;
-    setDraftColab(prev => ({ ...prev, nome: item.nome || prev.nome, funcao: item.funcao || prev.funcao }));
+    setDraftColab(prev => ({ ...prev, nome: item.nome || prev.nome, funcao: item.funcao || prev.funcao, origem: item.origem, perfil: item.perfil }));
   };
 
   const addColab = async () => {
     if (!draftColab.nome) return;
+    if (!colaboradorEhExecucao(draftColab)) {
+      await alert({ title: 'Colaborador não elegível', message: 'Vincule apenas mão de obra de execução às atividades.' });
+      return;
+    }
     if (editingColabIndex !== null) {
       const colaboradorAtualizado = { ...draftColab, nome: String(draftColab.nome).trim(), funcao: String(draftColab.funcao || '').trim() };
       setFormData((atual) => ({
@@ -1102,13 +1184,7 @@ function RDOForm2() {
   };
 
   const calcHorasColab = (c) => {
-    const tm = (t) => { const m = t?.match(/(\d{1,2}):(\d{2})/); return m ? parseInt(m[1]) * 60 + parseInt(m[2]) : null; };
-    const ini = tm(c.entrada); const fim = tm(c.saida_final);
-    const i1 = tm(c.saida_almoco); const i2 = tm(c.retorno_almoco);
-    if (ini == null || fim == null) return 0;
-    let tot = Math.max(0, fim - ini);
-    if (i1 != null && i2 != null && i2 > i1) tot = Math.max(0, tot - (i2 - i1));
-    return Math.round((tot / 60) * 100) / 100;
+    return calcularHorasJornadaColaborador(c);
   };
 
   /* ── Equipamentos ───────────────────────────────── */
@@ -2434,7 +2510,7 @@ function RDOForm2() {
               <div className="rdo-activity-resource-block">
                 <h4>Mão de obra utilizada</h4>
                 {(draftAtividade.mao_obra_utilizada || []).map((item, indice) => <div className="rdo-resource-line" key={`mao-${item.mao_obra_direta_id}`}><span>{item.nome} {item.funcao ? `· ${item.funcao}` : ''}</span><input className="form-input" inputMode="decimal" value={item.horas_utilizadas} onChange={(event) => atualizarRecursoAtividade(draftAtividade.atividade_eap_id, 'mao_obra_utilizada', indice, 'horas_utilizadas', event.target.value)} /><small>h</small><IconButton size="sm" tone="danger" variant="ghost" icon={Trash2} label={`Remover ${item.nome}`} onClick={() => removerRecursoAtividade(draftAtividade.atividade_eap_id, 'mao_obra_utilizada', indice)} /></div>)}
-                <div className="rdo-resource-add"><select className="form-select" value={draftRecursosAtividade[draftAtividade.atividade_eap_id]?.mao_obra?.mao_obra_direta_id || ''} onChange={(event) => atualizarDraftRecurso(draftAtividade.atividade_eap_id, 'mao_obra', 'mao_obra_direta_id', event.target.value)}><option value="">Selecionar mão de obra...</option>{maoObraParaAtividade.map((item) => <option key={item.opcao_id} value={item.opcao_id}>{item.nome}{item.funcao ? ` · ${item.funcao}` : ''}</option>)}</select><input className="form-input" inputMode="decimal" placeholder="Horas" value={draftRecursosAtividade[draftAtividade.atividade_eap_id]?.mao_obra?.horas_utilizadas || ''} onChange={(event) => atualizarDraftRecurso(draftAtividade.atividade_eap_id, 'mao_obra', 'horas_utilizadas', event.target.value)} /><Button size="sm" startIcon={Plus} onClick={() => adicionarRecursoAtividade(draftAtividade.atividade_eap_id, 'mao_obra')}>Adicionar mão de obra</Button></div>
+                <div className="rdo-resource-add"><ExecutorPicker options={maoObraParaAtividade} value={draftRecursosAtividade[draftAtividade.atividade_eap_id]?.mao_obra?.mao_obra_direta_id || ''} onChange={(value) => atualizarDraftRecurso(draftAtividade.atividade_eap_id, 'mao_obra', 'mao_obra_direta_id', value)} /><input className="form-input" inputMode="decimal" placeholder="Horas na atividade" value={draftRecursosAtividade[draftAtividade.atividade_eap_id]?.mao_obra?.horas_utilizadas || ''} onChange={(event) => atualizarDraftRecurso(draftAtividade.atividade_eap_id, 'mao_obra', 'horas_utilizadas', event.target.value)} /><Button size="sm" startIcon={Plus} onClick={() => adicionarRecursoAtividade(draftAtividade.atividade_eap_id, 'mao_obra')}>Adicionar mão de obra</Button></div>
               </div>
               <div className="rdo-activity-resource-block">
                 <h4>Insumos utilizados</h4>
@@ -2532,7 +2608,7 @@ function RDOForm2() {
                                 <small>h</small><IconButton size="sm" tone="danger" variant="ghost" icon={Trash2} label={`Remover ${item.nome}`} onClick={() => removerRecursoAtividade(a.atividade_eap_id, 'mao_obra_utilizada', indice)} />
                               </div>)}
                               <div className="rdo-resource-add">
-                                <select className="form-select" value={draftRecursosAtividade[a.atividade_eap_id]?.mao_obra?.mao_obra_direta_id || ''} onChange={(event) => atualizarDraftRecurso(a.atividade_eap_id, 'mao_obra', 'mao_obra_direta_id', event.target.value)}><option value="">Selecionar mão de obra...</option>{maoObraParaAtividade.map((item) => <option key={item.opcao_id} value={item.opcao_id}>{item.nome}{item.funcao ? ` · ${item.funcao}` : ''}</option>)}</select>
+                                <ExecutorPicker options={maoObraParaAtividade} value={draftRecursosAtividade[a.atividade_eap_id]?.mao_obra?.mao_obra_direta_id || ''} onChange={(value) => atualizarDraftRecurso(a.atividade_eap_id, 'mao_obra', 'mao_obra_direta_id', value)} />
                                 <input className="form-input" inputMode="decimal" placeholder="Horas" value={draftRecursosAtividade[a.atividade_eap_id]?.mao_obra?.horas_utilizadas || ''} onChange={(event) => atualizarDraftRecurso(a.atividade_eap_id, 'mao_obra', 'horas_utilizadas', event.target.value)} />
                                 <Button size="sm" startIcon={Plus} onClick={() => adicionarRecursoAtividade(a.atividade_eap_id, 'mao_obra')}>Adicionar mão de obra</Button>
                               </div>

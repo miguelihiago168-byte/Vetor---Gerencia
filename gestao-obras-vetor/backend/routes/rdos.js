@@ -78,6 +78,23 @@ const ensureRdoOptionalColumns = async () => {
 
 const recursoLista = (atividade, chave) => Array.isArray(atividade?.[chave]) ? atividade[chave] : [];
 const recursoNumero = (value) => Number(String(value ?? '').replace(',', '.'));
+const chaveColaborador = (nome, funcao) => `${String(nome || '').trim().toLowerCase()}|${String(funcao || '').trim().toLowerCase()}`;
+const calcularHorasJornadaColaborador = (colaborador) => {
+  const minutos = (valor) => {
+    const correspondencia = String(valor || '').match(/^(\d{1,2}):(\d{2})$/);
+    return correspondencia ? Number(correspondencia[1]) * 60 + Number(correspondencia[2]) : null;
+  };
+  const entrada = minutos(colaborador?.entrada);
+  const saida = minutos(colaborador?.saida_final);
+  const inicioIntervalo = minutos(colaborador?.saida_almoco);
+  const fimIntervalo = minutos(colaborador?.retorno_almoco);
+  if (entrada == null || saida == null) return 0;
+  let total = Math.max(0, saida - entrada);
+  if (inicioIntervalo != null && fimIntervalo != null && fimIntervalo > inicioIntervalo) {
+    total = Math.max(0, total - (fimIntervalo - inicioIntervalo));
+  }
+  return Math.round((total / 60) * 100) / 100;
+};
 const rdoValidationError = (message) => Object.assign(new Error(message), { status: 400 });
 const atividadeTemRecursos = (atividade) => ['mao_obra_utilizada', 'insumos_utilizados', 'ferramentas_utilizadas']
   .some((chave) => recursoLista(atividade, chave).length > 0);
@@ -227,18 +244,27 @@ const syncActivityResources = async ({ atividade, rdoAtividadeId, projetoId, ten
     const horas = recursoNumero(item.horas_utilizadas);
     if (!Number.isFinite(horas) || horas <= 0) throw new Error('Horas de mão de obra devem ser maiores que zero.');
     const pessoa = await localizarOuCadastrarMaoObraDaAtividade({ item, projetoId, usuario });
-    const outraAtividade = await getQuery(`
-      SELECT ram.rdo_atividade_id
-      FROM rdo_atividade_mao_obra ram
-      INNER JOIN rdo_atividades ra ON ra.id = ram.rdo_atividade_id
-      WHERE ram.tenant_id=?
-        AND ra.rdo_id=?
-        AND ram.mao_obra_direta_id=?
-        AND ram.rdo_atividade_id<>?
-      LIMIT 1
-    `, [tenantId, atividadeRdo.rdo_id, pessoa.id, rdoAtividadeId]);
-    if (outraAtividade) {
-      throw rdoValidationError('Este colaborador já está vinculado a outra atividade deste RDO.');
+    const rdoDetalhes = await getQuery('SELECT mao_obra_detalhada FROM rdos WHERE id = ? AND tenant_id = ?', [atividadeRdo.rdo_id, tenantId]);
+    let jornadaDiaria = 0;
+    try {
+      const colaboradores = rdoDetalhes?.mao_obra_detalhada ? JSON.parse(rdoDetalhes.mao_obra_detalhada) : [];
+      const colaborador = colaboradores.find((item) => chaveColaborador(item?.nome, item?.funcao) === chaveColaborador(nome, funcao));
+      jornadaDiaria = calcularHorasJornadaColaborador(colaborador);
+    } catch (_) {}
+    if (jornadaDiaria > 0) {
+      const alocadas = await getQuery(`
+        SELECT COALESCE(SUM(ram.horas_utilizadas), 0) AS total
+        FROM rdo_atividade_mao_obra ram
+        INNER JOIN rdo_atividades ra ON ra.id = ram.rdo_atividade_id
+        WHERE ram.tenant_id = ?
+          AND ra.rdo_id = ?
+          AND ram.mao_obra_direta_id = ?
+          AND ram.rdo_atividade_id <> ?
+      `, [tenantId, atividadeRdo.rdo_id, pessoa.id, rdoAtividadeId]);
+      const horasDisponiveis = Math.max(0, Math.round((jornadaDiaria - Number(alocadas?.total || 0)) * 100) / 100);
+      if (horas > horasDisponiveis) {
+        throw rdoValidationError(`Horas de mão de obra de ${nome} excedem o saldo diário. Disponível: ${horasDisponiveis}h.`);
+      }
     }
     item.mao_obra_direta_id = pessoa.id;
     await runQuery(`INSERT INTO rdo_atividade_mao_obra (tenant_id,rdo_atividade_id,mao_obra_direta_id,funcao_snapshot,horas_utilizadas,criado_por)
@@ -958,6 +984,7 @@ router.post('/', auth, [
 
     const {
       projeto_id,
+      data_relatorio,
       entrada_saida_inicio,
       entrada_saida_fim,
       intervalo_almoco_inicio,
