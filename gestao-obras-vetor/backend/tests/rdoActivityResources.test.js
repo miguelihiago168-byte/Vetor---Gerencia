@@ -19,9 +19,12 @@ assert.match(route, /ferramentas_utilizadas/);
 assert.match(route, /Saldo disponível insuficiente/);
 assert.match(route, /clearActivityResources/);
 assert.match(route, /activityResourcesSchemaExists/);
+assert.match(route, /localizarOuCadastrarMaoObraDaAtividade/);
+assert.match(route, /Informe a mão de obra utilizada na atividade/);
+assert.match(route, /INSERT INTO mao_obra_direta/);
 assert.match(pdfService, /Recursos utilizados por atividade/);
 assert.match(pdfService, /rdo_atividade_mao_obra/);
 assert.match(pdfService, /rdo_atividade_ferramentas/);
 assert.match(pdfService, /rdo_atividade_id IS NOT NULL/);
 
-console.log(JSON.stringify({ ok: true, suite: 'rdoActivityResources', scenarios: 15 }));
+console.log(JSON.stringify({ ok: true, suite: 'rdoActivityResources', scenarios: 18 }));

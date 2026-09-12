@@ -81,6 +81,41 @@ const recursoNumero = (value) => Number(String(value ?? '').replace(',', '.'));
 const atividadeTemRecursos = (atividade) => ['mao_obra_utilizada', 'insumos_utilizados', 'ferramentas_utilizadas']
   .some((chave) => recursoLista(atividade, chave).length > 0);
 
+const localizarOuCadastrarMaoObraDaAtividade = async ({ item, projetoId, usuario }) => {
+  const idInformado = Number(item?.mao_obra_direta_id);
+  if (idInformado) {
+    const existente = await getQuery(
+      'SELECT id, funcao FROM mao_obra_direta WHERE id=? AND (projeto_id=? OR projeto_id IS NULL) AND COALESCE(ativo,1)=1',
+      [idInformado, projetoId]
+    );
+    if (existente) return existente;
+  }
+
+  const nome = String(item?.nome || '').trim();
+  const funcao = String(item?.funcao || '').trim();
+  if (!nome) throw new Error('Informe a mão de obra utilizada na atividade.');
+
+  const existente = await getQuery(`
+    SELECT id, funcao FROM mao_obra_direta
+    WHERE projeto_id=?
+      AND COALESCE(ativo,1)=1
+      AND LOWER(TRIM(nome))=LOWER(TRIM(?))
+      AND LOWER(TRIM(COALESCE(funcao,'')))=LOWER(TRIM(?))
+    LIMIT 1
+  `, [projetoId, nome, funcao]);
+  if (existente) return existente;
+
+  // A equipe do RDO também pode conter usuários do sistema ou lançamentos
+  // manuais. Para manter o vínculo rastreável, cria-se o registro direto
+  // somente quando ele ainda não existe no catálogo da obra.
+  const identificador = `RDO-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+  const criado = await runQuery(`
+    INSERT INTO mao_obra_direta (identificador, projeto_id, nome, funcao, ativo, criado_por)
+    VALUES (?, ?, ?, ?, 1, ?)
+  `, [identificador, projetoId, nome, funcao, usuario.id]);
+  return { id: criado.lastID, funcao };
+};
+
 // RDOs sem recursos continuam funcionando antes da migration ser aplicada. A
 // migration só é exigida quando houver algo para vincular (ou para remover).
 const activityResourcesSchemaExists = async () => {
@@ -173,14 +208,23 @@ const syncActivityResources = async ({ atividade, rdoAtividadeId, projetoId, ten
     const seen = new Set();
     items.forEach((item) => { const id = Number(item?.[key]); if (!id || seen.has(id)) throw new Error(`${label} duplicado na atividade.`); seen.add(id); });
   };
-  assertUnique(maoObra, 'mao_obra_direta_id', 'Colaborador');
+  const maoObraKeys = new Set();
+  maoObra.forEach((item) => {
+    const id = Number(item?.mao_obra_direta_id);
+    const chave = id
+      ? `id:${id}`
+      : `nome:${String(item?.nome || '').trim().toLowerCase()}|${String(item?.funcao || '').trim().toLowerCase()}`;
+    if (!id && !String(item?.nome || '').trim()) throw new Error('Informe a mão de obra utilizada na atividade.');
+    if (maoObraKeys.has(chave)) throw new Error('Colaborador duplicado na atividade.');
+    maoObraKeys.add(chave);
+  });
   assertUnique(ferramentas, 'ferramenta_id', 'Ferramenta');
   assertUnique(insumos, 'lote_id', 'Lote de insumo');
   for (const item of maoObra) {
     const horas = recursoNumero(item.horas_utilizadas);
     if (!Number.isFinite(horas) || horas <= 0) throw new Error('Horas de mão de obra devem ser maiores que zero.');
-    const pessoa = await getQuery('SELECT id, funcao FROM mao_obra_direta WHERE id=? AND (projeto_id=? OR projeto_id IS NULL) AND COALESCE(ativo,1)=1', [Number(item.mao_obra_direta_id), projetoId]);
-    if (!pessoa) throw new Error('Colaborador inválido ou inativo para esta obra.');
+    const pessoa = await localizarOuCadastrarMaoObraDaAtividade({ item, projetoId, usuario });
+    item.mao_obra_direta_id = pessoa.id;
     await runQuery(`INSERT INTO rdo_atividade_mao_obra (tenant_id,rdo_atividade_id,mao_obra_direta_id,funcao_snapshot,horas_utilizadas,criado_por)
       VALUES (?,?,?,?,?,?) ON CONFLICT (tenant_id,rdo_atividade_id,mao_obra_direta_id)
       DO UPDATE SET funcao_snapshot=EXCLUDED.funcao_snapshot, horas_utilizadas=EXCLUDED.horas_utilizadas, atualizado_em=NOW()`, [tenantId, rdoAtividadeId, pessoa.id, pessoa.funcao || null, horas, usuario.id]);
