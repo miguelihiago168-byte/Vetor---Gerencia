@@ -985,23 +985,24 @@ function RDOForm2() {
     });
   }, [colaboradoresDisponiveis, formData.mao_obra_detalhada]);
 
-  // Uma atividade pode usar qualquer pessoa já lançada na equipe deste RDO.
-  // O catálogo é priorizado para preservar o ID; quem veio de um usuário do
-  // sistema ou foi digitado manualmente é resolvido pelo backend ao salvar.
+  // A origem do vínculo é exclusivamente a lista de presença deste RDO.
+  // Pessoas já alocadas em outra atividade não podem ser selecionadas de novo.
   const maoObraParaAtividade = useMemo(() => {
+    const atividadeAtual = String(draftAtividade.atividade_eap_id || '');
+    const jaAlocados = new Set(
+      (formData.atividades || [])
+        .filter((atividade) => String(atividade.atividade_eap_id) !== atividadeAtual)
+        .flatMap((atividade) => atividade.mao_obra_utilizada || [])
+        .map((item) => chaveColaborador(item?.nome, item?.funcao))
+    );
     const porChave = new Map();
-    (recursosAtividadeDisponiveis.mao_obra || []).forEach((item) => {
-      const chave = chaveColaborador(item?.nome, item?.funcao);
-      if (!item?.nome || porChave.has(chave)) return;
-      porChave.set(chave, { ...item, opcao_id: `catalogo:${item.id}` });
-    });
     (formData.mao_obra_detalhada || []).forEach((item, indice) => {
       const chave = chaveColaborador(item?.nome, item?.funcao);
-      if (!item?.nome || porChave.has(chave)) return;
+      if (!item?.nome || jaAlocados.has(chave) || porChave.has(chave)) return;
       porChave.set(chave, { ...item, id: null, opcao_id: `rdo:${indice}` });
     });
     return Array.from(porChave.values());
-  }, [formData.mao_obra_detalhada, recursosAtividadeDisponiveis.mao_obra]);
+  }, [draftAtividade.atividade_eap_id, formData.atividades, formData.mao_obra_detalhada]);
 
   const onSelecionarColaborador = (valorSelecionado) => {
     setColaboradorSelecionado(valorSelecionado);

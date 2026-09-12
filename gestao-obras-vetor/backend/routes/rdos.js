@@ -78,6 +78,7 @@ const ensureRdoOptionalColumns = async () => {
 
 const recursoLista = (atividade, chave) => Array.isArray(atividade?.[chave]) ? atividade[chave] : [];
 const recursoNumero = (value) => Number(String(value ?? '').replace(',', '.'));
+const rdoValidationError = (message) => Object.assign(new Error(message), { status: 400 });
 const atividadeTemRecursos = (atividade) => ['mao_obra_utilizada', 'insumos_utilizados', 'ferramentas_utilizadas']
   .some((chave) => recursoLista(atividade, chave).length > 0);
 
@@ -93,7 +94,7 @@ const localizarOuCadastrarMaoObraDaAtividade = async ({ item, projetoId, usuario
 
   const nome = String(item?.nome || '').trim();
   const funcao = String(item?.funcao || '').trim();
-  if (!nome) throw new Error('Informe a mão de obra utilizada na atividade.');
+  if (!nome) throw rdoValidationError('Informe a mão de obra utilizada na atividade.');
 
   const existente = await getQuery(`
     SELECT id, funcao FROM mao_obra_direta
@@ -204,6 +205,8 @@ const syncActivityResources = async ({ atividade, rdoAtividadeId, projetoId, ten
   const maoObra = recursoLista(atividade, 'mao_obra_utilizada');
   const ferramentas = recursoLista(atividade, 'ferramentas_utilizadas');
   const insumos = recursoLista(atividade, 'insumos_utilizados');
+  const atividadeRdo = await getQuery('SELECT rdo_id FROM rdo_atividades WHERE id=?', [rdoAtividadeId]);
+  if (!atividadeRdo) throw new Error('Atividade do RDO não encontrada para vincular recursos.');
   const assertUnique = (items, key, label) => {
     const seen = new Set();
     items.forEach((item) => { const id = Number(item?.[key]); if (!id || seen.has(id)) throw new Error(`${label} duplicado na atividade.`); seen.add(id); });
@@ -214,8 +217,8 @@ const syncActivityResources = async ({ atividade, rdoAtividadeId, projetoId, ten
     const chave = id
       ? `id:${id}`
       : `nome:${String(item?.nome || '').trim().toLowerCase()}|${String(item?.funcao || '').trim().toLowerCase()}`;
-    if (!id && !String(item?.nome || '').trim()) throw new Error('Informe a mão de obra utilizada na atividade.');
-    if (maoObraKeys.has(chave)) throw new Error('Colaborador duplicado na atividade.');
+    if (!id && !String(item?.nome || '').trim()) throw rdoValidationError('Informe a mão de obra utilizada na atividade.');
+    if (maoObraKeys.has(chave)) throw rdoValidationError('Colaborador duplicado na atividade.');
     maoObraKeys.add(chave);
   });
   assertUnique(ferramentas, 'ferramenta_id', 'Ferramenta');
@@ -224,6 +227,19 @@ const syncActivityResources = async ({ atividade, rdoAtividadeId, projetoId, ten
     const horas = recursoNumero(item.horas_utilizadas);
     if (!Number.isFinite(horas) || horas <= 0) throw new Error('Horas de mão de obra devem ser maiores que zero.');
     const pessoa = await localizarOuCadastrarMaoObraDaAtividade({ item, projetoId, usuario });
+    const outraAtividade = await getQuery(`
+      SELECT ram.rdo_atividade_id
+      FROM rdo_atividade_mao_obra ram
+      INNER JOIN rdo_atividades ra ON ra.id = ram.rdo_atividade_id
+      WHERE ram.tenant_id=?
+        AND ra.rdo_id=?
+        AND ram.mao_obra_direta_id=?
+        AND ram.rdo_atividade_id<>?
+      LIMIT 1
+    `, [tenantId, atividadeRdo.rdo_id, pessoa.id, rdoAtividadeId]);
+    if (outraAtividade) {
+      throw rdoValidationError('Este colaborador já está vinculado a outra atividade deste RDO.');
+    }
     item.mao_obra_direta_id = pessoa.id;
     await runQuery(`INSERT INTO rdo_atividade_mao_obra (tenant_id,rdo_atividade_id,mao_obra_direta_id,funcao_snapshot,horas_utilizadas,criado_por)
       VALUES (?,?,?,?,?,?) ON CONFLICT (tenant_id,rdo_atividade_id,mao_obra_direta_id)
@@ -1236,8 +1252,9 @@ router.post('/', auth, [
 
   } catch (error) {
     console.error('Erro ao criar RDO:', error);
-    const detalhe = process.env.NODE_ENV === 'production' ? null : (error.message || String(error));
-    res.status(500).json({ erro: detalhe ? `Erro ao criar RDO: ${detalhe}` : 'Erro ao criar RDO.' });
+    const status = Number(error.status) || (error.code === 'DATABASE_SCHEMA_OUTDATED' ? 503 : 500);
+    const detalhe = status < 500 ? (error.message || String(error)) : null;
+    res.status(status).json({ erro: detalhe ? `Erro ao criar RDO: ${detalhe}` : 'Erro ao criar RDO.' });
   }
 });
 
@@ -1551,8 +1568,9 @@ router.put('/:id', auth, async (req, res) => {
 
   } catch (error) {
     console.error('Erro ao atualizar RDO:', error);
-    const detalhe = process.env.NODE_ENV === 'production' ? null : (error.message || String(error));
-    res.status(500).json({ erro: detalhe ? `Erro ao atualizar RDO: ${detalhe}` : 'Erro ao atualizar RDO.' });
+    const status = Number(error.status) || (error.code === 'DATABASE_SCHEMA_OUTDATED' ? 503 : 500);
+    const detalhe = status < 500 ? (error.message || String(error)) : null;
+    res.status(status).json({ erro: detalhe ? `Erro ao atualizar RDO: ${detalhe}` : 'Erro ao atualizar RDO.' });
   }
 });
 
