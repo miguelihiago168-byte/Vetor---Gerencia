@@ -23,6 +23,12 @@ const {
 } = require('../services/eapActivityEventService');
 
 const router = express.Router();
+const PERFIS_NAO_EXECUCAO = /gestor|fiscal|qualidade|administrador|admin|diretor|coordenador/i;
+const colaboradorEhExecucao = (item) => {
+  const temPerfilDeGestao = PERFIS_NAO_EXECUCAO.test(`${item?.perfil || ''} ${item?.funcao || ''}`);
+  const maoObraIndireta = String(item?.tipo || '').trim().toLowerCase() === 'indireta';
+  return !temPerfilDeGestao && !maoObraIndireta;
+};
 const RDO_CONFIG_MANAGER_PROFILES = new Set([
   PERFIS.GESTOR_GERAL,
   PERFIS.GESTOR_OBRA,
@@ -224,6 +230,11 @@ const syncActivityResources = async ({ atividade, rdoAtividadeId, projetoId, ten
   const insumos = recursoLista(atividade, 'insumos_utilizados');
   const atividadeRdo = await getQuery('SELECT rdo_id FROM rdo_atividades WHERE id=?', [rdoAtividadeId]);
   if (!atividadeRdo) throw new Error('Atividade do RDO não encontrada para vincular recursos.');
+  const rdoDetalhes = await getQuery('SELECT mao_obra_detalhada FROM rdos WHERE id = ? AND tenant_id = ?', [atividadeRdo.rdo_id, tenantId]);
+  let colaboradoresPresenca = [];
+  try {
+    colaboradoresPresenca = rdoDetalhes?.mao_obra_detalhada ? JSON.parse(rdoDetalhes.mao_obra_detalhada) : [];
+  } catch (_) {}
   const assertUnique = (items, key, label) => {
     const seen = new Set();
     items.forEach((item) => { const id = Number(item?.[key]); if (!id || seen.has(id)) throw new Error(`${label} duplicado na atividade.`); seen.add(id); });
@@ -242,13 +253,21 @@ const syncActivityResources = async ({ atividade, rdoAtividadeId, projetoId, ten
   assertUnique(insumos, 'lote_id', 'Lote de insumo');
   for (const item of maoObra) {
     const horas = recursoNumero(item.horas_utilizadas);
+    const nome = String(item?.nome || '').trim();
+    const funcao = String(item?.funcao || '').trim();
+    const colaborador = colaboradoresPresenca.find((pessoa) =>
+      chaveColaborador(pessoa?.nome, pessoa?.funcao) === chaveColaborador(nome, funcao)
+    );
+    if (!colaborador) {
+      throw rdoValidationError('A mão de obra utilizada deve constar na lista de presença do RDO.');
+    }
+    if (!colaboradorEhExecucao(colaborador)) {
+      throw rdoValidationError('Apenas mão de obra de execução pode ser vinculada às atividades.');
+    }
     if (!Number.isFinite(horas) || horas <= 0) throw new Error('Horas de mão de obra devem ser maiores que zero.');
     const pessoa = await localizarOuCadastrarMaoObraDaAtividade({ item, projetoId, usuario });
-    const rdoDetalhes = await getQuery('SELECT mao_obra_detalhada FROM rdos WHERE id = ? AND tenant_id = ?', [atividadeRdo.rdo_id, tenantId]);
     let jornadaDiaria = 0;
     try {
-      const colaboradores = rdoDetalhes?.mao_obra_detalhada ? JSON.parse(rdoDetalhes.mao_obra_detalhada) : [];
-      const colaborador = colaboradores.find((item) => chaveColaborador(item?.nome, item?.funcao) === chaveColaborador(nome, funcao));
       jornadaDiaria = calcularHorasJornadaColaborador(colaborador);
     } catch (_) {}
     if (jornadaDiaria > 0) {

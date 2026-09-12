@@ -9,10 +9,6 @@ const { createEquipmentCatalogService } = require('../services/rdoEquipmentCatal
 const equipmentCatalog = createEquipmentCatalogService(require('../config/database'));
 
 const router = express.Router();
-const PERFIS_NAO_EXECUCAO = /gestor|fiscal|qualidade|administrador|admin|diretor|coordenador/i;
-const ehMaoObraDeExecucao = (item) => {
-  return !PERFIS_NAO_EXECUCAO.test(`${item?.perfil || ''} ${item?.funcao || ''}`);
-};
 
 // Uploads config (reusing backend/uploads)
 const uploadsDir = path.join(__dirname, '..', 'uploads');
@@ -138,7 +134,8 @@ router.get('/projeto/:projetoId/execucao-atividades', auth, async (req, res) => 
   }
 });
 
-// Lista combinada de colaboradores para preenchimento de mão de obra no RDO
+// Lista combinada de colaboradores para a lista de presença do RDO.
+// A elegibilidade para execução de atividades é aplicada ao vincular o recurso.
 router.get('/projeto/:projetoId/colaboradores', auth, async (req, res) => {
   try {
     const { projetoId } = req.params;
@@ -170,7 +167,7 @@ router.get('/projeto/:projetoId/colaboradores', auth, async (req, res) => {
     }
 
     const mapaUnico = new Map();
-    [...usuariosSistema, ...maoObraDireta].filter(ehMaoObraDeExecucao).forEach((item) => {
+    [...usuariosSistema, ...maoObraDireta].forEach((item) => {
       const nome = String(item.nome || '').trim();
       const funcao = String(item.funcao || '').trim();
       if (!nome) return;

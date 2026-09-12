@@ -29,6 +29,7 @@
     "test:eap-progress": "node tests/eapProgressService.test.js",
     "test:rdo-horario": "node tests/rdoHorarioPropagation.test.js",
     "test:rdo-activity-resources": "node tests/rdoActivityResources.test.js",
+    "test:rdo-presenca": "node tests/rdoAttendanceEligibility.test.js",
     "test:agenda-lembretes": "node tests/reuniaoLembretes.test.js",
     "service-account": "node scripts/service_accounts.js",
     "migrate-curva-s": "node scripts/migrate_add_curva_s_fields.js"

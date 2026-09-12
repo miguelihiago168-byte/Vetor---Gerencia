@@ -1027,11 +1027,14 @@ function RDOForm2() {
   const chaveColaborador = (nome, funcao) =>
     `${String(nome || '').trim().toLowerCase()}|${String(funcao || '').trim().toLowerCase()}`;
   const colaboradorEhExecucao = (item) => {
-    return !/gestor|fiscal|qualidade|administrador|admin|diretor|coordenador/i.test(`${item?.perfil || ''} ${item?.funcao || ''}`);
+    const temPerfilDeGestao = /gestor|fiscal|qualidade|administrador|admin|diretor|coordenador/i
+      .test(`${item?.perfil || ''} ${item?.funcao || ''}`);
+    const maoObraIndireta = String(item?.tipo || '').trim().toLowerCase() === 'indireta';
+    return !temPerfilDeGestao && !maoObraIndireta;
   };
 
   const colaboradoresSelecionaveis = useMemo(() => {
-    return colaboradoresDisponiveis.filter(colaboradorEhExecucao).filter(item => {
+    return colaboradoresDisponiveis.filter(item => {
       const chaveItem = chaveColaborador(item?.nome, item?.funcao);
       return !formData.mao_obra_detalhada.some(c => chaveColaborador(c?.nome, c?.funcao) === chaveItem);
     });
@@ -1092,10 +1095,6 @@ function RDOForm2() {
 
   const addColab = async () => {
     if (!draftColab.nome) return;
-    if (!colaboradorEhExecucao(draftColab)) {
-      await alert({ title: 'Colaborador não elegível', message: 'Vincule apenas mão de obra de execução às atividades.' });
-      return;
-    }
     if (editingColabIndex !== null) {
       const colaboradorAtualizado = { ...draftColab, nome: String(draftColab.nome).trim(), funcao: String(draftColab.funcao || '').trim() };
       setFormData((atual) => ({
@@ -1168,6 +1167,8 @@ function RDOForm2() {
       nome: colaborador.nome || '',
       funcao: colaborador.funcao || '',
       tipo: colaborador.tipo || 'Direta',
+      origem: colaborador.origem,
+      perfil: colaborador.perfil,
       entrada: colaborador.entrada || formData.entrada_saida_inicio,
       saida_almoco: colaborador.saida_almoco || formData.intervalo_almoco_inicio,
       retorno_almoco: colaborador.retorno_almoco || formData.intervalo_almoco_fim,
