@@ -210,8 +210,8 @@ const normalizarProjetos = (projetoIds, projetoIdLegado) => {
   return [];
 };
 
-const listarTodosProjetosIds = async () => {
-  const rows = await allQuery('SELECT id FROM projetos ORDER BY id');
+const listarTodosProjetosIds = async (tenantId) => {
+  const rows = await allQuery('SELECT id FROM projetos WHERE tenant_id = ? ORDER BY id', [tenantId]);
   return rows.map((item) => Number(item.id));
 };
 
@@ -251,25 +251,53 @@ const resolverPerfil = (perfilInformado, funcaoInformada, perfilAtual) => {
   return normalizarPerfil(perfilAtual);
 };
 
-const sincronizarVinculosProjeto = async (usuarioId, projetoIds) => {
-  await runQuery('DELETE FROM projeto_usuarios WHERE usuario_id = ?', [usuarioId]);
-  for (const projetoId of projetoIds) {
-    await runQuery('INSERT OR IGNORE INTO projeto_usuarios (projeto_id, usuario_id) VALUES (?, ?)', [projetoId, usuarioId]);
+const validarProjetosDoTenant = async (projetoIds, tenantId) => {
+  if (projetoIds.length === 0) return;
+  const placeholders = projetoIds.map(() => '?').join(', ');
+  const projetos = await allQuery(
+    `SELECT id FROM projetos WHERE tenant_id = ? AND id IN (${placeholders})`,
+    [tenantId, ...projetoIds]
+  );
+  if (projetos.length !== projetoIds.length) {
+    const error = new Error('Uma ou mais obras não pertencem à empresa ativa.');
+    error.status = 400;
+    throw error;
   }
 };
 
-const carregarUsuarioComProjetos = async (id) => {
+const sincronizarVinculosProjeto = async (usuarioId, projetoIds, tenantId) => {
+  await validarProjetosDoTenant(projetoIds, tenantId);
+  await runQuery('DELETE FROM projeto_usuarios WHERE usuario_id = ? AND tenant_id = ?', [usuarioId, tenantId]);
+  for (const projetoId of projetoIds) {
+    await runQuery(
+      'INSERT OR IGNORE INTO projeto_usuarios (tenant_id, projeto_id, usuario_id) VALUES (?, ?, ?)',
+      [tenantId, projetoId, usuarioId]
+    );
+  }
+};
+
+const carregarUsuarioComProjetos = async (id, tenantId) => {
   const usuario = await getQuery(`
-    SELECT id, login, nome, email, pin, perfil, funcao, setor, setor_outro, is_gestor, is_adm, perfil_almoxarifado, avatar,
+    SELECT u.id, u.login, u.nome, u.email, u.pin, u.perfil, u.funcao, u.setor, u.setor_outro, u.is_gestor, u.is_adm, u.perfil_almoxarifado, u.avatar,
            COALESCE(presenca_status, 'disponivel') AS presenca_status, presenca_atualizado_em,
-           ativo, criado_em, atualizado_em
-    FROM usuarios
-    WHERE id = ?
-  `, [id]);
+           u.ativo, u.criado_em, u.atualizado_em
+    FROM usuarios u
+    WHERE u.id = ?
+      AND EXISTS (
+        SELECT 1 FROM usuario_tenants ut
+        WHERE ut.usuario_id = u.id AND ut.tenant_id = ? AND ut.ativo = TRUE
+      )
+  `, [id, tenantId]);
 
   if (!usuario) return null;
 
-  const projetos = await allQuery('SELECT projeto_id FROM projeto_usuarios WHERE usuario_id = ? ORDER BY projeto_id', [id]);
+  const projetos = await allQuery(`
+    SELECT pu.projeto_id
+    FROM projeto_usuarios pu
+    INNER JOIN projetos p ON p.id = pu.projeto_id
+    WHERE pu.usuario_id = ? AND pu.tenant_id = ? AND p.tenant_id = ?
+    ORDER BY pu.projeto_id
+  `, [id, tenantId, tenantId]);
   usuario.projeto_ids = projetos.map((item) => Number(item.projeto_id));
   usuario.projeto_id = usuario.projeto_ids[0] || null;
 
@@ -332,6 +360,12 @@ router.get('/', [auth, requirePermission(PERMISSIONS.USERS_VIEW)], async (req, r
       params.push(Number(projeto_id));
     }
 
+    filtros.push(`EXISTS (
+      SELECT 1 FROM usuario_tenants ut
+      WHERE ut.usuario_id = usuarios.id AND ut.tenant_id = ? AND ut.ativo = TRUE
+    )`);
+    params.push(req.tenantId);
+
     const usuarios = await allQuery(`
       SELECT id, login, nome, email, pin, perfil, funcao, setor, setor_outro, is_gestor, is_adm, perfil_almoxarifado, avatar,
              COALESCE(presenca_status, 'disponivel') AS presenca_status, presenca_atualizado_em,
@@ -341,7 +375,10 @@ router.get('/', [auth, requirePermission(PERMISSIONS.USERS_VIEW)], async (req, r
       ORDER BY nome
     `, params);
 
-    const vinculos = await allQuery('SELECT usuario_id, projeto_id FROM projeto_usuarios');
+    const vinculos = await allQuery(
+      'SELECT usuario_id, projeto_id FROM projeto_usuarios WHERE tenant_id = ?',
+      [req.tenantId]
+    );
     const mapa = new Map();
     for (const row of vinculos) {
       if (!mapa.has(row.usuario_id)) mapa.set(row.usuario_id, []);
@@ -364,11 +401,15 @@ router.get('/', [auth, requirePermission(PERMISSIONS.USERS_VIEW)], async (req, r
 router.get('/deletados/lista', [auth, requirePermission(PERMISSIONS.USERS_VIEW)], async (req, res) => {
   try {
     const usuariosDeleted = await allQuery(`
-      SELECT id, login, nome, email, perfil, funcao, setor, setor_outro, deletado_em, deletado_por
-      FROM usuarios
-      WHERE deletado_em IS NOT NULL
-      ORDER BY deletado_em DESC
-    `);
+      SELECT u.id, u.login, u.nome, u.email, u.perfil, u.funcao, u.setor, u.setor_outro, u.deletado_em, u.deletado_por
+      FROM usuarios u
+      WHERE u.deletado_em IS NOT NULL
+        AND EXISTS (
+          SELECT 1 FROM usuario_tenants ut
+          WHERE ut.usuario_id = u.id AND ut.tenant_id = ? AND ut.ativo = TRUE
+        )
+      ORDER BY u.deletado_em DESC
+    `, [req.tenantId]);
 
     res.json(usuariosDeleted);
   } catch (error) {
@@ -522,18 +563,37 @@ router.patch('/bulk-update', [auth, requirePermission(PERMISSIONS.USERS_MANAGE)]
       return res.status(400).json({ erro: 'Lista de IDs inválida.' });
     }
 
-    const idsValidos = ids.map(Number).filter((id) => Number.isInteger(id) && id > 0);
+    const idsValidos = [...new Set(ids.map(Number).filter((id) => Number.isInteger(id) && id > 0))];
     if (idsValidos.length === 0) return res.status(400).json({ erro: 'Nenhum ID válido informado.' });
+
+    const placeholdersUsuarios = idsValidos.map(() => '?').join(', ');
+    const usuariosDoTenant = await allQuery(`
+      SELECT DISTINCT ut.usuario_id AS id
+      FROM usuario_tenants ut
+      WHERE ut.usuario_id IN (${placeholdersUsuarios})
+        AND ut.tenant_id = ?
+        AND ut.ativo = TRUE
+    `, [...idsValidos, req.tenantId]);
+    if (usuariosDoTenant.length !== idsValidos.length) {
+      return res.status(404).json({ erro: 'Um ou mais usuários não pertencem à empresa ativa.' });
+    }
 
     // Caso especial: vincular obra
     if (campo === 'projeto_vincular' || campo === 'projeto_desvincular') {
       if (!projeto_id) return res.status(400).json({ erro: 'projeto_id é obrigatório para vincular/desvincular obras.' });
       const projetoIdNum = Number(projeto_id);
+      await validarProjetosDoTenant([projetoIdNum], req.tenantId);
       for (const uid of idsValidos) {
         if (campo === 'projeto_vincular') {
-          await runQuery('INSERT OR IGNORE INTO projeto_usuarios (projeto_id, usuario_id) VALUES (?, ?)', [projetoIdNum, uid]);
+          await runQuery(
+            'INSERT OR IGNORE INTO projeto_usuarios (tenant_id, projeto_id, usuario_id) VALUES (?, ?, ?)',
+            [req.tenantId, projetoIdNum, uid]
+          );
         } else {
-          await runQuery('DELETE FROM projeto_usuarios WHERE projeto_id = ? AND usuario_id = ?', [projetoIdNum, uid]);
+          await runQuery(
+            'DELETE FROM projeto_usuarios WHERE tenant_id = ? AND projeto_id = ? AND usuario_id = ?',
+            [req.tenantId, projetoIdNum, uid]
+          );
         }
       }
       await registrarAuditoria('usuarios_bulk', null, campo.toUpperCase(), null, { ids: idsValidos, projeto_id: projetoIdNum }, req.usuario.id);
@@ -600,9 +660,9 @@ router.patch('/bulk-update', [auth, requirePermission(PERMISSIONS.USERS_MANAGE)]
 
     // Se ativando Gestor Geral em lote, vincular a todos os projetos
     if (campo === 'perfil' && valorFinal === PERFIS.GESTOR_GERAL) {
-      const todosIds = await listarTodosProjetosIds();
+      const todosIds = await listarTodosProjetosIds(req.tenantId);
       for (const uid of idsValidos) {
-        await sincronizarVinculosProjeto(uid, todosIds);
+        await sincronizarVinculosProjeto(uid, todosIds, req.tenantId);
       }
     }
 
@@ -617,7 +677,7 @@ router.patch('/bulk-update', [auth, requirePermission(PERMISSIONS.USERS_MANAGE)]
 router.get('/:id', [auth, requirePermission(PERMISSIONS.USERS_VIEW)], async (req, res) => {
   try {
     const { id } = req.params;
-    const usuario = await carregarUsuarioComProjetos(id);
+    const usuario = await carregarUsuarioComProjetos(id, req.tenantId);
     if (!usuario) return res.status(404).json({ erro: 'Usuário não encontrado.' });
 
     res.json(usuario);
@@ -664,7 +724,7 @@ router.post('/', [
       });
     }
 
-    const projetoIds = perfil === PERFIS.GESTOR_GERAL ? await listarTodosProjetosIds() : projetoIdsEntrada;
+    const projetoIds = perfil === PERFIS.GESTOR_GERAL ? await listarTodosProjetosIds(req.tenantId) : projetoIdsEntrada;
     const erroPerfil = validarPerfilEObras(perfil, projetoIds);
     if (erroPerfil) return res.status(400).json({ erro: erroPerfil });
 
@@ -715,7 +775,7 @@ router.post('/', [
       return id;
     });
 
-    const usuarioCriado = await carregarUsuarioComProjetos(usuarioId);
+    const usuarioCriado = await carregarUsuarioComProjetos(usuarioId, req.tenantId);
     await registrarAuditoria('usuarios', usuarioId, 'CREATE', null, usuarioCriado, req.usuario.id);
 
     res.status(201).json({
@@ -751,7 +811,7 @@ router.put('/:id', [
 ], async (req, res) => {
   try {
     const { id } = req.params;
-    const usuarioAnterior = await carregarUsuarioComProjetos(id);
+    const usuarioAnterior = await carregarUsuarioComProjetos(id, req.tenantId);
     if (!usuarioAnterior) return res.status(404).json({ erro: 'Usuário não encontrado.' });
 
     const errors = validationResult(req);
@@ -777,7 +837,7 @@ router.put('/:id', [
       await runQuery(sql, statusParams);
       await runQueryMain(sql, statusParams);
 
-      const usuarioNovo = await carregarUsuarioComProjetos(id);
+      const usuarioNovo = await carregarUsuarioComProjetos(id, req.tenantId);
       await registrarAuditoria(
         'usuarios',
         id,
@@ -852,7 +912,7 @@ router.put('/:id', [
     const projetoIdsEntrada = (req.body.projeto_ids !== undefined || req.body.projeto_id !== undefined)
       ? normalizarProjetos(req.body.projeto_ids, req.body.projeto_id)
       : usuarioAnterior.projeto_ids;
-    const projetoIds = perfil === PERFIS.GESTOR_GERAL ? await listarTodosProjetosIds() : projetoIdsEntrada;
+    const projetoIds = perfil === PERFIS.GESTOR_GERAL ? await listarTodosProjetosIds(req.tenantId) : projetoIdsEntrada;
 
     const erroSetor = validarSetor(setor, setorOutro);
     if (erroSetor) return res.status(400).json({ erro: erroSetor });
@@ -883,10 +943,10 @@ router.put('/:id', [
     }
 
     if (req.body.projeto_ids !== undefined || req.body.projeto_id !== undefined || perfil === PERFIS.GESTOR_OBRA || perfil === PERFIS.GESTOR_GERAL) {
-      await sincronizarVinculosProjeto(id, projetoIds);
+      await sincronizarVinculosProjeto(id, projetoIds, req.tenantId);
     }
 
-    const usuarioNovo = await carregarUsuarioComProjetos(id);
+    const usuarioNovo = await carregarUsuarioComProjetos(id, req.tenantId);
     await registrarAuditoria('usuarios', id, 'UPDATE', usuarioAnterior, usuarioNovo, req.usuario.id);
 
     res.json({ mensagem: 'Usuário atualizado com sucesso.', usuario: usuarioNovo });
@@ -900,6 +960,8 @@ router.patch('/:id/gestor', [auth, requirePermission(PERMISSIONS.USERS_MANAGE)],
   try {
     const { id } = req.params;
     const { is_gestor } = req.body;
+    const usuario = await carregarUsuarioComProjetos(id, req.tenantId);
+    if (!usuario) return res.status(404).json({ erro: 'Usuário não encontrado.' });
     const perfil = Number(is_gestor) === 1 ? PERFIS.GESTOR_GERAL : PERFIS.ADM;
 
     const legado = mapPerfilParaLegado(perfil);
@@ -923,6 +985,8 @@ router.patch('/:id/adm', [auth, requirePermission(PERMISSIONS.USERS_MANAGE)], as
   try {
     const { id } = req.params;
     const { is_adm } = req.body;
+    const usuario = await carregarUsuarioComProjetos(id, req.tenantId);
+    if (!usuario) return res.status(404).json({ erro: 'Usuário não encontrado.' });
     const perfil = Number(is_adm) === 1 ? PERFIS.ADM : PERFIS.GESTOR_OBRA;
 
     const legado = mapPerfilParaLegado(perfil);
@@ -945,6 +1009,8 @@ router.patch('/:id/adm', [auth, requirePermission(PERMISSIONS.USERS_MANAGE)], as
 router.delete('/:id', [auth, requirePermission(PERMISSIONS.USERS_MANAGE)], async (req, res) => {
   try {
     const { id } = req.params;
+    const usuario = await carregarUsuarioComProjetos(id, req.tenantId);
+    if (!usuario) return res.status(404).json({ erro: 'Usuário não encontrado.' });
 
     await runQuery(
       'UPDATE usuarios SET ativo = 0, deletado_em = CURRENT_TIMESTAMP, deletado_por = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',
@@ -977,12 +1043,20 @@ router.delete('/:id/permanente', [auth, requirePermission(PERMISSIONS.USERS_MANA
       return res.status(400).json({ erro: 'Não é permitido excluir permanentemente o próprio usuário.' });
     }
 
-    const usuarioAnterior = await carregarUsuarioComProjetos(usuarioId);
+    const usuarioAnterior = await carregarUsuarioComProjetos(usuarioId, req.tenantId);
     if (!usuarioAnterior) {
       return res.status(404).json({ erro: 'Usuário não encontrado.' });
     }
 
     // Remove vínculos antes da remoção física
+    const outroVinculoAtivo = await getQuery(
+      'SELECT 1 FROM usuario_tenants WHERE usuario_id = ? AND tenant_id != ? AND ativo = TRUE LIMIT 1',
+      [usuarioId, req.tenantId]
+    );
+    if (outroVinculoAtivo) {
+      return res.status(409).json({ erro: 'Este usuário também pertence a outra empresa e não pode ser excluído permanentemente por este ambiente.' });
+    }
+
     await runQuery('DELETE FROM projeto_usuarios WHERE usuario_id = ?', [usuarioId]);
     await runQueryMain('DELETE FROM projeto_usuarios WHERE usuario_id = ?', [usuarioId]);
     await runQueryMain('DELETE FROM usuario_tenants WHERE usuario_id = ?', [usuarioId]);
@@ -1245,7 +1319,7 @@ router.patch('/me/primeiro-acesso', [
       return res.status(400).json({ erro: 'Dados inválidos para concluir o primeiro acesso.' });
     }
 
-    const usuarioAnterior = await carregarUsuarioComProjetos(req.usuario.id);
+    const usuarioAnterior = await carregarUsuarioComProjetos(req.usuario.id, req.tenantId);
     if (!usuarioAnterior) {
       return res.status(404).json({ erro: 'Usuário não encontrado.' });
     }
@@ -1298,7 +1372,7 @@ router.patch('/me/primeiro-acesso', [
       );
     }
 
-    const usuarioNovo = await carregarUsuarioComProjetos(req.usuario.id);
+    const usuarioNovo = await carregarUsuarioComProjetos(req.usuario.id, req.tenantId);
     await registrarAuditoria('usuarios', req.usuario.id, 'UPDATE', usuarioAnterior, usuarioNovo, req.usuario.id);
 
     res.json({

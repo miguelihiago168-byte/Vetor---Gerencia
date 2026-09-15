@@ -67,6 +67,35 @@ const usuarioPodeVerTodosProjetos = (usuario) => {
   return perfil === PERFIS.ADM || perfil === PERFIS.GESTOR_GERAL;
 };
 
+const normalizarUsuarios = (usuarios) => [...new Set(
+  (Array.isArray(usuarios) ? usuarios : [])
+    .map((id) => Number(id))
+    .filter((id) => Number.isInteger(id) && id > 0)
+)];
+
+const validarUsuariosDoTenant = async (usuarios, tenantId) => {
+  const ids = normalizarUsuarios(usuarios);
+  if (ids.length === 0) return ids;
+
+  const placeholders = ids.map(() => '?').join(', ');
+  const vinculados = await allQuery(`
+    SELECT DISTINCT u.id
+    FROM usuarios u
+    INNER JOIN usuario_tenants ut ON ut.usuario_id = u.id
+    WHERE u.id IN (${placeholders})
+      AND ut.tenant_id = ?
+      AND ut.ativo = TRUE
+  `, [...ids, tenantId]);
+
+  if (vinculados.length !== ids.length) {
+    const error = new Error('Um ou mais usuários não pertencem à empresa ativa.');
+    error.status = 400;
+    throw error;
+  }
+
+  return ids;
+};
+
 const tabelaExiste = async (client, tabela) => {
   const resultado = await getWithClient(client, 'SELECT to_regclass(?) AS tabela', [`public.${tabela}`]);
   return Boolean(resultado?.tabela);
@@ -206,6 +235,7 @@ router.get('/', auth, async (req, res) => {
             SELECT COUNT(*)
             FROM projeto_usuarios pu2
             INNER JOIN usuarios ux ON ux.id = pu2.usuario_id
+            INNER JOIN usuario_tenants ut ON ut.usuario_id = ux.id AND ut.tenant_id = p.tenant_id AND ut.ativo = TRUE
             WHERE pu2.projeto_id = p.id
               AND ux.deletado_em IS NULL
               AND COALESCE(ux.ativo, 1) = 1
@@ -223,6 +253,7 @@ router.get('/', auth, async (req, res) => {
             SELECT COUNT(*)
             FROM projeto_usuarios pu2
             INNER JOIN usuarios ux ON ux.id = pu2.usuario_id
+            INNER JOIN usuario_tenants ut ON ut.usuario_id = ux.id AND ut.tenant_id = p.tenant_id AND ut.ativo = TRUE
             WHERE pu2.projeto_id = p.id
               AND ux.deletado_em IS NULL
               AND COALESCE(ux.ativo, 1) = 1
@@ -320,8 +351,9 @@ router.get('/:id', auth, async (req, res) => {
       SELECT u.id, u.login, u.nome, u.email, u.is_gestor, u.perfil
       FROM usuarios u
       INNER JOIN projeto_usuarios pu ON u.id = pu.usuario_id
-      WHERE pu.projeto_id = ?
-    `, [id]);
+      INNER JOIN usuario_tenants ut ON ut.usuario_id = u.id AND ut.tenant_id = ? AND ut.ativo = TRUE
+      WHERE pu.projeto_id = ? AND pu.tenant_id = ?
+    `, [tenantId, id, tenantId]);
 
     projeto.usuarios = usuarios;
 
@@ -432,6 +464,8 @@ router.post('/', [auth, isGestor], [
       return res.status(400).json({ erro: 'Tenant não definido.' });
     }
 
+    const usuariosDoTenant = await validarUsuariosDoTenant(usuarios, tenantId);
+
     const result = await runQuery(`
       INSERT INTO projetos (nome, empresa_responsavel, empresa_executante, data_inicio, prazo_termino, cidade, criado_por, tenant_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -440,11 +474,11 @@ router.post('/', [auth, isGestor], [
     const projetoId = result.lastID;
 
     // Adicionar usuários ao projeto
-    if (usuarios && usuarios.length > 0) {
-      for (const usuarioId of usuarios) {
+    if (usuariosDoTenant.length > 0) {
+      for (const usuarioId of usuariosDoTenant) {
         await runQuery(
-          'INSERT INTO projeto_usuarios (projeto_id, usuario_id) VALUES (?, ?)',
-          [projetoId, usuarioId]
+          'INSERT INTO projeto_usuarios (tenant_id, projeto_id, usuario_id) VALUES (?, ?, ?)',
+          [tenantId, projetoId, usuarioId]
         );
       }
     }
@@ -458,7 +492,7 @@ router.post('/', [auth, isGestor], [
 
   } catch (error) {
     console.error('Erro ao criar projeto:', error);
-    res.status(500).json({ erro: 'Erro ao criar projeto.' });
+    res.status(error.status || 500).json({ erro: error.message || 'Erro ao criar projeto.' });
   }
 });
 
@@ -477,6 +511,8 @@ router.put('/:id', [auth, isGestor], async (req, res) => {
     const projetoAnterior = await getQuery('SELECT * FROM projetos WHERE id = ? AND tenant_id = ?', [id, tenantId]);
     if (!projetoAnterior) return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
 
+    const usuariosDoTenant = usuarios === undefined ? null : await validarUsuariosDoTenant(usuarios, tenantId);
+
     await runQuery(`
       UPDATE projetos 
       SET nome = ?, empresa_responsavel = ?, empresa_executante = ?, data_inicio = ?, prazo_termino = ?, cidade = ?, atualizado_em = CURRENT_TIMESTAMP
@@ -484,13 +520,13 @@ router.put('/:id', [auth, isGestor], async (req, res) => {
     `, [nome, empresa_responsavel, empresa_executante, data_inicio, prazo_termino, cidade, id, tenantId]);
 
     // Atualizar usuários do projeto
-    if (usuarios) {
-      await runQuery('DELETE FROM projeto_usuarios WHERE projeto_id = ?', [id]);
+    if (usuariosDoTenant !== null) {
+      await runQuery('DELETE FROM projeto_usuarios WHERE projeto_id = ? AND tenant_id = ?', [id, tenantId]);
       
-      for (const usuarioId of usuarios) {
+      for (const usuarioId of usuariosDoTenant) {
         await runQuery(
-          'INSERT INTO projeto_usuarios (projeto_id, usuario_id) VALUES (?, ?)',
-          [id, usuarioId]
+          'INSERT INTO projeto_usuarios (tenant_id, projeto_id, usuario_id) VALUES (?, ?, ?)',
+          [tenantId, id, usuarioId]
         );
       }
     }
@@ -501,7 +537,7 @@ router.put('/:id', [auth, isGestor], async (req, res) => {
 
   } catch (error) {
     console.error('Erro ao atualizar projeto:', error);
-    res.status(500).json({ erro: 'Erro ao atualizar projeto.' });
+    res.status(error.status || 500).json({ erro: error.message || 'Erro ao atualizar projeto.' });
   }
 });
 

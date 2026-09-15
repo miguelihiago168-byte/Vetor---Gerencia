@@ -57,7 +57,7 @@ function Projetos() {
   const [logoFiles, setLogoFiles] = useState({ responsavel: null, executante: null });
   const [logoPreviews, setLogoPreviews] = useState({ responsavel: '', executante: '' });
   
-  const { isGestor, perfil } = useAuth();
+  const { isGestor, perfil, usuario } = useAuth();
   const navigate = useNavigate();
   const podeListarUsuarios = perfil === 'ADM' || perfil === 'Gestor Geral';
   const podeExcluirProjeto = perfil === 'Gestor Geral';
@@ -67,8 +67,11 @@ function Projetos() {
     .sort((a, b) => showArquivados ? 0 : Number(isProjectCompleted(a)) - Number(isProjectCompleted(b)));
 
   useEffect(() => {
+    setLoading(true);
+    setShowModal(false);
+    setEditando(null);
     carregarDados();
-  }, []);
+  }, [usuario?.tenant_id]);
 
   const carregarDados = async () => {
     try {
