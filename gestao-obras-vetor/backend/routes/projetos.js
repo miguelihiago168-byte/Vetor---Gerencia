@@ -84,7 +84,7 @@ const validarUsuariosDoTenant = async (usuarios, tenantId) => {
     INNER JOIN usuario_tenants ut ON ut.usuario_id = u.id
     WHERE u.id IN (${placeholders})
       AND ut.tenant_id = ?
-      AND ut.ativo = TRUE
+      AND ut.ativo = 1
   `, [...ids, tenantId]);
 
   if (vinculados.length !== ids.length) {
@@ -235,7 +235,7 @@ router.get('/', auth, async (req, res) => {
             SELECT COUNT(*)
             FROM projeto_usuarios pu2
             INNER JOIN usuarios ux ON ux.id = pu2.usuario_id
-            INNER JOIN usuario_tenants ut ON ut.usuario_id = ux.id AND ut.tenant_id = p.tenant_id AND ut.ativo = TRUE
+            INNER JOIN usuario_tenants ut ON ut.usuario_id = ux.id AND ut.tenant_id = p.tenant_id AND ut.ativo = 1
             WHERE pu2.projeto_id = p.id
               AND ux.deletado_em IS NULL
               AND COALESCE(ux.ativo, 1) = 1
@@ -253,7 +253,7 @@ router.get('/', auth, async (req, res) => {
             SELECT COUNT(*)
             FROM projeto_usuarios pu2
             INNER JOIN usuarios ux ON ux.id = pu2.usuario_id
-            INNER JOIN usuario_tenants ut ON ut.usuario_id = ux.id AND ut.tenant_id = p.tenant_id AND ut.ativo = TRUE
+            INNER JOIN usuario_tenants ut ON ut.usuario_id = ux.id AND ut.tenant_id = p.tenant_id AND ut.ativo = 1
             WHERE pu2.projeto_id = p.id
               AND ux.deletado_em IS NULL
               AND COALESCE(ux.ativo, 1) = 1
@@ -351,7 +351,7 @@ router.get('/:id', auth, async (req, res) => {
       SELECT u.id, u.login, u.nome, u.email, u.is_gestor, u.perfil
       FROM usuarios u
       INNER JOIN projeto_usuarios pu ON u.id = pu.usuario_id
-      INNER JOIN usuario_tenants ut ON ut.usuario_id = u.id AND ut.tenant_id = ? AND ut.ativo = TRUE
+      INNER JOIN usuario_tenants ut ON ut.usuario_id = u.id AND ut.tenant_id = ? AND ut.ativo = 1
       WHERE pu.projeto_id = ? AND pu.tenant_id = ?
     `, [tenantId, id, tenantId]);
 

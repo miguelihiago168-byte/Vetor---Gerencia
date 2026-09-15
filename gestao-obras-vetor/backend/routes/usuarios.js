@@ -285,7 +285,7 @@ const carregarUsuarioComProjetos = async (id, tenantId) => {
     WHERE u.id = ?
       AND EXISTS (
         SELECT 1 FROM usuario_tenants ut
-        WHERE ut.usuario_id = u.id AND ut.tenant_id = ? AND ut.ativo = TRUE
+        WHERE ut.usuario_id = u.id AND ut.tenant_id = ? AND ut.ativo = 1
       )
   `, [id, tenantId]);
 
@@ -362,7 +362,7 @@ router.get('/', [auth, requirePermission(PERMISSIONS.USERS_VIEW)], async (req, r
 
     filtros.push(`EXISTS (
       SELECT 1 FROM usuario_tenants ut
-      WHERE ut.usuario_id = usuarios.id AND ut.tenant_id = ? AND ut.ativo = TRUE
+      WHERE ut.usuario_id = usuarios.id AND ut.tenant_id = ? AND ut.ativo = 1
     )`);
     params.push(req.tenantId);
 
@@ -406,7 +406,7 @@ router.get('/deletados/lista', [auth, requirePermission(PERMISSIONS.USERS_VIEW)]
       WHERE u.deletado_em IS NOT NULL
         AND EXISTS (
           SELECT 1 FROM usuario_tenants ut
-          WHERE ut.usuario_id = u.id AND ut.tenant_id = ? AND ut.ativo = TRUE
+          WHERE ut.usuario_id = u.id AND ut.tenant_id = ? AND ut.ativo = 1
         )
       ORDER BY u.deletado_em DESC
     `, [req.tenantId]);
@@ -572,7 +572,7 @@ router.patch('/bulk-update', [auth, requirePermission(PERMISSIONS.USERS_MANAGE)]
       FROM usuario_tenants ut
       WHERE ut.usuario_id IN (${placeholdersUsuarios})
         AND ut.tenant_id = ?
-        AND ut.ativo = TRUE
+        AND ut.ativo = 1
     `, [...idsValidos, req.tenantId]);
     if (usuariosDoTenant.length !== idsValidos.length) {
       return res.status(404).json({ erro: 'Um ou mais usuários não pertencem à empresa ativa.' });
@@ -1050,7 +1050,7 @@ router.delete('/:id/permanente', [auth, requirePermission(PERMISSIONS.USERS_MANA
 
     // Remove vínculos antes da remoção física
     const outroVinculoAtivo = await getQuery(
-      'SELECT 1 FROM usuario_tenants WHERE usuario_id = ? AND tenant_id != ? AND ativo = TRUE LIMIT 1',
+      'SELECT 1 FROM usuario_tenants WHERE usuario_id = ? AND tenant_id != ? AND ativo = 1 LIMIT 1',
       [usuarioId, req.tenantId]
     );
     if (outroVinculoAtivo) {
