@@ -26,28 +26,41 @@ export function CockpitCard({ title, icon: Icon, action, children, className = '
   </section>;
 }
 
+const projectScheduleProgress = (project) => {
+  const atMidday = (value) => value ? new Date(`${String(value).slice(0, 10)}T12:00:00`) : null;
+  const start = atMidday(project?.planned_start);
+  const end = atMidday(project?.prazo_termino);
+  if (!start || !end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) return null;
+  return Math.max(0, Math.min(100, ((Date.now() - start.getTime()) / (end.getTime() - start.getTime())) * 100));
+};
+
 export function CockpitHeader({ project, updatedAt, refreshing, onRefresh, deadline }) {
+  const scheduleProgress = projectScheduleProgress(project);
+  const archived = Number(project?.arquivado) === 1;
+
   return <section className="cockpit-header">
-    <span className="cockpit-header-glow" aria-hidden="true" />
     <div className="cockpit-header-main">
-      <div className="cockpit-header-topline">
-        <span className="cockpit-eyebrow"><Gauge size={14} /> Cockpit da Obra</span>
-        <span className="cockpit-live-status"><i /> Visão consolidada</span>
+      <div className="cockpit-project-content">
+        <div className="cockpit-header-topline">
+          <span className="cockpit-eyebrow"><Gauge size={14} /> Cockpit da Obra</span>
+          {archived && <span className="cockpit-archived-note">Projeto arquivado</span>}
+        </div>
+        <h1>{project?.nome || 'Projeto'}</h1>
+        <div className="cockpit-meta">
+          {project?.empresa_responsavel && <span><Building2 size={14} /> {project.empresa_responsavel}</span>}
+          {project?.empresa_executante && <span><Building2 size={14} /> {project.empresa_executante}</span>}
+          {project?.cidade && <span><MapPin size={14} /> {project.cidade}</span>}
+        </div>
       </div>
-      <h1>{project?.nome || 'Projeto'}</h1>
-      <div className="cockpit-meta">
-        {project?.empresa_responsavel && <span><Building2 size={14} /> Contratante: {project.empresa_responsavel}</span>}
-        {project?.empresa_executante && <span><Building2 size={14} /> Executante: {project.empresa_executante}</span>}
-        {project?.cidade && <span><MapPin size={14} /> {project.cidade}</span>}
-        <span><CalendarDays size={14} /> Início planejado: {formatDate(project?.planned_start, 'Não informado')}</span>
-        <span>Término contratual: {formatDate(project?.prazo_termino, 'Não informado')}</span>
+      <div className="cockpit-schedule">
+        <div className="cockpit-schedule-dates"><span><CalendarDays size={14} /> {formatDate(project?.planned_start, 'Não informado')}</span><span>{formatDate(project?.prazo_termino, 'Não informado')}</span></div>
+        {scheduleProgress !== null && <div className="cockpit-schedule-track" aria-label={`${Math.round(scheduleProgress)}% do prazo contratual transcorrido`}><span style={{ width: `${scheduleProgress}%` }} /></div>}
       </div>
-      {Number(project?.arquivado) === 1 && <span className="cockpit-archived">Projeto arquivado</span>}
     </div>
     <div className="cockpit-header-side">
       {deadline?.days !== null && <div className={`cockpit-deadline ${deadline.completed ? 'is-complete' : deadline.overdue ? 'is-critical' : ''}`}><small>Prazo contratual</small>{deadline.completed ? <div><CheckCircle2 size={24} /><strong>Concluído</strong></div> : <div><strong>{Math.abs(deadline.days)}</strong><span>{deadline.overdue ? 'dias vencido' : 'dias restantes'}</span></div>}</div>}
       <small className="cockpit-updated"><Clock3 size={13} /> Atualizado em {updatedAt ? new Date(updatedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</small>
-      <Button className="cockpit-refresh" variant="inverse" startIcon={RefreshCw} loading={refreshing} fullWidth onClick={onRefresh}>Atualizar dados</Button>
+      <Button className="cockpit-refresh" variant="inverse" startIcon={RefreshCw} loading={refreshing} fullWidth onClick={onRefresh}>Atualizar</Button>
     </div>
   </section>;
 }
@@ -69,9 +82,20 @@ export function DomainStatusStrip({ items }) {
 
 export function KpiGrid({ items }) {
   return <section className="cockpit-kpi-grid">
-    {items.filter((item) => item.visible !== false).map((item) => <button type="button" key={item.label} className={`cockpit-kpi kpi-${item.state || 'neutral'} ${item.onClick ? 'is-interactive' : ''}`} onClick={item.onClick} disabled={!item.onClick} title={item.tooltip || ''}>
-      <span>{item.label}</span>{item.onClick && <ArrowUpRight className="cockpit-kpi-arrow" size={15} />}<strong>{item.value ?? '—'}{item.unit && <small>{item.unit}</small>}</strong><em>{item.reference || 'Sem referência'}</em>
-    </button>)}
+    {items.filter((item) => item.visible !== false).map((item, index) => {
+      const state = item.state || 'neutral';
+      const stateLabels = { ok: 'Dentro do esperado', attention: 'Requer atenção', critical: 'Crítico', neutral: 'Acompanhar' };
+      const progress = item.unit === '%' && Number.isFinite(Number(item.value))
+        ? Math.max(0, Math.min(100, Number(item.value)))
+        : null;
+
+      return <button type="button" key={item.label} className={`cockpit-kpi kpi-${state} ${index === 0 ? 'cockpit-kpi-primary' : ''} ${item.onClick ? 'is-interactive' : ''}`} onClick={item.onClick} disabled={!item.onClick} title={item.tooltip || ''}>
+        <div className="cockpit-kpi-heading"><span>{item.label}</span><small className="cockpit-kpi-state"><i />{stateLabels[state]}</small></div>
+        {item.onClick && <ArrowUpRight className="cockpit-kpi-arrow" size={15} />}
+        <div className="cockpit-kpi-body"><strong>{item.value ?? '—'}{item.unit && <small>{item.unit}</small>}</strong><em>{item.reference || 'Sem referência'}</em></div>
+        {progress !== null && <div className="cockpit-kpi-progress"><div><span style={{ width: `${progress}%` }} /></div><small>{progress.toFixed(1).replace('.', ',')}% executado</small></div>}
+      </button>;
+    })}
   </section>;
 }
 

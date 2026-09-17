@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { AlertTriangle, ArrowUpRight, Boxes, Camera, ChevronLeft, ChevronRight, ClipboardList, FileText, HardHat, ShieldCheck, Wrench } from 'lucide-react';
+import { AlertTriangle, ArrowUpRight, Boxes, Camera, ChevronLeft, ChevronRight, ClipboardCheck, ClipboardList, FileImage, FileText, HardHat, ShieldCheck, Users, Wrench } from 'lucide-react';
 import { CockpitCard, EmptyState, MetricGrid } from './CockpitPrimitives';
 import Button from '../ui/Button';
 import { formatDate } from './cockpitTransforms';
@@ -7,6 +7,12 @@ import { formatDate } from './cockpitTransforms';
 const CockpitLinkButton = ({ children, onClick }) => (
   <Button size="sm" tone="primary" variant="ghost" endIcon={ArrowUpRight} onClick={onClick}>{children}</Button>
 );
+
+const rdoNumber = (rdo) => {
+  const value = String(rdo?.numero_rdo ?? rdo?.id ?? '0');
+  const numeric = value.match(/\d+/g)?.join('');
+  return Number(numeric || 0);
+};
 
 export function AttentionPointsCard({ items, onOpen }) {
   return <CockpitCard title="Pontos de atenção" icon={AlertTriangle} className="cockpit-card-wide">
@@ -17,32 +23,57 @@ export function AttentionPointsCard({ items, onOpen }) {
 }
 
 export function RecentExecutionCard({ data, onOpen }) {
-  return <CockpitCard title="Execução recente" icon={FileText} className="cockpit-card-wide" action={<CockpitLinkButton onClick={() => onOpen('rdos')}>Ver RDOs</CockpitLinkButton>}>
+  const recentRdos = [...(data?.recent || [])].sort((a, b) => rdoNumber(b) - rdoNumber(a));
+  const statusTone = (status = '') => {
+    const normalized = String(status).toLocaleLowerCase('pt-BR');
+    if (normalized.includes('aprov') || normalized.includes('conclu')) return 'ok';
+    if (normalized.includes('revis') || normalized.includes('análise')) return 'attention';
+    return 'neutral';
+  };
+
+  return <CockpitCard title="Produção registrada" icon={FileText} className="cockpit-card-wide cockpit-operation-execution" action={<CockpitLinkButton onClick={() => onOpen('rdos')}>Ver todos os RDOs</CockpitLinkButton>}>
     {!data ? <EmptyState>Dados de RDO indisponíveis.</EmptyState> : <>
-      <MetricGrid items={[
-        { label: 'RDOs em 7 dias', value: data.totals.rdos }, { label: 'Atividades registradas', value: data.totals.activities },
-        { label: 'Fotos adicionadas', value: data.totals.photos }, { label: 'Ocorrências', value: data.totals.occurrences }
-      ]} />
-      <div className="cockpit-list">{data.recent.map((rdo) => <button type="button" className="cockpit-list-row" key={rdo.id} onClick={() => onOpen(`rdo/${rdo.id}`)}>
-        <div><strong>RDO-{String(rdo.numero_rdo || rdo.id).padStart(3, '0')}</strong><span>{formatDate(rdo.data_relatorio)} · {rdo.responsavel || 'Responsável não informado'}</span></div>
-        <div className="cockpit-row-end"><strong>{rdo.status}</strong><span>{rdo.activity_count || 0} atividades · {rdo.photo_count || 0} fotos</span></div>
+      <div className="cockpit-operation-summary">
+        <div className="is-primary"><FileText /><span><small>RDOs nos últimos 7 dias</small><strong>{data.totals.rdos}</strong></span></div>
+        <div><ClipboardCheck /><span><strong>{data.totals.activities}</strong><small>atividades registradas</small></span></div>
+        <div><FileImage /><span><strong>{data.totals.photos}</strong><small>fotos adicionadas</small></span></div>
+        <div className={data.totals.occurrences ? 'has-attention' : ''}><AlertTriangle /><span><strong>{data.totals.occurrences}</strong><small>ocorrências</small></span></div>
+      </div>
+      <div className="cockpit-rdo-section">
+        <div className="cockpit-rdo-heading"><span>RDOs recentes</span><small>{recentRdos.length} em ordem numérica</small></div>
+        <div className="cockpit-list cockpit-rdo-list">{recentRdos.map((rdo) => <button type="button" className="cockpit-list-row cockpit-rdo-row" key={rdo.id} onClick={() => onOpen(`rdo/${rdo.id}`)}>
+          <div className="cockpit-rdo-id"><span>RDO</span><strong>{String(rdo.numero_rdo || rdo.id).padStart(3, '0')}</strong></div>
+          <div className="cockpit-rdo-content"><strong>{formatDate(rdo.data_relatorio)}</strong><span>{rdo.responsavel || 'Responsável não informado'}</span></div>
+          <div className="cockpit-rdo-volume"><span><ClipboardCheck /> {rdo.activity_count || 0} atividades</span><span><Camera /> {rdo.photo_count || 0} fotos</span></div>
+          <span className={`cockpit-rdo-status is-${statusTone(rdo.status)}`}>{rdo.status || 'Sem status'}</span>
       </button>)}</div>
+      </div>
     </>}
   </CockpitCard>;
 }
 
 export function WorkforceSummaryCard({ data }) {
-  return <CockpitCard title="Mão de obra e horas" icon={HardHat}>{!data ? <EmptyState>Dados de mão de obra indisponíveis.</EmptyState> : <><MetricGrid items={[
-    { label: 'Efetivo mais recente', value: data?.latest_effective ?? '—', state: 'info' },
-    { label: 'Média nos RDOs (7d)', value: data?.average_effective ?? '—' },
-    { label: 'HH no período', value: data?.hh_available ? data.hh : 'Não disponível', state: data?.hh_available ? 'ok' : 'neutral' }
-  ]} />{data.by_function?.length ? <div className="cockpit-bars">{data.by_function.slice(0, 6).map((item) => <div key={item.funcao}><span>{item.funcao}</span><strong>{item.quantidade}</strong></div>)}</div> : <p className="cockpit-caption">Distribuição por função indisponível: nenhum registro individual no período.</p>}</>}</CockpitCard>;
+  const functions = data?.by_function?.slice(0, 6) || [];
+  const maxQuantity = Math.max(1, ...functions.map((item) => Number(item.quantidade || 0)));
+  return <CockpitCard title="Equipe em campo" icon={HardHat} className="cockpit-workforce-card">{!data ? <EmptyState>Dados de mão de obra indisponíveis.</EmptyState> : <>
+    <div className="cockpit-workforce-summary">
+      <div className="cockpit-workforce-primary"><Users /><span><small>Efetivo mais recente</small><strong>{data?.latest_effective ?? '—'}<em>pessoas</em></strong></span></div>
+      <div><span>Média em 7 dias</span><strong>{data?.average_effective ?? '—'}</strong></div>
+      <div><span>HH no período</span><strong>{data?.hh_available ? data.hh : '—'}</strong><small>{data?.hh_available ? 'horas registradas' : 'não disponível'}</small></div>
+    </div>
+    {functions.length ? <div className="cockpit-workforce-functions"><header><span>Composição por função</span><small>até 6 funções</small></header>{functions.map((item) => <div key={item.funcao}><span>{item.funcao}</span><div><i style={{ width: `${(Number(item.quantidade || 0) / maxQuantity) * 100}%` }} /></div><strong>{item.quantidade}</strong></div>)}</div> : <p className="cockpit-caption">Distribuição por função indisponível: nenhum registro individual no período.</p>}
+  </>}</CockpitCard>;
 }
 
 export function EquipmentSummaryCard({ data, onOpen }) {
   const items = data?.items || [];
-  return <CockpitCard title="Equipamentos nos RDOs" icon={Wrench} action={<CockpitLinkButton onClick={() => onOpen('almoxarifado')}>Ver Ativos</CockpitLinkButton>}>
-    {!data ? <EmptyState>Dados de equipamentos indisponíveis.</EmptyState> : items.length ? <div className="cockpit-list compact">{items.slice(0, 7).map((item) => <div className="cockpit-list-row static" key={item.name}><div><strong>{item.name}</strong><span>Último uso: {formatDate(item.last_used)}</span></div><div className="cockpit-row-end"><strong>máx. {item.max_quantity}</strong><span>{item.days_used} dia(s)</span></div></div>)}</div> : <EmptyState>Nenhum equipamento registrado nos RDOs.</EmptyState>}
+  return <CockpitCard title="Equipamentos em uso" icon={Wrench} className="cockpit-equipment-card" action={<CockpitLinkButton onClick={() => onOpen('almoxarifado')}>Ver Ativos</CockpitLinkButton>}>
+    {!data ? <EmptyState>Dados de equipamentos indisponíveis.</EmptyState> : items.length ? <div className="cockpit-equipment-list">{items.slice(0, 7).map((item) => <div className="cockpit-equipment-row" key={item.name}>
+      <span className="cockpit-equipment-icon"><Wrench /></span>
+      <div><strong>{item.name}</strong><span>Último uso em {formatDate(item.last_used)}</span></div>
+      <div className="cockpit-equipment-usage"><strong>{item.days_used}</strong><span>dia(s) de uso</span></div>
+      <div className="cockpit-equipment-quantity"><span>Máximo</span><strong>{item.max_quantity}</strong></div>
+    </div>)}</div> : <EmptyState>Nenhum equipamento registrado nos RDOs.</EmptyState>}
   </CockpitCard>;
 }
 

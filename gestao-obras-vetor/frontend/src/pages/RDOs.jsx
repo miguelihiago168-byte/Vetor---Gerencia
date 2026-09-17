@@ -85,10 +85,14 @@ function RDOs() {
     return 'rdo-badge rdo-badge-pendente';
   };
 
-  const getRdoNumber = (rdo) => {
+  const getRdoNumericValue = (rdo) => {
     const raw = rdo.numero_rdo ?? rdo.id;
     const match = String(raw || '').match(/(\d+)$/);
-    const numero = match ? Number(match[1]) : Number(raw || 0);
+    return match ? Number(match[1]) : Number(raw || 0);
+  };
+
+  const getRdoNumber = (rdo) => {
+    const numero = getRdoNumericValue(rdo);
     return `RDO-${String(numero || rdo.id).padStart(3, '0')}`;
   };
 
@@ -276,7 +280,14 @@ function RDOs() {
       acc[key].push(r);
       return acc;
     }, {})
-  ).sort((a, b) => b[0].localeCompare(a[0]));
+  )
+    .map(([date, items]) => [
+      date,
+      [...items].sort((a, b) => getRdoNumericValue(b) - getRdoNumericValue(a))
+    ])
+    .sort(([, itemsA], [, itemsB]) =>
+      getRdoNumericValue(itemsB[0]) - getRdoNumericValue(itemsA[0])
+    );
 
   return (
     <>

@@ -1,3 +1,101 @@
+.cronograma-page {
+  --schedule-bg: #f2f5f9;
+  --schedule-surface: #fff;
+  --schedule-subtle: #f7f9fc;
+  --schedule-border: #dce4ee;
+  --schedule-text: #10233e;
+  --schedule-muted: #66768d;
+  --schedule-primary: #1e6fba;
+  --schedule-primary-strong: #124b7d;
+  --schedule-primary-soft: #eaf3fb;
+  --schedule-success: #159c7f;
+  --schedule-success-soft: #e9f7f3;
+  --schedule-warning: #d78a0d;
+  --schedule-warning-soft: #fff7e8;
+  --schedule-danger: #dd4d55;
+  --schedule-danger-soft: #fff1f2;
+  min-height: calc(100vh - 64px);
+  padding: 24px 0 52px;
+  color: var(--schedule-text);
+  background: linear-gradient(180deg, rgba(30, 111, 186, .035), transparent 230px), var(--schedule-bg);
+}
+.cronograma-page.is-embedded { min-height: auto; padding: 18px; background: transparent; }
+.cronograma-container { width: min(1520px, calc(100% - 48px)); margin: 0 auto; }
+.cronograma-page.is-embedded .cronograma-container { width: 100%; }
+.cronograma-loading { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 280px; color: var(--schedule-muted); font-size: 11px; }
+.cronograma-page-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 18px; }
+.cronograma-eyebrow { display: inline-flex; align-items: center; gap: 6px; color: var(--schedule-primary); font-size: 9px; font-weight: 850; letter-spacing: .11em; text-transform: uppercase; }
+.cronograma-eyebrow svg { width: 14px; height: 14px; }
+.cronograma-page-header h1 { margin: 5px 0 4px; font-size: clamp(27px, 2.4vw, 38px); line-height: 1; letter-spacing: -.04em; }
+.cronograma-page-header p { margin: 0; color: var(--schedule-muted); font-size: 10px; }
+.cronograma-page-actions, .cronograma-embedded-actions, .cronograma-embedded-actions > div { display: flex; align-items: center; gap: 8px; }
+.cronograma-embedded-actions { justify-content: space-between; margin-bottom: 12px; padding: 10px 12px; border: 1px solid var(--schedule-border); border-radius: 10px; background: var(--schedule-surface); }
+.cronograma-embedded-actions > span { display: inline-flex; align-items: center; gap: 7px; color: var(--schedule-muted); font-size: 9px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.cronograma-embedded-actions > span svg { width: 15px; height: 15px; color: var(--schedule-primary); }
+
+.cronograma-summary { display: grid; grid-template-columns: minmax(330px, 1.55fr) repeat(3, minmax(150px, .68fr)); gap: 10px; margin-bottom: 12px; }
+.cronograma-summary > article { display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 106px; padding: 15px; border: 1px solid var(--schedule-border); border-radius: 11px; background: var(--schedule-surface); box-shadow: 0 3px 12px rgba(18, 45, 78, .03); }
+.cronograma-summary > article > div { min-width: 0; }
+.cronograma-summary small, .cronograma-summary strong, .cronograma-summary p { display: block; }
+.cronograma-summary small { color: var(--schedule-muted); font-size: 8px; font-weight: 750; }
+.cronograma-summary strong { margin-top: 5px; font-size: 24px; line-height: 1; letter-spacing: -.03em; }
+.cronograma-summary p { margin: 5px 0 0; color: var(--schedule-muted); font-size: 7px; }
+.cronograma-progress-summary { display: grid !important; grid-template-columns: minmax(150px, .8fr) minmax(180px, 1.2fr); gap: 22px !important; background: linear-gradient(140deg, #f4faff, var(--schedule-surface)) !important; }
+.cronograma-progress-summary > div:first-child strong { color: var(--schedule-primary-strong); font-size: 31px; }
+.cronograma-progress-visual > div { height: 8px; overflow: hidden; border-radius: 99px; background: #e3eaf1; }
+.cronograma-progress-visual > div span { display: block; min-width: 4px; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--schedule-primary), var(--schedule-success)); }
+.cronograma-progress-visual > small { margin-top: 6px; text-align: right; }
+.cronograma-summary-icon { display: grid; flex: 0 0 auto; place-items: center; width: 35px; height: 35px; border-radius: 9px; color: var(--schedule-primary); background: var(--schedule-primary-soft); }
+.cronograma-summary-icon svg { width: 18px; height: 18px; }
+.cronograma-summary-icon.is-critical { color: var(--schedule-warning); background: var(--schedule-warning-soft); }
+.cronograma-summary-icon.is-delay { color: var(--schedule-success); background: var(--schedule-success-soft); }
+.cronograma-summary .has-delay { border-color: color-mix(in srgb, var(--schedule-danger) 28%, var(--schedule-border)); }
+.cronograma-summary .has-delay .is-delay { color: var(--schedule-danger); background: var(--schedule-danger-soft); }
+.cronograma-summary .has-delay strong { color: var(--schedule-danger); }
+.cronograma-warning { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 11px 13px; border: 1px solid color-mix(in srgb, var(--schedule-danger) 25%, var(--schedule-border)); border-radius: 9px; color: var(--schedule-danger); background: var(--schedule-danger-soft); }
+.cronograma-warning > svg { flex: 0 0 auto; width: 17px; height: 17px; }
+.cronograma-warning strong, .cronograma-warning span { display: block; }
+.cronograma-warning strong { font-size: 9px; }
+.cronograma-warning span { margin-top: 2px; color: var(--schedule-muted); font-size: 8px; }
+
+.cronograma-gantt-card { overflow: hidden; border: 1px solid var(--schedule-border); border-radius: 12px; background: var(--schedule-surface); box-shadow: 0 4px 16px rgba(18, 45, 78, .035); }
+.cronograma-gantt-card > header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 16px; border-bottom: 1px solid var(--schedule-border); }
+.cronograma-gantt-card > header > div:first-child > span { display: inline-flex; align-items: center; gap: 5px; color: var(--schedule-primary); font-size: 8px; font-weight: 850; letter-spacing: .09em; text-transform: uppercase; }
+.cronograma-gantt-card > header > div:first-child > span svg { width: 13px; height: 13px; }
+.cronograma-gantt-card h2 { margin: 3px 0 0; font-size: 15px; letter-spacing: -.02em; }
+.cronograma-gantt-card header p { margin: 3px 0 0; color: var(--schedule-muted); font-size: 8px; }
+.cronograma-gantt-hint { display: inline-flex; align-items: center; gap: 6px; color: var(--schedule-muted); font-size: 8px; }
+.cronograma-gantt-hint svg { width: 14px; height: 14px; color: var(--schedule-success); }
+
+body.dark-mode .cronograma-page {
+  --schedule-bg: #0b141e; --schedule-surface: #121d29; --schedule-subtle: #172532; --schedule-border: #2a3a4b;
+  --schedule-text: #edf4fb; --schedule-muted: #9fb0c2; --schedule-primary: #64aef0; --schedule-primary-strong: #9dcffc;
+  --schedule-primary-soft: #173149; --schedule-success: #55cfae; --schedule-success-soft: #16352e;
+  --schedule-warning: #efb65e; --schedule-warning-soft: #372c1d; --schedule-danger: #ff8389; --schedule-danger-soft: #3b2429;
+}
+body.dark-mode .cronograma-progress-summary { background: linear-gradient(140deg, #152838, var(--schedule-surface)) !important; }
+body.dark-mode .cronograma-progress-visual > div { background: #263746; }
+
+@media (max-width: 1100px) {
+  .cronograma-summary { grid-template-columns: repeat(3, 1fr); }
+  .cronograma-progress-summary { grid-column: 1 / -1; }
+}
+@media (max-width: 760px) {
+  .cronograma-page { padding: 18px 0 40px; }
+  .cronograma-page.is-embedded { padding: 14px; }
+  .cronograma-container { width: min(100% - 22px, 720px); }
+  .cronograma-page-header, .cronograma-embedded-actions, .cronograma-gantt-card > header { align-items: flex-start; flex-direction: column; }
+  .cronograma-page-actions { align-items: stretch; flex-wrap: wrap; }
+  .cronograma-embedded-actions { gap: 10px; }
+  .cronograma-summary { grid-template-columns: 1fr; }
+  .cronograma-progress-summary { grid-column: auto; }
+  .cronograma-gantt-hint { display: none; }
+}
+@media (max-width: 460px) {
+  .cronograma-progress-summary { grid-template-columns: 1fr !important; }
+  .cronograma-progress-visual > small { text-align: left; }
+}
+
 .cronograma-analise-modal {
   --cronograma-modal-bg: #ffffff;
   --cronograma-modal-text: #334155;

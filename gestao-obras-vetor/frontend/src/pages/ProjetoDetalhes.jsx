@@ -33,6 +33,13 @@ const TAB_DEFINITIONS = [
   { id: 'quality', label: 'Qualidade e Suprimentos', icon: ShieldCheck, anyPermission: ['quality', 'procurement'] },
   { id: 'resources', label: 'Recursos', icon: Boxes, anyPermission: ['rdo', 'assets'] }
 ];
+const TAB_COPY = {
+  overview: ['Visão geral da obra', 'Resumo executivo dos indicadores que exigem decisão.'],
+  planning: ['Planejamento', 'Avanço físico, caminho crítico e aderência ao cronograma.'],
+  operation: ['Operação', 'Execução recente, mão de obra, equipamentos e registros de campo.'],
+  quality: ['Qualidade e suprimentos', 'Pendências de qualidade e situação das aquisições da obra.'],
+  resources: ['Recursos', 'Disponibilidade da equipe, equipamentos e ativos da obra.']
+};
 const COCKPIT_INTERNAL_SOURCES = new Set(['eap_meta', 'rdos', 'workforce', 'equipment', 'quality']);
 
 function ProjetoDetalhes() {
@@ -220,6 +227,7 @@ function ProjetoDetalhes() {
     <CockpitHeader project={cockpit.project} updatedAt={cockpit.updated_at} refreshing={refreshing} onRefresh={() => loadAll()} deadline={deadline} />
     {!meetingDismissed && meetings.length > 0 && <section className="cockpit-meeting-banner"><div><span>Agenda de hoje</span><strong>{meetings[0].assunto}</strong><small>{meetings.length > 1 ? `${meetings.length} reuniões programadas neste projeto` : 'Uma reunião programada neste projeto'}</small></div><div><button type="button" onClick={() => openModule(`mensagens?tab=agenda&reuniao=${meetings[0].id}`)}>Ver agenda</button><button type="button" className="ghost" onClick={dismissMeetings}>Dispensar</button></div></section>}
     <CockpitTabs value={activeTab} onChange={setActiveTab} tabs={tabs} />
+    <header className="cockpit-view-heading"><div><span>{TAB_COPY[activeTab]?.[0]}</span><p>{TAB_COPY[activeTab]?.[1]}</p></div><small>Atualizado em {cockpit.updated_at ? new Date(cockpit.updated_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</small></header>
     {sourceErrors.length > 0 && <div className="cockpit-source-warning"><span>Algumas fontes não responderam. Os demais dados continuam disponíveis.</span><div>{sourceErrors.map((source) => <button type="button" key={source} onClick={() => retrySource(source)} disabled={Boolean(retryingSource)}>{retryingSource === source ? 'Tentando...' : `Tentar ${source}`}</button>)}</div></div>}
 
     {activeTab === 'overview' && <>
@@ -231,17 +239,21 @@ function ProjetoDetalhes() {
       </div>
     </>}
 
-    {activeTab === 'planning' && permissions.eap && <div className="cockpit-grid">
+    {activeTab === 'planning' && permissions.eap && <div className="cockpit-planning-layout">
       <ActivityStatusCard view={activityView} />
-      <CriticalActivitiesCard view={activityView} onOpen={openActivity} onOpenAll={() => openModule('gantt')} />
-      <UpcomingActivitiesCard view={activityView} onOpen={openActivity} />
       {permissions.curve_s && <CurvaSCard data={curve} onOpen={() => openModule('curva-s')} />}
+      <div className="cockpit-planning-actions">
+        <CriticalActivitiesCard view={activityView} onOpen={openActivity} onOpenAll={() => openModule('gantt')} />
+        <UpcomingActivitiesCard view={activityView} onOpen={openActivity} />
+      </div>
     </div>}
 
-    {activeTab === 'operation' && permissions.rdo && <div className="cockpit-grid">
+    {activeTab === 'operation' && permissions.rdo && <div className="cockpit-operation-layout">
       <RecentExecutionCard data={cockpit.execution} onOpen={openModule} />
-      <WorkforceSummaryCard data={cockpit.workforce} />
-      <EquipmentSummaryCard data={cockpit.equipment} onOpen={openModule} />
+      <div className="cockpit-operation-resources">
+        <WorkforceSummaryCard data={cockpit.workforce} />
+        <EquipmentSummaryCard data={cockpit.equipment} onOpen={openModule} />
+      </div>
       <PhotoAlbumCard album={photoAlbum} getUrl={getUploadUrl} loading={photoAlbumLoading} onOpen={openModule} />
     </div>}
 

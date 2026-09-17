@@ -11,7 +11,7 @@ import {
 } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
-import { Zap, RefreshCw, CalendarDays, AlertTriangle, Eye, X } from 'lucide-react';
+import { Zap, RefreshCw, CalendarDays, AlertTriangle, CheckCircle2, Eye, GitBranch, ListChecks, TrendingUp, X } from 'lucide-react';
 import './CronogramaGantt.css';
 
 const fmtPercent = (value) => `${Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
@@ -96,79 +96,56 @@ function CronogramaGantt({ hideNavbar = false }) {
   };
 
   if (loading) {
-    return (
-      <>
-        {!hideNavbar && <Navbar />}
-        <div className="container" style={{ textAlign: 'center', padding: '40px' }}>
-          <div className="spinner"></div>
-        </div>
-      </>
-    );
+    return <>{!hideNavbar && <Navbar />}<main className={`cronograma-page ${hideNavbar ? 'is-embedded' : ''}`}><div className="cronograma-loading"><div className="spinner" /><span>Preparando o cronograma...</span></div></main></>;
   }
 
   return (
     <>
       {!hideNavbar && <Navbar />}
-      <div className="container" style={{ paddingTop: hideNavbar ? '6px' : '24px', paddingBottom: '40px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 10, flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            {!hideNavbar && (
-              <CockpitReturnButton fallbackTo={`/projeto/${projetoId}/planejamento`} fallbackLabel="Voltar ao Planejamento" />
-            )}
-            <h1 style={{ margin: 0 }}>Cronograma (Gantt)</h1>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Button startIcon={RefreshCw} onClick={carregarTudo} loading={carregando}>Atualizar</Button>
-            {isGestor && (
-              <Button tone="warning" variant="soft" startIcon={Zap} onClick={handleAnalisarCronograma} loading={carregando}>
-                Analisar Cronograma
-              </Button>
-            )}
-          </div>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 16 }}>
-          <div className="card" style={{ padding: 12 }}>
-            <small>Total de atividades</small>
-            <h2 style={{ margin: '6px 0 0 0' }}>{resumo.total}</h2>
-          </div>
-          <div className="card" style={{ padding: 12 }}>
-            <small>Concluídas</small>
-            <h2 style={{ margin: '6px 0 0 0' }}>{resumo.concluidaPct}%</h2>
-          </div>
-          <div className="card" style={{ padding: 12 }}>
-            <small>No caminho crítico</small>
-            <h2 style={{ margin: '6px 0 0 0' }}>{resumo.criticas}</h2>
-          </div>
-          <div className="card" style={{ padding: 12 }}>
-            <small>Atrasadas</small>
-            <h2 style={{ margin: '6px 0 0 0', color: resumo.atrasadas ? '#dc2626' : 'inherit' }}>{resumo.atrasadas}</h2>
-          </div>
-        </div>
-
-        {resumo.atrasadas > 0 && (
-          <div className="card" style={{ padding: 12, marginBottom: 16, borderLeft: '4px solid #dc2626' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <AlertTriangle size={16} color="#dc2626" />
-              <strong>{resumo.atrasadas} atividade(s) atrasada(s)</strong>
+      <main className={`cronograma-page ${hideNavbar ? 'is-embedded' : ''}`}>
+        <div className="cronograma-container">
+          {!hideNavbar && <header className="cronograma-page-header">
+            <div>
+              <span className="cronograma-eyebrow"><CalendarDays /> Planejamento</span>
+              <h1>Cronograma da obra</h1>
+              <p>Linha do tempo, progresso, dependências e caminho crítico</p>
             </div>
-          </div>
-        )}
+            <div className="cronograma-page-actions">
+              <CockpitReturnButton fallbackTo={`/projeto/${projetoId}/planejamento`} fallbackLabel="Voltar ao Planejamento" />
+              <Button startIcon={RefreshCw} onClick={carregarTudo} loading={carregando}>Atualizar</Button>
+              {isGestor && <Button tone="warning" variant="soft" startIcon={Zap} onClick={handleAnalisarCronograma} loading={carregando}>Analisar cronograma</Button>}
+            </div>
+          </header>}
 
-        <div className="card" style={{ padding: 12, marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-            <CalendarDays size={16} />
-            <strong>Visão do Cronograma</strong>
-          </div>
-          <GanttSidebar
-            isOpen={true}
-            embedded={true}
-            dadosGantt={dadosGantt}
-            caminhoCritico={dadosGantt?.caminhoCritico}
-            folgas={dadosGantt?.folgas}
-          />
+          {hideNavbar && <div className="cronograma-embedded-actions">
+            <span><CalendarDays /> Visão consolidada do cronograma</span>
+            <div><Button startIcon={RefreshCw} onClick={carregarTudo} loading={carregando}>Atualizar</Button>{isGestor && <Button tone="warning" variant="soft" startIcon={Zap} onClick={handleAnalisarCronograma} loading={carregando}>Analisar</Button>}</div>
+          </div>}
+
+          <section className="cronograma-summary">
+            <article className="cronograma-progress-summary">
+              <div><span>Conclusão das atividades</span><strong>{resumo.concluidaPct}%</strong><small>{resumo.total} atividades consideradas</small></div>
+              <div className="cronograma-progress-visual"><div><span style={{ width: `${resumo.concluidaPct}%` }} /></div><small>{resumo.concluidaPct === 100 ? 'Cronograma concluído' : 'Avanço por quantidade de atividades'}</small></div>
+            </article>
+            <article><span className="cronograma-summary-icon is-total"><ListChecks /></span><div><small>Total</small><strong>{resumo.total}</strong><p>atividades</p></div></article>
+            <article><span className="cronograma-summary-icon is-critical"><GitBranch /></span><div><small>Caminho crítico</small><strong>{resumo.criticas}</strong><p>sem folga</p></div></article>
+            <article className={resumo.atrasadas ? 'has-delay' : ''}><span className="cronograma-summary-icon is-delay"><AlertTriangle /></span><div><small>Atrasadas</small><strong>{resumo.atrasadas}</strong><p>{resumo.atrasadas ? 'requerem ação' : 'nenhuma pendência'}</p></div></article>
+          </section>
+
+          {resumo.atrasadas > 0 && <div className="cronograma-warning"><AlertTriangle /><div><strong>{resumo.atrasadas} atividade(s) fora do prazo planejado</strong><span>Priorize os itens atrasados que também pertencem ao caminho crítico.</span></div></div>}
+
+          <section className="cronograma-gantt-card">
+            <header><div><span><TrendingUp /> Linha do tempo</span><h2>Visão do cronograma</h2><p>Passe o cursor sobre uma barra para consultar datas, duração e progresso.</p></div><div className="cronograma-gantt-hint"><CheckCircle2 /> Barras preenchidas indicam o percentual executado</div></header>
+            <GanttSidebar
+              isOpen={true}
+              embedded={true}
+              dadosGantt={dadosGantt}
+              caminhoCritico={dadosGantt?.caminhoCritico}
+              folgas={dadosGantt?.folgas}
+            />
+          </section>
         </div>
-      </div>
+      </main>
 
       {analise && (
         <div style={{

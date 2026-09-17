@@ -179,16 +179,13 @@ const GanttSidebar = ({ isOpen, onClose, dadosGantt, caminhoCritico, folgas, emb
 
   return (
     <div className={`gantt-sidebar ${embedded ? 'gantt-embedded' : (isOpen ? 'aberto' : 'fechado')}`}>
-      {/* Header da Sidebar */}
-      <div className="gantt-header">
+      {!embedded && <div className="gantt-header">
         <div className="gantt-titulo">
           <h3>Cronograma (Gantt)</h3>
           <p>Visualização de dependências e caminho crítico</p>
         </div>
-        {!embedded && (
-          <IconButton className="gantt-close" variant="ghost" icon={X} label="Fechar cronograma" onClick={onClose} />
-        )}
-      </div>
+        <IconButton className="gantt-close" variant="ghost" icon={X} label="Fechar cronograma" onClick={onClose} />
+      </div>}
 
       {/* Conteúdo do Gantt */}
       <div className="gantt-content">
@@ -200,7 +197,8 @@ const GanttSidebar = ({ isOpen, onClose, dadosGantt, caminhoCritico, folgas, emb
         ) : (
           <>
             {/* Legenda */}
-            <div className="gantt-legenda">
+            <div className="gantt-legenda" aria-label="Legenda do cronograma">
+              <strong>Status das barras</strong>
               <div className="legenda-item">
                 <div className="legenda-cor" style={{ backgroundColor: '#4caf50' }}></div>
                 <span>Concluída</span>
@@ -276,8 +274,8 @@ const GanttSidebar = ({ isOpen, onClose, dadosGantt, caminhoCritico, folgas, emb
             </div>
 
             {/* Detalhes das Atividades */}
-            <div className="gantt-detalhes">
-              <h4>Detalhes das Atividades</h4>
+            <details className="gantt-detalhes">
+              <summary>Detalhes das atividades <span>{dados.length} itens</span></summary>
               <div className="detalhes-lista">
                 {dados.map(at => (
                   <div key={at.id} className="detalhe-item" style={{ borderLeftColor: getCor(at) }}>
@@ -305,7 +303,7 @@ const GanttSidebar = ({ isOpen, onClose, dadosGantt, caminhoCritico, folgas, emb
                   </div>
                 ))}
               </div>
-            </div>
+            </details>
           </>
         )}
       </div>
@@ -322,30 +320,34 @@ const GanttSidebar = ({ isOpen, onClose, dadosGantt, caminhoCritico, folgas, emb
 
 /* ─── SVG Gantt Chart com setas de dependência ─── */
 
-const MARGIN_LEFT = 200;
-const ROW_HEIGHT = 38;
-const HEADER_HEIGHT = 28;
-const MIN_PIXELS_PER_DAY = 8;
+const MARGIN_LEFT = 280;
+const ROW_HEIGHT = 44;
+const HEADER_HEIGHT = 40;
+const MIN_PIXELS_PER_DAY = 9;
 
 const GanttChartSVG = ({ dados, escalaMin, escalaMax, getCor, formatDateBR, calcularPosicaoTooltip, setTooltip, isDark }) => {
   const c = isDark ? {
-    rowEven:    '#1b2836',
-    rowOdd:     '#162030',
-    grid:       '#2a4060',
-    separator:  '#2a4060',
-    headerLine: '#2a4060',
-    tickLabel:  '#607080',
-    rowLabel:   '#c5d3de',
-    arrow:      '#607080',
+    canvas:     '#121d29',
+    header:     '#172532',
+    rowEven:    '#121d29',
+    rowOdd:     '#15222f',
+    grid:       '#253849',
+    separator:  '#34495d',
+    headerLine: '#2a3a4b',
+    tickLabel:  '#9fb0c2',
+    rowLabel:   '#dce7f1',
+    arrow:      '#8295a8',
   } : {
-    rowEven:    '#fafafa',
-    rowOdd:     '#f2f2f2',
-    grid:       '#e8e8e8',
-    separator:  '#d0d0d0',
-    headerLine: '#ddd',
-    tickLabel:  '#999',
-    rowLabel:   '#333',
-    arrow:      '#888',
+    canvas:     '#ffffff',
+    header:     '#f7f9fc',
+    rowEven:    '#ffffff',
+    rowOdd:     '#f8fafc',
+    grid:       '#e4eaf1',
+    separator:  '#cbd7e3',
+    headerLine: '#dce4ee',
+    tickLabel:  '#687a90',
+    rowLabel:   '#18304f',
+    arrow:      '#7c8da0',
   };
   const totalDays = Math.max(escalaMax - escalaMin, 1);
   const pixelsPerDay = Math.max(Math.floor(800 / totalDays), MIN_PIXELS_PER_DAY);
@@ -362,10 +364,25 @@ const GanttChartSVG = ({ dados, escalaMin, escalaMax, getCor, formatDateBR, calc
   const ticks = [];
   for (let t = 0; t <= totalDays; t += tickStep) ticks.push(escalaMin + t);
 
+  const projectStart = dados.reduce((earliest, item) => !earliest || item.dataInicio < earliest ? item.dataInicio : earliest, null);
+  const parseDateValue = (value) => {
+    const [year, month, day] = String(value).slice(0, 10).split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+  const addBusinessDays = (value, amount) => {
+    const date = parseDateValue(value);
+    let remaining = Math.max(0, Math.round(amount));
+    while (remaining > 0) {
+      date.setDate(date.getDate() + 1);
+      if (date.getDay() >= 1 && date.getDay() <= 5) remaining -= 1;
+    }
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  };
+
   const getBarX = (d) => MARGIN_LEFT + (d.deslocamento - escalaMin) * pixelsPerDay;
   const getBarW = (d) => Math.max(d.diasDuracao * pixelsPerDay, 4);
-  const getBarY = (i) => HEADER_HEIGHT + i * ROW_HEIGHT + 6;
-  const barH = ROW_HEIGHT - 12;
+  const getBarY = (i) => HEADER_HEIGHT + i * ROW_HEIGHT + 10;
+  const barH = ROW_HEIGHT - 20;
   const getRowCenterY = (i) => HEADER_HEIGHT + i * ROW_HEIGHT + ROW_HEIGHT / 2;
 
   // Gerar paths das setas de dependência (saem do fim da predecessora ao início da sucessora)
@@ -400,8 +417,8 @@ const GanttChartSVG = ({ dados, escalaMin, escalaMax, getCor, formatDateBR, calc
         height={svgHeight}
         style={{ fontFamily: 'sans-serif', display: 'block', minWidth: svgWidth, width: '100%' }}
       >
-        {/* Fundo geral */}
-        <rect x={0} y={0} width="100%" height={svgHeight} fill={isDark ? '#1b2836' : '#fff'} />
+        <rect x={0} y={0} width="100%" height={svgHeight} fill={c.canvas} />
+        <rect x={0} y={0} width={svgWidth} height={HEADER_HEIGHT} fill={c.header} />
         <defs>
           <marker id="gantt-arrow" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
             <polygon points="0 0, 7 2.5, 0 5" fill={c.arrow} />
@@ -414,14 +431,14 @@ const GanttChartSVG = ({ dados, escalaMin, escalaMax, getCor, formatDateBR, calc
           return (
             <g key={t}>
               <line x1={x} y1={HEADER_HEIGHT} x2={x} y2={svgHeight} stroke={c.grid} />
-              <text x={x} y={HEADER_HEIGHT - 6} textAnchor="middle" fontSize={10} fill={c.tickLabel}>
-                {`D${t}`}
+              <text x={x} y={HEADER_HEIGHT - 14} textAnchor="middle" fontSize={9} fontWeight={700} fill={c.tickLabel}>
+                {formatDateBR(addBusinessDays(projectStart, t - escalaMin)).slice(0, 5)}
               </text>
             </g>
           );
         })}
 
-        {/* Linha separadora vertical entre labels e barras */}
+        <text x={12} y={HEADER_HEIGHT - 14} fontSize={9} fontWeight={800} letterSpacing="1" fill={c.tickLabel}>ATIVIDADE</text>
         <line x1={MARGIN_LEFT} y1={0} x2={MARGIN_LEFT} y2={svgHeight} stroke={c.separator} strokeWidth={1} />
 
         {/* Linha separadora do header */}
@@ -441,17 +458,17 @@ const GanttChartSVG = ({ dados, escalaMin, escalaMax, getCor, formatDateBR, calc
               {/* Fundo alternado */}
               <rect x={0} y={y} width={svgWidth} height={ROW_HEIGHT} fill={i % 2 === 0 ? c.rowEven : c.rowOdd} />
               {/* Indicador de cor na margem esquerda */}
-              <rect x={0} y={y + 6} width={3} height={ROW_HEIGHT - 12} rx={1} fill={cor} opacity={0.7} />
+              <rect x={0} y={y + 8} width={3} height={ROW_HEIGHT - 16} rx={2} fill={cor} />
               {/* Label da atividade — alinhado à esquerda */}
               <text x={8} y={y + ROW_HEIGHT / 2 + 4} textAnchor="start" fontSize={11} fill={c.rowLabel}>
                 {label}
               </text>
               {/* Fundo translúcido (duração planejada) */}
-              <rect x={bx} y={by} width={bw} height={barH} rx={3} fill={cor} opacity={0.18} />
+              <rect x={bx} y={by} width={bw} height={barH} rx={6} fill={cor} opacity={0.14} />
               {/* Progresso preenchido */}
-              {progW > 0 && <rect x={bx} y={by} width={progW} height={barH} rx={3} fill={cor} opacity={0.85} />}
+              {progW > 0 && <rect x={bx} y={by} width={progW} height={barH} rx={6} fill={cor} opacity={0.92} />}
               {/* Borda da barra */}
-              <rect x={bx} y={by} width={bw} height={barH} rx={3} fill="none" stroke={cor} strokeWidth={1.5} />
+              <rect x={bx} y={by} width={bw} height={barH} rx={6} fill="none" stroke={cor} strokeWidth={1.5} />
               {/* Área de hover transparente */}
               <rect
                 x={bx} y={by} width={bw} height={barH}
