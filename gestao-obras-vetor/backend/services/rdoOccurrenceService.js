@@ -12,6 +12,21 @@ const OCCURRENCE_CATEGORIES = [
   { value: 'Outra', label: 'Outra' }
 ];
 
+const OCCURRENCE_TAGS = [
+  'Acidente de trabalho', 'Alteração de projeto', 'Dia Chuvoso', 'Dia parado',
+  'Falta de equipamento', 'Falta de material', 'Falta de mão de obra', 'Horas improdutivas'
+];
+const TAG_CATEGORY = {
+  'Acidente de trabalho': 'Segurança',
+  'Alteração de projeto': 'Projeto',
+  'Dia Chuvoso': 'Clima',
+  'Dia parado': 'Produtividade',
+  'Falta de equipamento': 'Equipamento',
+  'Falta de material': 'Material',
+  'Falta de mão de obra': 'Produtividade',
+  'Horas improdutivas': 'Produtividade'
+};
+
 const OCCURRENCE_IMPACTS = [
   'Nenhum impacto identificado', 'Segurança', 'Qualidade', 'Prazo', 'Custo', 'Produtividade', 'Meio ambiente', 'Equipe', 'Cliente / terceiros'
 ];
@@ -41,7 +56,9 @@ const assertEditable = async (rdoId, user, tenantId) => {
 };
 
 const validateOccurrence = async (item, { projetoId }) => {
-  const categoria = asText(item?.categoria, 80) || 'Outra';
+  const tags = [...new Set((Array.isArray(item?.tags) ? item.tags : [])
+    .map((value) => asText(value, 80)).filter(Boolean))];
+  const categoria = TAG_CATEGORY[tags[0]] || asText(item?.categoria, 80) || 'Outra';
   if (!OCCURRENCE_CATEGORIES.some((entry) => entry.value === categoria)) throw new Error('Categoria de ocorrência inválida.');
   const categoriaOutra = asText(item?.categoria_outra, 180);
   if (categoria === 'Outra' && !categoriaOutra) throw new Error('Informe a descrição da categoria “Outra”.');
@@ -67,6 +84,7 @@ const validateOccurrence = async (item, { projetoId }) => {
   if (impacts.includes('Nenhum impacto identificado') && impacts.length > 1) throw new Error('“Nenhum impacto identificado” não pode ser combinado com outros impactos.');
   return {
     id: item?.id ? Number(item.id) : null,
+    tags,
     titulo: asText(item?.titulo, 240) || null,
     categoria, categoria_outra: categoriaOutra || null,
     data_ocorrencia: asText(item?.data_ocorrencia, 10) || null,
@@ -112,7 +130,11 @@ const hydrateOccurrences = async (rdoId) => {
   impacts.forEach((row) => impactsById.set(row.ocorrencia_id, [...(impactsById.get(row.ocorrencia_id) || []), row.impacto]));
   const evidenceById = new Map();
   evidences.forEach((row) => evidenceById.set(row.ocorrencia_id, [...(evidenceById.get(row.ocorrencia_id) || []), row]));
-  return rows.map((row) => ({ ...row, impactos: impactsById.get(row.id) || [], evidencias: evidenceById.get(row.id) || [] }));
+  return rows.map((row) => ({
+    ...row,
+    tags: Array.isArray(row.tags) ? row.tags : (() => { try { return JSON.parse(row.tags || '[]'); } catch (_) { return []; } })(),
+    impactos: impactsById.get(row.id) || [], evidencias: evidenceById.get(row.id) || []
+  }));
 };
 
 const syncOccurrences = async ({ rdoId, projetoId, tenantId, user, occurrences, semOcorrencias, dataRelatorio }) => {
@@ -139,12 +161,12 @@ const syncOccurrences = async ({ rdoId, projetoId, tenantId, user, occurrences, 
   let nextNumber = Number((await getQuery('SELECT COALESCE(MAX(numero), 0) + 1 AS next FROM rdo_ocorrencias WHERE rdo_id = ?', [rdoId]))?.next || 1);
   for (const entry of normalized) {
     let occurrenceId = entry.id;
-    const fields = [entry.titulo, entry.descricao, entry.gravidade, entry.categoria, entry.categoria_outra, entry.data_ocorrencia, entry.hora_inicio, entry.hora_fim, entry.em_andamento, entry.local_frente, entry.atividade_eap_id, entry.envolvidos, entry.descricao_detalhada, entry.providencia_imediata, entry.recomendacao, entry.paralisacao, entry.trabalhadores_afetados, entry.impacto_cronograma];
+    const fields = [entry.titulo, entry.descricao, entry.gravidade, entry.categoria, entry.categoria_outra, entry.data_ocorrencia, entry.hora_inicio, entry.hora_fim, entry.em_andamento, entry.local_frente, entry.atividade_eap_id, entry.envolvidos, entry.descricao_detalhada, entry.providencia_imediata, entry.recomendacao, entry.paralisacao, entry.trabalhadores_afetados, entry.impacto_cronograma, JSON.stringify(entry.tags || [])];
     if (occurrenceId && existingById.has(occurrenceId)) {
-      await runQuery(`UPDATE rdo_ocorrencias SET titulo=?, descricao=?, gravidade=?, categoria=?, categoria_outra=?, data_ocorrencia=?, hora_inicio=?, hora_fim=?, em_andamento=?, local_frente=?, atividade_eap_id=?, envolvidos=?, descricao_detalhada=?, providencia_imediata=?, recomendacao=?, paralisacao=?, trabalhadores_afetados=?, impacto_cronograma=?, atualizado_por=?, atualizado_em=CURRENT_TIMESTAMP WHERE id=?`, [...fields, user.id, occurrenceId]);
+      await runQuery(`UPDATE rdo_ocorrencias SET titulo=?, descricao=?, gravidade=?, categoria=?, categoria_outra=?, data_ocorrencia=?, hora_inicio=?, hora_fim=?, em_andamento=?, local_frente=?, atividade_eap_id=?, envolvidos=?, descricao_detalhada=?, providencia_imediata=?, recomendacao=?, paralisacao=?, trabalhadores_afetados=?, impacto_cronograma=?, tags=?::jsonb, atualizado_por=?, atualizado_em=CURRENT_TIMESTAMP WHERE id=?`, [...fields, user.id, occurrenceId]);
       await runQuery('INSERT INTO rdo_ocorrencia_historico (ocorrencia_id, usuario_id, acao, antes, depois) VALUES (?, ?, ?, ?, ?)', [occurrenceId, user.id, 'ATUALIZADA', JSON.stringify(existingById.get(occurrenceId)), JSON.stringify(entry)]);
     } else {
-      const result = await runQuery(`INSERT INTO rdo_ocorrencias (rdo_id, numero, titulo, descricao, gravidade, categoria, categoria_outra, data_ocorrencia, hora_inicio, hora_fim, em_andamento, local_frente, atividade_eap_id, envolvidos, descricao_detalhada, providencia_imediata, recomendacao, paralisacao, trabalhadores_afetados, impacto_cronograma, criado_por, atualizado_por, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`, [rdoId, nextNumber++, ...fields, user.id, user.id]);
+      const result = await runQuery(`INSERT INTO rdo_ocorrencias (rdo_id, numero, titulo, descricao, gravidade, categoria, categoria_outra, data_ocorrencia, hora_inicio, hora_fim, em_andamento, local_frente, atividade_eap_id, envolvidos, descricao_detalhada, providencia_imediata, recomendacao, paralisacao, trabalhadores_afetados, impacto_cronograma, tags, criado_por, atualizado_por, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, CURRENT_TIMESTAMP)`, [rdoId, nextNumber++, ...fields, user.id, user.id]);
       occurrenceId = result.lastID;
       await runQuery('INSERT INTO rdo_ocorrencia_historico (ocorrencia_id, usuario_id, acao, depois) VALUES (?, ?, ?, ?)', [occurrenceId, user.id, 'CRIADA', JSON.stringify(entry)]);
     }
@@ -163,4 +185,4 @@ const assertApprovalOccurrenceDeclaration = async (rdoId) => {
   }
 };
 
-module.exports = { OCCURRENCE_CATEGORIES, OCCURRENCE_IMPACTS, hydrateOccurrences, syncOccurrences, assertEditable, assertApprovalOccurrenceDeclaration };
+module.exports = { OCCURRENCE_CATEGORIES, OCCURRENCE_TAGS, OCCURRENCE_IMPACTS, hydrateOccurrences, syncOccurrences, assertEditable, assertApprovalOccurrenceDeclaration };

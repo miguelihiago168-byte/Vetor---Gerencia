@@ -2507,6 +2507,73 @@
 .rdo-activity-summary p { display: flex; justify-content: space-between; gap: 8px; margin: 4px 0; font-size: 12px; color: #475569; }
 .rdo-activity-summary p strong { white-space: nowrap; color: #0f172a; }
 .rdo-activity-summary span { font-size: 12px; color: #64748b; }
+.rdo-activity-section-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.rdo-activity-section-actions p { margin: 0; color: #64748b; font-size: 13px; }
+.rdo-activity-more-options {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 0;
+  color: #475569;
+  font-size: 13px;
+  cursor: pointer;
+}
+.rdo-activity-more-options input { width: 18px; height: 18px; accent-color: #2563eb; }
+.rdo-activity-photo-link,
+.rdo-photo-gallery-note {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #dbe4ee;
+  border-radius: 10px;
+  background: #f8fafc;
+  margin-top: 12px;
+}
+.rdo-activity-photo-link > div { display: grid; gap: 3px; }
+.rdo-activity-photo-link strong,
+.rdo-photo-gallery-note strong { color: #1e293b; font-size: 13px; }
+.rdo-activity-photo-link span,
+.rdo-photo-gallery-note span { color: #64748b; font-size: 12px; }
+.rdo-photo-gallery-note { grid-template-columns: auto 1fr; align-items: center; margin-bottom: 12px; }
+.rdo-occurrence-tags { position: relative; }
+.rdo-tags-trigger {
+  width: 100%;
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+.rdo-tags-trigger span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rdo-tags-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  padding: 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, .18);
+}
+.rdo-tags-options { display: grid; gap: 8px; max-height: 220px; overflow-y: auto; padding: 10px 0; }
+.rdo-tags-options label { display: flex; align-items: center; gap: 8px; color: #475569; font-size: 14px; cursor: pointer; }
+.rdo-tags-options input { width: 18px; height: 18px; accent-color: #2563eb; }
+.rdo-tags-new { display: flex; gap: 8px; padding-top: 10px; border-top: 1px solid #e2e8f0; }
+.rdo-tags-new .form-input { min-width: 0; }
+.rdo-occurrence-toggle { display: inline-flex; align-items: center; gap: 7px; margin-top: 4px; color: #475569; font-size: 13px; }
+.rdo-occurrence-photos { display: grid; gap: 3px; margin-top: 12px; padding: 13px; border: 1px solid #dbe4ee; border-radius: 9px; background: #f8fafc; }
+.rdo-occurrence-photos strong { color: #1e293b; font-size: 13px; }
+.rdo-occurrence-photos span { color: #64748b; font-size: 12px; }
 .rdo-activity-resources {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2555,6 +2622,9 @@
 .rdo-resource-add > .btn { width: 100%; min-height: 42px; justify-content: center; white-space: normal; line-height: 1.15; }
 
 @media (max-width: 900px) {
+  .rdo-activity-section-actions { align-items: flex-start; flex-direction: column; }
+  .rdo-photo-gallery-note { grid-template-columns: 1fr; }
+  .rdo-tags-new { flex-direction: column; }
   .rdo-activity-resources { grid-template-columns: 1fr; }
   .rdo-activity-summary { grid-template-columns: 1fr; }
   .rdo-activity-resources-row td { padding: 0 6px 10px; }

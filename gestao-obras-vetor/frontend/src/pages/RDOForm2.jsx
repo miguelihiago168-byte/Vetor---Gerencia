@@ -30,11 +30,15 @@ const ANEXO_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp,.gif,.hei
 const ANEXO_EXT_RE = /\.(pdf|doc|docx|xls|xlsx|jpe?g|png|webp|gif|heic|heif)$/i;
 const FOTO_MAX_SIDE = 1920;
 const FOTO_QUALITY = 0.82;
+const OCCURRENCE_DEFAULT_TAGS = [
+  'Acidente de trabalho', 'Alteração de projeto', 'Dia Chuvoso', 'Dia parado',
+  'Falta de equipamento', 'Falta de material', 'Falta de mão de obra', 'Horas improdutivas'
+];
 const NOVA_OCORRENCIA = () => ({
   titulo: '', categoria: 'Segurança', categoria_outra: '', data_ocorrencia: '', hora_inicio: '', hora_fim: '',
   em_andamento: false, local_frente: '', atividade_eap_id: '', envolvidos: '', descricao_detalhada: '',
   providencia_imediata: '', recomendacao: '', impactos: [], gravidade: 'Baixa', paralisacao: false,
-  trabalhadores_afetados: 0, impacto_cronograma: ''
+  trabalhadores_afetados: 0, impacto_cronograma: '', tags: []
 });
 
 const dias = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
@@ -250,11 +254,21 @@ function RDOForm2() {
     insumos_utilizados: [],
     ferramentas_utilizadas: []
   });
-  const [ocorrenciaConfig, setOcorrenciaConfig] = useState({ categorias: [], impactos: [], gravidades: ['Baixa', 'Média', 'Alta', 'Crítica'] });
+  const [ocorrenciaConfig, setOcorrenciaConfig] = useState({ categorias: [], tags: OCCURRENCE_DEFAULT_TAGS, impactos: [], gravidades: ['Baixa', 'Média', 'Alta', 'Crítica'] });
   const [draftOcorrencia, setDraftOcorrencia] = useState(NOVA_OCORRENCIA);
   const [ocorrenciaAberta, setOcorrenciaAberta] = useState(null);
+  const [ocorrenciaModalAberto, setOcorrenciaModalAberto] = useState(false);
+  const [ocorrenciaOpcoesAvancadas, setOcorrenciaOpcoesAvancadas] = useState(false);
+  const [seletorTagsAberto, setSeletorTagsAberto] = useState(false);
+  const [buscaTagOcorrencia, setBuscaTagOcorrencia] = useState('');
+  const [novaTagOcorrencia, setNovaTagOcorrencia] = useState('');
   const [editAtividade, setEditAtividade] = useState(null);
   const [atividadeResumoAberta, setAtividadeResumoAberta] = useState(null);
+  const [atividadeModalAberto, setAtividadeModalAberto] = useState(false);
+  const [atividadeOpcoesAvancadas, setAtividadeOpcoesAvancadas] = useState(false);
+  const [fotosDaAtividade, setFotosDaAtividade] = useState([]);
+  const [descricaoFotosDaAtividade, setDescricaoFotosDaAtividade] = useState('');
+  const fotosDaAtividadeInputRef = useRef(null);
 
   const normalizarAcaoLog = (log) => {
     const acao = String(log?.acao || log?.tipo || '').toUpperCase();
@@ -396,9 +410,9 @@ function RDOForm2() {
 
         try {
           const ocorrenciaRes = await getRdoOcorrenciasConfiguracao();
-          setOcorrenciaConfig(ocorrenciaRes.data || { categorias: [], impactos: [], gravidades: [] });
+          setOcorrenciaConfig({ tags: OCCURRENCE_DEFAULT_TAGS, ...(ocorrenciaRes.data || { categorias: [], impactos: [], gravidades: [] }) });
         } catch {
-          setOcorrenciaConfig({ categorias: [{ value: 'Outra', label: 'Outra' }], impactos: [], gravidades: ['Baixa', 'Média', 'Alta', 'Crítica'] });
+          setOcorrenciaConfig({ categorias: [{ value: 'Outra', label: 'Outra' }], tags: OCCURRENCE_DEFAULT_TAGS, impactos: [], gravidades: ['Baixa', 'Média', 'Alta', 'Crítica'] });
         }
 
         let acumMap = {};
@@ -737,6 +751,53 @@ function RDOForm2() {
     setEditAtividade(null);
   };
 
+  const limparFotosDaAtividade = () => {
+    setFotosDaAtividade([]);
+    setDescricaoFotosDaAtividade('');
+    if (fotosDaAtividadeInputRef.current) fotosDaAtividadeInputRef.current.value = '';
+  };
+
+  const fecharModalAtividade = () => {
+    resetDraftAtividade();
+    limparFotosDaAtividade();
+    setAtividadeOpcoesAvancadas(false);
+    setAtividadeModalAberto(false);
+  };
+
+  const abrirNovaAtividade = () => {
+    resetDraftAtividade();
+    limparFotosDaAtividade();
+    setAtividadeOpcoesAvancadas(false);
+    setAtividadeModalAberto(true);
+  };
+
+  const enfileirarFotosDaAtividade = async () => {
+    if (!fotosDaAtividade.length) return;
+
+    const avulsa = String(draftAtividade.atividade_eap_id) === AVULSA_OPTION;
+    const descricaoAvulsa = String(draftAtividade.descricao_avulsa || '').trim();
+    const atividadeEap = atividadesEap.find((item) => String(item.id) === String(draftAtividade.atividade_eap_id));
+    const atividadeLabel = avulsa
+      ? `Avulsa — ${descricaoAvulsa}`
+      : `${atividadeEap?.codigo_eap ? `${atividadeEap.codigo_eap} — ` : ''}${atividadeEap?.nome || atividadeEap?.descricao || 'Atividade'}`;
+
+    const novasFotos = await Promise.all(fotosDaAtividade.map(async (file, ordemSelecao) => {
+      const arquivoFoto = await prepararFotoRdo(file);
+      return {
+        file: arquivoFoto,
+        previewUrl: URL.createObjectURL(arquivoFoto),
+        atividadeTipo: avulsa ? 'avulsa' : 'eap',
+        atividade_eap_id: avulsa ? null : draftAtividade.atividade_eap_id,
+        atividade_avulsa_descricao: avulsa ? descricaoAvulsa : null,
+        atividade_label: atividadeLabel,
+        descricao: descricaoFotosDaAtividade,
+        ordemSelecao
+      };
+    }));
+    setFotosQueue((atual) => [...atual, ...novasFotos]);
+    limparFotosDaAtividade();
+  };
+
   const startEditAtividadeEap = (atividade) => {
     setAtividadeResumoAberta(null);
     const sel = atividadesEap.find(x => String(x.id) === String(atividade.atividade_eap_id));
@@ -753,6 +814,9 @@ function RDOForm2() {
       ferramentas_utilizadas: atividade.ferramentas_utilizadas || []
     });
     setEditAtividade({ tipo: 'eap', atividade_eap_id: atividade.atividade_eap_id });
+    limparFotosDaAtividade();
+    setAtividadeOpcoesAvancadas(true);
+    setAtividadeModalAberto(true);
   };
 
   const startEditAtividadeAvulsa = (atividade, index) => {
@@ -763,9 +827,15 @@ function RDOForm2() {
       quantidade_executada: atividade.quantidade_executada ?? '',
       unidade_medida: '',
       percentual_executada: getPercentualAvulsa(atividade.quantidade_prevista, atividade.quantidade_executada),
-      observacao: atividade.observacao || ''
+      observacao: atividade.observacao || '',
+      mao_obra_utilizada: [],
+      insumos_utilizados: [],
+      ferramentas_utilizadas: []
     });
     setEditAtividade({ tipo: 'avulsa', index });
+    limparFotosDaAtividade();
+    setAtividadeOpcoesAvancadas(true);
+    setAtividadeModalAberto(true);
   };
 
   const fotoAtividadeOptions = useMemo(() => {
@@ -791,14 +861,17 @@ function RDOForm2() {
     return [...eapOptions, ...avulsaOptions];
   }, [formData.atividades, formData.atividades_avulsas, atividadesEap]);
 
-  const handleAddAtividade = () => {
-    if (!draftAtividade.atividade_eap_id) return;
+  const handleAddAtividade = async () => {
+    if (!draftAtividade.atividade_eap_id) {
+      showRdoError('Selecione uma atividade para continuar.');
+      return false;
+    }
 
     if (String(draftAtividade.atividade_eap_id) === AVULSA_OPTION) {
       const descricao = String(draftAtividade.descricao_avulsa || '').trim();
       if (!descricao) {
         showRdoError('Descrição da atividade avulsa é obrigatória.');
-        return;
+        return false;
       }
 
       const qtdPrevista = draftAtividade.quantidade_prevista_avulsa !== ''
@@ -810,11 +883,11 @@ function RDOForm2() {
 
       if (!Number.isFinite(qtdPrevista) || qtdPrevista <= 0) {
         showRdoError('Quantidade prevista da atividade avulsa deve ser maior que zero.');
-        return;
+        return false;
       }
       if (!Number.isFinite(qtdExecutada) || qtdExecutada < 0) {
         showRdoError('Quantidade executada da atividade avulsa é inválida.');
-        return;
+        return false;
       }
       if (qtdExecutada > qtdPrevista) {
         showRdoError('Quantidade executada da atividade avulsa não pode ser maior que a prevista.');
@@ -842,22 +915,23 @@ function RDOForm2() {
       }
 
       setFormData({ ...formData, atividades: novasAtividades, atividades_avulsas: novasAvulsas });
+      await enfileirarFotosDaAtividade();
       setErro('');
       resetDraftAtividade();
       setDirty(true);
-      return;
+      return true;
     }
 
     const { atividadeSel, quantidadeTotal, restante } = getAtividadeLimites(draftAtividade.atividade_eap_id);
     const qtdExec = draftAtividade.quantidade_executada !== '' ? Number(draftAtividade.quantidade_executada) : null;
     if (qtdExec !== null && !Number.isFinite(qtdExec)) {
-      showRdoError('Quantidade executada inválida.'); return;
+      showRdoError('Quantidade executada inválida.'); return false;
     }
     if (qtdExec !== null && qtdExec < 0) {
-      showRdoError('Quantidade executada não pode ser negativa.'); return;
+      showRdoError('Quantidade executada não pode ser negativa.'); return false;
     }
     if (qtdExec !== null && quantidadeTotal > 0 && restante != null && qtdExec > restante) {
-      showRdoError(`Quantidade acima do permitido. Restante: ${formatQtd(restante)} ${atividadeSel?.unidade_medida || ''}.`); return;
+      showRdoError(`Quantidade acima do permitido. Restante: ${formatQtd(restante)} ${atividadeSel?.unidade_medida || ''}.`); return false;
     }
     let percAuto = 0;
     if (qtdExec !== null && quantidadeTotal > 0) {
@@ -891,10 +965,20 @@ function RDOForm2() {
       : [...novaLista, item];
 
     setFormData({ ...formData, atividades: novaLista, atividades_avulsas: novasAvulsas });
+    await enfileirarFotosDaAtividade();
     setAtividadeResumoAberta(String(item.atividade_eap_id));
     setErro('');
     resetDraftAtividade();
     setDirty(true);
+    return true;
+  };
+
+  const salvarAtividadeNoModal = async () => {
+    const salva = await handleAddAtividade();
+    if (salva) {
+      setAtividadeOpcoesAvancadas(false);
+      setAtividadeModalAberto(false);
+    }
   };
 
   const removerAtividade = (id) => {
@@ -1330,17 +1414,57 @@ function RDOForm2() {
   const addOcorrencia = () => {
     if (!String(draftOcorrencia.descricao_detalhada || '').trim()) {
       showRdoError('Informe a descrição completa da ocorrência.');
-      return;
+      return false;
     }
     if (draftOcorrencia.categoria === 'Outra' && !String(draftOcorrencia.categoria_outra || '').trim()) {
       showRdoError('Descreva a categoria “Outra”.');
-      return;
+      return false;
     }
     const item = { ...draftOcorrencia, data_ocorrencia: draftOcorrencia.data_ocorrencia || formData.data_relatorio };
     setFormData(prev => ({ ...prev, sem_ocorrencias: false, ocorrencias_lista: [...prev.ocorrencias_lista, item] }));
     setDraftOcorrencia(NOVA_OCORRENCIA());
     setOcorrenciaAberta(formData.ocorrencias_lista.length);
     setDirty(true);
+    return true;
+  };
+
+  const abrirNovaOcorrencia = () => {
+    setDraftOcorrencia(NOVA_OCORRENCIA());
+    setOcorrenciaOpcoesAvancadas(false);
+    setSeletorTagsAberto(false);
+    setBuscaTagOcorrencia('');
+    setNovaTagOcorrencia('');
+    setOcorrenciaModalAberto(true);
+  };
+
+  const fecharModalOcorrencia = () => {
+    setDraftOcorrencia(NOVA_OCORRENCIA());
+    setOcorrenciaOpcoesAvancadas(false);
+    setSeletorTagsAberto(false);
+    setBuscaTagOcorrencia('');
+    setNovaTagOcorrencia('');
+    setOcorrenciaModalAberto(false);
+  };
+
+  const salvarOcorrenciaNoModal = () => {
+    if (addOcorrencia()) setOcorrenciaModalAberto(false);
+  };
+
+  const alternarTagOcorrencia = (tag) => {
+    setDraftOcorrencia((atual) => ({
+      ...atual,
+      tags: (atual.tags || []).includes(tag)
+        ? atual.tags.filter((item) => item !== tag)
+        : [...(atual.tags || []), tag]
+    }));
+  };
+
+  const adicionarNovaTagOcorrencia = () => {
+    const tag = String(novaTagOcorrencia || '').trim();
+    if (!tag) return;
+    setDraftOcorrencia((atual) => ({ ...atual, tags: (atual.tags || []).includes(tag) ? atual.tags : [...(atual.tags || []), tag] }));
+    setOcorrenciaConfig((atual) => ({ ...atual, tags: (atual.tags || []).includes(tag) ? atual.tags : [...(atual.tags || []), tag] }));
+    setNovaTagOcorrencia('');
   };
 
   const updateOcorrencia = (idx, changes) => {
@@ -2376,6 +2500,16 @@ function RDOForm2() {
 
         {/* ══ SEÇÃO 5 — Atividades Executadas ══════════ */}
         <Section id="atividades" num="5" title="Atividades Executadas" badge={(formData.atividades.length + formData.atividades_avulsas.length) || null} isOpen={openSections.atividades} onToggle={toggleSection} allowOverflow>
+          <div className="rdo-activity-section-actions">
+            <p>Registre as informações da atividade e vincule as fotos diretamente a ela.</p>
+            <Button tone="primary" variant="solid" startIcon={Plus} onClick={abrirNovaAtividade}>Adicionar atividade</Button>
+          </div>
+          <Modal
+            open={atividadeModalAberto}
+            wide
+            title={editAtividade ? `Editar atividade (${editAtividade.tipo === 'avulsa' ? 'Avulsa' : 'EAP'})` : `Adicionar atividade${isDraftAvulsa ? ' (Avulsa)' : ''}`}
+            onClose={fecharModalAtividade}
+          >
           <div className="rdo-grid-3" style={{ marginBottom: '8px' }}>
             <div className="form-group" style={{ gridColumn: 'span 2' }}>
               <label className="form-label">Atividade</label>
@@ -2424,13 +2558,13 @@ function RDOForm2() {
           {isDraftAvulsa && (
             <div className="rdo-grid-2" style={{ marginBottom: '8px' }}>
               <div className="form-group">
-                <label className="form-label">Descrição da atividade avulsa</label>
-                <input
+                <label className="form-label">Descrição da atividade avulsa *</label>
+                <textarea
                   className="form-input"
-                  type="text"
                   placeholder="Ex: Execução de base"
                   value={draftAtividade.descricao_avulsa}
                   onChange={(e) => setDraftAtividade({ ...draftAtividade, descricao_avulsa: e.target.value })}
+                  style={{ resize: 'vertical', minHeight: '82px' }}
                 />
               </div>
               <div className="form-group">
@@ -2445,6 +2579,43 @@ function RDOForm2() {
               </div>
             </div>
           )}
+
+          <label className="rdo-activity-more-options">
+            <input
+              type="checkbox"
+              checked={atividadeOpcoesAvancadas}
+              onChange={(event) => setAtividadeOpcoesAvancadas(event.target.checked)}
+            />
+            <span>Exibir mais opções</span>
+          </label>
+
+          <div className="rdo-grid-2" style={{ margin: '10px 0' }}>
+            <div className="form-group">
+              <label className="form-label">Porcentagem (%)</label>
+              <input className="form-input" readOnly value={(function () {
+                if (isDraftAvulsa) return getPercentualAvulsa(draftAtividade.quantidade_prevista_avulsa, draftAtividade.quantidade_executada);
+                const sel = atividadesEap.find((a) => String(a.id) === String(draftAtividade.atividade_eap_id));
+                const total = Number(sel?.quantidade_total || 0);
+                const executada = Number(draftAtividade.quantidade_executada || 0);
+                return total && executada ? Math.min(Math.round((executada / total) * 10000) / 100, 100) : 0;
+              })()} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Status</label>
+              <input className="form-input" readOnly value={(function () {
+                const percentual = isDraftAvulsa
+                  ? getPercentualAvulsa(draftAtividade.quantidade_prevista_avulsa, draftAtividade.quantidade_executada)
+                  : (() => {
+                    const sel = atividadesEap.find((a) => String(a.id) === String(draftAtividade.atividade_eap_id));
+                    const total = Number(sel?.quantidade_total || 0);
+                    return total ? (Number(draftAtividade.quantidade_executada || 0) / total) * 100 : 0;
+                  })();
+                return percentual >= 100 ? 'Concluída' : percentual > 0 ? 'Em andamento' : 'Não iniciada';
+              })()} />
+            </div>
+          </div>
+
+          {atividadeOpcoesAvancadas && <>
 
           {!isDraftAvulsa && draftAtividade.atividade_eap_id && (() => {
             const { atividadeSel, quantidadeTotal, execAprovado, restante } = getAtividadeLimites(draftAtividade.atividade_eap_id);
@@ -2525,6 +2696,29 @@ function RDOForm2() {
               </div>
             </div>
           )}
+          <div className="rdo-activity-photo-link">
+            <div>
+              <strong>Fotos ({fotosDaAtividade.length})</strong>
+              <span>As fotos selecionadas serão vinculadas automaticamente a esta atividade.</span>
+            </div>
+            <label className="rdo-file-picker">
+              <input ref={fotosDaAtividadeInputRef} type="file" accept="image/*" multiple
+                onChange={(event) => setFotosDaAtividade(Array.from(event.target.files || []))} />
+              <span className="rdo-file-picker-btn"><Upload size={15} /> Adicionar fotos</span>
+              <span className="rdo-file-picker-name">
+                {fotosDaAtividade.length ? `${fotosDaAtividade.length} foto(s) selecionada(s)` : 'Nenhuma foto selecionada'}
+              </span>
+            </label>
+            {fotosDaAtividade.length > 0 && (
+              <input
+                className="form-input"
+                value={descricaoFotosDaAtividade}
+                onChange={(event) => setDescricaoFotosDaAtividade(event.target.value)}
+                placeholder="Comentário para as fotos (opcional)"
+              />
+            )}
+          </div>
+          </>}
           <div className="rdo-activity-toolbar" style={{ marginBottom: '10px' }}>
             {editAtividade ? (
               <div className="rdo-activity-edit-hint">
@@ -2532,14 +2726,13 @@ function RDOForm2() {
               </div>
             ) : <div />}
             <div style={{ display: 'flex', gap: '8px' }}>
-              {editAtividade && (
-                <Button startIcon={X} onClick={resetDraftAtividade}>Cancelar edição</Button>
-              )}
-              <Button tone="primary" variant="solid" startIcon={editAtividade ? Save : Plus} onClick={handleAddAtividade}>
+              <Button startIcon={X} onClick={fecharModalAtividade}>Fechar</Button>
+              <Button tone="primary" variant="solid" startIcon={editAtividade ? Save : Plus} onClick={salvarAtividadeNoModal}>
                 {editAtividade ? 'Salvar edição' : 'Adicionar atividade'}
               </Button>
             </div>
           </div>
+          </Modal>
           {(formData.atividades.length + formData.atividades_avulsas.length) === 0 ? (
             <div className="rdo-empty">Nenhuma atividade adicionada.</div>
           ) : (
@@ -2687,41 +2880,9 @@ function RDOForm2() {
 
         {/* ══ SEÇÃO 6 — Fotos do RDO ═══════════════════ */}
         <Section id="fotos" num="6" title="Fotos do RDO" badge={(rdoFotos.length + fotosQueue.length) || null} isOpen={openSections.fotos} onToggle={toggleSection}>
-          <div className="rdo-add-row">
-            <div className="form-group" style={{ flex: '2' }}>
-              <label className="form-label">Arquivos</label>
-              <label className="rdo-file-picker">
-                <input ref={fotoInputRef} type="file" accept="image/*" multiple
-                  onChange={(e) => setFotoPendente(prev => ({ ...prev, files: Array.from(e.target.files || []) }))} />
-                <span className="rdo-file-picker-btn"><Upload size={15} /> Escolher fotos</span>
-                <span className="rdo-file-picker-name">
-                  {fotoPendente.files?.length > 1
-                    ? `${fotoPendente.files.length} fotos selecionadas`
-                    : (fotoPendente.files?.[0]?.name || 'Nenhum arquivo selecionado')}
-                </span>
-              </label>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Atividade *</label>
-              <select className="form-select" value={fotoPendente.atividadeId}
-                onChange={(e) => setFotoPendente(prev => ({ ...prev, atividadeId: e.target.value }))}>
-                <option value="">Selecione uma atividade...</option>
-                {fotoAtividadeOptions.map((opcao) => (
-                  <option key={opcao.value} value={opcao.value}>{opcao.label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="form-group" style={{ flex: '2' }}>
-              <label className="form-label">Comentário da foto</label>
-              <input className="form-input" type="text" placeholder="Descreva o que a foto registra..."
-                value={fotoPendente.descricao}
-                onChange={(e) => setFotoPendente(prev => ({ ...prev, descricao: e.target.value }))} />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <Button tone="primary" variant="solid" startIcon={Upload} onClick={handleFotoUpload} loading={isUploadingFoto} disabled={!fotoPendente.files?.length || !fotoPendente.atividadeId}>
-                Adicionar fotos
-              </Button>
-            </div>
+          <div className="rdo-photo-gallery-note">
+            <strong>Fotos vinculadas por atividade</strong>
+            <span>Para anexar uma foto, abra a atividade correspondente e use “Exibir mais opções”.</span>
           </div>
           {fotosQueue.length > 0 && (
             <div className="alert alert-info" style={{ marginBottom: '8px', fontSize: '12px' }}>
@@ -2923,6 +3084,55 @@ function RDOForm2() {
               setFormData(prev => ({ ...prev, sem_ocorrencias: checked })); setDirty(true);
             }} /> Não houve ocorrências neste dia
           </label>
+          {!formData.sem_ocorrencias && <div className="rdo-activity-section-actions">
+            <p>Registre a ocorrência, classifique-a por tags e complemente os detalhes quando necessário.</p>
+            <Button tone="primary" variant="solid" startIcon={Plus} onClick={abrirNovaOcorrencia}>Adicionar ocorrência</Button>
+          </div>}
+          <Modal open={ocorrenciaModalAberto} wide title="Adicionar ocorrência" onClose={fecharModalOcorrencia}>
+            <div className="form-group">
+              <label className="form-label">Descrição *</label>
+              <textarea className="form-input" rows="6" value={draftOcorrencia.descricao_detalhada}
+                onChange={(event) => setDraftOcorrencia({ ...draftOcorrencia, descricao_detalhada: event.target.value })}
+                placeholder="Descreva o que ocorreu..." />
+            </div>
+            <div className="form-group rdo-occurrence-tags">
+              <label className="form-label">Tipos de ocorrência (tags)</label>
+              <button type="button" className="form-select rdo-tags-trigger" onClick={() => setSeletorTagsAberto((aberto) => !aberto)} aria-expanded={seletorTagsAberto}>
+                <span>{(draftOcorrencia.tags || []).length ? draftOcorrencia.tags.join(', ') : 'Selecione as tags'}</span>
+                <ChevronDown size={16} />
+              </button>
+              {seletorTagsAberto && <div className="rdo-tags-menu">
+                <input className="form-input" autoFocus placeholder="Pesquisar" value={buscaTagOcorrencia} onChange={(event) => setBuscaTagOcorrencia(event.target.value)} />
+                <div className="rdo-tags-options">
+                  {[...new Set([...(ocorrenciaConfig.tags || OCCURRENCE_DEFAULT_TAGS), ...(draftOcorrencia.tags || [])])]
+                    .filter((tag) => tag.toLocaleLowerCase('pt-BR').includes(buscaTagOcorrencia.toLocaleLowerCase('pt-BR')))
+                    .map((tag) => <label key={tag}><input type="checkbox" checked={(draftOcorrencia.tags || []).includes(tag)} onChange={() => alternarTagOcorrencia(tag)} /> {tag}</label>)}
+                </div>
+                <div className="rdo-tags-new">
+                  <input className="form-input" value={novaTagOcorrencia} onChange={(event) => setNovaTagOcorrencia(event.target.value)} placeholder="Nova tag" />
+                  <Button size="sm" startIcon={Plus} onClick={adicionarNovaTagOcorrencia}>Adicionar nova tag</Button>
+                </div>
+              </div>}
+            </div>
+            <label className="rdo-activity-more-options">
+              <input type="checkbox" checked={ocorrenciaOpcoesAvancadas} onChange={(event) => setOcorrenciaOpcoesAvancadas(event.target.checked)} />
+              <span>Exibir mais opções</span>
+            </label>
+            {ocorrenciaOpcoesAvancadas && <>
+              <div className="rdo-grid-3" style={{ marginTop: '12px' }}>
+                <div className="form-group"><label className="form-label">Hora início</label><input className="form-input" type="time" value={draftOcorrencia.hora_inicio} onChange={(event) => setDraftOcorrencia({ ...draftOcorrencia, hora_inicio: event.target.value })} /></div>
+                <div className="form-group"><label className="form-label">Hora fim</label><input className="form-input" type="time" disabled={draftOcorrencia.em_andamento} value={draftOcorrencia.hora_fim} onChange={(event) => setDraftOcorrencia({ ...draftOcorrencia, hora_fim: event.target.value })} /></div>
+                <div className="form-group"><label className="form-label">Total de horas</label><input className="form-input" readOnly value={(() => { const horas = calcularHorasEquipamento(draftOcorrencia.hora_inicio, draftOcorrencia.hora_fim); return horas == null ? 'hh:mm' : `${horas.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} h`; })()} /></div>
+              </div>
+              <label className="rdo-occurrence-toggle"><input type="checkbox" checked={!!draftOcorrencia.em_andamento} onChange={(event) => setDraftOcorrencia({ ...draftOcorrencia, em_andamento: event.target.checked, hora_fim: event.target.checked ? '' : draftOcorrencia.hora_fim })} /> Em andamento</label>
+              <div className="rdo-grid-3" style={{ marginTop: '12px' }}>
+                <div className="form-group"><label className="form-label">Gravidade</label><select className="form-select" value={draftOcorrencia.gravidade} onChange={(event) => setDraftOcorrencia({ ...draftOcorrencia, gravidade: event.target.value })}>{ocorrenciaConfig.gravidades.map((gravidade) => <option key={gravidade}>{gravidade}</option>)}</select></div>
+                <div className="form-group" style={{ gridColumn: 'span 2' }}><label className="form-label">Local / frente</label><input className="form-input" value={draftOcorrencia.local_frente} onChange={(event) => setDraftOcorrencia({ ...draftOcorrencia, local_frente: event.target.value })} /></div>
+              </div>
+              <div className="rdo-occurrence-photos"><strong>Fotos</strong><span>Após salvar a ocorrência, vincule evidências da galeria do RDO no detalhe do registro.</span></div>
+            </>}
+            <div className="rdo-activity-toolbar" style={{ marginTop: '18px' }}><div /><div style={{ display: 'flex', gap: '8px' }}><Button startIcon={X} onClick={fecharModalOcorrencia}>Fechar</Button><Button tone="primary" variant="solid" startIcon={Save} onClick={salvarOcorrenciaNoModal}>Salvar</Button></div></div>
+          </Modal>
           {formData.ocorrencias_lista.map((o, idx) => {
             const expanded = ocorrenciaAberta === idx;
             const set = (changes) => updateOcorrencia(idx, changes);
@@ -2951,7 +3161,6 @@ function RDOForm2() {
               </div>}
             </article>;
           })}
-          {!formData.sem_ocorrencias && <div className="rdo-add-row" style={{ background: '#f8fafc', padding: '12px', borderRadius: '8px', alignItems: 'end' }}><div className="form-group" style={{ flex: 2 }}><label className="form-label">Nova ocorrência — título</label><input className="form-input" value={draftOcorrencia.titulo} onChange={(e) => setDraftOcorrencia({ ...draftOcorrencia, titulo: e.target.value })} /></div><div className="form-group" style={{ flex: 3 }}><label className="form-label">Descrição completa *</label><input className="form-input" value={draftOcorrencia.descricao_detalhada} onChange={(e) => setDraftOcorrencia({ ...draftOcorrencia, descricao_detalhada: e.target.value })} /></div><div className="form-group"><label className="form-label">Gravidade</label><select className="form-select" value={draftOcorrencia.gravidade} onChange={(e) => setDraftOcorrencia({ ...draftOcorrencia, gravidade: e.target.value })}>{ocorrenciaConfig.gravidades.map((g) => <option key={g}>{g}</option>)}</select></div><Button tone="primary" variant="solid" startIcon={Plus} onClick={addOcorrencia}>Adicionar</Button></div>}
           {!formData.sem_ocorrencias && formData.ocorrencias_lista.length === 0 && <div className="rdo-empty">Registre uma ocorrência ou declare a ausência antes de enviar para aprovação.</div>}
         </Section>
 
