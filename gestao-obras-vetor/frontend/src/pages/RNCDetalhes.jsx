@@ -5,7 +5,9 @@ import CockpitReturnButton from '../components/CockpitReturnButton';
 import Button, { IconButton } from '../components/ui/Button';
 import {
   getRNCs,
+  getUsuarios,
   updateStatusRNC,
+  updateRncRegistro,
   getAnexosRNC,
   uploadAnexoRNC,
   submitCorrecaoRNC,
@@ -76,7 +78,7 @@ const fmtDatetime = (value) => {
 
 const STATUS_META = {
   Aberta: { label: 'Aberta', cls: 'status-aberta' },
-  'Em andamento': { label: 'Aberta', cls: 'status-aberta' },
+  'Em andamento': { label: 'Plano de ação', cls: 'status-andamento' },
   'Em análise': { label: 'Em aprovação', cls: 'status-analise' },
   Encerrada: { label: 'Encerrada', cls: 'status-encerrada' },
   Reprovada: { label: 'Reprovada', cls: 'status-reprovada' }
@@ -101,8 +103,8 @@ const STEPS = [
 const stepIndex = (status) => {
   if (status === 'Em análise') return 2;
   if (status === 'Encerrada') return 3;
-  if (status === 'Aberta' || status === 'Em andamento' || status === 'Reprovada') return 1;
-  return 1;
+  if (status === 'Em andamento' || status === 'Reprovada') return 1;
+  return 0;
 };
 
 function RNCDetalhes() {
@@ -119,16 +121,33 @@ function RNCDetalhes() {
   const [fotosCorrecao, setFotosCorrecao] = useState([]);
   const [previewCorrecao, setPreviewCorrecao] = useState([]);
   const [enviando, setEnviando] = useState(false);
+  const [usuarios, setUsuarios] = useState([]);
+  const [registro, setRegistro] = useState({ titulo: '', descricao: '', gravidade: 'Média', acao_corretiva: '', responsavel_id: '', data_prevista_encerramento: '', area_afetada: '', norma_referencia: '' });
   const [draggingC, setDraggingC] = useState(false);
   const dropCorrecaoRef = useRef(null);
 
   useEffect(() => {
     carregarRNC();
+    getUsuarios().then((response) => setUsuarios(response.data || [])).catch(() => setUsuarios([]));
   }, [rncId]);
 
   useEffect(() => {
     if (rnc?.descricao_correcao) setCorrecaoTexto(rnc.descricao_correcao);
   }, [rnc?.descricao_correcao]);
+
+  useEffect(() => {
+    if (!rnc) return;
+    setRegistro({
+      titulo: rnc.titulo || '',
+      descricao: rnc.descricao || '',
+      gravidade: rnc.gravidade || 'Média',
+      acao_corretiva: rnc.acao_corretiva || '',
+      responsavel_id: rnc.responsavel_id || '',
+      data_prevista_encerramento: rnc.data_prevista_encerramento || '',
+      area_afetada: rnc.area_afetada || '',
+      norma_referencia: rnc.norma_referencia || ''
+    });
+  }, [rnc]);
 
   const carregarRNC = async () => {
     try {
@@ -174,7 +193,12 @@ function RNCDetalhes() {
 
   const enviarCorrecao = async () => {
     if (!correcaoTexto.trim()) {
-      error('Descreva o que foi feito para corrigir a não conformidade.');
+      error('Descreva o plano de ação e a recuperação proposta para a não conformidade.');
+      return;
+    }
+
+    if (totalFotosCorrecao < 1) {
+      error('Anexe ao menos uma foto ou evidência da correção antes de enviar para aprovação.');
       return;
     }
 
@@ -192,7 +216,7 @@ function RNCDetalhes() {
 
       await submitCorrecaoRNC(rncId, { descricao_correcao: correcaoTexto.trim() });
       await enviarRncParaAprovacao(rncId);
-      success('Correção registrada e enviada para aprovação!');
+      success('Plano de ação e evidências enviados para aprovação!');
       await carregarRNC();
       setFotosCorrecao([]);
       setPreviewCorrecao([]);
@@ -210,6 +234,27 @@ function RNCDetalhes() {
       success('RNC aprovada e encerrada.');
     } catch (err) {
       error('Falha: ' + (err.response?.data?.erro || err.message));
+    }
+  };
+
+  const salvarRegistro = async (event) => {
+    event.preventDefault();
+    try {
+      await updateRncRegistro(rncId, registro);
+      success('Registro da RNC atualizado.');
+      await carregarRNC();
+    } catch (err) {
+      error('Falha ao atualizar o registro: ' + (err.response?.data?.erro || err.message));
+    }
+  };
+
+  const reabrirRegistro = async () => {
+    try {
+      await updateStatusRNC(rncId, 'Aberta');
+      success('RNC devolvida para Registro. Revise os dados e valide novamente antes do plano de ação.');
+      await carregarRNC();
+    } catch (err) {
+      error('Falha ao devolver a RNC para Registro: ' + (err.response?.data?.erro || err.message));
     }
   };
 
@@ -307,9 +352,10 @@ function RNCDetalhes() {
   const activeStep = stepIndex(rnc.status);
   const isEncerrada = rnc.status === 'Encerrada';
   const isEmAnalise = rnc.status === 'Em análise';
-  const isAberta = rnc.status === 'Aberta' || rnc.status === 'Em andamento';
+  const isRegistro = rnc.status === 'Aberta';
+  const isEmCorrecao = rnc.status === 'Em andamento';
   const isReprovada = rnc.status === 'Reprovada';
-  const podeCorrigir = (isAberta || isReprovada) && !isEncerrada;
+  const podeCorrigir = (isEmCorrecao || isReprovada) && !isEncerrada;
   const totalFotosCorrecao = fotosCorrecaoRegistradas.length + fotosCorrecao.length;
 
   const timeline = [
@@ -337,6 +383,7 @@ function RNCDetalhes() {
               Qualidade / RNC / <strong>#{rnc.id}</strong>
             </div>
             <h1 className="rdet-title">{titulo}</h1>
+            {rnc.folha_verificacao_id && <button className="rdet-origem-badge" onClick={() => navigate(`/projeto/${projetoId}/qualidade/folhas/${rnc.folha_verificacao_id}`)}>Folha {rnc.folha_verificacao_numero || rnc.folha_verificacao_id}</button>}
             <div className="rdet-badges">
               <span className={`rdet-status-badge ${statusMeta.cls}`}>{statusMeta.label}</span>
               {rnc.gravidade && <span className={`rdet-grav-badge ${GRAV_CLS(rnc.gravidade)}`}>{rnc.gravidade}</span>}
@@ -373,6 +420,25 @@ function RNCDetalhes() {
                 <h3>Não Conformidade</h3>
               </div>
               <p className="rdet-desc">{rnc.descricao}</p>
+              {isRegistro && !rnc.registro_salvo && (
+                <form className="rdet-record-editor" onSubmit={salvarRegistro}>
+                  <div className="rdet-record-editor-head"><h4>Registro da não conformidade</h4><span>Complete e revise os dados desta etapa. O plano de ação só será preenchido depois da validação.</span></div>
+                  <label>Título<input required value={registro.titulo} onChange={(event) => setRegistro((current) => ({ ...current, titulo: event.target.value }))} /></label>
+                  <label>Descrição da não conformidade<textarea required rows={4} value={registro.descricao} onChange={(event) => setRegistro((current) => ({ ...current, descricao: event.target.value }))} /></label>
+                  <div className="rdet-record-editor-grid"><label>Gravidade<select value={registro.gravidade} onChange={(event) => setRegistro((current) => ({ ...current, gravidade: event.target.value }))}><option>Baixa</option><option>Média</option><option>Alta</option><option>Crítica</option></select></label><label>Área / setor afetado<input value={registro.area_afetada} onChange={(event) => setRegistro((current) => ({ ...current, area_afetada: event.target.value }))} placeholder="Ex.: Estrutura, elétrica, civil" /></label></div>
+                  <label>Ação corretiva esperada<textarea required rows={3} value={registro.acao_corretiva} onChange={(event) => setRegistro((current) => ({ ...current, acao_corretiva: event.target.value }))} placeholder="Descreva claramente o que precisa ser feito para corrigir e evitar a recorrência." /></label>
+                  <div className="rdet-record-editor-grid"><label>Responsável pela correção<select value={registro.responsavel_id} onChange={(event) => setRegistro((current) => ({ ...current, responsavel_id: event.target.value }))}><option value="">Selecione o responsável</option>{usuarios.map((usuario) => <option key={usuario.id} value={usuario.id}>{usuario.nome}</option>)}</select></label><label>Prazo para encerramento<input type="date" value={registro.data_prevista_encerramento || ''} onChange={(event) => setRegistro((current) => ({ ...current, data_prevista_encerramento: event.target.value }))} /></label></div>
+                  <label>Norma / referência técnica<input value={registro.norma_referencia} onChange={(event) => setRegistro((current) => ({ ...current, norma_referencia: event.target.value }))} placeholder="Ex.: procedimento, projeto ou manual do fabricante" /></label>
+                  <div className="rdet-record-editor-actions"><Button type="submit" tone="primary" variant="solid">Salvar registro</Button></div>
+                </form>
+              )}
+              {isRegistro && rnc.registro_salvo && (
+                <div className="rdet-record-locked">
+                  <div className="rdet-record-locked-head"><CheckCircle2 size={18} /><div><strong>Registro salvo</strong><span>Os dados estão bloqueados para edição até a conclusão desta etapa.</span></div></div>
+                  <div className="rdet-record-summary"><div><span>Gravidade</span><strong>{rnc.gravidade || 'Não informada'}</strong></div><div><span>Área / setor</span><strong>{rnc.area_afetada || 'Não informado'}</strong></div><div><span>Responsável</span><strong>{rnc.responsavel_nome || 'Não definido'}</strong></div><div><span>Prazo</span><strong>{rnc.data_prevista_encerramento ? fmtDate(rnc.data_prevista_encerramento) : 'Não definido'}</strong></div></div>
+                  {rnc.acao_corretiva && <div className="rdet-record-summary-wide"><span>Ação corretiva esperada</span><strong>{rnc.acao_corretiva}</strong></div>}
+                </div>
+              )}
               {rnc.norma_referencia && (
                 <div className="rdet-inline-info">
                   <Info size={13} />
@@ -425,13 +491,28 @@ function RNCDetalhes() {
               </div>
             )}
 
-            {podeCorrigir && (
+              {isEmCorrecao && canAprovarRnc && (
+                <div className="rdet-return-record">
+                  <div><strong>Precisa corrigir os dados do registro?</strong><span>Devolva a RNC para Registro antes de enviar o plano para aprovação.</span></div>
+                  <Button variant="outline" onClick={reabrirRegistro}>Voltar para Registro</Button>
+                </div>
+              )}
+              {isRegistro && (
+                <div className="rdet-correction-panel">
+                  <div className="rdet-correction-head">
+                    <div className="rdet-correction-icon"><Info size={20} /></div>
+                    <div><h3>Validação do registro</h3><span>A RNC foi aberta a partir da folha. Revise os dados técnicos antes de liberar o plano de ação.</span></div>
+                  </div>
+                  {canAprovarRnc ? <Button tone="primary" variant="solid" startIcon={CheckCircle} onClick={async()=>{try{await updateStatusRNC(rncId,'Em andamento');success('Registro validado. O plano de ação foi liberado.');await carregarRNC();}catch(err){error('Falha ao validar o registro: '+(err.response?.data?.erro||err.message));}}}>Validar registro e liberar plano</Button> : <p className="rdet-correction-hint">Aguardando validação do Gestor ou da Qualidade para liberar o plano de ação.</p>}
+                </div>
+              )}
+              {podeCorrigir && (
               <div className="rdet-card rdet-card-correction">
                 <div className="rdet-card-head">
                   <div className="rdet-card-icon rdet-icon-green"><Wrench size={15} /></div>
                   <h3>Registrar Correção</h3>
                   <span className="rdet-correction-hint">
-                    {isReprovada ? 'Correção reprovada - registre novamente' : 'Descreva o que foi feito e envie para aprovação'}
+                    {isReprovada ? 'Plano de ação reprovado — registre novamente' : 'Proponha o plano de ação e envie as evidências para aprovação'}
                   </span>
                 </div>
                 <div className="form-group">
@@ -445,7 +526,7 @@ function RNCDetalhes() {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Fotos da correção (opcional)</label>
+                  <label className="form-label">Fotos e evidências da correção *</label>
                   <div
                     ref={dropCorrecaoRef}
                     className={`rdet-dropzone${draggingC ? ' dragging' : ''}`}
@@ -460,7 +541,7 @@ function RNCDetalhes() {
                   >
                     <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={(event) => adicionarFotosCorrecao(event.target.files)} />
                     <Upload size={20} />
-                    <span>Adicionar evidências da correção ({totalFotosCorrecao})</span>
+                    <span>Adicionar evidências da correção ({totalFotosCorrecao}) — obrigatório</span>
                   </div>
                   {previewCorrecao.length > 0 && (
                     <div className="rdet-preview-grid">
@@ -474,7 +555,7 @@ function RNCDetalhes() {
                   )}
                 </div>
                 <div className="rdet-correction-actions">
-                  <Button tone="primary" variant="solid" startIcon={Send} loading={enviando} className="rdet-send-btn" disabled={!correcaoTexto.trim()} onClick={enviarCorrecao}>Enviar para aprovação</Button>
+                  <Button tone="primary" variant="solid" startIcon={Send} loading={enviando} className="rdet-send-btn" disabled={!correcaoTexto.trim() || totalFotosCorrecao < 1} onClick={enviarCorrecao}>Enviar plano para aprovação</Button>
                 </div>
               </div>
             )}
@@ -514,7 +595,7 @@ function RNCDetalhes() {
               </div>
             )}
 
-            {rnc.descricao_correcao && !isEmAnalise && (
+            {rnc.descricao_correcao && !isEmAnalise && !isRegistro && (
               <div className="rdet-card rdet-card-done">
                 <div className="rdet-card-head">
                   <div className="rdet-card-icon rdet-icon-green"><CheckCircle2 size={15} /></div>

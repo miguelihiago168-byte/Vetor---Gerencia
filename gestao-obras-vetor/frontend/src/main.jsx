@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { LeaveGuardProvider } from './context/LeaveGuardContext';
@@ -42,6 +42,9 @@ import RNC from './pages/RNC';
 import RNCForm from './pages/RNCForm';
 import RNCDetalhes from './pages/RNCDetalhes';
 import QualidadeHub from './pages/QualidadeHub';
+import FolhasVerificacao from './pages/FolhasVerificacao';
+import FolhaVerificacaoForm from './pages/FolhaVerificacaoForm';
+import FolhaVerificacaoDetalhe from './pages/FolhaVerificacaoDetalhe';
 import RastreabilidadeMateriais from './pages/RastreabilidadeMateriais';
 import RastreabilidadeForm from './pages/RastreabilidadeForm';
 import RastreabilidadeDetalhe from './pages/RastreabilidadeDetalhe';
@@ -63,6 +66,11 @@ import './dark-mode.css';
 
 const PERFIS_RDO = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade', 'Fiscal'];
 const PERFIS_RNC = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade', 'Fiscal'];
+const PERFIS_FOLHAS = PERFIS_RNC;
+const ModelosDesativados = () => {
+  const { projetoId } = useParams();
+  return <Navigate to={`/projeto/${projetoId}/qualidade/folhas`} replace />;
+};
 const PERFIS_CURVA_S = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade', 'Fiscal'];
 const PERFIS_EAP = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade'];
 const PERFIS_GANTT = ['Gestor Geral', 'Gestor da Obra', 'Gestor Local', 'Gestor da Qualidade', 'Gestor de Qualidade'];
@@ -243,6 +251,11 @@ ReactDOM.createRoot(document.getElementById('root')).render(
               <QualidadeHub />
             </PrivateRoute>
           } />
+          <Route path="/projeto/:projetoId/qualidade/folhas" element={<PrivateRoute allowedPerfis={PERFIS_FOLHAS}><FolhasVerificacao /></PrivateRoute>} />
+          <Route path="/projeto/:projetoId/qualidade/folhas/nova" element={<PrivateRoute allowedPerfis={PERFIS_FOLHAS}><FolhaVerificacaoForm /></PrivateRoute>} />
+          <Route path="/projeto/:projetoId/qualidade/folhas/:id" element={<PrivateRoute allowedPerfis={PERFIS_FOLHAS}><FolhaVerificacaoDetalhe /></PrivateRoute>} />
+          <Route path="/projeto/:projetoId/qualidade/folhas/:id/editar" element={<PrivateRoute allowedPerfis={PERFIS_FOLHAS}><FolhaVerificacaoDetalhe /></PrivateRoute>} />
+          <Route path="/projeto/:projetoId/qualidade/modelos" element={<ModelosDesativados />} />
           <Route path="/projeto/:projetoId/rastreabilidade-materiais" element={
             <PrivateRoute allowedPerfis={['Gestor Geral', 'Gestor da Obra', 'Gestor da Qualidade', 'Gestor de Qualidade', 'ADM', 'Almoxarife', 'Fiscal']}>
               <RastreabilidadeMateriais />

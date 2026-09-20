@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const { allQuery, getQuery, runQuery } = require('../config/database');
+const { allQuery, getQuery, runQuery, tableHasColumn } = require('../config/database');
 const { auth, isGestor } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
 const { PERFIS, inferirPerfil } = require('../constants/access');
@@ -48,15 +48,28 @@ router.get('/projeto/:projetoId', auth, async (req, res) => {
     if (!projeto) {
       return res.status(404).json({ erro: 'Projeto não encontrado ou não pertence ao seu tenant.' });
     }
-    const lista = await allQuery(`
-      SELECT r.*, u.nome AS criado_por_nome, g.nome AS responsavel_nome, rd.data_relatorio AS rdo_data
-      FROM rnc r
-      LEFT JOIN usuarios u ON r.criado_por = u.id
-      LEFT JOIN usuarios g ON r.responsavel_id = g.id
-      LEFT JOIN rdos rd ON r.rdo_id = rd.id
-      WHERE r.projeto_id = ?
-      ORDER BY r.criado_em DESC
-    `, [projetoId]);
+    let lista;
+    try {
+      lista = await allQuery(`
+        SELECT r.*, u.nome AS criado_por_nome, g.nome AS responsavel_nome, rd.data_relatorio AS rdo_data,
+          fv.id AS folha_verificacao_id, fv.numero AS folha_verificacao_numero,
+          EXISTS (SELECT 1 FROM auditoria ar WHERE ar.tabela = 'rnc' AND ar.registro_id = r.id AND ar.acao = 'REGISTRO_ATUALIZADO') AS registro_salvo
+        FROM rnc r
+        LEFT JOIN usuarios u ON r.criado_por = u.id
+        LEFT JOIN usuarios g ON r.responsavel_id = g.id
+        LEFT JOIN rdos rd ON r.rdo_id = rd.id
+        LEFT JOIN folhas_verificacao_rncs fvr ON fvr.rnc_id = r.id
+        LEFT JOIN folhas_verificacao fv ON fv.id = fvr.folha_id
+        WHERE r.projeto_id = ?
+        ORDER BY r.criado_em DESC
+      `, [projetoId]);
+    } catch (schemaError) {
+      // Mantém RNC disponível em instalações que ainda não aplicaram a migration das folhas.
+      lista = await allQuery(`SELECT r.*, u.nome AS criado_por_nome, g.nome AS responsavel_nome, rd.data_relatorio AS rdo_data,
+        EXISTS (SELECT 1 FROM auditoria ar WHERE ar.tabela = 'rnc' AND ar.registro_id = r.id AND ar.acao = 'REGISTRO_ATUALIZADO') AS registro_salvo
+        FROM rnc r LEFT JOIN usuarios u ON r.criado_por=u.id LEFT JOIN usuarios g ON r.responsavel_id=g.id LEFT JOIN rdos rd ON r.rdo_id=rd.id
+        WHERE r.projeto_id=? ORDER BY r.criado_em DESC`, [projetoId]);
+    }
     res.json(lista);
   } catch (error) {
     console.error('Erro ao listar RNC:', error);
@@ -140,6 +153,51 @@ router.post('/', auth, [
   } catch (error) {
     console.error('Erro ao criar RNC:', error);
     res.status(500).json({ erro: 'Erro ao criar RNC.' });
+  }
+});
+
+// Atualizar o registro inicial de uma RNC. Mantém o plano de ação separado do
+// registro técnico e usa somente colunas presentes no cadastro-base de RNC.
+router.put('/:id/registro', auth, [
+  body('titulo').trim().notEmpty(),
+  body('descricao').trim().notEmpty(),
+  body('gravidade').trim().notEmpty()
+], async (req, res) => {
+  try {
+    const { id } = req.params;
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ erro: 'Preencha os campos obrigatórios do registro.', detalhes: errors.array() });
+
+    const rncAtual = await getQuery('SELECT * FROM rnc WHERE id = ?', [id]);
+    if (!rncAtual) return res.status(404).json({ erro: 'RNC não encontrada.' });
+    if (rncAtual.status !== 'Aberta') return res.status(409).json({ erro: 'O registro só pode ser editado enquanto a RNC estiver em Registro.' });
+
+    const uid = String(req.usuario?.id ?? '');
+    if (uid !== String(rncAtual.criado_por ?? '') && !req.usuario.is_gestor) {
+      return res.status(403).json({ erro: 'Sem permissão para editar este registro.' });
+    }
+
+    const { titulo, descricao, gravidade, acao_corretiva } = req.body;
+    const updates = ['titulo = ?', 'descricao = ?', 'gravidade = ?', 'acao_corretiva = ?'];
+    const values = [titulo.trim(), descricao.trim(), gravidade.trim(), String(acao_corretiva || '').trim() || null];
+    const optional = [
+      ['responsavel_id', req.body.responsavel_id || null],
+      ['data_prevista_encerramento', req.body.data_prevista_encerramento || null],
+      ['area_afetada', req.body.area_afetada || null],
+      ['norma_referencia', req.body.norma_referencia || null]
+    ];
+    for (const [column, value] of optional) {
+      if (await tableHasColumn('rnc', column)) { updates.push(`${column} = ?`); values.push(value); }
+    }
+    updates.push('atualizado_em = CURRENT_TIMESTAMP');
+    values.push(id);
+    await runQuery(`UPDATE rnc SET ${updates.join(', ')} WHERE id = ?`, values);
+    const novo = await getQuery('SELECT * FROM rnc WHERE id = ?', [id]);
+    await registrarAuditoria('rnc', id, 'REGISTRO_ATUALIZADO', rncAtual, novo, req.usuario.id);
+    return res.json({ mensagem: 'Registro da RNC atualizado.' });
+  } catch (error) {
+    console.error('Erro ao atualizar registro da RNC:', error);
+    return res.status(500).json({ erro: 'Erro ao atualizar o registro da RNC.' });
   }
 });
 
@@ -282,6 +340,10 @@ router.post('/:id/enviar-aprovacao', auth, async (req, res) => {
 
     const rncAtual = await getQuery('SELECT * FROM rnc WHERE id = ?', [id]);
     if (!rncAtual) return res.status(404).json({ erro: 'RNC não encontrada.' });
+    if (!['Em andamento', 'Reprovada'].includes(rncAtual.status)) return res.status(409).json({ erro:'A RNC precisa ter o registro validado antes de o plano de ação ser enviado para aprovação.' });
+    if (!String(rncAtual.descricao_correcao || '').trim()) return res.status(409).json({ erro:'Registre o plano de ação antes de enviar a RNC para aprovação.' });
+    const evidencias = await getQuery("SELECT COUNT(*)::int total FROM anexos WHERE rnc_id=? AND categoria='correcao'", [id]);
+    if (Number(evidencias?.total || 0) < 1) return res.status(409).json({ erro:'Anexe ao menos uma foto ou evidência da correção antes de enviar a RNC para aprovação.' });
 
     // somente criador ou responsável podem enviar para aprovação
     const uid = String(req.usuario?.id ?? '');
@@ -350,6 +412,7 @@ router.post('/:id/corrigir', auth, async (req, res) => {
 
     const rncAtual = await getQuery('SELECT * FROM rnc WHERE id = ?', [id]);
     if (!rncAtual) return res.status(404).json({ erro: 'RNC não encontrada.' });
+    if (!['Em andamento', 'Reprovada'].includes(rncAtual.status)) return res.status(409).json({ erro:'Aguarde a validação do registro da RNC antes de propor o plano de ação.' });
 
     // somente criador, responsável ou gestor podem submeter correção
     const uid = String(req.usuario?.id ?? '');
@@ -357,6 +420,9 @@ router.post('/:id/corrigir', auth, async (req, res) => {
     if (!podeCorrigir) {
       return res.status(403).json({ erro: 'Sem permissão para submeter correção.' });
     }
+    if (!String(descricao_correcao || '').trim()) return res.status(400).json({ erro:'Plano de ação obrigatório.' });
+    const evidencias = await getQuery("SELECT COUNT(*)::int total FROM anexos WHERE rnc_id=? AND categoria='correcao'", [id]);
+    if (Number(evidencias?.total || 0) < 1) return res.status(409).json({ erro:'Anexe ao menos uma foto ou evidência antes de registrar o plano de ação.' });
 
     await runQuery(
       'UPDATE rnc SET descricao_correcao = ?, descricao_correcao_em = CURRENT_TIMESTAMP, status = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?',

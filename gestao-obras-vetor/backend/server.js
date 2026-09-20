@@ -55,6 +55,7 @@ const serviceAuthRoutes = require('./routes/service_auth');
 const transferenciasRoutes = require('./routes/transferencias');
 const estoqueRoutes = require('./routes/estoque');
 const contatoRoutes = require('./routes/contato');
+const folhasVerificacaoRoutes = require('./routes/folhas_verificacao');
 // Startup nao executa migrations automaticas. Use npm run migrate/status antes de subir a aplicacao.
 console.log('[startup-db-guard] Migrations automaticas de startup desativadas.');
 
@@ -85,6 +86,7 @@ app.use('/api/almoxarifado', almoxarifadoRoutes);
 app.use('/api/email', emailRoutes);
 app.use('/api/mensagens', mensagensRoutes);
 app.use('/api/uploads', uploadsRoutes);
+app.use('/api/folhas-verificacao', folhasVerificacaoRoutes);
 
 const createRealtimeServer = (server) => {
   const io = new Server(server, {

@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import CockpitReturnButton, { forwardCockpitNavigationState } from '../components/CockpitReturnButton';
 import Button, { IconButton } from '../components/ui/Button';
-import { createRNC, getUsuarios, getProjeto, getRDOs, uploadAnexoRNC } from '../services/api';
+import { createRNC, getUsuarios, getProjeto, getRDOs, getFolhaVerificacao, uploadAnexoRNC, vincularRncFolha } from '../services/api';
 import { Save, X, AlertTriangle, Camera, Wrench, Users, Calendar, Upload, CheckCircle } from 'lucide-react';
 import { useNotification } from '../context/NotificationContext';
 import './RNCForm.css';
@@ -12,6 +12,7 @@ function RNCForm() {
   const { projetoId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const folhaVerificacaoId = new URLSearchParams(location.search).get('folhaVerificacaoId');
   const { success, error: notifyError } = useNotification();
   const [loading, setLoading] = useState(false);
   const [usuarios, setUsuarios] = useState([]);
@@ -62,6 +63,36 @@ function RNCForm() {
     carregarDados();
   }, [projetoId]);
 
+  useEffect(() => {
+    if (!folhaVerificacaoId) return;
+    const carregarDadosDaFolha = async () => {
+      try {
+        const response = await getFolhaVerificacao(folhaVerificacaoId);
+        const folha = response.data;
+        if (String(folha.projeto_id) !== String(projetoId)) throw new Error('A folha pertence a outro projeto.');
+        const identificacao = typeof folha.identificacao === 'string' ? JSON.parse(folha.identificacao || '{}') : (folha.identificacao || {});
+        const pontosNc = (folha.medicoes || []).filter((medicao) => medicao.resultado === 'NAO_CONFORME').map((medicao) => medicao.numero_ponto || medicao.localizacao || medicao.id);
+        const documento = folha.torque?.documento_referencia || '';
+        setFormData((current) => ({
+          ...current,
+          titulo: `Não conformidade ${folha.numero}`,
+          descricao: `Gerada pela Folha de Verificação ${folha.numero}. Pontos não conformes: ${pontosNc.join(', ') || 'conforme detalhamento da folha'}.`,
+          gravidade: 'Média',
+          acao_corretiva: `Corrigir os pontos não conformes da folha ${folha.numero} conforme ${documento || 'o requisito técnico aplicável'} e registrar a reinspeção.`,
+          rdo_id: folha.rdo_id ? String(folha.rdo_id) : '',
+          origem: 'Inspeção',
+          area_afetada: identificacao.area_setor_trecho || identificacao.area || ''
+        }));
+        setLocalSetor(identificacao.area_setor_trecho || identificacao.localizacao || '');
+      } catch (err) {
+        const msg = err.response?.data?.erro || err.message || 'Não foi possível carregar os dados da folha.';
+        setErro(msg);
+        notifyError(msg);
+      }
+    };
+    carregarDadosDaFolha();
+  }, [folhaVerificacaoId, projetoId]);
+
   const formatRdoDate = (value) => {
     if (!value) return null;
     const m = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -107,6 +138,10 @@ function RNCForm() {
       const rncRes = await createRNC(dataToSend);
       const rncId = rncRes?.data?.id;
 
+      if (folhaVerificacaoId && rncId) {
+        await vincularRncFolha(folhaVerificacaoId, rncId);
+      }
+
       const fotosComFalha = [];
       if (rncId && fotos.length > 0) {
         for (const foto of fotos) {
@@ -122,7 +157,7 @@ function RNCForm() {
 
       success(dataToSend.responsavel_id ? 'RNC criada e responsável notificado!' : 'RNC criada com sucesso!');
       if (fotosComFalha.length > 0) notifyError(`Fotos não enviadas: ${fotosComFalha.join(', ')}`);
-      navigate(`/projeto/${projetoId}/rnc`, { state: forwardCockpitNavigationState(location) });
+      navigate(folhaVerificacaoId && rncId ? `/projeto/${projetoId}/rnc/${rncId}` : `/projeto/${projetoId}/rnc`, { state: forwardCockpitNavigationState(location) });
     } catch (err) {
       const msg = err.response?.data?.erro || err.message || 'Erro ao criar RNC.';
       setErro(msg);
@@ -162,8 +197,8 @@ function RNCForm() {
         <div className="rnc-form-topbar">
           <CockpitReturnButton fallbackTo={`/projeto/${projetoId}/rnc`} className="rnc-form-back" variant="inverse" />
           <div className="rnc-form-topbar-title">
-            <span className="rnc-form-breadcrumb">Qualidade / Não Conformidades / <strong>Nova RNC</strong></span>
-            <h1>Abrir Não Conformidade</h1>
+            <span className="rnc-form-breadcrumb">Qualidade / Não Conformidades / <strong>{folhaVerificacaoId ? 'RNC da Folha de Verificação' : 'Nova RNC'}</strong></span>
+            <h1>{folhaVerificacaoId ? 'Registrar RNC da Folha de Verificação' : 'Abrir Não Conformidade'}</h1>
           </div>
           <div className="rnc-form-topbar-actions">
             <Button variant="inverse" startIcon={X} onClick={() => navigate(`/projeto/${projetoId}/rnc`, { state: forwardCockpitNavigationState(location) })}>

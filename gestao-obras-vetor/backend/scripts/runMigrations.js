@@ -1,5 +1,8 @@
 const fs = require('fs');
 const path = require('path');
+// The application loads .env during normal startup. This command is standalone,
+// so load the same local configuration before opening the database connection.
+require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
 const { pool, translateQuery } = require('../config/database');
 
 const args = new Set(process.argv.slice(2));

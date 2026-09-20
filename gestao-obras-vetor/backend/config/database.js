@@ -89,12 +89,13 @@ const withClient = async (schemaOrFn, maybeFn, explicitContext) => {
   }
 };
 
-const execWithClient = async (client, sql, params = []) => {
+const execWithClient = async (client, sql, params = [], options = {}) => {
   let finalSql = translateQuery(sql);
   const insert = isInsert(finalSql);
-  if (insert && !/RETURNING\s+\S/i.test(finalSql)) finalSql = `${finalSql.replace(/;\s*$/, '')} RETURNING id`;
+  const returnColumn = options.returnColumn === undefined ? 'id' : options.returnColumn;
+  if (insert && returnColumn && !/RETURNING\s+\S/i.test(finalSql)) finalSql = `${finalSql.replace(/;\s*$/, '')} RETURNING ${returnColumn}`;
   const result = await client.query(finalSql, params);
-  return { lastID: insert && result.rows.length ? Number(result.rows[0].id) : null, changes: result.rowCount };
+  return { lastID: insert && returnColumn && result.rows.length ? Number(result.rows[0][returnColumn]) : null, changes: result.rowCount };
 };
 const getWithClient = async (client, sql, params = []) => (await client.query(translateQuery(sql), params)).rows[0] || null;
 const allWithClient = async (client, sql, params = []) => (await client.query(translateQuery(sql), params)).rows;

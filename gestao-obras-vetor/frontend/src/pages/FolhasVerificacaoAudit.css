@@ -1,0 +1,41 @@
+.signature-note {
+  margin: -7px 0 14px;
+  color: var(--text-secondary, #64748b);
+  font-size: .9rem;
+}
+
+.signature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.signature-card {
+  display: grid;
+  gap: 5px;
+  padding: 14px;
+  border: 1px solid var(--border-color, #dce5e7);
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.signature-card.is-signed { border-color: #83d8c0; background: #ecfbf5; }
+.signature-card strong { width: max-content; border-radius: 999px; padding: 3px 8px; background: #e2e8f0; color: #64748b; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; }
+.signature-card.is-signed strong { background: #c9f2e3; color: #08705f; }
+.signature-card span { color: var(--text-secondary, #64748b); font-size: .82rem; }
+.signature-card b { font-size: .95rem; color: var(--text-primary, #0f172a); }
+.signature-card small { color: var(--text-secondary, #64748b); line-height: 1.35; }
+
+.history-list { display: grid; gap: 0; }
+.history-item { padding: 12px 0; border-bottom: 1px solid var(--border-color, #e2e8f0); }
+.history-item > div { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
+.history-item b { color: var(--text-primary, #0f172a); font-size: .92rem; }
+.history-item span { color: var(--text-secondary, #64748b); font-size: .8rem; text-align: right; }
+.history-item p { margin: 6px 0 0; color: var(--text-secondary, #64748b); font-size: .84rem; line-height: 1.4; }
+
+@media (max-width: 760px) {
+  .signature-grid { grid-template-columns: 1fr; }
+  .history-item > div { display: grid; gap: 4px; }
+  .history-item span { text-align: left; }
+}

@@ -249,6 +249,7 @@ export const getCurvaS = (projetoId) => api.get(`/dashboard/projeto/${projetoId}
 export const getRNCs = (projetoId) => api.get(`/rnc/projeto/${projetoId}`);
 export const createRNC = (data) => api.post('/rnc', data);
 export const updateRNC = (id, data) => api.put(`/rnc/${id}`, data);
+export const updateRncRegistro = (id, data) => api.put(`/rnc/${id}/registro`, data);
 export const updateStatusRNC = (id, status) => api.patch(`/rnc/${id}/status`, { status });
 // Submeter correção de RNC (responsável/criador)
 export const submitCorrecaoRNC = (id, data) => api.post(`/rnc/${id}/corrigir`, data);
@@ -414,6 +415,35 @@ export const getRelatorioPerdasAlmox = (projetoId) => api.get('/almoxarifado/rel
 export const getRdoFerramentasDisponiveis = (rdoId) => api.get(`/almoxarifado/rdo/${rdoId}/ferramentas-disponiveis`);
 export const getRdoFerramentas = (rdoId) => api.get(`/almoxarifado/rdo/${rdoId}/ferramentas`);
 export const addRdoFerramenta = (rdoId, data) => api.post(`/almoxarifado/rdo/${rdoId}/ferramentas`, data);
+
+// Folhas de Verificação
+export const getFolhasContexto = (projetoId) => api.get(`/folhas-verificacao/projeto/${projetoId}/contexto`);
+export const getFolhasVerificacao = (projetoId, params) => api.get(`/folhas-verificacao/projeto/${projetoId}`, { params });
+export const getFolhasIndicadores = (projetoId) => api.get(`/folhas-verificacao/projeto/${projetoId}/indicadores`);
+export const getFolhaVerificacao = (id) => api.get(`/folhas-verificacao/${id}`);
+export const createFolhaVerificacao = (projetoId, data) => api.post(`/folhas-verificacao/projeto/${projetoId}`, data);
+export const updateFolhaVerificacao = (id, data) => api.patch(`/folhas-verificacao/${id}`, data);
+export const deleteFolhaVerificacao = (id) => api.delete(`/folhas-verificacao/${id}`);
+export const addFolhaPonto = (id, data) => api.post(`/folhas-verificacao/${id}/pontos`, data);
+export const addFolhaResposta = (id, data) => api.post(`/folhas-verificacao/${id}/respostas`, data);
+export const addFolhaMedicao = (id, data) => api.post(`/folhas-verificacao/${id}/medicoes`, data);
+export const updateFolhaMedicao = (id, medicaoId, data) => api.patch(`/folhas-verificacao/${id}/medicoes/${medicaoId}`, data);
+export const deleteFolhaMedicao = (id, medicaoId) => api.delete(`/folhas-verificacao/${id}/medicoes/${medicaoId}`);
+export const vincularFolha = (id, data) => api.post(`/folhas-verificacao/${id}/vinculos`, data);
+export const enviarFolhaAnalise = (id) => api.post(`/folhas-verificacao/${id}/enviar-analise`);
+export const aprovarFolha = (id) => api.post(`/folhas-verificacao/${id}/aprovar`);
+export const reprovarFolha = (id, data) => api.post(`/folhas-verificacao/${id}/reprovar`, data);
+export const gerarRncFolha = (id, data) => api.post(`/folhas-verificacao/${id}/rnc`, data);
+export const vincularRncFolha = (id, rncId) => api.post(`/folhas-verificacao/${id}/rnc/vincular`, { rnc_id: rncId });
+export const iniciarCorrecaoFolha = (id, data) => api.post(`/folhas-verificacao/${id}/correcoes`, data);
+export const finalizarCorrecaoFolha = (id, data) => api.post(`/folhas-verificacao/${id}/finalizar-correcao`, data);
+export const assinarFolha = (id, tipo) => api.post(`/folhas-verificacao/${id}/assinaturas/${tipo}`);
+export const uploadEvidenciaFolha = (id, formData) => api.post(`/folhas-verificacao/${id}/evidencias`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+export const deleteEvidenciaFolha = (id, evidenciaId) => api.delete(`/folhas-verificacao/${id}/evidencias/${evidenciaId}`);
+export const getFolhaPDF = (id) => api.get(`/folhas-verificacao/${id}/pdf`, { responseType: 'blob' });
+export const getModelosFolha = () => api.get('/folhas-verificacao/modelos');
+export const createModeloFolha = (data) => api.post('/folhas-verificacao/modelos', data);
+export const updateModeloFolha = (id, data) => api.patch(`/folhas-verificacao/modelos/${id}`, data);
 
 export const getRdoLogs = (rdoId) => api.get(`/rdos/${rdoId}/logs`);
 // Rastreabilidade de materiais

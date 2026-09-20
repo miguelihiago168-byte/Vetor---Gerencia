@@ -1,0 +1,38 @@
+.measurement-edit-button { background:#e7f8f3; border:1px solid #0b8f77; border-radius:7px; color:#08705f; cursor:pointer; font-weight:700; padding:6px 10px; }
+.measurement-edit-button:hover { background:#d5f2e9; }
+.folhas-edit-measurement { display:grid; gap:16px; }
+.folhas-edit-measurement > p { color:var(--text-secondary,#64748b); margin:0; }
+.folhas-edit-measurement .folha-actions { background:transparent; padding:0; position:static; }
+.folhas-edit-measurement label { display:grid; font-weight:650; gap:7px; }
+.folhas-edit-measurement .folha-grid { gap:14px; }
+.folhas-edit-measurement input,.folhas-edit-measurement textarea { box-sizing:border-box; width:100%; }
+.folhas-edit-measurement input { background:var(--input-bg,#fff); border:1px solid var(--border-color,#cbd5e1); border-radius:8px; color:inherit; font:inherit; min-height:42px; padding:9px 11px; }
+.folhas-edit-measurement input:focus,.folhas-edit-measurement textarea:focus { border-color:#0b8f77; box-shadow:0 0 0 3px rgba(11,143,119,.14); outline:0; }
+.folhas-edit-measurement textarea { background:var(--input-bg,#fff); border:1px solid var(--border-color,#cbd5e1); border-radius:8px; color:inherit; font:inherit; padding:10px; resize:vertical; width:100%; }
+.sample-progress-card { align-items:center; background:var(--card-bg,#fff); border:1px solid #f2b84b; border-left:4px solid #f59e0b; border-radius:12px; display:flex; gap:20px; justify-content:space-between; margin:0 0 16px; padding:15px 18px; }
+.sample-progress-card.is-complete { border-color:#72d9bd; border-left-color:#10b981; }
+.sample-progress-card span { color:var(--text-secondary,#64748b); display:block; font-size:.82rem; }
+.sample-progress-card strong { display:block; font-size:1.04rem; margin-top:3px; }
+.sample-progress-card p { color:var(--text-secondary,#64748b); margin:5px 0 0; }
+.sample-progress-card small { color:var(--text-secondary,#64748b); display:block; line-height:1.35; margin-top:8px; max-width:660px; }
+.sample-progress-meter { align-items:center; display:flex; flex:0 0 min(280px,32%); gap:10px; }
+.sample-progress-meter>div { background:#e8edf0; border-radius:999px; height:10px; overflow:hidden; width:100%; }
+.sample-progress-meter>div span { background:#f59e0b; border-radius:inherit; height:100%; transition:width .2s ease; }
+.sample-progress-card.is-complete .sample-progress-meter>div span { background:#10b981; }
+.sample-progress-meter b { font-size:.84rem; min-width:36px; text-align:right; }
+@media (max-width:760px) { .sample-progress-card { align-items:stretch; flex-direction:column; gap:12px; } .sample-progress-meter { flex-basis:auto; } }
+.checklist-readonly-note { color:var(--text-secondary,#64748b); font-size:.9rem; margin:-4px 0 12px; }
+.check-item-readonly { color:var(--text-secondary,#64748b); font-size:.76rem; }
+.correction-rnc { align-items:center; background:rgba(239,68,68,.07); border:1px solid rgba(239,68,68,.38); border-left:4px solid #dc2626; border-radius:9px; color:#991b1b; display:flex; gap:10px; margin:14px 0; padding:12px 14px; }
+.correction-rnc-content { display:grid; gap:3px; }
+.correction-rnc-content > strong { color:#991b1b; }
+.correction-rnc-content > span,.correction-rnc-content > small { color:var(--text-secondary,#64748b); font-size:.85rem; }
+.correction-rnc-content > span b { color:inherit; }
+.correction-workflow { background:rgba(13,148,136,.045); border:1px solid rgba(13,148,136,.26); border-radius:10px; margin-top:14px; padding:16px; }
+.correction-workflow h3 { margin:0 0 6px; }
+.correction-workflow p { color:var(--text-secondary,#64748b); line-height:1.45; margin:0 0 14px; }
+.correction-workflow label { display:grid; font-weight:650; gap:7px; }
+.correction-workflow textarea { background:var(--input-bg,#fff); border:1px solid var(--border-color,#cbd5e1); border-radius:8px; box-sizing:border-box; color:inherit; font:inherit; padding:10px 11px; resize:vertical; width:100%; }
+.correction-workflow textarea:focus { border-color:#0b8f77; box-shadow:0 0 0 3px rgba(11,143,119,.14); outline:0; }
+.correction-workflow--revision-open { background:linear-gradient(135deg,rgba(37,99,235,.08),rgba(13,148,136,.08)); border-color:rgba(37,99,235,.35); }
+.correction-workflow--revision-open h3 { color:#1d4ed8; }
