@@ -334,8 +334,8 @@ router.post('/ferramentas', [auth, requireWritePermission], async (req, res) => 
 
     const result = await runQuery(`
       INSERT INTO almox_ferramentas
-      (projeto_id, codigo, nome, categoria, nf_compra, marca, modelo, descricao, unidade, quantidade_total, quantidade_disponivel, valor_reposicao, criado_por)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (projeto_id, codigo, nome, categoria, nf_compra, marca, modelo, descricao, unidade, quantidade_total, quantidade_disponivel, valor_reposicao, numero_serie, faixa_minima, faixa_maxima, certificado_calibracao, calibracao_valida_ate, criado_por)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       Number(projetoId),
       codigoGerado,
@@ -349,6 +349,11 @@ router.post('/ferramentas', [auth, requireWritePermission], async (req, res) => 
       quantidade,
       quantidade,
       valorReposicaoNum,
+      req.body.numero_serie || null,
+      req.body.faixa_minima || null,
+      req.body.faixa_maxima || null,
+      req.body.certificado_calibracao || null,
+      req.body.calibracao_valida_ate || null,
       req.usuario.id
     ]);
 

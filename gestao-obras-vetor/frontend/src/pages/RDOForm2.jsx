@@ -214,7 +214,7 @@ function RDOForm2() {
 
   const [openSections, setOpenSections] = useState({
     horario: true, clima: true, maoObra: true, equip: true,
-    atividades: true, fotos: false, materiais: true,
+    atividades: true, fotos: true, materiais: true,
     ocorrencias: true, comentarios: false, anexos: false
   });
   const toggleSection = (key) => setOpenSections(prev => ({ ...prev, [key]: !prev[key] }));
@@ -2880,9 +2880,36 @@ function RDOForm2() {
 
         {/* ══ SEÇÃO 6 — Fotos do RDO ═══════════════════ */}
         <Section id="fotos" num="6" title="Fotos do RDO" badge={(rdoFotos.length + fotosQueue.length) || null} isOpen={openSections.fotos} onToggle={toggleSection}>
-          <div className="rdo-photo-gallery-note">
-            <strong>Fotos vinculadas por atividade</strong>
-            <span>Para anexar uma foto, abra a atividade correspondente e use “Exibir mais opções”.</span>
+          <div className="rdo-photo-upload-panel">
+            <div className="rdo-photo-upload-heading">
+              <span className="rdo-photo-upload-icon"><Upload size={19} /></span>
+              <div><strong>Adicionar fotos ao RDO</strong><span>Selecione as imagens e informe a atividade que elas comprovam.</span></div>
+            </div>
+            <div className="rdo-photo-upload-fields">
+              <div className="form-group rdo-photo-upload-field">
+                <label className="form-label">Arquivos</label>
+                <label className="rdo-file-picker rdo-photo-file-picker">
+                  <input ref={fotoInputRef} type="file" accept="image/*" multiple onChange={(event) => setFotoPendente((current) => ({ ...current, files:Array.from(event.target.files || []) }))} />
+                  <span className="rdo-file-picker-btn"><Upload size={15} /> Selecionar fotos</span>
+                  <span className="rdo-file-picker-name">{fotoPendente.files.length ? `${fotoPendente.files.length} foto(s) selecionada(s)` : 'JPG, PNG, WEBP, HEIC ou imagem da câmera'}</span>
+                </label>
+              </div>
+              <div className="form-group rdo-photo-upload-field">
+                <label className="form-label">Atividade vinculada <span className="required">*</span></label>
+                <select className="form-select" value={fotoPendente.atividadeId} disabled={!fotoAtividadeOptions.length} onChange={(event) => setFotoPendente((current) => ({ ...current, atividadeId:event.target.value }))}>
+                  <option value="">{fotoAtividadeOptions.length ? 'Selecione a atividade…' : 'Cadastre uma atividade antes de anexar'}</option>
+                  {fotoAtividadeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </div>
+              <div className="form-group rdo-photo-upload-field">
+                <label className="form-label">Comentário das fotos</label>
+                <input className="form-input" value={fotoPendente.descricao} onChange={(event) => setFotoPendente((current) => ({ ...current, descricao:event.target.value }))} placeholder="Ex.: concretagem concluída no bloco B" />
+              </div>
+            </div>
+            <div className="rdo-photo-upload-footer">
+              <span>{rdoId ? 'As fotos serão enviadas agora quando a atividade já estiver salva; caso contrário, ficarão na fila.' : 'As fotos ficarão na fila e serão enviadas ao salvar o RDO.'}</span>
+              <Button type="button" tone="primary" variant="solid" startIcon={Upload} loading={isUploadingFoto} disabled={!fotoPendente.files.length || !fotoPendente.atividadeId || isUploadingFoto} onClick={handleFotoUpload}>Adicionar à galeria</Button>
+            </div>
           </div>
           {fotosQueue.length > 0 && (
             <div className="alert alert-info" style={{ marginBottom: '8px', fontSize: '12px' }}>

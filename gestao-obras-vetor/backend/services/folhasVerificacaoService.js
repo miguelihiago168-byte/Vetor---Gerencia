@@ -11,7 +11,8 @@ const STATUS = {
   REPROVADA_BLOQUEADA: 'REPROVADA_BLOQUEADA',
   EM_CORRECAO: 'EM_CORRECAO',
   EM_REINSPECAO: 'EM_REINSPECAO',
-  APROVADA: 'APROVADA'
+  APROVADA: 'APROVADA',
+  CANCELADA: 'CANCELADA'
 };
 
 const RESULT = {
@@ -42,15 +43,16 @@ const scaledToDecimal = (value) => {
 };
 const scaledMultiply = (a, b) => (a * b) / SCALE;
 
-const calculateLimits = ({ expected, toleranceType, tolerance, lowerLimit, upperLimit }) => {
-  const nominal = decimalToScaled(expected, 'Torque esperado');
-  if (nominal <= 0n) throw new Error('Torque esperado deve ser maior que zero.');
+const calculateLimits = ({ expected, toleranceType, tolerance, lowerLimit, upperLimit, fieldName = 'Torque esperado', positiveOnly = true }) => {
+  const nominal = decimalToScaled(expected, fieldName);
+  if (positiveOnly && nominal <= 0n) throw new Error(`${fieldName} deve ser maior que zero.`);
   let lower;
   let upper;
   if (toleranceType === 'PERCENTUAL') {
     const percentage = decimalToScaled(tolerance, 'Tolerância');
     if (percentage < 0n) throw new Error('Tolerância não pode ser negativa.');
-    const variation = scaledMultiply(nominal, percentage) / 100n;
+    const nominalMagnitude = nominal < 0n ? -nominal : nominal;
+    const variation = scaledMultiply(nominalMagnitude, percentage) / 100n;
     lower = nominal - variation;
     upper = nominal + variation;
   } else if (toleranceType === 'ABSOLUTA') {
@@ -64,7 +66,7 @@ const calculateLimits = ({ expected, toleranceType, tolerance, lowerLimit, upper
   } else {
     throw new Error('Tipo de tolerância inválido.');
   }
-  if (lower < 0n) throw new Error('Limite inferior não pode ser negativo.');
+  if (positiveOnly && lower < 0n) throw new Error('Limite inferior não pode ser negativo.');
   if (upper < lower) throw new Error('Limite superior deve ser maior ou igual ao inferior.');
   return { expected: scaledToDecimal(nominal), lower: scaledToDecimal(lower), upper: scaledToDecimal(upper) };
 };
@@ -125,8 +127,8 @@ const assertInstrument = ({ expectedTorque, rangeMin, rangeMax, calibrationValid
 
 const assertTransition = (from, to) => {
   const transitions = {
-    [STATUS.RASCUNHO]: [STATUS.EM_ANALISE],
-    [STATUS.EM_ANALISE]: [STATUS.APROVADA, STATUS.REPROVADA_BLOQUEADA],
+    [STATUS.RASCUNHO]: [STATUS.EM_ANALISE, STATUS.CANCELADA],
+    [STATUS.EM_ANALISE]: [STATUS.APROVADA, STATUS.REPROVADA_BLOQUEADA, STATUS.CANCELADA],
     [STATUS.REPROVADA_BLOQUEADA]: [STATUS.EM_CORRECAO],
     [STATUS.EM_CORRECAO]: [STATUS.EM_REINSPECAO],
     [STATUS.EM_REINSPECAO]: [STATUS.APROVADA, STATUS.REPROVADA_BLOQUEADA]

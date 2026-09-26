@@ -8,7 +8,7 @@ const json = (input, fallback = {}) => { if (!input) return fallback; if (typeof
 const snapshotName = (input) => { const parsed = json(input, null); return parsed && typeof parsed === 'object' ? (parsed.nome || parsed.name || '-') : value(input); };
 const number = (input, fallback = '-') => { const parsed = Number(input); return Number.isFinite(parsed) ? parsed.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : fallback; };
 const resultLabel = (input) => ({ BLOQUEADO: 'Não conforme', NAO_CONFORME: 'Não conforme', CONFORME: 'Conforme', PENDENTE: 'Pendente', NAO_APLICAVEL: 'Não aplicável', CONFORME_COM_RESSALVAS: 'Conforme com ressalvas' }[input] || value(input));
-const statusLabel = (input) => ({ RASCUNHO: 'Rascunho', EM_ANALISE: 'Em análise', REPROVADA_BLOQUEADA: 'Não conforme', EM_CORRECAO: 'Em correção', EM_REINSPECAO: 'Em reinspeção', APROVADA: 'Aprovada' }[input] || value(input));
+const statusLabel = (input) => ({ RASCUNHO: 'Rascunho / em inspeção', EM_ANALISE: 'Pendente de aprovação', REPROVADA_BLOQUEADA: 'Não conforme', EM_CORRECAO: 'Em correção', EM_REINSPECAO: 'Em reinspeção', APROVADA: 'Concluída', CANCELADA:'Cancelada' }[input] || value(input));
 const pointStatusLabel = (input, required) => (!input || (required && input === 'NAO_APLICAVEL') ? 'Pendente' : resultLabel(input));
 const dateTime = (input) => input ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: process.env.PDF_TIME_ZONE || process.env.APP_TIME_ZONE || 'America/Sao_Paulo' }).format(new Date(input)) : '-';
 const signatureLabel = (type) => ({ EXECUTANTE: 'Executante', INSPETOR: 'Inspetor', APROVADOR: 'Aprovador' }[type] || type || 'Responsável');
@@ -61,7 +61,7 @@ async function loadData(folhaId) {
   const folha = await getQuery(`SELECT f.*,p.nome projeto_nome,p.empresa_responsavel,p.empresa_executante,u.nome criador_nome
     FROM folhas_verificacao f JOIN projetos p ON p.id=f.projeto_id LEFT JOIN usuarios u ON u.id=f.criado_por WHERE f.id=?`, [folhaId]);
   if (!folha) return null;
-  const [torque, points, measurements, answers, evidences, signatures, links, rnc, activity, rdo] = await Promise.all([
+  const [torque, points, measurements, answers, evidences, signatures, links, rnc, activity, rdo, circuitos, cabos, conexoes, equipamentos, torquesEletricos, ensaios, civilRecords, civilNonConformities] = await Promise.all([
     getQuery('SELECT * FROM folhas_verificacao_torque_config WHERE folha_id=?', [folhaId]),
     allQuery('SELECT * FROM folhas_verificacao_pontos WHERE folha_id=? ORDER BY identificacao', [folhaId]),
     allQuery('SELECT * FROM folhas_verificacao_medicoes WHERE folha_id=? ORDER BY numero_ponto,id', [folhaId]),
@@ -71,19 +71,27 @@ async function loadData(folhaId) {
     allQuery('SELECT f.numero,f.status,f.resultado_lote,v.tipo_vinculo,v.obrigatorio FROM folhas_verificacao_vinculos v JOIN folhas_verificacao f ON f.id=v.folha_destino_id WHERE v.folha_origem_id=?', [folhaId]),
     getQuery('SELECT r.* FROM folhas_verificacao_rncs fr JOIN rnc r ON r.id=fr.rnc_id WHERE fr.folha_id=?', [folhaId]),
     folha.atividade_eap_id ? getQuery('SELECT codigo_eap,descricao FROM atividades_eap WHERE id=?', [folha.atividade_eap_id]) : Promise.resolve(null),
-    folha.rdo_id ? getQuery('SELECT numero_rdo,data_relatorio FROM rdos WHERE id=?', [folha.rdo_id]) : Promise.resolve(null)
+    folha.rdo_id ? getQuery('SELECT numero_rdo,data_relatorio FROM rdos WHERE id=?', [folha.rdo_id]) : Promise.resolve(null),
+    folha.tipo_folha === 'ELETRICA' ? allQuery('SELECT * FROM folhas_verificacao_eletrica_circuitos WHERE folha_id=? ORDER BY tag', [folhaId]) : Promise.resolve([]),
+    folha.tipo_folha === 'ELETRICA' ? allQuery('SELECT * FROM folhas_verificacao_eletrica_cabos WHERE folha_id=? ORDER BY id', [folhaId]) : Promise.resolve([]),
+    folha.tipo_folha === 'ELETRICA' ? allQuery('SELECT * FROM folhas_verificacao_eletrica_conexoes WHERE folha_id=? ORDER BY id', [folhaId]) : Promise.resolve([]),
+    folha.tipo_folha === 'ELETRICA' ? allQuery('SELECT * FROM folhas_verificacao_eletrica_equipamentos WHERE folha_id=? ORDER BY id', [folhaId]) : Promise.resolve([]),
+    folha.tipo_folha === 'ELETRICA' ? allQuery('SELECT * FROM folhas_verificacao_eletrica_torques WHERE folha_id=? ORDER BY id', [folhaId]) : Promise.resolve([]),
+    folha.tipo_folha === 'ELETRICA' ? allQuery('SELECT * FROM folhas_verificacao_eletrica_ensaios WHERE folha_id=? ORDER BY id', [folhaId]) : Promise.resolve([]),
+    folha.tipo_folha === 'CIVIL' ? allQuery('SELECT * FROM folhas_verificacao_civil_registros WHERE folha_id=? ORDER BY ordem,id', [folhaId]) : Promise.resolve([]),
+    folha.tipo_folha === 'CIVIL' ? allQuery('SELECT nc.*,u.nome responsavel_nome FROM folhas_verificacao_nao_conformidades nc LEFT JOIN usuarios u ON u.id=nc.responsavel_id WHERE nc.folha_id=? ORDER BY nc.criado_em', [folhaId]) : Promise.resolve([])
   ]);
   if (folha.aprovado_por && !signatures.some((signature) => signature.tipo === 'APROVADOR')) {
     const approver = await getQuery('SELECT nome,perfil,assinatura_png FROM usuarios WHERE id=?', [folha.aprovado_por]);
     if (approver?.assinatura_png) signatures.push({ tipo: 'APROVADOR', tenant_id: folha.tenant_id, nome_snapshot: approver.nome, perfil_snapshot: approver.perfil, assinatura_snapshot: approver.assinatura_png, assinado_em: folha.aprovado_em, versao_folha: folha.versao });
   }
-  return { folha, torque, points, measurements, answers, evidences, signatures, links, rnc, activity, rdo };
+  return { folha, torque, points, measurements, answers, evidences, signatures, links, rnc, activity, rdo, circuitos, cabos, conexoes, equipamentos, torquesEletricos, ensaios, civilRecords, civilNonConformities };
 }
 
 async function generateFolhaVerificacaoPdfBuffer(folhaId) {
   const data = await loadData(folhaId);
   if (!data) { const error = new Error('Folha não encontrada.'); error.statusCode = 404; throw error; }
-  const { folha, torque, points, measurements, answers, evidences, signatures, links, rnc, activity, rdo } = data;
+  const { folha, torque, points, measurements, answers, evidences, signatures, links, rnc, activity, rdo, circuitos, cabos, conexoes, equipamentos, torquesEletricos, ensaios, civilRecords, civilNonConformities } = data;
   const doc = new PDFDocument({ size: 'A4', margin: 38, bufferPages: true });
   const chunks = []; doc.on('data', (chunk) => chunks.push(chunk)); const complete = new Promise((resolve) => doc.on('end', () => resolve(Buffer.concat(chunks))));
   const identification = json(folha.identificacao); const summary = json(folha.resumo); const instrument = json(torque?.instrumento_snapshot);
@@ -94,7 +102,7 @@ async function generateFolhaVerificacaoPdfBuffer(folhaId) {
   if (fs.existsSync(logoFile)) doc.image(logoFile, 40, 16, { fit: [68, 68], align: 'center', valign: 'center' });
   doc.fillColor('#123b7a').font('Helvetica-Bold').fontSize(9).text('VETOR', 38, 89); doc.font('Helvetica').fontSize(6.5).text('GESTÃO DE OBRAS', 38, 101);
   doc.fillColor('#10264a').font('Helvetica-Bold').fontSize(19).text('Folha de Verificação', 132, 18);
-  doc.font('Helvetica').fontSize(9.5).text(`${folha.tipo_folha === 'TORQUE' ? 'Controle de torque' : 'Controle de qualidade'} - ${folha.numero}`, 132, 47, { width: 270 });
+  doc.font('Helvetica').fontSize(9.5).text(`${folha.tipo_folha === 'TORQUE' ? 'Controle de torque' : folha.tipo_folha === 'CIVIL' ? 'Controle de qualidade civil' : 'Controle de qualidade'} - ${folha.numero}`, 132, 47, { width: 270 });
   doc.fillColor('#55758a').fontSize(7.5).text(`Obra: ${value(folha.projeto_nome)}`, 132, 65, { width: 270, ellipsis: true });
   doc.text(`Contratante: ${snapshotName(folha.empresa_responsavel_snapshot || folha.empresa_responsavel)}`, 132, 79, { width: 270, ellipsis: true });
   doc.text(`Executante: ${snapshotName(folha.empresa_executante_snapshot || folha.empresa_executante)}`, 132, 93, { width: 270, ellipsis: true });
@@ -109,6 +117,10 @@ async function generateFolhaVerificacaoPdfBuffer(folhaId) {
     ['Critério de aceitação', folha.criterio_aceitacao === 'CEM_PORCENTO' ? 'Inspeção 100%' : folha.criterio_aceitacao === 'MAX_NC' ? `Máximo de ${value(folha.maximo_nc, '0')} NC` : 'C=0'],
     ['Atividade EAP', activity ? `${value(activity.codigo_eap)} - ${value(activity.descricao)}` : 'Não vinculada'], ['RDO relacionado', rdo ? `${value(rdo.numero_rdo)} - ${value(rdo.data_relatorio)}` : 'Não vinculado'],
     ['Empresa responsável', snapshotName(folha.empresa_responsavel_snapshot || folha.empresa_responsavel)], ['Empresa executante', snapshotName(folha.empresa_executante_snapshot || folha.empresa_executante)]
+  ], 4, folha);
+  if (folha.tipo_folha === 'CIVIL') drawGrid(doc, [
+    ['Cliente', identification.cliente], ['Atividade executada', identification.atividade_executada], ['Data da inspeção', identification.data_inspecao], ['Hora da inspeção', identification.hora_inspecao],
+    ['Documento de referência', identification.documento_referencia], ['Revisão', identification.revisao_documento], ['Procedimento executivo', identification.procedimento_executivo], ['Frente / local', identification.area]
   ], 4, folha);
 
   if (torque) {
@@ -125,7 +137,7 @@ async function generateFolhaVerificacaoPdfBuffer(folhaId) {
   const remainingCount = Math.max(0, sampleTarget - measuredCount);
   const progress = sampleTarget ? Math.min(100, Math.round((measuredCount / sampleTarget) * 100)) : 100;
   sectionTitle(doc, 'Resumo da inspeção', folha);
-  drawSummaryCards(doc, [['Meta da amostra', sampleTarget], ['Parafusos verificados', measuredCount], ['Faltam verificar', remainingCount], ['Não conformes', summary.nonConforming || 0], ['Resultado', resultLabel(folha.resultado_lote)]], folha);
+  drawSummaryCards(doc, [['Meta da amostra', sampleTarget], [folha.tipo_folha === 'CIVIL' ? 'Medições concluídas' : 'Parafusos verificados', measuredCount], ['Faltam verificar', remainingCount], ['Não conformes', summary.nonConforming || 0], ['Resultado', resultLabel(folha.resultado_lote)]], folha);
   const progressY = doc.y; const progressBarX = 300; const progressBarWidth = 190;
   doc.save().roundedRect(38, progressY, 519, 42, 8).fill('#f8fafc').stroke('#dce5e7').restore();
   doc.fillColor('#10264a').font('Helvetica-Bold').fontSize(8.5).text(`${measuredCount} de ${sampleTarget || 0} parafusos verificados`, 50, progressY + 9, { width: 220 });
@@ -148,6 +160,28 @@ async function generateFolhaVerificacaoPdfBuffer(folhaId) {
     const drawMeasurementHeader = () => { const y = doc.y; doc.save().rect(38, y, 519, 22).fill('#123b7a').restore(); let x = 44; headers.forEach((header, index) => { doc.fillColor('#fff').font('Helvetica-Bold').fontSize(7).text(header, x, y + 7, { width: widths[index] - 5 }); x += widths[index]; }); doc.y = y + 27; };
     ensureSpace(doc, 55, folha); drawMeasurementHeader();
     measurements.forEach((measurement, index) => { if (doc.y + 27 > pageBottom) { newPage(doc, folha); sectionTitle(doc, '5. Medições registradas - continuação', folha); drawMeasurementHeader(); } const extras = json(measurement.dados_extras); const y = doc.y; if (index % 2 === 1) doc.save().rect(38, y, 519, 23).fill('#f1f8f8').restore(); let x = 44; const cells = [value(measurement.numero_ponto, measurement.id), value(measurement.localizacao || measurement.elemento), value(extras.quantidade_verificada, '1'), number(measurement.requisito_nominal), `${number(measurement.valor_medido)} ${value(measurement.unidade, '')}`, dateTime(measurement.medido_em), resultLabel(measurement.resultado)]; cells.forEach((cell, cellIndex) => { doc.fillColor(cellIndex === 6 ? (measurement.resultado === 'CONFORME' ? '#08705f' : '#c53030') : '#10264a').font(cellIndex === 6 ? 'Helvetica-Bold' : 'Helvetica').fontSize(7).text(cell, x, y + 7, { width: widths[cellIndex] - 5, ellipsis: true }); x += widths[cellIndex]; }); doc.y = y + 23; });
+  }
+  if (folha.tipo_folha === 'ELETRICA') {
+    sectionTitle(doc, 'Registros elétricos', folha, 42 + 3 * 57 + 8);
+    drawGrid(doc, [
+      ['Circuitos', circuitos.length], ['Cabos', cabos.length], ['Conexões', conexoes.length], ['Equipamentos', equipamentos.length], ['Torques elétricos', torquesEletricos.length], ['Ensaios', ensaios.length],
+      ...circuitos.map((row) => [`Circuito ${value(row.tag)}`, `${value(row.origem)} → ${value(row.destino)} · ${resultLabel(row.resultado)}`]),
+      ...ensaios.map((row) => [`Ensaio ${value(row.tipo)}`, `${value(row.valor_medido)} ${value(row.unidade)} · ${resultLabel(row.resultado)}`])
+    ], 2, folha);
+  }
+  if (folha.tipo_folha === 'CIVIL' && civilRecords.length) {
+    sectionTitle(doc, 'Registros da execução civil', folha);
+    for (const record of civilRecords) {
+      const fields = json(record.dados, {});
+      const items = Object.entries(fields).filter(([key,content])=>!key.endsWith('_id') && content !== null && content !== undefined && content !== '').map(([key,content])=>[key.replaceAll('_',' ').replace(/^./,char=>char.toUpperCase()),content]);
+      if (!items.length) continue;
+      sectionTitle(doc, record.titulo || `${value(record.secao).replaceAll('_',' ')}${record.categoria ? ` - ${record.categoria.replaceAll('_',' ')}` : ''}`, folha, 42 + Math.ceil(items.length / 2) * 57 + 8);
+      drawGrid(doc, items, 2, folha);
+    }
+  }
+  if (folha.tipo_folha === 'CIVIL' && civilNonConformities.length) {
+    sectionTitle(doc, 'Não conformidades civis', folha);
+    drawGrid(doc, civilNonConformities.flatMap((item,index)=>[[`NC ${index+1}`,item.descricao],['Local / responsável',`${value(item.localizacao)} - ${value(item.responsavel_nome)}`],['Ação imediata',item.acao_imediata],['Prazo / status',`${value(item.prazo)} - ${value(item.status).replaceAll('_',' ')}`]]), 2, folha);
   }
   if (links.length) { sectionTitle(doc, '6. Folhas vinculadas', folha, 42 + Math.ceil(links.length / 2) * 57 + 8); drawGrid(doc, links.map((link) => [link.numero, `${value(link.tipo_vinculo)} - ${statusLabel(link.status)} - ${resultLabel(link.resultado_lote)}`]), 2, folha); }
   if (rnc) { sectionTitle(doc, '7. RNC e tratamento', folha, 42 + 3 * 57 + 8); drawGrid(doc, [['RNC', `#${rnc.id}`], ['Status', value(rnc.status)], ['Gravidade', value(rnc.gravidade)], ['Título', rnc.titulo], ['Descrição', rnc.descricao], ['Ação corretiva', rnc.acao_corretiva]], 2, folha); }

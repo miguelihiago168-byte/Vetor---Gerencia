@@ -19,7 +19,7 @@ function AlmoxFerramentas() {
   const [destinosTransferencia, setDestinosTransferencia] = useState({});
   const [loading, setLoading] = useState(true);
   const [filtroAtivos, setFiltroAtivos] = useState('');
-  const [form, setForm] = useState({ codigo: '', nome: '', categoria: 'Outros', nf_compra: '', marca: '', modelo: '', descricao: '', unidade: 'UN', quantidade_total: '', valor_reposicao: '' });
+  const [form, setForm] = useState({ codigo: '', nome: '', categoria: 'Outros', nf_compra: '', marca: '', modelo: '', descricao: '', unidade: 'UN', quantidade_total: '', valor_reposicao: '', numero_serie: '', faixa_minima: '', faixa_maxima: '', certificado_calibracao: '', calibracao_valida_ate: '' });
   const [proximoCodigo, setProximoCodigo] = useState('');
   const [primeiroCodigo, setPrimeiroCodigo] = useState(false);
 
@@ -88,7 +88,7 @@ function AlmoxFerramentas() {
         quantidade_total: Number(form.quantidade_total),
         valor_reposicao: parseMoneyBR(form.valor_reposicao)
       });
-      setForm({ codigo: '', nome: '', categoria: 'Outros', nf_compra: '', marca: '', modelo: '', descricao: '', unidade: 'UN', quantidade_total: '', valor_reposicao: '' });
+      setForm({ codigo: '', nome: '', categoria: 'Outros', nf_compra: '', marca: '', modelo: '', descricao: '', unidade: 'UN', quantidade_total: '', valor_reposicao: '', numero_serie: '', faixa_minima: '', faixa_maxima: '', certificado_calibracao: '', calibracao_valida_ate: '' });
       success('Ativo cadastrado com sucesso.', 5000);
       await carregar();
       setAba('lista');
@@ -178,6 +178,11 @@ function AlmoxFerramentas() {
             <input className="form-input" required placeholder="NF de compra" value={form.nf_compra} onChange={(e) => setForm({ ...form, nf_compra: e.target.value })} />
             <input className="form-input" placeholder="Marca" value={form.marca} onChange={(e) => setForm({ ...form, marca: e.target.value })} />
             <input className="form-input" placeholder="Modelo" value={form.modelo} onChange={(e) => setForm({ ...form, modelo: e.target.value })} />
+            <input className="form-input" placeholder="Número de série (instrumento)" value={form.numero_serie} onChange={(e) => setForm({ ...form, numero_serie: e.target.value })} />
+            <input className="form-input" type="number" step="any" placeholder="Faixa mínima" value={form.faixa_minima} onChange={(e) => setForm({ ...form, faixa_minima: e.target.value })} />
+            <input className="form-input" type="number" step="any" placeholder="Faixa máxima" value={form.faixa_maxima} onChange={(e) => setForm({ ...form, faixa_maxima: e.target.value })} />
+            <input className="form-input" placeholder="Certificado de calibração" value={form.certificado_calibracao} onChange={(e) => setForm({ ...form, certificado_calibracao: e.target.value })} />
+            <input className="form-input" type="date" title="Validade da calibração" value={form.calibracao_valida_ate} onChange={(e) => setForm({ ...form, calibracao_valida_ate: e.target.value })} />
             <input className="form-input" placeholder="Descrição" value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} />
             <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8 }}>
               <button className="btn btn-primary" type="submit">Salvar ativo</button>

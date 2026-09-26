@@ -2541,6 +2541,36 @@
 .rdo-activity-photo-link span,
 .rdo-photo-gallery-note span { color: #64748b; font-size: 12px; }
 .rdo-photo-gallery-note { grid-template-columns: auto 1fr; align-items: center; margin-bottom: 12px; }
+.rdo-photo-upload-panel {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid #cfe0ec;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #f8fbfe, #f1f7fb);
+}
+.rdo-photo-upload-heading { display: flex; align-items: center; gap: 11px; }
+.rdo-photo-upload-heading > div { display: grid; gap: 3px; }
+.rdo-photo-upload-heading strong { color: #1e3a56; font-size: 14px; }
+.rdo-photo-upload-heading span { color: #64748b; font-size: 12px; }
+.rdo-photo-upload-icon {
+  display: grid;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #2580be, #17679e);
+  color: #fff !important;
+  box-shadow: 0 5px 12px rgba(37, 128, 190, .2);
+}
+.rdo-photo-upload-fields { display: grid; grid-template-columns: 1.05fr 1fr 1fr; gap: 12px; align-items: start; }
+.rdo-photo-upload-field { display: grid; gap: 6px; margin-bottom: 0; min-width: 0; }
+.rdo-photo-upload-field .form-label { margin: 0; }
+.rdo-page .rdo-photo-file-picker { height: 38px; min-height: 38px; }
+.rdo-photo-upload-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding-top: 12px; border-top: 1px solid #d9e5ed; }
+.rdo-photo-upload-footer > span { max-width: 680px; color: #64748b; font-size: 11px; line-height: 1.45; }
 .rdo-occurrence-tags { position: relative; }
 .rdo-tags-trigger {
   width: 100%;
@@ -2624,6 +2654,9 @@
 @media (max-width: 900px) {
   .rdo-activity-section-actions { align-items: flex-start; flex-direction: column; }
   .rdo-photo-gallery-note { grid-template-columns: 1fr; }
+  .rdo-photo-upload-fields { grid-template-columns: 1fr; }
+  .rdo-photo-upload-footer { align-items: stretch; flex-direction: column; }
+  .rdo-photo-upload-footer .ui-button { justify-content: center; width: 100%; }
   .rdo-tags-new { flex-direction: column; }
   .rdo-activity-resources { grid-template-columns: 1fr; }
   .rdo-activity-summary { grid-template-columns: 1fr; }
@@ -3131,6 +3164,16 @@ body.dark-mode .rdo-page .rdo-file-picker-btn {
 body.dark-mode .rdo-page .rdo-file-picker-name {
   color: #c5d3de;
 }
+
+body.dark-mode .rdo-page .rdo-photo-upload-panel {
+  background: linear-gradient(145deg, #142538, #172b40);
+  border-color: #2a4661;
+}
+
+body.dark-mode .rdo-page .rdo-photo-upload-heading strong { color: #e8edf3; }
+body.dark-mode .rdo-page .rdo-photo-upload-heading span,
+body.dark-mode .rdo-page .rdo-photo-upload-footer > span { color: #9fb1c3; }
+body.dark-mode .rdo-page .rdo-photo-upload-footer { border-color: #2a4060; }
 
 body.dark-mode .rdo-page .rdo-upload-zone-polished {
   background: #132235;

@@ -72,18 +72,21 @@ function RNCForm() {
         if (String(folha.projeto_id) !== String(projetoId)) throw new Error('A folha pertence a outro projeto.');
         const identificacao = typeof folha.identificacao === 'string' ? JSON.parse(folha.identificacao || '{}') : (folha.identificacao || {});
         const pontosNc = (folha.medicoes || []).filter((medicao) => medicao.resultado === 'NAO_CONFORME').map((medicao) => medicao.numero_ponto || medicao.localizacao || medicao.id);
+        const itensNc = (folha.respostas || []).filter((item) => item.resultado === 'NAO_CONFORME').map((item) => { try { const snapshot=typeof item.item_snapshot==='string'?JSON.parse(item.item_snapshot||'{}'):item.item_snapshot||{}; return snapshot.rotulo; } catch { return null; } }).filter(Boolean);
+        const tratamentos = (folha.civil?.nao_conformidades || []).filter((item) => item.status !== 'RESOLVIDO');
+        const desvios = [...itensNc,...pontosNc,...tratamentos.map((item)=>item.descricao)].filter(Boolean);
         const documento = folha.torque?.documento_referencia || '';
         setFormData((current) => ({
           ...current,
           titulo: `Não conformidade ${folha.numero}`,
-          descricao: `Gerada pela Folha de Verificação ${folha.numero}. Pontos não conformes: ${pontosNc.join(', ') || 'conforme detalhamento da folha'}.`,
+          descricao: `Gerada pela Folha de Verificação ${folha.numero}. Itens não conformes: ${desvios.join(', ') || 'conforme detalhamento da folha'}.`,
           gravidade: 'Média',
-          acao_corretiva: `Corrigir os pontos não conformes da folha ${folha.numero} conforme ${documento || 'o requisito técnico aplicável'} e registrar a reinspeção.`,
+          acao_corretiva: tratamentos.map((item)=>item.acao_imediata).filter(Boolean).join('; ') || `Corrigir os pontos não conformes da folha ${folha.numero} conforme ${documento || identificacao.documento_referencia || 'o requisito técnico aplicável'} e registrar a reinspeção.`,
           rdo_id: folha.rdo_id ? String(folha.rdo_id) : '',
           origem: 'Inspeção',
           area_afetada: identificacao.area_setor_trecho || identificacao.area || ''
         }));
-        setLocalSetor(identificacao.area_setor_trecho || identificacao.localizacao || '');
+        setLocalSetor(tratamentos.find((item)=>item.localizacao)?.localizacao || identificacao.area_setor_trecho || identificacao.localizacao || identificacao.area || '');
       } catch (err) {
         const msg = err.response?.data?.erro || err.message || 'Não foi possível carregar os dados da folha.';
         setErro(msg);

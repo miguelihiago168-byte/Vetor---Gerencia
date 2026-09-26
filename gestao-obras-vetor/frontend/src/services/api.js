@@ -441,6 +441,16 @@ export const assinarFolha = (id, tipo) => api.post(`/folhas-verificacao/${id}/as
 export const uploadEvidenciaFolha = (id, formData) => api.post(`/folhas-verificacao/${id}/evidencias`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
 export const deleteEvidenciaFolha = (id, evidenciaId) => api.delete(`/folhas-verificacao/${id}/evidencias/${evidenciaId}`);
 export const getFolhaPDF = (id) => api.get(`/folhas-verificacao/${id}/pdf`, { responseType: 'blob' });
+export const getFolhaEletrica = (id) => api.get(`/folhas-verificacao/${id}/eletrica`);
+export const addFolhaEletricaCircuito = (id, data) => api.post(`/folhas-verificacao/${id}/eletrica/circuitos`, data);
+export const addFolhaEletricaRegistro = (id, resource, data) => api.post(`/folhas-verificacao/${id}/eletrica/${resource}`, data);
+export const updateFolhaEletricaRegistro = (id, resource, resourceId, data) => api.patch(`/folhas-verificacao/${id}/eletrica/${resource}/${resourceId}`, data);
+export const deleteFolhaEletricaRegistro = (id, resource, resourceId) => api.delete(`/folhas-verificacao/${id}/eletrica/${resource}/${resourceId}`);
+export const getFolhaCivil = (id) => api.get(`/folhas-verificacao/${id}/civil`);
+export const saveFolhaCivilSection = (id, section, data) => api.put(`/folhas-verificacao/${id}/civil/secoes/${section}`, data);
+export const addFolhaCivilNaoConformidade = (id, data) => api.post(`/folhas-verificacao/${id}/civil/nao-conformidades`, data);
+export const updateFolhaCivilNaoConformidade = (id, ncId, data) => api.patch(`/folhas-verificacao/${id}/civil/nao-conformidades/${ncId}`, data);
+export const cancelarFolhaCivil = (id, justificativa) => api.post(`/folhas-verificacao/${id}/cancelar`, { justificativa });
 export const getModelosFolha = () => api.get('/folhas-verificacao/modelos');
 export const createModeloFolha = (data) => api.post('/folhas-verificacao/modelos', data);
 export const updateModeloFolha = (id, data) => api.patch(`/folhas-verificacao/modelos/${id}`, data);

@@ -31,4 +31,20 @@ assert.strictEqual(rules.isImmutable(rules.STATUS.RASCUNHO), false);
 assert.throws(() => rules.assertTransition(rules.STATUS.APROVADA, rules.STATUS.RASCUNHO));
 const linkedTorque = rules.summarizeLot({ population:1, sampleSize:1, measurements:[{result:rules.RESULT.CONFORME}], requiredTorqueLinks:[{required:true,status:rules.STATUS.EM_ANALISE,result:rules.RESULT.PENDENTE}] });
 assert.strictEqual(linkedTorque.result, rules.RESULT.BLOQUEADO);
+// FV-ELE uses the same server-side limits engine for electrical torque and tests.
+const electricalTorque = rules.calculateLimits({ expected: '32', toleranceType: 'ABSOLUTA', tolerance: '1' });
+assert.deepStrictEqual(electricalTorque, { expected: '32', lower: '31', upper: '33' });
+assert.strictEqual(rules.calculateMeasurementResult({ value: '31.5', lower: electricalTorque.lower, upper: electricalTorque.upper }), rules.RESULT.CONFORME);
+assert.strictEqual(rules.calculateMeasurementResult({ value: '33.1', lower: electricalTorque.lower, upper: electricalTorque.upper }), rules.RESULT.NAO_CONFORME);
+
+const civilAbsolute = rules.calculateLimits({ expected:'1.5', toleranceType:'ABSOLUTA', tolerance:'0.05', fieldName:'Valor especificado', positiveOnly:false });
+assert.deepStrictEqual(civilAbsolute, { expected:'1.5', lower:'1.45', upper:'1.55' });
+assert.strictEqual(rules.calculateMeasurementResult({ value:'1.45', lower:civilAbsolute.lower, upper:civilAbsolute.upper }), rules.RESULT.CONFORME);
+assert.strictEqual(rules.calculateMeasurementResult({ value:'1.56', lower:civilAbsolute.lower, upper:civilAbsolute.upper }), rules.RESULT.NAO_CONFORME);
+const civilLevel = rules.calculateLimits({ expected:'-0.25', toleranceType:'MANUAL', lowerLimit:'-0.27', upperLimit:'-0.23', fieldName:'Cota especificada', positiveOnly:false });
+assert.deepStrictEqual(civilLevel, { expected:'-0.25', lower:'-0.27', upper:'-0.23' });
+const civilNegativePercent = rules.calculateLimits({ expected:'-10', toleranceType:'PERCENTUAL', tolerance:'5', fieldName:'Cota especificada', positiveOnly:false });
+assert.deepStrictEqual(civilNegativePercent, { expected:'-10', lower:'-10.5', upper:'-9.5' });
+assert.strictEqual(rules.calculateMeasurementResult({ value:'', lower:'1', upper:'2' }), rules.RESULT.PENDENTE);
+assert.doesNotThrow(() => rules.assertTransition(rules.STATUS.RASCUNHO, rules.STATUS.CANCELADA));
 console.log('folhasVerificacaoService.test.js: OK');
