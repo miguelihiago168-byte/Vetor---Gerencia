@@ -202,14 +202,6 @@ const calcularHorasColaborador = (colaborador) => {
   return `${fmtNumber(Math.max(total, 0) / 60)} h`;
 };
 
-const calcularHorasColaboradorValor = (colaborador) => {
-  const horas = String(calcularHorasColaborador(colaborador))
-    .replace(',', '.')
-    .replace(' h', '');
-  const valor = Number(horas);
-  return Number.isFinite(valor) ? valor : 0;
-};
-
 const tableRows = (items, renderer, emptyText, colspan) => {
   if (!items.length) return `<tr><td colspan="${colspan}" class="empty-cell">${escapeHtml(emptyText)}</td></tr>`;
   return items.map(renderer).join('');
@@ -455,8 +447,9 @@ function renderHtml(data) {
   const statusStyle = statusInlineStyle(rdo.status || 'Em preenchimento');
   const totalEquipe = Number(rdo.mao_obra_direta || 0) + Number(rdo.mao_obra_indireta || 0) + Number(rdo.mao_obra_terceiros || 0);
   const diasRestantes = calcularDiasRestantesProjeto(rdo.projeto_prazo_termino);
-  const horasHomem = maoObra.reduce((total, item) => total + calcularHorasColaboradorValor(item), 0);
-  const horasTrabalhadas = horasHomem || Number(rdo.horas_trabalhadas || 0);
+  const hhMaoObraDireta = rdo.hh_mao_obra_direta === null || rdo.hh_mao_obra_direta === undefined
+    ? null
+    : Number(rdo.hh_mao_obra_direta);
 
   const fotoCards = fotos.map((foto) => {
     const filePath = path.join(uploadsDir, foto.caminho_arquivo || '');
@@ -626,7 +619,7 @@ function renderHtml(data) {
       <div class="section-title">Prazos, Jornada e Indicadores</div>
       <div class="box grid-4">
         <div class="kpi"><strong>${diasRestantes == null ?'-' : diasRestantes}</strong><span>Dias restantes</span></div>
-        <div class="kpi"><strong>${fmtNumber(horasTrabalhadas)}</strong><span>Horas-homem</span></div>
+        <div class="kpi"><strong>${hhMaoObraDireta === null ? 'Não calculado' : fmtNumber(hhMaoObraDireta)}</strong><span>HH mão de obra direta</span></div>
         <div class="kpi"><strong>${totalEquipe || maoObra.length}</strong><span>Total equipe</span></div>
         <div class="kpi"><strong>${atividadesPdf.length}</strong><span>Atividades</span></div>
       </div>

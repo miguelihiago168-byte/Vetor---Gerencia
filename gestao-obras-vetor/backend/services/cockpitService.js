@@ -1,4 +1,5 @@
 const DEFAULT_TIME_ZONE = 'America/Sao_Paulo';
+const { ehMaoObraDireta } = require('./rdoWorkforceHoursService');
 
 const number = (value) => Number(value || 0);
 
@@ -49,6 +50,18 @@ const inWindow = (value, from, to, timeZone) => {
 
 const effective = (rdo) => number(rdo.mao_obra_direta) + number(rdo.mao_obra_indireta) + number(rdo.mao_obra_terceiros);
 
+const workforceRowsFromRdos = (rdos = []) => rdos.flatMap((rdo) => {
+  let detalhada = rdo?.mao_obra_detalhada;
+  if (typeof detalhada === 'string') {
+    try { detalhada = JSON.parse(detalhada); } catch (_) { detalhada = []; }
+  }
+  if (!Array.isArray(detalhada)) return [];
+  return detalhada.filter(ehMaoObraDireta).map((item) => ({
+    data_relatorio: rdo.data_relatorio,
+    funcao: item.funcao
+  }));
+});
+
 const summarizeExecution = (rdos = [], now = new Date(), timeZone = DEFAULT_TIME_ZONE) => {
   const today = dateKey(now, timeZone);
   const from = shiftDateKey(today, -6);
@@ -86,7 +99,8 @@ const summarizeWorkforce = (rdos = [], rows = [], now = new Date(), timeZone = D
     const label = String(row.funcao || 'Não informada').trim() || 'Não informada';
     byFunction.set(label, (byFunction.get(label) || 0) + 1);
   }
-  const hhAvailable = periodRows.length > 0;
+  const rdosComHh = periodRdos.filter((rdo) => rdo.hh_mao_obra_direta !== null && rdo.hh_mao_obra_direta !== undefined && Number.isFinite(Number(rdo.hh_mao_obra_direta)));
+  const hhAvailable = rdosComHh.length > 0;
   const average = periodRdos.length
     ? periodRdos.reduce((sum, rdo) => sum + effective(rdo), 0) / periodRdos.length
     : null;
@@ -94,8 +108,11 @@ const summarizeWorkforce = (rdos = [], rows = [], now = new Date(), timeZone = D
     period: { from, to: today, days: 7 },
     latest_effective: ordered.length ? effective(ordered[0]) : null,
     average_effective: average === null ? null : Math.round(average * 10) / 10,
-    hh: hhAvailable ? Math.round(periodRows.reduce((sum, row) => sum + number(row.horas_trabalhadas), 0) * 100) / 100 : null,
+    hh: hhAvailable ? Math.round(rdosComHh.reduce((sum, rdo) => sum + number(rdo.hh_mao_obra_direta), 0) * 100) / 100 : null,
     hh_available: hhAvailable,
+    hh_rdos_count: rdosComHh.length,
+    hh_rdos_total: periodRdos.length,
+    hh_partial: hhAvailable && rdosComHh.length < periodRdos.length,
     by_function: [...byFunction.entries()].map(([funcao, quantidade]) => ({ funcao, quantidade })).sort((a, b) => b.quantidade - a.quantidade)
   };
 };
@@ -167,12 +184,12 @@ const loadCockpit = async ({ project, permissions, allQuery, now = new Date() })
   let workforce = null;
   let equipment = null;
   let rdosPromise = Promise.resolve(null);
-  let workforceRowsPromise = Promise.resolve(null);
   let equipmentRowsPromise = Promise.resolve(null);
   if (permissions.rdo) {
     rdosPromise = safeBlock('rdos', () => allQuery(`
       SELECT r.id, r.numero_rdo, r.data_relatorio, r.status, r.criado_em, r.atualizado_em,
              r.mao_obra_direta, r.mao_obra_indireta, r.mao_obra_terceiros,
+             r.mao_obra_detalhada, r.hh_mao_obra_direta,
              u.nome AS responsavel,
              (SELECT COUNT(*) FROM rdo_atividades ra WHERE ra.rdo_id = r.id) AS activity_count,
              (SELECT COUNT(*) FROM rdo_fotos rf WHERE rf.rdo_id = r.id) AS photo_count,
@@ -185,15 +202,6 @@ const loadCockpit = async ({ project, permissions, allQuery, now = new Date() })
         )
       ORDER BY r.data_relatorio DESC, r.id DESC
     `, [projectId, from, today, projectId]), errors);
-
-    workforceRowsPromise = safeBlock('workforce', () => allQuery(`
-      SELECT r.data_relatorio, rmo.horas_trabalhadas, mo.funcao
-      FROM rdo_mao_obra rmo
-      INNER JOIN rdos r ON r.id = rmo.rdo_id
-      LEFT JOIN mao_obra mo ON mo.id = rmo.mao_obra_id
-      WHERE r.projeto_id = ? AND date(r.data_relatorio) BETWEEN date(?) AND date(?)
-      ORDER BY r.data_relatorio DESC
-    `, [projectId, from, today]), errors);
 
     equipmentRowsPromise = safeBlock('equipment', () => allQuery(`
       SELECT e.nome, e.quantidade, e.horas_utilizadas, r.data_relatorio
@@ -209,12 +217,12 @@ const loadCockpit = async ({ project, permissions, allQuery, now = new Date() })
       `, [projectId]), errors)
     : Promise.resolve(null);
 
-  const [activitiesMeta, rdos, workforceRows, equipmentRows, qualityRows] = await Promise.all([
-    activitiesMetaPromise, rdosPromise, workforceRowsPromise, equipmentRowsPromise, qualityRowsPromise
+  const [activitiesMeta, rdos, equipmentRows, qualityRows] = await Promise.all([
+    activitiesMetaPromise, rdosPromise, equipmentRowsPromise, qualityRowsPromise
   ]);
   if (permissions.rdo) {
     execution = rdos === null ? null : summarizeExecution(rdos, now);
-    workforce = workforceRows === null ? null : summarizeWorkforce(rdos || [], workforceRows, now);
+    workforce = rdos === null ? null : summarizeWorkforce(rdos, workforceRowsFromRdos(rdos), now);
     equipment = equipmentRows === null ? null : { items: summarizeEquipment(equipmentRows) };
   }
   const quality = qualityRows === null ? null : summarizeQuality(qualityRows, now);
@@ -247,6 +255,7 @@ module.exports = {
   dateKey,
   businessDaysBetween,
   effective,
+  workforceRowsFromRdos,
   summarizeExecution,
   summarizeWorkforce,
   summarizeEquipment,

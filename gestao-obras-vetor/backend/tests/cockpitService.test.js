@@ -38,16 +38,34 @@ const main = async () => {
   const unavailable = summarizeWorkforce(rdos, [], now);
   assert.strictEqual(unavailable.hh, null);
   assert.strictEqual(unavailable.hh_available, false);
+  assert.strictEqual(unavailable.hh_rdos_count, 0);
+  assert.strictEqual(unavailable.hh_rdos_total, 2);
+  assert.strictEqual(unavailable.hh_partial, false);
   assert.strictEqual(unavailable.latest_effective, 5);
   assert.strictEqual(unavailable.average_effective, 4.5);
 
-  const workforce = summarizeWorkforce(rdos, [
-    { data_relatorio: '2026-07-15', horas_trabalhadas: 8, funcao: 'Eletricista' },
-    { data_relatorio: '2026-07-15', horas_trabalhadas: 7.5, funcao: 'Eletricista' },
-    { data_relatorio: '2026-07-10', horas_trabalhadas: 6, funcao: 'Ajudante' }
+  const workforce = summarizeWorkforce([
+    { ...rdos[0], hh_mao_obra_direta: 15.5 },
+    { ...rdos[1], hh_mao_obra_direta: 6 },
+    rdos[2]
+  ], [
+    { data_relatorio: '2026-07-15', funcao: 'Eletricista' },
+    { data_relatorio: '2026-07-15', funcao: 'Eletricista' },
+    { data_relatorio: '2026-07-10', funcao: 'Ajudante' }
   ], now);
   assert.strictEqual(workforce.hh, 21.5);
+  assert.strictEqual(workforce.hh_rdos_count, 2);
+  assert.strictEqual(workforce.hh_rdos_total, 2);
+  assert.strictEqual(workforce.hh_partial, false);
   assert.deepStrictEqual(workforce.by_function[0], { funcao: 'Eletricista', quantidade: 2 });
+
+  const partialWorkforce = summarizeWorkforce([
+    { ...rdos[0], hh_mao_obra_direta: 15.5 },
+    rdos[1],
+    rdos[2]
+  ], [], now);
+  assert.strictEqual(partialWorkforce.hh, 15.5);
+  assert.strictEqual(partialWorkforce.hh_partial, true);
 
   const equipment = summarizeEquipment([
     { nome: ' Retroescavadeira ', quantidade: 1, data_relatorio: '2026-07-10' },

@@ -30,6 +30,8 @@
     "test:rdo-horario": "node tests/rdoHorarioPropagation.test.js",
     "test:rdo-activity-resources": "node tests/rdoActivityResources.test.js",
     "test:rdo-presenca": "node tests/rdoAttendanceEligibility.test.js",
+    "test:rdo-hh": "node tests/rdoWorkforceHoursService.test.js",
+    "test:rdo-hh-integration": "node tests/rdoHhIntegration.test.js",
     "test:agenda-lembretes": "node tests/reuniaoLembretes.test.js",
     "test:folhas-verificacao": "node tests/folhasVerificacaoService.test.js",
     "service-account": "node scripts/service_accounts.js",

@@ -15,8 +15,8 @@ function KPICards({ rdo, maoObra, atividadesExecutadas, ocorrencias }) {
     return d + i + t || null;
   })();
 
-  const horas = rdo?.horas_trabalhadas != null
-    ? String(rdo.horas_trabalhadas).replace('.', ',')
+  const hhDireta = rdo?.hh_mao_obra_direta != null
+    ? Number(rdo.hh_mao_obra_direta).toLocaleString('pt-BR', { maximumFractionDigits: 2 })
     : null;
 
   const atividadeCount = atividadesExecutadas?.length ?? (rdo?.atividades?.length ?? null);
@@ -29,9 +29,9 @@ function KPICards({ rdo, maoObra, atividadesExecutadas, ocorrencias }) {
       sub: totalEquipe != null ? 'colaborador' + (totalEquipe !== 1 ? 'es' : '') : 'sem registro',
     },
     {
-      label: 'Horas Trabalhadas',
-      value: horas != null ? horas : '—',
-      sub: horas != null ? 'horas no dia' : 'sem registro',
+      label: 'HH Mão de Obra Direta',
+      value: hhDireta != null ? hhDireta : '—',
+      sub: hhDireta != null ? 'horas-homem no dia' : 'não calculado',
     },
     {
       label: 'Atividades',

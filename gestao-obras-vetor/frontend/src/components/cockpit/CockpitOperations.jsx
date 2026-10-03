@@ -59,7 +59,7 @@ export function WorkforceSummaryCard({ data }) {
     <div className="cockpit-workforce-summary">
       <div className="cockpit-workforce-primary"><Users /><span><small>Efetivo mais recente</small><strong>{data?.latest_effective ?? '—'}<em>pessoas</em></strong></span></div>
       <div><span>Média em 7 dias</span><strong>{data?.average_effective ?? '—'}</strong></div>
-      <div><span>HH no período</span><strong>{data?.hh_available ? data.hh : '—'}</strong><small>{data?.hh_available ? 'horas registradas' : 'não disponível'}</small></div>
+      <div><span>HH no período</span><strong>{data?.hh_available ? data.hh : '—'}</strong><small>{data?.hh_available ? (data.hh_partial ? `parcial · ${data.hh_rdos_count}/${data.hh_rdos_total} RDOs` : `${data.hh_rdos_count} RDO(s) com HH`) : 'não disponível'}</small></div>
     </div>
     {functions.length ? <div className="cockpit-workforce-functions"><header><span>Composição por função</span><small>até 6 funções</small></header>{functions.map((item) => <div key={item.funcao}><span>{item.funcao}</span><div><i style={{ width: `${(Number(item.quantidade || 0) / maxQuantity) * 100}%` }} /></div><strong>{item.quantidade}</strong></div>)}</div> : <p className="cockpit-caption">Distribuição por função indisponível: nenhum registro individual no período.</p>}
   </>}</CockpitCard>;

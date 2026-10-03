@@ -13,6 +13,7 @@ const {
 const backendPackage = require('../package.json');
 const { ensureRdoCorrectionColumns, clearRdoCorrection } = require('../services/rdoCorrectionService');
 const { generateRdoPdfBuffer } = require('../services/rdoPdfService');
+const { calcularHhMaoObraDireta } = require('../services/rdoWorkforceHoursService');
 const { ensureSchemaReady, sendSchemaOutdated } = require('../utils/schemaGuard');
 const { hydrateOccurrences, syncOccurrences, assertApprovalOccurrenceDeclaration } = require('../services/rdoOccurrenceService');
 const {
@@ -67,7 +68,7 @@ const ensureRdoOptionalColumns = async () => {
   await ensureSchemaReady({ getQuery, allQuery }, {
     tables: ['rdo_logs', 'rdo_comentarios', 'rdo_materiais', 'rdo_ocorrencias', 'rdo_assinaturas', 'rdo_clima', 'rdo_fotos', 'rdo_equipamentos'],
     columns: {
-      rdos: ['atividades_avulsas', 'aprovado_por', 'aprovado_em', 'gestor_aprovado_por', 'gestor_aprovado_em', 'fiscal_aprovado_por', 'fiscal_aprovado_em', 'historico_status', 'sem_ocorrencias', 'mao_obra_detalhada'],
+      rdos: ['atividades_avulsas', 'aprovado_por', 'aprovado_em', 'gestor_aprovado_por', 'gestor_aprovado_em', 'fiscal_aprovado_por', 'fiscal_aprovado_em', 'historico_status', 'sem_ocorrencias', 'mao_obra_detalhada', 'hh_mao_obra_direta'],
       projetos: ['rdo_copiar_automaticamente', 'rdo_exige_aprovacao_fiscal'],
       rdo_fotos: ['ordem', 'atividade_avulsa_descricao', 'tipo', 'tamanho', 'largura', 'altura'],
       rdo_materiais: ['nome_material', 'quantidade', 'unidade', 'numero_nf', 'tipo_movimento'],
@@ -79,7 +80,7 @@ const ensureRdoOptionalColumns = async () => {
       rdo_assinaturas: ['rdo_id', 'usuario_id', 'tipo', 'arquivo_assinatura', 'assinado_em'],
       rdo_clima: ['rdo_id', 'periodo', 'condicao_tempo', 'condicao_trabalho', 'pluviometria_mm']
     }
-  }, '000005_rdo_project_settings');
+  }, '000024_rdo_hh_mao_obra_direta');
 };
 
 const recursoLista = (atividade, chave) => Array.isArray(atividade?.[chave]) ? atividade[chave] : [];
@@ -1163,6 +1164,11 @@ router.post('/', auth, [
     };
 
     const horas_calc = (horas_trabalhadas || calcHoras());
+    const maoObraDetalhada = Array.isArray(req.body.mao_obra_detalhada) ? req.body.mao_obra_detalhada : [];
+    const hhMaoObraDireta = calcularHhMaoObraDireta(maoObraDetalhada, {
+      intervalo_almoco_inicio: intervalo_almoco_inicio || '12:00',
+      intervalo_almoco_fim: intervalo_almoco_fim || '13:00'
+    });
 
     // Número RDO sequencial e único (RDO-XXX)
     const numeroRdoFinal = numero_rdo;
@@ -1176,8 +1182,8 @@ router.post('/', auth, [
         clima_manha, tempo_manha, praticabilidade_manha,
         clima_tarde, tempo_tarde, praticabilidade_tarde,
         mao_obra_direta, mao_obra_indireta, mao_obra_terceiros,
-        equipamentos, ocorrencias, comentarios, mao_obra_detalhada, atividades_avulsas, criado_por, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        equipamentos, ocorrencias, comentarios, mao_obra_detalhada, hh_mao_obra_direta, atividades_avulsas, criado_por, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       req.tenantId, numeroRdoFinal, projeto_id, dataRelatorioStr, dia_semana_calc,
       entrada_saida_inicio || '07:00', entrada_saida_fim || '17:00',
@@ -1185,7 +1191,7 @@ router.post('/', auth, [
       clima_manha || 'Claro', tempo_manha || '★', praticabilidade_manha || 'Praticável',
       clima_tarde || 'Claro', tempo_tarde || '★', praticabilidade_tarde || 'Praticável',
       mao_obra_direta || 0, mao_obra_indireta || 0, mao_obra_terceiros || 0,
-      equipamentos, ocorrencias, comentarios, (req.body.mao_obra_detalhada ? JSON.stringify(req.body.mao_obra_detalhada) : null), (atividades_avulsas.length > 0 ? JSON.stringify(atividades_avulsas) : null), req.usuario.id, initialStatus
+      equipamentos, ocorrencias, comentarios, (maoObraDetalhada.length ? JSON.stringify(maoObraDetalhada) : null), hhMaoObraDireta, (atividades_avulsas.length > 0 ? JSON.stringify(atividades_avulsas) : null), req.usuario.id, initialStatus
     ]);
 
     const rdoId = result.lastID;
@@ -1356,6 +1362,16 @@ router.put('/:id', auth, async (req, res) => {
       intervalo_almoco_fim
     });
     const horarioFoiAlterado = houveAlteracaoHorario(rdoAtual, horarioAtualizado);
+    let maoObraDetalhadaAtual = [];
+    try {
+      maoObraDetalhadaAtual = rdoAtual.mao_obra_detalhada ? JSON.parse(rdoAtual.mao_obra_detalhada) : [];
+    } catch (_) {
+      maoObraDetalhadaAtual = [];
+    }
+    const maoObraDetalhadaEfetiva = typeof req.body.mao_obra_detalhada !== 'undefined'
+      ? (Array.isArray(req.body.mao_obra_detalhada) ? req.body.mao_obra_detalhada : [])
+      : maoObraDetalhadaAtual;
+    const hhMaoObraDireta = calcularHhMaoObraDireta(maoObraDetalhadaEfetiva, horarioAtualizado);
 
     if (Array.isArray(atividades)) {
       for (const atividade of atividades) {
@@ -1414,7 +1430,7 @@ router.put('/:id', auth, async (req, res) => {
         clima_tarde = ?, tempo_tarde = ?, praticabilidade_tarde = ?,
         mao_obra_direta = ?, mao_obra_indireta = ?, mao_obra_terceiros = ?,
         equipamentos = ?, ocorrencias = ?, comentarios = ?,
-        mao_obra_detalhada = ?,
+        mao_obra_detalhada = ?, hh_mao_obra_direta = ?,
         atividades_avulsas = ?,
         atualizado_em = CURRENT_TIMESTAMP
       WHERE id = ?
@@ -1431,6 +1447,7 @@ router.put('/:id', auth, async (req, res) => {
         ? (req.body.mao_obra_detalhada ? JSON.stringify(req.body.mao_obra_detalhada) : null)
         : rdoAtual.mao_obra_detalhada // se não veio no payload, preserva o valor atual
       ),
+      hhMaoObraDireta,
       (typeof req.body.atividades_avulsas !== 'undefined'
         ? (Array.isArray(req.body.atividades_avulsas) && req.body.atividades_avulsas.length > 0 ? JSON.stringify(req.body.atividades_avulsas) : null)
         : rdoAtual.atividades_avulsas

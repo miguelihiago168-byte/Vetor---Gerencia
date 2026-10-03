@@ -364,13 +364,25 @@ function RDOForm2() {
       formData.intervalo_almoco_fim
     );
     const totalPessoas = (formData.mao_obra_detalhada || []).length;
+    const hhDireta = Math.round((formData.mao_obra_detalhada || []).reduce((total, colaborador) => {
+      const categoria = String(colaborador?.tipo ?? colaborador?.classificacao ?? '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+      const saida = colaborador?.saida_final ?? colaborador?.saida;
+      if (categoria !== 'direta' || !colaborador?.entrada || !saida) return total;
+      return total + calcHorasInterval(
+        colaborador.entrada,
+        saida,
+        colaborador.saida_almoco || formData.intervalo_almoco_inicio,
+        colaborador.retorno_almoco || formData.intervalo_almoco_fim
+      );
+    }, 0) * 100) / 100;
     const totalEquip = equipamentosLista.length;
     const totalAtiv = ((formData.atividades || []).length + (formData.atividades_avulsas || []).length);
     const totalOcorr = (formData.ocorrencias_lista || []).length;
     const percMedio = totalAtiv > 0
       ? Math.round((formData.atividades.reduce((sum, a) => sum + Number(a.percentual_executado || 0), 0) / totalAtiv) * 10) / 10
       : 0;
-    return { horasTrab, totalPessoas, totalEquip, totalAtiv, totalOcorr, percMedio };
+    return { horasTrab, hhDireta, totalPessoas, totalEquip, totalAtiv, totalOcorr, percMedio };
   }, [formData, equipamentosLista]);
 
   const statusObra = useMemo(() => {
@@ -2170,6 +2182,10 @@ function RDOForm2() {
           </div>
 
           <div className="rdo-header-right">
+            <div className="rdo-kpi blue">
+              <div className="rdo-kpi-val">{kpis.hhDireta.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</div>
+              <div className="rdo-kpi-label">HH Direta</div>
+            </div>
             <div className="rdo-kpi blue">
               <div className="rdo-kpi-val">{kpis.totalPessoas}</div>
               <div className="rdo-kpi-label">Pessoas</div>
