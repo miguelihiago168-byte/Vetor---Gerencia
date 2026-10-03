@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { BarChart3, Boxes, HardHat, LayoutDashboard, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, BarChart3, Boxes, ClipboardList, FileText, GitBranch, HardHat, LayoutDashboard, ShieldCheck, Users } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import {
   getProjectCockpit, getCurvaS, obterDadosGantt, kanbanRequisicoes,
@@ -45,7 +45,7 @@ const COCKPIT_INTERNAL_SOURCES = new Set(['eap_meta', 'rdos', 'workforce', 'equi
 function ProjetoDetalhes() {
   const { projetoId } = useParams();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { perfil, usuario } = useAuth();
   const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'overview');
   const [cockpit, setCockpit] = useState(null);
@@ -189,8 +189,20 @@ function ProjetoDetalhes() {
     return true;
   }), [permissions]);
   useEffect(() => {
-    if (!tabs.some((tab) => tab.id === activeTab)) setActiveTab('overview');
-  }, [activeTab, tabs]);
+    if (!loading && !tabs.some((tab) => tab.id === activeTab)) setActiveTab('overview');
+  }, [activeTab, tabs, loading]);
+  useEffect(() => {
+    setActiveTab(searchParams.get('tab') || 'overview');
+  }, [searchParams]);
+  const changeTab = (tab) => {
+    setActiveTab(tab);
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (tab === 'overview') next.delete('tab');
+      else next.set('tab', tab);
+      return next;
+    }, { replace: true });
+  };
   useEffect(() => {
     if (activeTab === 'operation' && permissions.rdo && photoAlbum === null && !photoAlbumLoading && !sourceErrors.includes('galeria-rdos')) {
       loadPhotoAlbum();
@@ -210,33 +222,39 @@ function ProjetoDetalhes() {
   const openModule = (suffix) => navigate(`/projeto/${projetoId}/${suffix}`, { state: cockpitNavigationState });
   const openActivity = (item) => navigate(`/projeto/${projetoId}/eap/${item.id}`, { state: cockpitNavigationState });
   const curveIndicators = curve?.indicadores;
-  const kpis = [
-    { label: 'Progresso físico', value: curveIndicators ? Number(curveIndicators.avanco_real || 0).toFixed(2) : '—', unit: curveIndicators ? '%' : '', state: curveIndicators?.spi_status === 'vermelho' ? 'attention' : curveIndicators?.spi_status === 'verde' ? 'ok' : 'neutral', reference: curve?.data_atual ? `Ref. ${formatDate(curve.data_atual)}` : 'Fonte: Curva S', tooltip: 'Avanço realizado oficial da Curva S.', onClick: permissions.curve_s ? () => openModule('curva-s') : null },
-    { label: 'SPI', value: curveIndicators ? Number(curveIndicators.spi || 0).toFixed(3) : '—', state: curveIndicators?.spi_status === 'vermelho' ? 'attention' : curveIndicators?.spi_status === 'verde' ? 'ok' : 'neutral', reference: curveIndicators ? (Number(curveIndicators.spi) >= 1 ? 'No ritmo planejado' : 'Abaixo do ritmo planejado') : 'Sem dados', tooltip: 'Relação entre avanço realizado e planejado.', onClick: permissions.curve_s ? () => openModule('curva-s') : null },
-    { label: 'Atividades críticas', value: permissions.eap && activityView ? activityView.counts.critical : '—', state: activityView?.counts.critical ? 'attention' : activityView ? 'ok' : 'neutral', reference: 'Fonte: Gantt oficial', onClick: permissions.eap ? () => openModule('gantt') : null },
-    { label: 'RNCs abertas', value: permissions.quality ? (cockpit?.quality?.open ?? '—') : '—', state: !cockpit?.quality ? 'neutral' : cockpit.quality.critical_open ? 'critical' : cockpit.quality.open ? 'attention' : 'ok', reference: cockpit?.quality?.critical_open ? `${cockpit.quality.critical_open} crítica(s)` : 'Fonte: Qualidade', onClick: permissions.quality ? () => openModule('rnc') : null },
-    { label: 'Requisições pendentes', value: permissions.procurement && procurement ? procurement.analysis + procurement.quotation + procurement.authorized : '—', state: procurement?.urgent?.length ? 'attention' : 'neutral', reference: procurement ? `${procurement.urgent.length} urgente(s)` : 'Fonte: Suprimentos', onClick: permissions.procurement ? () => openModule('compras') : null },
-    { label: 'Efetivo mais recente', value: permissions.rdo ? (cockpit?.workforce?.latest_effective ?? '—') : '—', unit: cockpit?.workforce?.latest_effective != null ? 'pessoas' : '', state: cockpit?.workforce?.latest_effective == null ? 'neutral' : 'ok', reference: cockpit?.execution?.latest_rdo_date ? `RDO de ${formatDate(cockpit.execution.latest_rdo_date)}` : 'Sem RDO', onClick: permissions.rdo ? () => openModule('rdos') : null },
-    { label: 'Ativos indisponíveis', value: permissions.assets && assets ? Number(assets.ferramentas_manutencao || 0) + Number(assets.ferramentas_atrasadas || 0) : '—', state: !assets ? 'neutral' : Number(assets.ferramentas_manutencao || 0) + Number(assets.ferramentas_atrasadas || 0) ? 'attention' : 'ok', reference: 'Manutenção + atrasados', onClick: permissions.assets ? () => openModule('almoxarifado') : null }
+  const quickActions = [
+    { label: 'Diário de obra', description: 'Registros e produção', icon: FileText, href: 'rdos', visible: permissions.rdo },
+    { label: 'Cronograma', description: 'Prazos e atividades', icon: GitBranch, href: 'gantt', visible: permissions.eap },
+    { label: 'Suprimentos', description: 'Compras e requisições', icon: ClipboardList, href: 'compras', visible: permissions.procurement },
+    { label: 'Almoxarifado', description: 'Estoque e ferramentas', icon: Boxes, href: 'almoxarifado', visible: permissions.assets }
+  ].filter((action) => action.visible);
+  const summaryKpis = [
+    { icon: GitBranch, visible: Boolean(permissions.eap), label: 'Atividades críticas', value: activityView?.counts.critical ?? '—', state: activityView?.counts.critical ? 'attention' : activityView ? 'ok' : 'neutral', reference: 'No caminho crítico', onClick: () => openModule('gantt') },
+    { icon: ShieldCheck, visible: Boolean(permissions.quality), label: 'RNCs abertas', value: cockpit?.quality?.open ?? '—', state: !cockpit?.quality ? 'neutral' : cockpit.quality.critical_open ? 'critical' : cockpit.quality.open ? 'attention' : 'ok', reference: cockpit?.quality?.critical_open ? `${cockpit.quality.critical_open} crítica(s)` : 'Acompanhamento da qualidade', onClick: () => openModule('rnc') },
+    { icon: ClipboardList, visible: Boolean(permissions.procurement), label: 'Requisições pendentes', value: procurement ? procurement.analysis + procurement.quotation + procurement.authorized : '—', state: procurement?.urgent?.length ? 'attention' : 'neutral', reference: procurement ? `${procurement.urgent.length} urgente(s)` : 'Sem dados de suprimentos', onClick: () => openModule('compras') },
+    { icon: Users, visible: Boolean(permissions.rdo), label: 'Equipe em campo', value: cockpit?.workforce?.latest_effective ?? '—', unit: cockpit?.workforce?.latest_effective != null ? 'pessoas' : '', state: cockpit?.workforce?.latest_effective == null ? 'neutral' : 'ok', reference: cockpit?.execution?.latest_rdo_date ? `RDO de ${formatDate(cockpit.execution.latest_rdo_date)}` : 'Sem RDO', onClick: () => openModule('rdos') },
   ];
 
   if (loading) return <><Navbar /><main className="cockpit-shell"><div className="cockpit-container"><CockpitSkeleton /></div></main></>;
   if (fatalError || !cockpit) return <><Navbar /><main className="cockpit-shell"><div className="cockpit-container"><CockpitError message={fatalError} onRetry={() => loadAll({ initial: true })} /></div></main></>;
 
   return <><Navbar /><main className="cockpit-shell"><div className="cockpit-container">
-    <CockpitHeader project={cockpit.project} updatedAt={cockpit.updated_at} refreshing={refreshing} onRefresh={() => loadAll()} deadline={deadline} />
+    <nav className="cockpit-breadcrumb" aria-label="Navegação da obra"><button type="button" onClick={() => navigate('/projetos')}><ArrowLeft size={15} /> Obras</button><span>/</span><span>Visão da obra</span></nav>
+    <CockpitHeader project={cockpit.project} updatedAt={cockpit.updated_at} refreshing={refreshing} onRefresh={() => loadAll()} deadline={deadline} indicators={curveIndicators} onOpenProgress={permissions.curve_s ? () => openModule('curva-s') : null} />
     {!meetingDismissed && meetings.length > 0 && <section className="cockpit-meeting-banner"><div><span>Agenda de hoje</span><strong>{meetings[0].assunto}</strong><small>{meetings.length > 1 ? `${meetings.length} reuniões programadas neste projeto` : 'Uma reunião programada neste projeto'}</small></div><div><button type="button" onClick={() => openModule(`mensagens?tab=agenda&reuniao=${meetings[0].id}`)}>Ver agenda</button><button type="button" className="ghost" onClick={dismissMeetings}>Dispensar</button></div></section>}
-    <CockpitTabs value={activeTab} onChange={setActiveTab} tabs={tabs} />
-    <header className="cockpit-view-heading"><div><span>{TAB_COPY[activeTab]?.[0]}</span><p>{TAB_COPY[activeTab]?.[1]}</p></div><small>Atualizado em {cockpit.updated_at ? new Date(cockpit.updated_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</small></header>
+    <CockpitTabs value={activeTab} onChange={changeTab} tabs={tabs} />
+    <div id="cockpit-panel" role="tabpanel" aria-labelledby={`cockpit-tab-${activeTab}`} tabIndex={0}>
+    <header className="cockpit-view-heading"><div><h2>{TAB_COPY[activeTab]?.[0]}</h2><p>{TAB_COPY[activeTab]?.[1]}</p></div><span className="cockpit-period">{activeTab === 'overview' ? 'Panorama atual' : 'Acompanhamento da obra'}</span></header>
     {sourceErrors.length > 0 && <div className="cockpit-source-warning"><span>Algumas fontes não responderam. Os demais dados continuam disponíveis.</span><div>{sourceErrors.map((source) => <button type="button" key={source} onClick={() => retrySource(source)} disabled={Boolean(retryingSource)}>{retryingSource === source ? 'Tentando...' : `Tentar ${source}`}</button>)}</div></div>}
 
     {activeTab === 'overview' && <>
-      <DomainStatusStrip items={domains} />
-      <KpiGrid items={kpis} />
-      <div className="cockpit-grid">
+      <KpiGrid items={summaryKpis} />
+      <div className={`cockpit-overview-grid ${permissions.curve_s ? '' : 'without-curve'}`}>
+        {permissions.curve_s && <CurvaSCard data={curve} compact onOpen={() => openModule('curva-s')} />}
         <AttentionPointsCard items={attention} onOpen={openModule} />
-        {permissions.curve_s && <CurvaSCard data={curve} onOpen={() => openModule('curva-s')} />}
       </div>
+      <section className="cockpit-domain-section"><header><h2>Saúde da obra</h2><p>Situação de cada frente de trabalho</p></header><DomainStatusStrip items={domains.filter((domain) => domain.name !== 'Planejamento' || permissions.curve_s)} /></section>
+      {quickActions.length > 0 && <section className="cockpit-shortcuts" aria-label="Acesso rápido"><header><h2>Acesso rápido</h2><p>Continue de onde precisa</p></header><div>{quickActions.map(({ icon: Icon, ...action }) => <button type="button" key={action.href} onClick={() => openModule(action.href)}><span className="cockpit-shortcut-icon"><Icon size={21} /></span><span><strong>{action.label}</strong><small>{action.description}</small></span><ArrowUpRight size={17} /></button>)}</div></section>}
     </>}
 
     {activeTab === 'planning' && permissions.eap && <div className="cockpit-planning-layout">
@@ -267,6 +285,7 @@ function ProjetoDetalhes() {
       {permissions.rdo && <EquipmentSummaryCard data={cockpit.equipment} onOpen={openModule} />}
       {permissions.assets && <AssetsSummaryCard data={assets} onOpen={openModule} />}
     </div>}
+    </div>
 
     <DataTraceabilityPanel data={cockpit} visible={canTrace} external={{ procurement: procurement?.total ?? null, assets: assets?.total_ferramentas ?? null, photos: photoAlbum?.total_fotos ?? null, failed: sourceErrors }} />
   </div></main></>;

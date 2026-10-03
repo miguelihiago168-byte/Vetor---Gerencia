@@ -23,7 +23,7 @@ const ActivityList = ({ items, empty, onOpen, tone = 'default' }) => items.lengt
   })}
 </div> : <EmptyState>{empty}</EmptyState>;
 
-export function CurvaSCard({ data, onOpen }) {
+export function CurvaSCard({ data, onOpen, compact = false }) {
   const indicators = data?.indicadores;
   const series = data?.serie || [];
   const planned = Number(indicators?.avanco_planejado || 0);
@@ -32,7 +32,7 @@ export function CurvaSCard({ data, onOpen }) {
   const spi = Number(indicators?.spi || 0);
   const needsAttention = deviation < 0 || spi < 1;
 
-  return <CockpitCard title="Curva S" icon={TrendingUp} className="cockpit-card-wide" action={<Button size="sm" tone="primary" variant="ghost" endIcon={ArrowUpRight} onClick={onOpen}>Abrir Curva S</Button>}>
+  return <CockpitCard title={compact ? 'Evolução da obra' : 'Curva S'} icon={TrendingUp} className={`cockpit-card-wide ${compact ? 'cockpit-curve-compact' : ''}`} action={<Button size="sm" tone="primary" variant="ghost" endIcon={ArrowUpRight} onClick={onOpen}>Abrir Curva S</Button>}>
     {!data ? <EmptyState>Curva S indisponível ou sem EAP configurada.</EmptyState> : <div className="cockpit-curve">
       <aside className="cockpit-curve-summary">
         <span className="cockpit-curve-kicker">Progresso acumulado</span>
@@ -50,7 +50,7 @@ export function CurvaSCard({ data, onOpen }) {
         <header><div><strong>Evolução do avanço</strong><small>{data?.data_atual ? `Referência: ${formatDate(data.data_atual)}` : 'Planejado versus realizado'}</small></div><div className="cockpit-curve-legend"><span className="planned"><i />Planejado</span><span className="actual"><i />Realizado</span></div></header>
         {series.length ? <div className="cockpit-chart"><ResponsiveContainer width="100%" height={270}><ComposedChart data={series} margin={{ top: 12, right: 10, left: -20, bottom: 0 }}>
           <defs><linearGradient id="cockpitRealArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--cockpit-success)" stopOpacity={0.2} /><stop offset="100%" stopColor="var(--cockpit-success)" stopOpacity={0.01} /></linearGradient></defs>
-          <CartesianGrid vertical={false} strokeDasharray="4 5" stroke="var(--cockpit-border)" /><XAxis dataKey="data" axisLine={false} tickLine={false} minTickGap={30} tick={{ fill: 'var(--cockpit-muted)', fontSize: 10 }} tickFormatter={(value) => formatDate(value)} /><YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fill: 'var(--cockpit-muted)', fontSize: 10 }} tickFormatter={(value) => `${value}%`} /><Tooltip labelFormatter={formatDate} formatter={(value, name) => [`${Number(value).toFixed(1)}%`, name === 'planejado' ? 'Planejado' : 'Realizado']} contentStyle={{ borderColor: 'var(--cockpit-border)', borderRadius: 8, boxShadow: '0 8px 24px rgba(18,45,78,.12)' }} /><Area type="monotone" dataKey="real" fill="url(#cockpitRealArea)" stroke="none" tooltipType="none" /><Line type="monotone" dataKey="planejado" stroke="var(--cockpit-primary)" strokeDasharray="6 5" dot={false} strokeWidth={2} /><Line type="monotone" dataKey="real" stroke="var(--cockpit-success)" dot={false} activeDot={{ r: 4 }} strokeWidth={3} />
+          <CartesianGrid vertical={false} strokeDasharray="4 5" stroke="var(--cockpit-border)" /><XAxis dataKey="data" axisLine={false} tickLine={false} minTickGap={30} tick={{ fill: 'var(--cockpit-muted)', fontSize: 11 }} tickFormatter={(value) => formatDate(value)} /><YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fill: 'var(--cockpit-muted)', fontSize: 11 }} tickFormatter={(value) => `${value}%`} /><Tooltip labelFormatter={formatDate} formatter={(value, name) => [`${Number(value).toFixed(1)}%`, name === 'planejado' ? 'Planejado' : 'Realizado']} contentStyle={{ background: 'var(--cockpit-surface)', color: 'var(--cockpit-text)', borderColor: 'var(--cockpit-border)', borderRadius: 8, boxShadow: '0 8px 24px rgba(18,45,78,.12)' }} /><Area type="monotone" dataKey="real" fill="url(#cockpitRealArea)" stroke="none" tooltipType="none" /><Line type="monotone" dataKey="planejado" stroke="var(--cockpit-primary)" strokeDasharray="6 5" dot={false} strokeWidth={2} /><Line type="monotone" dataKey="real" stroke="var(--cockpit-success)" dot={false} activeDot={{ r: 4 }} strokeWidth={3} />
         </ComposedChart></ResponsiveContainer></div> : <EmptyState>Sem série de progresso para o período.</EmptyState>}
       </div>
     </div>}

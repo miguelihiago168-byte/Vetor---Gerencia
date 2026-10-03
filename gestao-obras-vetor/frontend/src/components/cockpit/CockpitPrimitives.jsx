@@ -34,15 +34,16 @@ const projectScheduleProgress = (project) => {
   return Math.max(0, Math.min(100, ((Date.now() - start.getTime()) / (end.getTime() - start.getTime())) * 100));
 };
 
-export function CockpitHeader({ project, updatedAt, refreshing, onRefresh, deadline }) {
+export function CockpitHeader({ project, updatedAt, refreshing, onRefresh, deadline, indicators, onOpenProgress }) {
   const scheduleProgress = projectScheduleProgress(project);
   const archived = Number(project?.arquivado) === 1;
+  const progress = indicators ? Number(indicators.avanco_real || 0) : null;
 
   return <section className="cockpit-header">
     <div className="cockpit-header-main">
       <div className="cockpit-project-content">
         <div className="cockpit-header-topline">
-          <span className="cockpit-eyebrow"><Gauge size={14} /> Cockpit da Obra</span>
+          <span className="cockpit-eyebrow"><Gauge size={14} /> Cockpit da obra</span>
           {archived && <span className="cockpit-archived-note">Projeto arquivado</span>}
         </div>
         <h1>{project?.nome || 'Projeto'}</h1>
@@ -53,12 +54,17 @@ export function CockpitHeader({ project, updatedAt, refreshing, onRefresh, deadl
         </div>
       </div>
       <div className="cockpit-schedule">
-        <div className="cockpit-schedule-dates"><span><CalendarDays size={14} /> {formatDate(project?.planned_start, 'Não informado')}</span><span>{formatDate(project?.prazo_termino, 'Não informado')}</span></div>
+        <div className="cockpit-schedule-dates"><span><CalendarDays size={14} /> Início · {formatDate(project?.planned_start, 'Não informado')}</span><span>Entrega · {formatDate(project?.prazo_termino, 'Não informado')}</span></div>
         {scheduleProgress !== null && <div className="cockpit-schedule-track" aria-label={`${Math.round(scheduleProgress)}% do prazo contratual transcorrido`}><span style={{ width: `${scheduleProgress}%` }} /></div>}
+        <small className="cockpit-schedule-caption">{scheduleProgress === null ? 'Período contratual não definido' : `${Math.round(scheduleProgress)}% do prazo contratual transcorrido`}</small>
       </div>
     </div>
+    {onOpenProgress && <button type="button" className="cockpit-hero-progress" onClick={onOpenProgress}>
+      <span className="cockpit-progress-ring" style={{ '--progress': `${Math.max(0, Math.min(100, progress ?? 0))}%` }}><span><strong>{progress === null ? '—' : progress.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}<small>{progress === null ? '' : '%'}</small></strong><small>executado</small></span></span>
+      <span className="cockpit-progress-copy"><strong>Avanço físico <ArrowUpRight size={14} /></strong><small>{indicators ? `${Number(indicators.avanco_planejado || 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% planejado` : 'Aguardando dados da Curva S'}</small></span>
+    </button>}
     <div className="cockpit-header-side">
-      {deadline?.days !== null && <div className={`cockpit-deadline ${deadline.completed ? 'is-complete' : deadline.overdue ? 'is-critical' : ''}`}><small>Prazo contratual</small>{deadline.completed ? <div><CheckCircle2 size={24} /><strong>Concluído</strong></div> : <div><strong>{Math.abs(deadline.days)}</strong><span>{deadline.overdue ? 'dias vencido' : 'dias restantes'}</span></div>}</div>}
+      <div className={`cockpit-deadline ${deadline?.completed ? 'is-complete' : deadline?.overdue ? 'is-critical' : ''}`}><small>Prazo contratual</small>{deadline?.completed ? <div><CheckCircle2 size={24} /><strong>Concluído</strong></div> : deadline?.days != null ? <div><strong>{Math.abs(deadline.days)}</strong><span>{deadline.overdue ? 'dias vencido' : 'dias restantes'}</span></div> : <div><span>Não informado</span></div>}</div>
       <small className="cockpit-updated"><Clock3 size={13} /> Atualizado em {updatedAt ? new Date(updatedAt).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</small>
       <Button className="cockpit-refresh" variant="inverse" startIcon={RefreshCw} loading={refreshing} fullWidth onClick={onRefresh}>Atualizar</Button>
     </div>
@@ -66,10 +72,18 @@ export function CockpitHeader({ project, updatedAt, refreshing, onRefresh, deadl
 }
 
 export function CockpitTabs({ value, onChange, tabs }) {
+  const handleKeyDown = (event, index) => {
+    const offsets = { ArrowRight: 1, ArrowLeft: -1, Home: -index, End: tabs.length - 1 - index };
+    if (!(event.key in offsets)) return;
+    event.preventDefault();
+    const next = (index + offsets[event.key] + tabs.length) % tabs.length;
+    onChange(tabs[next].id);
+    event.currentTarget.parentElement.querySelectorAll('[role="tab"]')[next]?.focus();
+  };
   return <div className="cockpit-tabs" role="tablist" aria-label="Seções do Cockpit">
-    {tabs.map((tab) => {
+    {tabs.map((tab, index) => {
       const Icon = tab.icon;
-      return <button key={tab.id} type="button" role="tab" aria-selected={value === tab.id} className={value === tab.id ? 'active' : ''} onClick={() => onChange(tab.id)}>{Icon && <Icon size={15} />}{tab.label}</button>;
+      return <button key={tab.id} id={`cockpit-tab-${tab.id}`} type="button" role="tab" aria-controls="cockpit-panel" tabIndex={value === tab.id ? 0 : -1} aria-selected={value === tab.id} className={value === tab.id ? 'active' : ''} onKeyDown={(event) => handleKeyDown(event, index)} onClick={() => onChange(tab.id)}>{Icon && <Icon size={17} />}{tab.label}</button>;
     })}
   </div>;
 }
@@ -82,18 +96,16 @@ export function DomainStatusStrip({ items }) {
 
 export function KpiGrid({ items }) {
   return <section className="cockpit-kpi-grid">
-    {items.filter((item) => item.visible !== false).map((item, index) => {
+    {items.filter((item) => item.visible !== false).map((item) => {
       const state = item.state || 'neutral';
+      const Icon = item.icon;
       const stateLabels = { ok: 'Dentro do esperado', attention: 'Requer atenção', critical: 'Crítico', neutral: 'Acompanhar' };
-      const progress = item.unit === '%' && Number.isFinite(Number(item.value))
-        ? Math.max(0, Math.min(100, Number(item.value)))
-        : null;
 
-      return <button type="button" key={item.label} className={`cockpit-kpi kpi-${state} ${index === 0 ? 'cockpit-kpi-primary' : ''} ${item.onClick ? 'is-interactive' : ''}`} onClick={item.onClick} disabled={!item.onClick} title={item.tooltip || ''}>
-        <div className="cockpit-kpi-heading"><span>{item.label}</span><small className="cockpit-kpi-state"><i />{stateLabels[state]}</small></div>
+      return <button type="button" key={item.label} className={`cockpit-kpi kpi-${state} ${item.onClick ? 'is-interactive' : ''}`} onClick={item.onClick} disabled={!item.onClick} title={item.tooltip || ''}>
+        <div className="cockpit-kpi-heading">{Icon && <Icon size={18} />}<span>{item.label}</span></div>
         {item.onClick && <ArrowUpRight className="cockpit-kpi-arrow" size={15} />}
         <div className="cockpit-kpi-body"><strong>{item.value ?? '—'}{item.unit && <small>{item.unit}</small>}</strong><em>{item.reference || 'Sem referência'}</em></div>
-        {progress !== null && <div className="cockpit-kpi-progress"><div><span style={{ width: `${progress}%` }} /></div><small>{progress.toFixed(1).replace('.', ',')}% executado</small></div>}
+        <small className="cockpit-kpi-state"><i />{stateLabels[state]}</small>
       </button>;
     })}
   </section>;

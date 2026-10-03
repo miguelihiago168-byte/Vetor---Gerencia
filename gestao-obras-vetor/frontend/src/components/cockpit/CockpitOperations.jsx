@@ -15,9 +15,9 @@ const rdoNumber = (rdo) => {
 };
 
 export function AttentionPointsCard({ items, onOpen }) {
-  return <CockpitCard title="Pontos de atenção" icon={AlertTriangle} className="cockpit-card-wide">
+  return <CockpitCard title="Prioridades da obra" icon={AlertTriangle} className="cockpit-attention-card" action={<span className="cockpit-attention-count">{items.length}</span>}>
     {items.length ? <div className="cockpit-attention-list">{items.map((item, index) => <button type="button" key={`${item.source}-${item.title}-${index}`} className={`cockpit-attention attention-${item.priority}`} onClick={() => onOpen(item.href)}>
-      <span>{item.source}</span><div><strong>{item.title}</strong>{item.detail && <small>{item.detail}</small>}</div><time>{formatDate(item.date, '')}</time>
+      <span>{item.source}</span><div><strong>{item.title}</strong>{item.detail && <small>{item.detail}</small>}</div><time>{formatDate(item.date, '')}</time><ArrowUpRight size={15} aria-hidden="true" />
     </button>)}</div> : <EmptyState>Nenhum ponto de atenção rastreável no momento.</EmptyState>}
   </CockpitCard>;
 }
