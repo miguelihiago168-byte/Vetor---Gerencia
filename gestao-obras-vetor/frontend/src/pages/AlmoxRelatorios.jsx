@@ -1,112 +1,68 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { fmtTs } from '../utils/date';
 import { useParams } from 'react-router-dom';
 import AlmoxarifadoLayout from '../components/AlmoxarifadoLayout';
+import { AssetsPanel, AssetsState, AssetsSearch, AssetsStatus, AssetsTable } from '../components/AlmoxarifadoUI';
 import { getRelatorioMovimentacoesAlmox } from '../services/api';
-import { useNotification } from '../context/NotificationContext';
+
+const tipos = {
+  CADASTRO: ['Cadastro', 'blue'],
+  RETIRADA: ['Retirada', 'blue'],
+  DEVOLUCAO: ['Devolução', 'green'],
+  MANUTENCAO_ENVIO: ['Envio à manutenção', 'yellow'],
+  MANUTENCAO_RETORNO: ['Retorno da manutenção', 'green'],
+  BAIXA_DEFINITIVA: ['Baixa definitiva', 'red'],
+  PERDA: ['Perda', 'red'],
+  TRANSFERENCIA: ['Transferência', 'blue'],
+  TRANSFERENCIA_ATIVO: ['Transferência de ativo', 'blue'],
+  VINCULO_RDO: ['Vínculo com RDO', 'blue']
+};
 
 function AlmoxRelatorios() {
   const { projetoId } = useParams();
-  const { error } = useNotification();
   const [movimentacoes, setMovimentacoes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filtroRelatorios, setFiltroRelatorios] = useState('');
-
-  const movimentacoesFiltradas = useMemo(() => {
-    const termo = filtroRelatorios.trim().toLowerCase();
-    if (!termo) return movimentacoes;
-
-    return movimentacoes.filter((movimentacao) => {
-      const camposBusca = [
-        movimentacao.tipo,
-        movimentacao.ferramenta_nome,
-        movimentacao.ferramenta_marca,
-        movimentacao.ferramenta_modelo,
-        movimentacao.ferramenta_nf_compra,
-        movimentacao.projeto_origem_nome,
-        movimentacao.projeto_destino_nome,
-        movimentacao.colaborador_nome,
-        movimentacao.usuario_nome
-      ];
-
-      return camposBusca.some((campo) => String(campo || '').toLowerCase().includes(termo));
-    });
-  }, [movimentacoes, filtroRelatorios]);
+  const [loadError, setLoadError] = useState('');
+  const [tentativa, setTentativa] = useState(0);
+  const [busca, setBusca] = useState('');
+  const [tipo, setTipo] = useState('todos');
 
   useEffect(() => {
-    const carregar = async () => {
-      try {
-        setLoading(true);
-        const res = await getRelatorioMovimentacoesAlmox(projetoId);
-        setMovimentacoes(res.data || []);
-      } catch (err) {
-        error(err?.response?.data?.erro || 'Erro ao carregar relatório de movimentações.', 7000);
-      } finally {
-        setLoading(false);
-      }
-    };
+    let active = true;
+    setLoading(true);
+    setLoadError('');
+    getRelatorioMovimentacoesAlmox(projetoId)
+      .then((res) => { if (active) setMovimentacoes(res.data || []); })
+      .catch((err) => { if (active) setLoadError(err?.response?.data?.erro || 'Erro ao carregar o histórico de movimentações.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [projetoId, tentativa]);
 
-    carregar();
-  }, [projetoId]);
+  const tiposDisponiveis = [...new Set(movimentacoes.map((m) => m.tipo).filter(Boolean))];
+  const filtradas = movimentacoes.filter((m) => (tipo === 'todos' || m.tipo === tipo)
+    && [m.id, m.tipo, tipos[m.tipo]?.[0], m.ferramenta_nome, m.ferramenta_marca, m.ferramenta_modelo, m.ferramenta_nf_compra, m.projeto_origem_nome, m.projeto_destino_nome, m.colaborador_nome, m.usuario_nome]
+      .some((value) => String(value || '').toLocaleLowerCase('pt-BR').includes(busca.trim().toLocaleLowerCase('pt-BR'))));
+  const columns = [
+    { key: 'ativo', label: 'Ativo', render: (m) => <div><strong className="assets-item-name">{m.ferramenta_nome || 'Não informado'}</strong><span className="assets-record-meta">{[m.ferramenta_marca, m.ferramenta_modelo].filter(Boolean).join(' · ') || 'Marca/modelo não informados'}</span><span className="assets-detail">NF: {m.ferramenta_nf_compra || 'Não informada'}</span></div> },
+    { key: 'registro', label: 'Movimentação', render: (m) => <div><AssetsStatus tone={tipos[m.tipo]?.[1] || 'blue'}>{tipos[m.tipo]?.[0] || m.tipo || 'Não informado'}</AssetsStatus><span className="assets-record-meta">#{m.id} · {fmtTs(m.criado_em)}</span></div> },
+    { key: 'quantidade', label: 'Quantidade', className: 'assets-number', render: (m) => m.quantidade },
+    { key: 'obras', label: 'Origem e destino', render: (m) => <div><span>Origem: {m.projeto_origem_nome || 'Não informada'}</span><span className="assets-record-meta">Destino: {m.projeto_destino_nome || 'Não informado'}</span></div> },
+    { key: 'pessoas', label: 'Responsáveis', render: (m) => <div><span>Colaborador: {m.colaborador_nome || 'Não informado'}</span><span className="assets-record-meta">Registrado por: {m.usuario_nome || 'Não informado'}</span></div> }
+  ];
 
   return (
-    <AlmoxarifadoLayout title="Relatórios">
-        {loading ? (
-          <div className="loading"><div className="spinner"></div></div>
-        ) : (
-          <div className="card">
-            <h2 className="card-header">Histórico imutável de movimentações</h2>
-            <div className="mb-3">
-              <input
-                className="form-input"
-                placeholder="Pesquisar por tipo, ativo, marca, modelo, NF, origem, destino, colaborador ou usuário"
-                value={filtroRelatorios}
-                onChange={(e) => setFiltroRelatorios(e.target.value)}
-              />
-            </div>
-            <div style={{ overflowX: 'auto' }}>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Data</th>
-                    <th>Tipo</th>
-                    <th>Ativo</th>
-                    <th>Marca</th>
-                    <th>Modelo</th>
-                    <th>NF</th>
-                    <th>Qtd</th>
-                    <th>Origem</th>
-                    <th>Destino</th>
-                    <th>Colaborador</th>
-                    <th>Usuário</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {movimentacoesFiltradas.map((m) => (
-                    <tr key={m.id}>
-                      <td>#{m.id}</td>
-                      <td>{fmtTs(m.criado_em)}</td>
-                      <td>{m.tipo}</td>
-                      <td>{m.ferramenta_nome}</td>
-                      <td>{m.ferramenta_marca || '-'}</td>
-                      <td>{m.ferramenta_modelo || '-'}</td>
-                      <td>{m.ferramenta_nf_compra || '-'}</td>
-                      <td>{m.quantidade}</td>
-                      <td>{m.projeto_origem_nome || '-'}</td>
-                      <td>{m.projeto_destino_nome || '-'}</td>
-                      <td>{m.colaborador_nome || '-'}</td>
-                      <td>{m.usuario_nome || '-'}</td>
-                    </tr>
-                  ))}
-                  {movimentacoesFiltradas.length === 0 && (
-                    <tr><td colSpan={12}>{filtroRelatorios ? 'Nenhuma movimentação encontrada para o filtro informado.' : 'Nenhuma movimentação registrada.'}</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+    <AlmoxarifadoLayout title="Relatórios" description="Acompanhe a movimentação dos ativos e a rastreabilidade de cada operação.">
+      <AssetsPanel title="Histórico de movimentações" description="Registros imutáveis de retiradas, devoluções, manutenção e transferências." count={!loading && !loadError ? movimentacoes.length : null} footer={!loading && !loadError ? `${filtradas.length} de ${movimentacoes.length} movimentações` : null}>
+        <AssetsSearch value={busca} onChange={setBusca} placeholder="Buscar ativo, NF, obra, colaborador ou usuário">
+          <select className="form-select assets-status-filter" aria-label="Filtrar tipo de movimentação" value={tipo} onChange={(e) => setTipo(e.target.value)}>
+            <option value="todos">Todos os tipos</option>{tiposDisponiveis.map((value) => <option key={value} value={value}>{tipos[value]?.[0] || value}</option>)}
+          </select>
+        </AssetsSearch>
+        {loading || loadError ? <AssetsState loading={loading} error={loadError} onRetry={() => setTentativa((value) => value + 1)} /> : filtradas.length ? <AssetsTable label="Histórico de movimentações" columns={columns} rows={filtradas} className="assets-history-table" /> :
+          <AssetsState title={movimentacoes.length ? 'Nenhuma movimentação encontrada' : 'Nenhuma movimentação registrada'} description={movimentacoes.length ? 'Ajuste a busca ou o tipo de movimentação.' : 'As operações realizadas com os ativos desta obra aparecerão aqui.'}>
+            {(busca || tipo !== 'todos') && <button className="btn btn-secondary" onClick={() => { setBusca(''); setTipo('todos'); }}>Limpar filtros</button>}
+          </AssetsState>}
+      </AssetsPanel>
     </AlmoxarifadoLayout>
   );
 }

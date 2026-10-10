@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import AlmoxarifadoLayout from '../components/AlmoxarifadoLayout';
+import { AssetsPanel, AssetsState, AssetsSearch, AssetsStatus, AssetsTable, AssetsModal } from '../components/AlmoxarifadoUI';
+import { ArrowDownLeft, Info } from 'lucide-react';
 import { enviarFerramentaManutencao, getAlocacoesAbertas, registrarDevolucaoFerramenta, registrarPerdaFerramenta } from '../services/api';
 import { useNotification } from '../context/NotificationContext';
 
@@ -8,6 +10,9 @@ function AlmoxDevolucao() {
   const { projetoId } = useParams();
   const { success, error } = useNotification();
   const [alocacoes, setAlocacoes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [busca, setBusca] = useState('');
   const [showBaixaModal, setShowBaixaModal] = useState(false);
   const [alocacaoSelecionada, setAlocacaoSelecionada] = useState(null);
   const carregandoRef = useRef(false);
@@ -22,12 +27,15 @@ function AlmoxDevolucao() {
   const carregar = async () => {
     if (!projetoId || carregandoRef.current) return;
     carregandoRef.current = true;
+    setLoading(true);
+    setLoadError('');
     try {
       const res = await getAlocacoesAbertas(projetoId);
       setAlocacoes(res.data || []);
     } catch (err) {
       setAlocacoes([]);
       const mensagem = err?.response?.data?.erro || 'Erro ao carregar alocações.';
+      setLoadError(mensagem);
       const now = Date.now();
       const repetido = ultimoErroRef.current.msg === mensagem && (now - ultimoErroRef.current.at) < 2500;
       if (!repetido) {
@@ -36,6 +44,7 @@ function AlmoxDevolucao() {
       }
     } finally {
       carregandoRef.current = false;
+      setLoading(false);
     }
   };
 
@@ -113,111 +122,53 @@ function AlmoxDevolucao() {
     }
   };
 
+  const filtradas = alocacoes.filter((a) => `${a.ferramenta_nome || ''} ${a.colaborador_usuario_nome || a.colaborador_nome || ''}`.toLocaleLowerCase('pt-BR').includes(busca.trim().toLocaleLowerCase('pt-BR')));
+  const columns = [
+    { key: 'ativo', label: 'Ativo', render: (a) => <strong className="assets-item-name">{a.ferramenta_nome}</strong> },
+    { key: 'colaborador', label: 'Colaborador', render: (a) => a.colaborador_usuario_nome || a.colaborador_nome || 'Não informado' },
+    { key: 'status', label: 'Status', render: (a) => <AssetsStatus tone={a.status === 'EM_MANUTENCAO' ? 'blue' : 'green'}>{a.status === 'EM_MANUTENCAO' ? 'Em manutenção' : 'Alocado'}</AssetsStatus> },
+    { key: 'previsao', label: 'Devolução prevista', render: (a) => a.previsao_devolucao ? new Date(a.previsao_devolucao).toLocaleDateString('pt-BR') : 'Sem previsão' },
+    { key: 'quantidade', label: 'Qtd. pendente', className: 'assets-number', render: (a) => Number(a.quantidade) - Number(a.quantidade_devolvida || 0) },
+    { key: 'acao', label: 'Ação', render: (a) => a.status === 'ALOCADA' ? <button className="btn btn-secondary btn-sm" onClick={() => abrirModalBaixa(a)}><ArrowDownLeft size={14} aria-hidden="true" />Dar baixa</button> : <span className="assets-detail">Aguardando manutenção</span> }
+  ];
+
   return (
-    <AlmoxarifadoLayout title="Devolução">
-        <div className="card">
-          <h2 className="card-header">Alocações abertas</h2>
-          <div style={{ overflowX: 'auto' }}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Ativo</th>
-                  <th>Colaborador</th>
-                  <th>Status</th>
-                  <th>Previsão</th>
-                  <th>Pendente</th>
-                  <th>Ação</th>
-                </tr>
-              </thead>
-              <tbody>
-                {alocacoes.map((a) => {
-                  const pendente = Number(a.quantidade) - Number(a.quantidade_devolvida || 0);
-                  return (
-                    <tr key={a.id}>
-                      <td>{a.ferramenta_nome}</td>
-                      <td>{a.colaborador_usuario_nome || a.colaborador_nome || '-'}</td>
-                      <td>{a.status === 'EM_MANUTENCAO' ? <span className="badge badge-blue">Em manutenção</span> : <span className="badge badge-green">Alocada</span>}</td>
-                      <td>{a.previsao_devolucao ? new Date(a.previsao_devolucao).toLocaleDateString('pt-BR') : '-'}</td>
-                      <td>{pendente}</td>
-                      <td>
-                        {a.status === 'ALOCADA' ? (
-                          <button className="btn btn-warning" onClick={() => abrirModalBaixa(a)}>Dar baixa</button>
-                        ) : (
-                          <span className="badge badge-gray">Indisponível</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-                {alocacoes.length === 0 && (
-                  <tr><td colSpan={6}>Nenhuma alocação ativa para devolução.</td></tr>
-                )}
-              </tbody>
-            </table>
+    <AlmoxarifadoLayout title="Devolução" description="Confira as alocações abertas e registre o retorno ou a baixa dos ativos.">
+      <AssetsPanel title="Alocações abertas" description="Selecione um ativo para informar a quantidade e a condição de devolução." count={!loading && !loadError ? alocacoes.length : null}
+        footer={!loading && !loadError ? `${filtradas.length} de ${alocacoes.length} alocações` : null}>
+        <AssetsSearch value={busca} onChange={setBusca} />
+        {loading || loadError ? <AssetsState loading={loading} error={loadError} onRetry={carregar} /> : filtradas.length ? <AssetsTable label="Alocações para devolução" columns={columns} rows={filtradas} /> :
+          <AssetsState title={alocacoes.length ? 'Nenhuma alocação encontrada' : 'Nenhuma devolução pendente'} description={alocacoes.length ? 'Tente outro ativo ou colaborador.' : 'As retiradas em aberto aparecerão aqui para acompanhamento.'}>
+            {busca && <button className="btn btn-secondary" onClick={() => setBusca('')}>Limpar busca</button>}
+          </AssetsState>}
+      </AssetsPanel>
+
+      {showBaixaModal && <AssetsModal title="Baixa de ativo" description={alocacaoSelecionada?.ferramenta_nome} onClose={fecharModalBaixa}>
+        <form onSubmit={(e) => { e.preventDefault(); confirmarBaixa(); }}>
+          <div className="assets-notice"><Info size={17} aria-hidden="true" /><span>Quantidade pendente: <strong>{Number(alocacaoSelecionada?.quantidade || 0) - Number(alocacaoSelecionada?.quantidade_devolvida || 0)}</strong>. Você pode registrar uma devolução parcial.</span></div>
+          <div className="assets-form-grid assets-form-grid-two">
+            <label className="assets-field">Ação
+              <select className="form-select" value={baixaForm.acao} onChange={(e) => setBaixaForm({ ...baixaForm, acao: e.target.value })}>
+                <option value="DEVOLVIDA">Devolvida</option><option value="PERDIDA">Perdida</option><option value="DANIFICADA">Danificada</option>
+              </select>
+            </label>
+            <label className="assets-field">Quantidade *
+              <input className="form-input" type="number" min="1" required max={Math.max(1, Number(alocacaoSelecionada?.quantidade || 0) - Number(alocacaoSelecionada?.quantidade_devolvida || 0))}
+                value={baixaForm.quantidade} onChange={(e) => setBaixaForm({ ...baixaForm, quantidade: e.target.value })} />
+            </label>
+            {baixaForm.acao === 'DANIFICADA' && <label className="assets-field assets-field-wide">Destino do ativo danificado
+              <select className="form-select" value={baixaForm.destinoDanificada} onChange={(e) => setBaixaForm({ ...baixaForm, destinoDanificada: e.target.value })}>
+                <option value="MANUTENCAO">Enviar para manutenção</option><option value="BAIXA_DEFINITIVA">Baixa definitiva</option>
+              </select>
+            </label>}
+            <label className="assets-field assets-field-wide">Justificativa {baixaForm.acao === 'DANIFICADA' && baixaForm.destinoDanificada === 'BAIXA_DEFINITIVA' ? '*' : '(opcional)'}
+              <textarea className="form-textarea" rows={3} required={baixaForm.acao === 'DANIFICADA' && baixaForm.destinoDanificada === 'BAIXA_DEFINITIVA'} value={baixaForm.justificativa}
+                onChange={(e) => setBaixaForm({ ...baixaForm, justificativa: e.target.value })} placeholder="Descreva a condição ou o motivo da baixa" />
+            </label>
           </div>
-        </div>
-
-        {showBaixaModal && (
-          <div className="modal-overlay fade-in" role="dialog" aria-modal="true" onClick={fecharModalBaixa}>
-            <div className="modal-card" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
-              <h3 style={{ marginTop: 0, marginBottom: 8 }}>Baixa de ativo</h3>
-              <p style={{ marginTop: 0, color: 'var(--gray-600)' }}>
-                Selecione a ação para o ativo <strong>{alocacaoSelecionada?.ferramenta_nome}</strong>.
-              </p>
-
-              <div className="grid" style={{ gap: 12 }}>
-                <div>
-                  <label className="form-label">Ação</label>
-                  <select className="form-select" value={baixaForm.acao} onChange={(e) => setBaixaForm({ ...baixaForm, acao: e.target.value })}>
-                    <option value="DEVOLVIDA">Devolvida</option>
-                    <option value="PERDIDA">Perdida</option>
-                    <option value="DANIFICADA">Danificada</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="form-label">Quantidade</label>
-                  <input
-                    className="form-input"
-                    type="number"
-                    min="1"
-                    max={Math.max(1, Number(alocacaoSelecionada?.quantidade || 0) - Number(alocacaoSelecionada?.quantidade_devolvida || 0))}
-                    value={baixaForm.quantidade}
-                    onChange={(e) => setBaixaForm({ ...baixaForm, quantidade: e.target.value })}
-                  />
-                </div>
-
-                {baixaForm.acao === 'DANIFICADA' && (
-                  <div>
-                    <label className="form-label">Destino do ativo danificado</label>
-                    <select className="form-select" value={baixaForm.destinoDanificada} onChange={(e) => setBaixaForm({ ...baixaForm, destinoDanificada: e.target.value })}>
-                      <option value="MANUTENCAO">Enviar para manutenção</option>
-                      <option value="BAIXA_DEFINITIVA">Baixa definitiva</option>
-                    </select>
-                  </div>
-                )}
-
-                <div>
-                  <label className="form-label">
-                    Justificativa {baixaForm.acao === 'DANIFICADA' && baixaForm.destinoDanificada === 'BAIXA_DEFINITIVA' ? '(obrigatória)' : '(opcional)'}
-                  </label>
-                  <textarea
-                    className="form-input"
-                    rows={3}
-                    value={baixaForm.justificativa}
-                    onChange={(e) => setBaixaForm({ ...baixaForm, justificativa: e.target.value })}
-                    placeholder="Descreva o motivo da baixa"
-                  />
-                </div>
-              </div>
-
-              <div className="dialog-actions" style={{ marginTop: 16 }}>
-                <button className="btn btn-secondary" onClick={fecharModalBaixa}>Cancelar</button>
-                <button className="btn btn-primary" onClick={confirmarBaixa}>Confirmar baixa</button>
-              </div>
-            </div>
-          </div>
-        )}
+          <div className="assets-form-actions"><button className="btn btn-secondary" type="button" onClick={fecharModalBaixa}>Cancelar</button><button className="btn btn-primary" type="submit">Confirmar baixa</button></div>
+        </form>
+      </AssetsModal>}
     </AlmoxarifadoLayout>
   );
 }
