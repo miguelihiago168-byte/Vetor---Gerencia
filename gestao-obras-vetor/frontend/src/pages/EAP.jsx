@@ -14,7 +14,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
 import { useNotification } from '../context/NotificationContext';
-import { Activity, Plus, ArrowLeft, Download, Upload, X, AlertTriangle, CheckCircle2, MoreHorizontal, FileSpreadsheet } from 'lucide-react';
+import { Activity, Plus, ArrowLeft, Download, Upload, X, AlertTriangle, CheckCircle2, MoreHorizontal, FileSpreadsheet, Layers } from 'lucide-react';
 import EapTable from '../components/eap/EapTable';
 import useEapEditor from '../components/eap/useEapEditor';
 import './EAP.css';
@@ -513,13 +513,13 @@ function EAP({ hideNavbar = false }) {
             {!hideNavbar && (
               <Button startIcon={ArrowLeft} onClick={async () => { if (await editor.cancel()) navigate(`/projeto/${projetoId}/planejamento`); }}>Planejamento</Button>
             )}
-            <div><h1 className="eap-list-title">EAP do Projeto</h1><p style={{ fontSize: 12, color: 'var(--eap-muted)', marginTop: 7 }}>Organize as atividades e acompanhe o avanço da obra.</p></div>
+            <div><div className="eap-page-eyebrow"><Layers size={14} aria-hidden="true" /> Estrutura analítica do projeto</div><h1 className="eap-list-title">EAP do Projeto</h1><p className="eap-list-description">Do planejamento à execução, cada atividade no seu lugar.</p></div>
           </div>
           <div className="eap-toolbar" aria-label="Acoes da EAP">
             <Button tone="primary" variant="solid" startIcon={Plus} disabled={editor.saving || Boolean(loadError)} onClick={async () => { if (await editor.cancel()) editor.begin(); }}>Nova atividade</Button>
             <div className="eap-actions-menu">
               <Button
-                variant="ghost"
+                variant="outline"
                 startIcon={MoreHorizontal}
                 onClick={() => setEapActionsOpen((open) => !open)}
                 aria-expanded={eapActionsOpen}

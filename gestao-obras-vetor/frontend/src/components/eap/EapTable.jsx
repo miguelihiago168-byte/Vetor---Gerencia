@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, History, Pencil, Plus, Search, SlidersHorizontal, Trash2, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, History, Pencil, Plus, Search, SlidersHorizontal, Trash2, X, Layers, Circle, Timer, CheckCircle2, ListTree, ShieldCheck } from 'lucide-react';
 import Button, { IconButton } from '../ui/Button';
 import { activityCounts, activityLabel, activityWeight, buildHierarchy, formatDate, formatNumber, STATUS_LABELS, visibleActivities } from './eapUtils';
 import { EapDrawer, EapField, EditorActions, WeightHint } from './EapEditor';
@@ -94,15 +94,15 @@ export default function EapTable({ activities, editor, onDelete, readOnly = fals
     if (editor.session && String(row.id) === String(editingId)) return renderEdit(row);
     const hasChildren = row.children.length > 0;
     const isExpanded = filtering || expanded.has(String(row.id));
-    return <tr key={row.id} className={`${hasChildren ? 'eap-group-row' : ''}${row.contextOnly ? ' is-context' : ''}`} data-activity-id={row.id}>
+    return <tr key={row.id} className={`${hasChildren ? 'eap-group-row' : 'eap-leaf-row'}${row.contextOnly ? ' is-context' : ''}`} data-activity-id={row.id}>
       <td className="eap-sticky-0"><span className="eap-code">{row.codigo_eap}</span></td>
       <td className="eap-sticky-1"><div className="eap-tree-name" style={{ '--depth': row.level }}>
         {hasChildren ? <button type="button" className="eap-tree-toggle" aria-label={`${isExpanded ? 'Recolher' : 'Expandir'} ${row.codigo_eap}`} aria-expanded={isExpanded} disabled={locked || filtering} onClick={() => toggle(row.id)}>{isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button> : <span className="eap-tree-dot" />}
-        <button className="eap-name-button" type="button" onClick={() => start(row, '', true)} disabled={actionsDisabled} title={row.nome || row.descricao}><strong>{row.nome || row.descricao}</strong>{hasChildren && <small>{row.children.length} subatividade(s)</small>}</button>
+        <button className="eap-name-button" type="button" onClick={() => start(row, '', true)} disabled={actionsDisabled} title={row.nome || row.descricao}><strong>{row.nome || row.descricao}</strong>{hasChildren && <small><Layers size={11} aria-hidden="true" />{row.children.length} subatividade{row.children.length !== 1 ? 's' : ''}</small>}</button>
       </div></td>
       <td>{formatDate(row.data_inicio_planejada)}</td><td>{formatDate(row.data_fim_planejada)}</td>
       <td>{hasChildren ? '—' : row.unidade_medida || '—'}</td><td className="eap-number">{hasChildren ? '—' : formatNumber(row.quantidade_total)}</td>
-      <td className="eap-number">{formatNumber(activityWeight(row))}%</td><td><Progress row={row} /></td>
+      <td className="eap-number"><span className="eap-weight-value">{formatNumber(activityWeight(row))}%</span></td><td><Progress row={row} /></td>
       <td><span className={`eap-table-status is-${row.tone}`}>{STATUS_LABELS[row.tone]}</span></td>
       <td><div className="eap-row-actions">
         <IconButton size="sm" variant="ghost" icon={Pencil} label={`Editar ${row.codigo_eap}`} onClick={() => start(row)} disabled={actionsDisabled} />
@@ -124,21 +124,31 @@ export default function EapTable({ activities, editor, onDelete, readOnly = fals
 
   return <div className="eap-workspace" ref={ref} onKeyDown={onKeyDown}>
     <div className="eap-overview" aria-label="Resumo das atividades executáveis">
-      {[['total', 'Atividades'], ['idle', 'Não iniciadas'], ['active', 'Em andamento'], ['done', 'Concluídas']].map(([key, label]) => <div key={key} className={`eap-overview-item is-${key}`}><span>{label}</span><strong>{counts[key]}</strong><small>{key === 'total' ? 'Sem contar agrupadores' : 'Na EAP completa'}</small></div>)}
+      {[['total', 'Atividades', Layers, 'Atividades sem filhos'], ['idle', 'Não iniciadas', Circle, 'Aguardando execução'], ['active', 'Em andamento', Timer, 'Execução iniciada'], ['done', 'Concluídas', CheckCircle2, 'Execução em 100%']].map(([key, label, Icon, detail]) => <div key={key} className={`eap-overview-item is-${key}`}>
+        <div className="eap-overview-heading"><span>{label}</span><span className="eap-overview-icon"><Icon size={19} aria-hidden="true" /></span></div>
+        <strong>{counts[key]}</strong><small>{detail}</small>
+      </div>)}
+    </div>
+    <section className="eap-structure" aria-labelledby="eap-structure-title">
+    <div className="eap-structure-header">
+      <div className="eap-structure-title"><span className="eap-structure-icon"><ListTree size={20} aria-hidden="true" /></span><div><h2 id="eap-structure-title">Estrutura de atividades</h2><p>Etapas, entregas e avanço da obra</p></div></div>
+      <div className="eap-expand-tools"><Button size="sm" variant="ghost" startIcon={ChevronsUpDown} disabled={locked || filtering} onClick={() => setExpanded(new Set(activities.map((a) => String(a.id))))}>Expandir tudo</Button><Button size="sm" variant="ghost" startIcon={ChevronsDownUp} disabled={locked || filtering} onClick={() => setExpanded(new Set())}>Recolher tudo</Button></div>
     </div>
     <div className="eap-table-tools">
       <label className="eap-search"><Search size={17} /><span className="eap-sr-only">Buscar atividade</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar código ou atividade" disabled={locked} /></label>
-      <label className="eap-status-filter"><span>Situação</span><select value={status} onChange={(event) => setStatus(event.target.value)} disabled={locked}><option value="">Todas</option>{Object.entries(STATUS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
-      <div className="eap-expand-tools"><Button size="sm" startIcon={ChevronsUpDown} disabled={locked || filtering} onClick={() => setExpanded(new Set(activities.map((a) => String(a.id))))}>Expandir tudo</Button><Button size="sm" startIcon={ChevronsDownUp} disabled={locked || filtering} onClick={() => setExpanded(new Set())}>Recolher tudo</Button></div>
+      <label className="eap-status-filter"><SlidersHorizontal size={16} aria-hidden="true" /><span className="eap-sr-only">Situação</span><select value={status} onChange={(event) => setStatus(event.target.value)} disabled={locked}><option value="">Todas as situações</option>{Object.entries(STATUS_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+      <span className="eap-results-count" aria-live="polite"><strong>{rows.length}</strong> {rows.length === 1 ? 'linha visível' : 'linhas visíveis'}</span>
     </div>
-    <div className="eap-table-caption"><span>{rows.length} linha(s) visível(is){filtering && ' · Agrupadores preservados para contexto'}</span><span>{locked ? 'Salve ou cancele a edição para filtrar ou recolher.' : 'Avanço atualizado pelos RDOs aprovados'}</span></div>
+    {locked && <div className="eap-edit-notice"><Pencil size={14} aria-hidden="true" /> Edição em andamento. Salve ou cancele para filtrar ou recolher.</div>}
     <div className="eap-table-scroll" tabIndex={0} role="region" aria-label="Tabela da EAP">
       <table className="eap-data-table"><caption className="eap-sr-only">Atividades, planejamento e progresso da EAP</caption>
-        <colgroup>{[86, 260, 130, 130, 90, 116, 92, 124, 130, 152].map((width, index) => <col key={index} style={{ width }} />)}</colgroup>
-        <thead><tr>{['Código', 'Atividade', 'Início planejado', 'Fim planejado', 'Unidade', 'Qtd. prevista', 'Peso (%)', 'Executado', 'Situação', 'Ações'].map((label, index) => <th scope="col" key={label} className={index < 2 ? `eap-sticky-${index}` : ''}>{label}</th>)}</tr></thead>
+        <colgroup>{[84, 290, 120, 120, 72, 108, 78, 128, 146, 144].map((width, index) => <col key={index} style={{ width }} />)}</colgroup>
+        <thead><tr>{['Código', 'Atividade', 'Início planejado', 'Fim planejado', 'Unidade', 'Qtd. prevista', 'Peso (%)', 'Executado', 'Situação', 'Ações'].map((label, index) => <th scope="col" key={label} className={index < 2 ? `eap-sticky-${index}` : [5, 6].includes(index) ? 'eap-number' : ''}>{label}</th>)}</tr></thead>
         <tbody>{renderedRows}{!renderedRows.length && <tr><td colSpan={10}><div className="eap-empty"><Search size={28} /><strong>{activities.length ? 'Nenhuma atividade corresponde aos filtros' : 'Comece a estrutura do projeto'}</strong><p>{activities.length ? 'Altere a busca ou a situação para encontrar outras atividades.' : 'Adicione uma atividade raiz e depois detalhe suas subatividades.'}</p>{filtering && <Button size="sm" startIcon={X} onClick={() => { setSearch(''); setStatus(''); }}>Limpar filtros</Button>}</div></td></tr>}</tbody>
       </table>
     </div>
+    <div className="eap-table-caption"><span><ShieldCheck size={14} aria-hidden="true" /> Progresso atualizado pelos RDOs aprovados</span><span>{filtering ? 'Ancestrais preservados nos resultados' : 'Contadores sobre as atividades sem filhos da EAP completa'}</span></div>
+    </section>
     {drawer && editor.session && <EapDrawer editor={editor} activities={activities} tab={tab} setTab={setTab} onClose={() => setDrawer(false)} onCancel={editor.cancel} />}
   </div>;
 }

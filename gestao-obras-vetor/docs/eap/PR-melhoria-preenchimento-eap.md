@@ -1,15 +1,19 @@
-# Facilitar o preenchimento e a consulta de progresso da EAP
+# Reformular a EAP e facilitar o preenchimento
 
 Branch: `codex/feat/melhoria-preenchimento-eap` · Base: `origin/main` (`3a4f786`).
 
 ## Resumo
 
-O cadastro e a edição da EAP exigiam abrir um formulário separado para cada atividade. A tabela agora permite editar uma linha por vez e cadastrar atividades consecutivas, com salvamento explícito. O painel lateral compartilha o mesmo rascunho e reúne descrição, hierarquia, dependências e histórico.
+A EAP ganha uma composição visual mais legível, com navegação horizontal entre as ferramentas de Planejamento, mais largura para a tabela e indicadores de situação com maior contraste. Agrupadores, códigos, progresso e ações têm identificação própria, mantendo os temas claro e escuro e a adaptação ao celular.
+
+O cadastro e a edição exigiam abrir um formulário separado para cada atividade. A tabela agora permite editar uma linha por vez e cadastrar atividades consecutivas, com salvamento explícito. O painel lateral compartilha o mesmo rascunho e reúne descrição, hierarquia, dependências e histórico.
 
 O progresso continua vindo dos RDOs aprovados. Cálculos, pesos, regras de hierarquia, permissões e contratos das APIs foram preservados; não há alterações no backend nem migrações.
 
 ## O que foi feito
 
+- Menu de Planejamento reorganizado em uma faixa horizontal com EAP, Curva S e Cronograma, preservando as ações e a confirmação de descarte.
+- Novo cabeçalho, indicadores com ícones e destaque do total, busca e filtros integrados à área da tabela. Tipografia ampliada, códigos em etiquetas, agrupadores com fundo distinto, situação com marcadores e peso visualmente separado do executado.
 - Tabela hierárquica com cabeçalho e identificação fixos, datas, unidade, quantidade prevista, peso, percentual, barra, situação e ações.
 - Edição na linha com Salvar/Cancelar; criação de raízes e filhas; Salvar e adicionar outra mantém o pai, sugere o próximo código de filha e limpa os demais campos.
 - Campos, validações e salvamento compartilhados entre tabela, painel e formulário das URLs existentes. Pai e predecessora podem ser pesquisados por código ou nome.
@@ -34,7 +38,8 @@ O progresso continua vindo dos RDOs aprovados. Cálculos, pesos, regras de hiera
 - Navegador: cancelamento e troca de atividade/aba com alterações, Voltar do navegador recusado/aceito, formulário na URL existente e retorno pelo contexto do cockpit.
 - Navegador: busca sem acentos, filtro de concluídas mantendo pai em 70%, histórico, Tab/Shift+Tab, Ctrl+Enter, Escape, foco e navegação das abas por setas. Conferida a abertura da importação, do recálculo manual e da confirmação de exclusão.
 - Comparações de progresso: vários níveis, pesos zero, pesos cuja soma é inferior a 100% e filhos concluídos; filtros não alteram os resultados.
-- Inspeção visual em 1440×1000 e 390×844, com temas claro e escuro.
+- Inspeção visual em 1920×1080, 1440×1000 e 390×844, com temas claro e escuro. Verificado alinhamento das colunas fixas e ausência de transbordamento da área de conteúdo no celular.
+- Após a reformulação visual: `test:eap`, build e `git diff --check` passaram novamente. Conferidos rascunho compartilhado, gravação preservando quantidade e dependências, confirmação de recálculo, filtros mantidos após salvar e proteção ao trocar de ferramenta. Em uma árvore demonstrativa de 80 atividades executáveis, buscar uma filha manteve o avanço do agrupador em 92,15%.
 
 ## Riscos e pendências
 
@@ -46,10 +51,11 @@ O progresso continua vindo dos RDOs aprovados. Cálculos, pesos, regras de hiera
 
 Capturas locais com dados sintéticos:
 
-- [Tabela no computador, tema claro](tabela-desktop.png)
-- [Edição na própria linha](edicao-na-linha.png)
-- [Painel de detalhes compartilhando o rascunho](painel-detalhes.png)
-- [Tabela no tema escuro](tabela-tema-escuro.png)
-- [Consulta no celular](consulta-celular.png)
-- [Editor no celular, tema claro](editor-celular-claro.png)
-- [Editor no celular, tema escuro](editor-celular.png)
+- [Planejamento e EAP, tema claro](visual-planejamento-claro.png)
+- [Planejamento e EAP, tema escuro](visual-planejamento-escuro.png)
+- [Hierarquia expandida](visual-hierarquia.png)
+- [Edição na própria linha](visual-edicao.png)
+- [Painel de detalhes](visual-painel.png)
+- [Consulta no celular, tema claro](visual-celular-claro.png)
+- [Consulta no celular, tema escuro](visual-celular.png)
+- [Editor no celular](visual-editor-celular.png)

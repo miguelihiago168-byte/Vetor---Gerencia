@@ -6,7 +6,7 @@ import { useDialog } from '../context/DialogContext';
 import EAP from './EAP';
 import CurvaS from './CurvaS';
 import CronogramaGantt from './CronogramaGantt';
-import { Layers, TrendingUp, Network, ChevronRight } from 'lucide-react';
+import { Layers, TrendingUp, Network, Maximize2, LayoutDashboard } from 'lucide-react';
 import './PlanejamentoDashboard.css';
 
 function PlanejamentoDashboard() {
@@ -54,16 +54,16 @@ function PlanejamentoDashboard() {
   const abaAtualLabel = abas.find(a => a.id === abaAtiva)?.label || 'EAP';
 
   return (
-    <>
+    <div className="planejamento-layout">
       <Navbar />
       <div className="planejamento-container">
-        <aside className="planejamento-sidebar">
+        <div className="planejamento-navigation">
           <div className="planejamento-header">
-            <h2 className="planejamento-title">Planejamento</h2>
-            <p className="planejamento-subtitle">Selecione uma ferramenta</p>
+            <span className="planejamento-symbol"><LayoutDashboard size={21} aria-hidden="true" /></span>
+            <div><h2 className="planejamento-title">Planejamento</h2><p className="planejamento-subtitle">Ferramentas do projeto</p></div>
           </div>
           
-          <nav className="planejamento-abas">
+          <nav className="planejamento-abas" aria-label="Ferramentas de planejamento">
             {abas.map((aba) => {
               const Icon = aba.icon;
               const isActive = abaAtiva === aba.id;
@@ -71,16 +71,16 @@ function PlanejamentoDashboard() {
                 <button
                   key={aba.id}
                   className={`planejamento-aba ${isActive ? 'active' : ''}`}
+                  aria-current={isActive ? 'page' : undefined}
+                  title={aba.description}
                   onClick={async () => { if (aba.id !== abaAtiva && await canLeave()) setAbaAtiva(aba.id); }}
                 >
                   <div className="planejamento-aba-icon">
-                    <Icon size={20} />
+                    <Icon size={18} aria-hidden="true" />
                   </div>
                   <div className="planejamento-aba-text">
                     <p className="planejamento-aba-label">{aba.label}</p>
-                    <p className="planejamento-aba-desc">{aba.description}</p>
                   </div>
-                  {isActive && <ChevronRight size={18} />}
                 </button>
               );
             })}
@@ -97,17 +97,17 @@ function PlanejamentoDashboard() {
                 if (abaId === 'gantt') navigate(`/projeto/${projetoId}/gantt`);
               }}
             >
-              <ChevronRight size={16} />
+              <Maximize2 size={16} aria-hidden="true" />
               Abrir em tela cheia
             </button>
           </div>
-        </aside>
+        </div>
 
-        <main className="planejamento-conteudo">
+        <main className="planejamento-conteudo" aria-label={abaAtualLabel}>
           {renderConteudo()}
         </main>
       </div>
-    </>
+    </div>
   );
 }
 
