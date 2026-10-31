@@ -1,0 +1,40 @@
+- generic [active] [ref=e1]:
+  - generic "Player de vídeo do YouTube" [ref=e5]:
+    - button "Reproduzir" [ref=e9] [cursor=pointer]
+    - button [ref=e12] [cursor=pointer]:
+      - img "Marca-d'água do canal" [ref=e13]
+    - generic [ref=e14]:
+      - generic [ref=e15] [cursor=pointer]:
+        - slider "Botão deslizante de busca" [ref=e16]
+        - generic:
+          - generic:
+            - generic:
+              - slider "Clique ou role o painel até a busca precisa"
+      - generic [ref=e27]:
+        - generic [ref=e28]:
+          - button "Reproduzir (k)" [ref=e29] [cursor=pointer]
+          - generic [ref=e30]:
+            - button "Sem áudio (m)" [ref=e32] [cursor=pointer]
+            - slider "Volume":
+              - generic [ref=e33] [cursor=pointer]
+          - button "3 Minutos 27 Segundos de 8 Minutos 28 Segundos" [ref=e36] [cursor=pointer]: 3:27 / 8:28
+        - generic [ref=e37]:
+          - generic [ref=e38]:
+            - button "Não há legendas/legendas descritivas disponíveis" [ref=e39] [cursor=pointer]
+            - button "Detalhes" [ref=e41] [cursor=pointer]
+          - generic [ref=e42]:
+            - button "Modo Teatro (t)" [ref=e43] [cursor=pointer]
+            - button "Tela inteira (f)" [ref=e44] [cursor=pointer]
+  - banner [ref=e68]:
+    - generic [ref=e70]:
+      - generic [ref=e71]:
+        - button "Guia" [ref=e73] [cursor=pointer]
+        - generic [ref=e75]:
+          - link:
+            - /url: /
+      - search [ref=e77]:
+        - generic [ref=e79]:
+          - generic [ref=e80]:
+            - combobox [expanded] [ref=e82]
+            - button [ref=e85] [cursor=pointer]
+          - button "Search" [ref=e86] [cursor=pointer]

@@ -1,0 +1,315 @@
+- generic [ref=e93]:
+  - banner [ref=e68]:
+    - generic [ref=e70]:
+      - generic [ref=e71]:
+        - button "Guia" [ref=e73] [cursor=pointer]
+        - generic [ref=e75]:
+          - link "Página inicial do YouTube" [ref=e96] [cursor=pointer]:
+            - /url: /
+          - generic [ref=e102]: PT
+        - button "Pular navegação" [ref=e106] [cursor=pointer]
+      - search [ref=e77]:
+        - generic [ref=e79]:
+          - generic [ref=e80]:
+            - combobox "Pesquisar" [expanded] [ref=e110]
+            - button [ref=e85] [cursor=pointer]
+          - button "Search" [ref=e86] [cursor=pointer]
+      - generic [ref=e113]:
+        - button "Configurações" [ref=e118] [cursor=pointer]
+        - link "Fazer login" [ref=e124] [cursor=pointer]:
+          - /url: https://accounts.google.com/ServiceLogin?service=youtube&uilel=3&passive=true&continue=https%3A%2F%2Fwww.youtube.com%2Fsignin%3Faction_handle_signin%3Dtrue%26app%3Ddesktop%26hl%3Dpt%26next%3Dhttps%253A%252F%252Fwww.youtube.com%252Fwatch%253Fv%253DW9QaL5gcsas%2526t%253D207s&hl=pt-BR&ec=65620
+  - main [ref=e129]:
+    - generic [ref=e131]:
+      - generic [aria-hidden] [ref=e134] [cursor=pointer]
+      - complementary [ref=e135]:
+        - generic "Player de vídeo do YouTube" [ref=e5]:
+          - button [ref=e12] [cursor=pointer]:
+            - img "Marca-d'água do canal" [ref=e13]
+          - generic [ref=e141]:
+            - generic [ref=e725]: canteiro, use a medição de obras. Com
+            - generic [ref=e727]: essa funcionalidade,
+          - generic [ref=e14]:
+            - generic [ref=e15] [cursor=pointer]:
+              - slider "Botão deslizante de busca" [ref=e16]
+              - generic:
+                - generic:
+                  - generic:
+                    - slider "Clique ou role o painel até a busca precisa"
+            - generic [ref=e27]:
+              - generic [ref=e28]:
+                - button "Pausa (k)" [ref=e724] [cursor=pointer]
+                - generic [ref=e30]:
+                  - button "Sem áudio (m)" [ref=e32] [cursor=pointer]
+                  - slider "Volume":
+                    - generic [ref=e33] [cursor=pointer]
+                - button "3 Minutos 27 Segundos de 8 Minutos 28 Segundos" [ref=e36] [cursor=pointer]: 3:27 / 8:28
+              - generic [ref=e37]:
+                - generic [ref=e38]:
+                  - button "A reprodução automática está ativada" [ref=e146] [cursor=pointer]
+                  - button "Não há legendas/legendas descritivas disponíveis" [pressed] [ref=e39] [cursor=pointer]
+                  - button "Detalhes" [ref=e41] [cursor=pointer]
+                - generic [ref=e42]:
+                  - button "Modo Teatro (t)" [ref=e43] [cursor=pointer]
+                  - button "Tela inteira (f)" [ref=e44] [cursor=pointer]
+    - generic [ref=e152]:
+      - generic [ref=e153]:
+        - generic [ref=e155]:
+          - heading "Como economizar tempo e dinheiro nas suas obras com uma gestão eficiente [NA PRÁTICA]" [level=1] [ref=e158]
+          - generic [ref=e159]:
+            - generic [ref=e160]:
+              - generic [ref=e161]:
+                - link [ref=e162] [cursor=pointer]:
+                  - /url: /@maiscontroleerp
+                  - img "Mais Controle - Software de Gestão de Obras" [ref=e164]
+                - generic [ref=e165]:
+                  - generic "Mais Controle - Software de Gestão de Obras" [ref=e169]:
+                    - link "Mais Controle - Software de Gestão de Obras" [ref=e170] [cursor=pointer]:
+                      - /url: /@maiscontroleerp
+                  - generic "4,67 mil inscritos" [ref=e171]
+              - button "Inscreva-se em Mais Controle - Software de Gestão de Obras." [ref=e177] [cursor=pointer]:
+                - generic: Inscrever-se
+            - generic [ref=e184]:
+              - generic [ref=e185]:
+                - generic [ref=e189]:
+                  - button "marcar este vídeo como \"Gostei\" com mais 134 pessoas" [ref=e193] [cursor=pointer]:
+                    - generic: "134"
+                  - button "Não gostei deste vídeo" [ref=e200] [cursor=pointer]
+                - button "Compartilhar" [ref=e206] [cursor=pointer]
+              - button "Salvar na playlist" [ref=e213] [cursor=pointer]
+              - button "Mais ações" [ref=e218] [cursor=pointer]
+          - generic [ref=e224]:
+            - generic [ref=e227]:
+              - text: 11.765 visualizações 23 de mai. de 2025
+              - link "#Engenharia" [ref=e228] [cursor=pointer]:
+                - /url: /hashtag/engenharia
+              - link "#ConstruçãoCivil" [ref=e229] [cursor=pointer]:
+                - /url: /hashtag/constru%C3%A7%C3%A3ocivil
+              - link "#MaisControle" [ref=e230] [cursor=pointer]:
+                - /url: /hashtag/maiscontrole
+            - generic [ref=e231]:
+              - generic [ref=e731]:
+                - text: "Quer saber como construtoras estão economizando tempo e dinheiro? Neste vídeo prático, mostramos como uma boa gestão — desde o orçamento até o relatório final — pode transformar a sua obra em um projeto mais eficiente e lucrativo. ✅ Orçamento com base SINAPI ou planilhas ✅ Cronograma de Gantt completo ✅ Curva BC e cronograma físico-financeiro ✅ Controle de compras, estoque e medição ✅ Relatórios financeiros e gerenciais ✅ Integrações com Excel, Power BI e mais ✅ Até 30% de aumento no faturamento em 1 ano 💡 Quem usa Mais Controle tem mais tempo, mais organização e mais lucro! 📲 Assista até o final e descubra como transformar sua gestão de obras! 📲 Quer ter esse nível de controle nas suas obras também? Agende uma demonstração gratuita:"
+                - link "http://bit.ly/43J8jY6" [ref=e733] [cursor=pointer]:
+                  - /url: https://www.youtube.com/redirect?event=video_description&redir_token=QUlxb01IWTVtaHVOc3RwanVVMFZTcmlVS2Vlc3xBSTVJdTVzR0VSODBoSTZaMjM3M1B0MXZMSllLOWduYS1vQWNVQzVaWTBBNFNuU3E2Q1JYNnFkOG9nUGxjOFdBT240dXhzLUZOQkxtaEFNTlNvSkpRdzUtSnY2SWo2ejY1WHRm&q=http%3A%2F%2Fbit.ly%2F43J8jY6&v=W9QaL5gcsas
+                - text: "Siga o Mais Controle: Instagram:"
+                - 'link "Instagram Channel Link: maiscontroleerp" [ref=e736] [cursor=pointer]':
+                  - /url: https://www.youtube.com/redirect?event=video_description&redir_token=QUlxb01IWW5yYmxBMFJfVXhOMDZ3dnhDVVF6UHxBSTVJdTV2eUdXVDh6dGFvUUlobTJsRlhMUHFhNDNRUTBrT0hOSm5JbzRqby1oU01wRmstOWctWVRscl95dmpfWFdIdWt0MzA5bU42cFd5VnhVZVBaNlhFcUwxd0dfdF9nZFpI&q=https%3A%2F%2Finstagram.com%2Fmaiscontroleerp&v=W9QaL5gcsas
+                  - text: / maiscontroleerp
+                - text: "Facebook:"
+                - 'link "Facebook Channel Link: maiscontroleerp" [ref=e740] [cursor=pointer]':
+                  - /url: https://www.youtube.com/redirect?event=video_description&redir_token=QUlxb01IYTJEY0p6LWtMdXhLeGVBNlBMcVIyZXxBSTVJdTV2eVpQTXVTTWR2akVnVVYxUjZ6VGE4Q0FPYjQwRnU4YUhuVUhNaF9vaHQ2S2hMSEVHcWNSRTUxYkt4b1cyS0d2bDdxYnJaX1N5eklJWjJrVlNqN0Rqc2pYRV9CbW10&q=https%3A%2F%2Ffacebook.com%2Fmaiscontroleerp&v=W9QaL5gcsas
+                  - text: / maiscontroleerp
+                - text: "Linkedin:"
+                - 'link "LinkedIn Channel Link: mais-controle-erp" [ref=e744] [cursor=pointer]':
+                  - /url: https://www.youtube.com/redirect?event=video_description&redir_token=QUlxb01IYmVyR3AtQ0ZqWElOcVRIREhUU0lWOXxBSTVJdTV2VTd4OUM1U01VVmhGemhqNy16LXpjbDNWZlJ3RzZYVUYzei0yM0ppdXlySnlVZlBJdG40NG91TnR0R2xmT0pKcVNLNVZQaWU3c2RpcTVPNDZjelpZeTZNNkl2RmRD&q=https%3A%2F%2Flinkedin.com%2Fcompany%2Fmais-controle-erp&v=W9QaL5gcsas
+                  - text: / mais-controle-erp
+                - link "#MaisControle" [ref=e747] [cursor=pointer]:
+                  - /url: /hashtag/maiscontrole
+                - link "#GestãoDeObras" [ref=e749] [cursor=pointer]:
+                  - /url: /hashtag/gest%C3%A3odeobras
+                - link "#Engenharia" [ref=e751] [cursor=pointer]:
+                  - /url: /hashtag/engenharia
+                - link "#ConstruçãoCivil" [ref=e753] [cursor=pointer]:
+                  - /url: /hashtag/constru%C3%A7%C3%A3ocivil
+                - link "#ObraRentável" [ref=e755] [cursor=pointer]:
+                  - /url: /hashtag/obrarent%C3%A1vel
+                - link "#ProdutividadeNaObra" [ref=e757] [cursor=pointer]:
+                  - /url: /hashtag/produtividadenaobra
+                - link "#OrçamentoDeObras" [ref=e759] [cursor=pointer]:
+                  - /url: /hashtag/or%C3%A7amentodeobras
+                - link "#CronogramaFísicoFinanceiro" [ref=e761] [cursor=pointer]:
+                  - /url: /hashtag/cronogramaf%C3%ADsicofinanceiro
+              - generic [ref=e764]:
+                - generic [ref=e765]:
+                  - generic [ref=e766]: Transcrição
+                  - paragraph [ref=e769]: Acompanhe usando a transcrição.
+                  - button "Mostrar transcrição" [ref=e774] [cursor=pointer]
+                - generic [ref=e778]:
+                  - link "Mais Controle - Software de Gestão de Obras 4,67 mil inscritos" [ref=e779] [cursor=pointer]:
+                    - /url: /@maiscontroleerp
+                    - generic [ref=e781]:
+                      - heading "Mais Controle - Software de Gestão de Obras" [level=3] [ref=e782]
+                      - generic [ref=e783]: 4,67 mil inscritos
+                  - generic [ref=e786]:
+                    - link "Vídeos" [ref=e789] [cursor=pointer]:
+                      - /url: /channel/UCS_m93imAwd78rQLv3Xx_MA/videos
+                    - link "Sobre" [ref=e795] [cursor=pointer]:
+                      - /url: /channel/UCS_m93imAwd78rQLv3Xx_MA/about
+                    - link "Instagram" [ref=e801] [cursor=pointer]:
+                      - /url: https://www.youtube.com/redirect?event=Watch_SD_EP&redir_token=QUlxb01IWllLMmpKbnk4UXJSTTRYYlhLUERMdnxBSTVJdTV0LU14UUc0Q1FJNkIwWEYydnNHZ1JsTk05dFBhOWlmU2pCSGVJcTZ4TklWMUtVSXdHeGFVSG1uelpCcDgySE93YzNDOEw5elBRYkdCQlBzWTF1RF9IT25yWGdLcEV1&q=https%3A%2F%2Fwww.instagram.com%2Fmaiscontroleerp%2F
+              - button "Mostrar menos" [ref=e805] [cursor=pointer]
+        - text: •
+      - generic [ref=e237]:
+        - generic [ref=e239]:
+          - generic [ref=e242]:
+            - generic [ref=e244] [cursor=pointer]:
+              - link [aria-hidden] [ref=e245]:
+                - /url: /watch?v=fjidj898ZG8
+                - img [ref=e251]:
+                  - generic [aria-hidden] [ref=e252]: 19:27
+              - generic [ref=e254]:
+                - generic [ref=e255]:
+                  - heading "5 ferramentas Obrigatórias para Gerenciar uma Obra" [level=3] [ref=e256]:
+                    - link "5 ferramentas Obrigatórias para Gerenciar uma Obra 19 minutos" [ref=e257]:
+                      - /url: /watch?v=fjidj898ZG8
+                      - text: 5 ferramentas Obrigatórias para Gerenciar uma Obra
+                  - generic [ref=e259]:
+                    - group [ref=e260]:
+                      - generic [ref=e261]: Eng Fabricio Rossi
+                    - group [ref=e262]:
+                      - generic "162 mil visualizações" [ref=e266]: 162 mil
+                      - generic "há 4 anos" [ref=e267]
+                - button "Mais ações" [ref=e270]
+            - generic [ref=e275] [cursor=pointer]:
+              - link [aria-hidden] [ref=e276]:
+                - /url: /watch?v=TfBi6AFp-tY
+                - img [ref=e282]:
+                  - generic [aria-hidden] [ref=e283]: 20:03
+              - generic [ref=e285]:
+                - generic [ref=e286]:
+                  - heading "Aplicação Power Bi na Construção Civil" [level=3] [ref=e287]:
+                    - link "Aplicação Power Bi na Construção Civil 20 minutos" [ref=e288]:
+                      - /url: /watch?v=TfBi6AFp-tY
+                      - text: Aplicação Power Bi na Construção Civil
+                  - generic [ref=e290]:
+                    - group [ref=e291]:
+                      - generic [ref=e292]: Solucione Engenharia & Consultoria
+                    - group [ref=e293]:
+                      - generic "24 mil visualizações" [ref=e297]: 24 mil
+                      - generic "há 6 anos" [ref=e298]
+                - button "Mais ações" [ref=e301]
+            - generic [ref=e306] [cursor=pointer]:
+              - link [aria-hidden] [ref=e307]:
+                - /url: /watch?v=qsJEkoz3RO0
+                - img [ref=e313]:
+                  - generic [aria-hidden] [ref=e314]: 7:16
+              - generic [ref=e316]:
+                - generic [ref=e317]:
+                  - 'heading "Conheça o Mais Controle: o sistema completo de gestão de obras em uma única plataforma" [level=3] [ref=e318]':
+                    - 'link "Conheça o Mais Controle: o sistema completo de gestão de obras em uma única plataforma 7 minutos e 16 segundos" [ref=e319]':
+                      - /url: /watch?v=qsJEkoz3RO0
+                      - text: "Conheça o Mais Controle: o sistema completo de gestão de obras em uma única plataforma"
+                  - generic [ref=e321]:
+                    - group [ref=e322]:
+                      - generic [ref=e323]: Mais Controle - Software de Gestão de Obras
+                    - group [ref=e324]:
+                      - generic "8,7 mil visualizações" [ref=e328]: 8,7 mil
+                      - generic "há 1 ano" [ref=e329]
+                - button "Mais ações" [ref=e332]
+            - generic [ref=e337] [cursor=pointer]:
+              - link [aria-hidden] [ref=e338]:
+                - /url: /watch?v=EkJGe9vRsXI
+                - img [ref=e344]:
+                  - generic [aria-hidden] [ref=e345]: 9:38
+              - generic [ref=e347]:
+                - generic [ref=e348]:
+                  - heading "Melhor software de gestão de obras" [level=3] [ref=e349]:
+                    - link "Melhor software de gestão de obras 9 minutos e 38 segundos" [ref=e350]:
+                      - /url: /watch?v=EkJGe9vRsXI
+                      - text: Melhor software de gestão de obras
+                  - generic [ref=e352]:
+                    - group [ref=e353]:
+                      - generic [ref=e354]: GanttPRO
+                    - group [ref=e355]:
+                      - generic "799 visualizações" [ref=e359]: "799"
+                      - generic "há 1 ano" [ref=e360]
+                - button "Mais ações" [ref=e363]
+            - generic [ref=e368] [cursor=pointer]:
+              - link [aria-hidden] [ref=e369]:
+                - /url: /watch?v=Xg0nEDPv2LE
+                - img [ref=e375]:
+                  - generic [aria-hidden] [ref=e376]: 38:51
+              - generic [ref=e378]:
+                - generic [ref=e379]:
+                  - 'heading "IA na Construção Civil na Prática: 15 Casas Geridas com IA" [level=3] [ref=e380]':
+                    - 'link "IA na Construção Civil na Prática: 15 Casas Geridas com IA 38 minutos" [ref=e381]':
+                      - /url: /watch?v=Xg0nEDPv2LE
+                      - text: "IA na Construção Civil na Prática: 15 Casas Geridas com IA"
+                  - generic [ref=e383]:
+                    - group [ref=e384]:
+                      - generic [ref=e385]: Eng. Pedro Faial
+                      - generic [ref=e386]: e PAPO RETO NA CONSTRUÇÃO
+                    - group [ref=e387]:
+                      - generic "1,1 mil visualizações" [ref=e391]: 1,1 mil
+                      - generic "há 4 semanas" [ref=e392]: há 4 sem.
+                - button "Mais ações" [ref=e395]
+            - generic [ref=e400] [cursor=pointer]:
+              - link [aria-hidden] [ref=e401]:
+                - /url: /watch?v=MEsgIJhEMqs
+                - img [ref=e407]:
+                  - generic [aria-hidden] [ref=e408]: 10:08
+              - generic [ref=e410]:
+                - generic [ref=e411]:
+                  - heading "A ferramenta secreta do ChatGPT que faz Dashboards incriveis (GRÁTIS)" [level=3] [ref=e412]:
+                    - link "A ferramenta secreta do ChatGPT que faz Dashboards incriveis (GRÁTIS) 10 minutos e 8 segundos" [ref=e413]:
+                      - /url: /watch?v=MEsgIJhEMqs
+                      - text: A ferramenta secreta do ChatGPT que faz Dashboards incriveis (GRÁTIS)
+                  - generic [ref=e415]:
+                    - group [ref=e416]:
+                      - generic [ref=e417]: Excelente João
+                      - generic "Verificado" [ref=e418]
+                    - group [ref=e421]:
+                      - generic "283 mil visualizações" [ref=e425]: 283 mil
+                      - generic "há 1 ano" [ref=e426]
+                - button "Mais ações" [ref=e429]
+            - generic [ref=e434] [cursor=pointer]:
+              - link [aria-hidden] [ref=e435]:
+                - /url: /watch?v=0K55-lOOfUc&pp=ugUHEgVwdC1QVA%3D%3D
+                - img [ref=e441]:
+                  - generic [aria-hidden] [ref=e442]: 39:04
+              - generic [ref=e444]:
+                - generic [ref=e445]:
+                  - heading "Uma moradia T4 na Aroeira onde a privacidade é protagonista | 30_Senhora Dona Casa" [level=3] [ref=e446]:
+                    - link "Uma moradia T4 na Aroeira onde a privacidade é protagonista | 30_Senhora Dona Casa 39 minutos" [ref=e447]:
+                      - /url: /watch?v=0K55-lOOfUc&pp=ugUHEgVwdC1QVA%3D%3D
+                      - text: Uma moradia T4 na Aroeira onde a privacidade é protagonista | 30_Senhora Dona Casa
+                  - generic [ref=e449]:
+                    - group [ref=e450]:
+                      - generic [ref=e451]: Senhora Dona Casa
+                    - group [ref=e452]:
+                      - generic "52 mil visualizações" [ref=e456]: 52 mil
+                      - generic "há 2 semanas" [ref=e457]: há 2 sem.
+                    - group [ref=e458]:
+                      - generic [ref=e459]: Dublagem automática
+                - button "Mais ações" [ref=e468]
+            - generic [ref=e473] [cursor=pointer]:
+              - link [aria-hidden] [ref=e474]:
+                - /url: /watch?v=638SgPrOmmw&pp=ugUHEgVwdC1QVNIHCQkrDAGHKiGM7w%3D%3D
+                - img [ref=e480]:
+                  - generic [aria-hidden] [ref=e481]: 20:49
+              - generic [ref=e483]:
+                - generic [ref=e484]:
+                  - heading "Cronograma em MS Project [Curso Básico em 20 minutos]" [level=3] [ref=e485]:
+                    - link "Cronograma em MS Project [Curso Básico em 20 minutos] 20 minutos" [ref=e486]:
+                      - /url: /watch?v=638SgPrOmmw&pp=ugUHEgVwdC1QVNIHCQkrDAGHKiGM7w%3D%3D
+                      - text: Cronograma em MS Project [Curso Básico em 20 minutos]
+                  - generic [ref=e488]:
+                    - group [ref=e489]:
+                      - generic [ref=e490]: Smart Planilhas
+                    - group [ref=e491]:
+                      - generic "128 mil visualizações" [ref=e495]: 128 mil
+                      - generic "há 3 anos" [ref=e496]
+                - button "Mais ações" [ref=e499]
+            - generic [ref=e504] [cursor=pointer]:
+              - link [aria-hidden] [ref=e505]:
+                - /url: /watch?v=qG1bFgusGSE
+                - generic [ref=e506]:
+                  - img [ref=e511]:
+                    - generic [aria-hidden] [ref=e512]: 17:37
+                  - img [ref=e515]:
+                    - generic [aria-hidden] [ref=e516]: Novidade
+              - generic [ref=e518]:
+                - generic [ref=e519]:
+                  - 'heading "Vamos a contas: \"S&P 500 e MSCI World: devo continuar a investir ou esperar por uma queda?\"" [level=3] [ref=e520]':
+                    - 'link "Vamos a contas: \"S&P 500 e MSCI World: devo continuar a investir ou esperar por uma queda?\" 17 minutos" [ref=e521]':
+                      - /url: /watch?v=qG1bFgusGSE
+                      - text: "Vamos a contas: \"S&P 500 e MSCI World: devo continuar a investir ou esperar por uma queda?\""
+                  - generic [ref=e523]:
+                    - group [ref=e524]:
+                      - generic [ref=e525]: SIC Notícias
+                    - group [ref=e526]:
+                      - generic "8,1 mil visualizações" [ref=e530]: 8,1 mil
+                      - generic "há 3 dias" [ref=e531]
+                - button "Mais ações" [ref=e534]
+          - button "Mostrar mais" [ref=e541] [cursor=pointer]
+        - heading "Comentários" [level=2] [ref=e550]

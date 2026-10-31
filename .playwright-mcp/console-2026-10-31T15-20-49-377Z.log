@@ -1,0 +1,595 @@
+[     649ms] [WARNING] Manifest: property 'migrate_from' ignored, manifest must specify an 'id' property in order to receive a migration. @ https://www.youtube.com/manifest.webmanifest:0
+[    1583ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://accounts.google.com/ServiceLogin?service=youtube&uilel=3&passive=true&continue=https%3A%2F%2Fwww.youtube.com%2Fsignin%3Faction_handle_signin%3Dtrue%26app%3Ddesktop%26hl%3Dpt%26next%3D%252Fsignin_passive%26feature%3Dpassive&hl=pt-BR:0
+[    2507ms] [INFO] LegacyDataMixin will be applied to all legacy elements.
+Set `_legacyUndefinedCheck: true` on element class to enable. @ https://www.youtube.com/s/_/ytmainappweb/_/js/k=ytmainappweb.base_module_set.en_US.xdAkFBA62FU.es5.O/am=AAAAACAAAAIAKQE/d=1/exm=base/ed=1/br=1/rs=AGKMywHCsnUbmW3mnGC4RFIBNqhpXS_MpQ/m=late,app:1358
+[    2965ms] [WARNING] The powerPreference option is currently ignored when calling requestAdapter() on Windows. See https://crbug.com/369219127 @ :0
+[    2984ms] [INFO] Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[    4895ms] [INFO] Loading the image 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzNiIgaGVpZ2h0PSIzNiIgZmlsbD0ibm9uZSIgdmlld0JveD0iMCAwIDM2IDM2Ij48cGF0aCBmaWxsPSIjZmZmIiBkPSJtMTcgOC42LTYuMTEtMy42MWMtMS41LS44OC0zLjM5LjItMy4zOSAxLjk0djIyLjEzYzAgMS43NCAxLjg5IDIuODIgMy4zOSAxLjk0TDE3IDI3LjR6bTAgMHYxOC44TDMzIDE4eiIvPjwvc3ZnPg==' violates the following Content Security Policy directive: "img-src https://youtube.com https://*.youtube.com https://youtu.be https://www.youtubekids.com https://www.youtube-nocookie.com https://www.youtubeeducation.com https://*.ytimg.com https://lh3.ggpht.com https://lh4.ggpht.com https://lh5.ggpht.com https://lh6.ggpht.com https://yt3.ggpht.com https://yt4.ggpht.com https://gstatic.com https://*.gstatic.com https://lh3.google.com https://lh4.google.com https://lh5.google.com https://lh6.google.com https://lh7-eu.google.com https://lh7-qw.google.com https://lh7-rt.google.com https://lh7-us.google.com https://lh3.googleusercontent.com https://lh4.googleusercontent.com https://lh5.googleusercontent.com https://lh6.googleusercontent.com https://lh7-eu.googleusercontent.com https://lh7-qw.googleusercontent.com https://lh7-rt.googleusercontent.com https://lh7-us.googleusercontent.com https://play-lh.googleusercontent.com https://yt3.googleusercontent.com https://yt4.googleusercontent.com https://*.playables.usercontent.goog https://*.allownetworkplayables.usercontent.goog https://*.h5games.usercontent.goog https://www.googleadservices.com https://*.doubleclick.net https://*.googlesyndication.com https://*.2mdn.net https://*.googlevideo.com https://www.googletagmanager.com https://video.google.com https://youtube.googleapis.com https://inputtools.google.com https://translate.google.com https://translate.googleapis.com https://clients1.google.com https://www.google.ad https://www.google.ae https://www.google.al https://www.google.am https://www.google.as https://www.google.at https://www.google.az https://www.google.ba https://www.google.be https://www.google.bf https://www.google.bg https://www.google.bi https://www.google.bj https://www.google.bs https://www.google.bt https://www.google.by https://www.google.ca https://www.google.cd https://www.google.cf https://www.google.cg https://www.google.ch https://www.google.ci https://www.google.cl https://www.google.cm https://www.google.cn https://www.google.co.ao https://www.google.co.bw https://www.google.co.ck https://www.google.co.cr https://www.google.co.id https://www.google.co.il https://www.google.co.im https://www.google.co.in https://www.google.co.je https://www.google.co.jp https://www.google.co.ke https://www.google.co.kr https://www.google.co.ls https://www.google.co.ma https://www.google.co.mz https://www.google.co.nz https://www.google.co.th https://www.google.co.tz https://www.google.co.ug https://www.google.co.uk https://www.google.co.uz https://www.google.co.ve https://www.google.co.vi https://www.google.co.za https://www.google.co.zm https://www.google.co.zw https://www.google.com https://www.google.com.af https://www.google.com.ag https://www.google.com.ai https://www.google.com.ar https://www.google.com.au https://www.google.com.bd https://www.google.com.bh https://www.google.com.bn https://www.google.com.bo https://www.google.com.br https://www.google.com.bz https://www.google.com.cn https://www.google.com.co https://www.google.com.cu https://www.google.com.cy https://www.google.com.do https://www.google.com.ec https://www.google.com.eg https://www.google.com.et https://www.google.com.fj https://www.google.com.gh https://www.google.com.gi https://www.google.com.gt https://www.google.com.hk https://www.google.com.jm https://www.google.com.kh https://www.google.com.kw https://www.google.com.lb https://www.google.com.ly https://www.google.com.mm https://www.google.com.mt https://www.google.com.mx https://www.google.com.my https://www.google.com.na https://www.google.com.ng https://www.google.com.ni https://www.google.com.np https://www.google.com.om https://www.google.com.pa https://www.google.com.pe https://www.google.com.pg https://www.google.com.ph https://www.google.com.pk https://www.google.com.pr https://www.google.com.py https://www.google.com.qa https://www.google.com.sa https://www.google.com.sb https://www.google.com.sg https://www.google.com.sl https://www.google.com.sv https://www.google.com.tj https://www.google.com.tn https://www.google.com.tr https://www.google.com.tw https://www.google.com.ua https://www.google.com.uy https://www.google.com.vc https://www.google.com.vn https://www.google.cv https://www.google.cz https://www.google.de https://www.google.dj https://www.google.dk https://www.google.dm https://www.google.dz https://www.google.ee https://www.google.es https://www.google.fi https://www.google.fm https://www.google.fr https://www.google.ga https://www.google.ge https://www.google.gg https://www.google.gl https://www.google.gm https://www.google.gp https://www.google.gr https://www.google.gy https://www.google.hk https://www.google.hn https://www.google.hr https://www.google.ht https://www.google.hu https://www.google.ie https://www.google.im https://www.google.iq https://www.google.is https://www.google.it https://www.google.je https://www.google.jo https://www.google.kg https://www.google.ki https://www.google.kz https://www.google.la https://www.google.li https://www.google.lk https://www.google.lt https://www.google.lu https://www.google.lv https://www.google.md https://www.google.me https://www.google.mg https://www.google.mk https://www.google.ml https://www.google.mn https://www.google.ms https://www.google.mu https://www.google.mv https://www.google.mw https://www.google.ne https://www.google.ng https://www.google.nl https://www.google.no https://www.google.nr https://www.google.nu https://www.google.pl https://www.google.pn https://www.google.ps https://www.google.pt https://www.google.ro https://www.google.rs https://www.google.ru https://www.google.rw https://www.google.sc https://www.google.se https://www.google.sh https://www.google.si https://www.google.sk https://www.google.sm https://www.google.sn https://www.google.so https://www.google.sr https://www.google.st https://www.google.td https://www.google.tg https://www.google.tk https://www.google.tl https://www.google.tm https://www.google.tn https://www.google.to https://www.google.tt https://www.google.vg https://www.google.vu https://www.google.ws". The policy is report-only, so the violation has been logged but no further action has been taken. @ https://www.youtube.com/s/player/11a45ffb/player_es6.vflset/pt_BR/base.js:8945
+[    8854ms] [WARNING] The resource https://rr3---sn-aigl6nl7.googlevideo.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[    8854ms] [WARNING] The resource https://i.ytimg.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[    8854ms] [WARNING] The resource https://rr5---sn-apn7en7s.c.youtube.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[   17279ms] [WARNING] The resource https://rr3---sn-aigl6nl7.googlevideo.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[   17279ms] [WARNING] The resource https://i.ytimg.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[   17279ms] [WARNING] The resource https://rr5---sn-apn7en7s.c.youtube.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[   27279ms] [WARNING] The resource https://rr3---sn-aigl6nl7.googlevideo.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[   27279ms] [WARNING] The resource https://i.ytimg.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[   27279ms] [WARNING] The resource https://rr5---sn-apn7en7s.c.youtube.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[   37280ms] [WARNING] The resource https://rr3---sn-aigl6nl7.googlevideo.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[   37280ms] [WARNING] The resource https://i.ytimg.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[   37280ms] [WARNING] The resource https://rr5---sn-apn7en7s.c.youtube.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[   45052ms] [WARNING] The resource https://rr3---sn-aigl6nl7.googlevideo.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[   45052ms] [WARNING] The resource https://i.ytimg.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[   45052ms] [WARNING] The resource https://rr5---sn-apn7en7s.c.youtube.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[   51877ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://www.youtube.com/youtubei/v1/get_transcript?prettyPrint=false:0
+[   54878ms] [WARNING] The resource https://rr3---sn-aigl6nl7.googlevideo.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[   54879ms] [WARNING] The resource https://i.ytimg.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[   54879ms] [WARNING] The resource https://rr5---sn-apn7en7s.c.youtube.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[   85305ms] [WARNING] The resource https://rr3---sn-aigl6nl7.googlevideo.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[   85305ms] [WARNING] The resource https://i.ytimg.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[   85305ms] [WARNING] The resource https://rr5---sn-apn7en7s.c.youtube.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[   94306ms] [WARNING] The resource https://rr3---sn-aigl6nl7.googlevideo.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[   94306ms] [WARNING] The resource https://i.ytimg.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[   94306ms] [WARNING] The resource https://rr5---sn-apn7en7s.c.youtube.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  106309ms] [WARNING] The resource https://rr3---sn-aigl6nl7.googlevideo.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  106309ms] [WARNING] The resource https://i.ytimg.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  106309ms] [WARNING] The resource https://rr5---sn-apn7en7s.c.youtube.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  114306ms] [WARNING] The resource https://rr3---sn-aigl6nl7.googlevideo.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  114306ms] [WARNING] The resource https://i.ytimg.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  114306ms] [WARNING] The resource https://rr5---sn-apn7en7s.c.youtube.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  124307ms] [WARNING] The resource https://rr3---sn-aigl6nl7.googlevideo.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  124308ms] [WARNING] The resource https://i.ytimg.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  124308ms] [WARNING] The resource https://rr5---sn-apn7en7s.c.youtube.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  134332ms] [WARNING] The resource https://rr3---sn-aigl6nl7.googlevideo.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  134332ms] [WARNING] The resource https://i.ytimg.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  134332ms] [WARNING] The resource https://rr5---sn-apn7en7s.c.youtube.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  144308ms] [WARNING] The resource https://rr3---sn-aigl6nl7.googlevideo.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  144308ms] [WARNING] The resource https://i.ytimg.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  144308ms] [WARNING] The resource https://rr5---sn-apn7en7s.c.youtube.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  218963ms] [WARNING] The resource https://rr3---sn-aigl6nl7.googlevideo.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  218963ms] [WARNING] The resource https://i.ytimg.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  218963ms] [WARNING] The resource https://rr5---sn-apn7en7s.c.youtube.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  279423ms] [WARNING] The resource https://rr3---sn-aigl6nl7.googlevideo.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  279423ms] [WARNING] The resource https://i.ytimg.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  279423ms] [WARNING] The resource https://rr5---sn-apn7en7s.c.youtube.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  308438ms] [WARNING] The resource https://rr3---sn-aigl6nl7.googlevideo.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  308438ms] [WARNING] The resource https://i.ytimg.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  308438ms] [WARNING] The resource https://rr5---sn-apn7en7s.c.youtube.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  608756ms] [WARNING] The resource https://rr3---sn-aigl6nl7.googlevideo.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  608756ms] [WARNING] The resource https://i.ytimg.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  608756ms] [WARNING] The resource https://rr5---sn-apn7en7s.c.youtube.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  804351ms] [WARNING] The resource https://rr3---sn-aigl6nl7.googlevideo.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  804352ms] [WARNING] The resource https://i.ytimg.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  804352ms] [WARNING] The resource https://rr5---sn-apn7en7s.c.youtube.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  910682ms] [WARNING] The resource https://rr3---sn-aigl6nl7.googlevideo.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  910682ms] [WARNING] The resource https://i.ytimg.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[  910682ms] [WARNING] The resource https://rr5---sn-apn7en7s.c.youtube.com/generate_204 was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally. @ https://www.youtube.com/watch?v=W9QaL5gcsas&t=207s:0
+[ 1075485ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:21535
+[ 1319899ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3000/api/eap/3:0
+[ 1514119ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:21535
+[ 1566648ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:21535
+[ 1569660ms] [ERROR] Warning: React has detected a change in the order of Hooks called by %s. This will lead to bugs and errors if not fixed. For more information, read the Rules of Hooks: https://reactjs.org/link/rules-of-hooks
+
+   Previous render            Next render
+   ------------------------------------------------------
+%s   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+%s EAP 1. useContext                 useContext
+2. useContext                 useContext
+3. useContext                 useContext
+4. useContext                 useContext
+5. useContext                 useContext
+6. useContext                 useContext
+7. useContext                 useContext
+8. useContext                 useContext
+9. useRef                     useRef
+10. useContext                useContext
+11. useLayoutEffect           useLayoutEffect
+12. useCallback               useCallback
+13. useContext                useContext
+14. useContext                useContext
+15. useContext                useContext
+16. useState                  useState
+17. useState                  useState
+18. useState                  useState
+19. useState                  useState
+20. useState                  useState
+21. useState                  useState
+22. useState                  useState
+23. useState                  useState
+24. useState                  useState
+25. useState                  useState
+26. useState                  useState
+27. useState                  useState
+28. useContext                useContext
+29. useContext                useContext
+30. useContext                useContext
+31. useState                  useState
+32. useState                  useState
+33. useState                  useState
+34. useState                  useState
+35. useState                  useState
+36. useRef                    useRef
+37. useState                  useState
+38. useState                  useState
+39. useEffect                 useEffect
+40. useEffect                 useEffect
+41. useEffect                 useEffect
+42. useEffect                 useEffect
+43. undefined                 useEffect
+ 
+    at EAP (http://127.0.0.1:3000/src/pages/EAP.jsx?t=1793461618963:38:16)
+    at PrivateRoute (http://127.0.0.1:3000/src/components/PrivateRoute.jsx:21:25)
+    at RenderedRoute (http://127.0.0.1:3000/node_modules/.vite/deps/react-router-dom.js?v=45e2f645:3510:5)
+    at Routes (http://127.0.0.1:3000/node_modules/.vite/deps/react-router-dom.js?v=45e2f645:3892:5)
+    at Router (http://127.0.0.1:3000/node_modules/.vite/deps/react-router-dom.js?v=45e2f645:3839:15)
+    at BrowserRouter (http://127.0.0.1:3000/node_modules/.vite/deps/react-router-dom.js?v=45e2f645:4549:5)
+    at DialogProvider (http://127.0.0.1:3000/src/context/DialogContext.jsx:22:34)
+    at LeaveGuardProvider (http://127.0.0.1:3000/src/context/LeaveGuardContext.jsx:21:38)
+    at UserPreferencesProvider (http://127.0.0.1:3000/src/context/UserPreferencesContext.jsx:20:43)
+    at AuthProvider (http://127.0.0.1:3000/src/context/AuthContext.jsx:28:32)
+    at NotificationProvider (http://127.0.0.1:3000/src/context/NotificationContext.jsx:20:40) @ http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:520
+[ 1569664ms] Error: Rendered more hooks than during the previous render.
+    at updateWorkInProgressHook (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:12301:21)
+    at updateEffectImpl (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:12697:22)
+    at updateEffect (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:12722:18)
+    at Object.useEffect (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:13326:22)
+    at useEffect (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-4D5CYJYK.js?v=45e2f645:1078:29)
+    at EAP (http://127.0.0.1:3000/src/pages/EAP.jsx?t=1793461618963:67:3)
+    at renderWithHooks (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:12171:26)
+    at updateFunctionComponent (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:14577:28)
+    at beginWork (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:15912:22)
+    at HTMLUnknownElement.callCallback2 (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:3674:22)
+[ 1569665ms] Error: Rendered more hooks than during the previous render.
+    at updateWorkInProgressHook (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:12301:21)
+    at updateEffectImpl (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:12697:22)
+    at updateEffect (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:12722:18)
+    at Object.useEffect (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:13326:22)
+    at useEffect (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-4D5CYJYK.js?v=45e2f645:1078:29)
+    at EAP (http://127.0.0.1:3000/src/pages/EAP.jsx?t=1793461618963:67:3)
+    at renderWithHooks (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:12171:26)
+    at updateFunctionComponent (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:14577:28)
+    at beginWork (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:15912:22)
+    at HTMLUnknownElement.callCallback2 (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:3674:22)
+[ 1569672ms] [ERROR] The above error occurred in the <EAP> component:
+
+    at EAP (http://127.0.0.1:3000/src/pages/EAP.jsx?t=1793461618963:38:16)
+    at PrivateRoute (http://127.0.0.1:3000/src/components/PrivateRoute.jsx:21:25)
+    at RenderedRoute (http://127.0.0.1:3000/node_modules/.vite/deps/react-router-dom.js?v=45e2f645:3510:5)
+    at Routes (http://127.0.0.1:3000/node_modules/.vite/deps/react-router-dom.js?v=45e2f645:3892:5)
+    at Router (http://127.0.0.1:3000/node_modules/.vite/deps/react-router-dom.js?v=45e2f645:3839:15)
+    at BrowserRouter (http://127.0.0.1:3000/node_modules/.vite/deps/react-router-dom.js?v=45e2f645:4549:5)
+    at DialogProvider (http://127.0.0.1:3000/src/context/DialogContext.jsx:22:34)
+    at LeaveGuardProvider (http://127.0.0.1:3000/src/context/LeaveGuardContext.jsx:21:38)
+    at UserPreferencesProvider (http://127.0.0.1:3000/src/context/UserPreferencesContext.jsx:20:43)
+    at AuthProvider (http://127.0.0.1:3000/src/context/AuthContext.jsx:28:32)
+    at NotificationProvider (http://127.0.0.1:3000/src/context/NotificationContext.jsx:20:40)
+
+Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://reactjs.org/link/error-boundaries to learn more about error boundaries. @ http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:14035
+[ 1569676ms] Error: Rendered more hooks than during the previous render.
+    at updateWorkInProgressHook (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:12301:21)
+    at updateEffectImpl (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:12697:22)
+    at updateEffect (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:12722:18)
+    at Object.useEffect (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:13326:22)
+    at useEffect (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-4D5CYJYK.js?v=45e2f645:1078:29)
+    at EAP (http://127.0.0.1:3000/src/pages/EAP.jsx?t=1793461618963:67:3)
+    at renderWithHooks (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:12171:26)
+    at updateFunctionComponent (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:14577:28)
+    at beginWork (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:15912:22)
+    at beginWork$1 (http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:19749:22)
+[ 1612061ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:21535
+[ 1915327ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:21535
+[ 1952743ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:21535
+[ 2035544ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:21535
+[ 2036155ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:21535
+[ 2063733ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:21535
+[ 2134444ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:21535
+[ 2134999ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:3000/api/eap/projeto/42:0
+[ 2233157ms] [LOG] [vite] server connection lost. polling for restart... @ http://127.0.0.1:3000/@vite/client:483
+[ 2233164ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2234170ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2235179ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2236191ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2237208ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2238223ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2239239ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2240243ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2241248ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2242265ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2243272ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2244276ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2245292ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2246308ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2247328ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2248342ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2249356ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2250374ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2251393ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2252402ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2253493ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2254521ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2255535ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2256553ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2257556ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2258573ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2259589ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2260597ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2261606ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2262622ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2263638ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2264652ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2265657ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2266673ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2267685ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2268689ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2269705ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2270721ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2271741ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2272751ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2273763ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2274769ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2275786ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2276792ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2277800ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2278815ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2279831ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2280847ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2281853ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2282867ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2283880ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2284897ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2285901ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2286906ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2287919ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2288940ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2289950ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2290963ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2291969ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2292983ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2294001ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2295008ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2296020ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2297035ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2298127ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2299147ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2300152ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2301168ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2302184ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2303195ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2304203ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2305217ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2306234ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2307251ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2308267ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2309284ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2310300ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2311316ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2312334ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2313351ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2314366ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2315382ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2316400ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2317417ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2318433ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2319450ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2320466ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2321482ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2322500ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2323516ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2324532ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2325549ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2326565ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2327582ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2328599ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2329604ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2330615ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2331632ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2332648ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2333666ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2334681ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2335698ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2336714ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2337731ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2338747ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2339752ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2340764ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2341780ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2342796ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2343813ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2344830ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2345846ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2346862ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2347878ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2348900ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2349914ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2350929ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2355374ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:21535
+[ 2638576ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:21535
+[ 2754888ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:3000/node_modules/.vite/deps/chunk-YYQEUSG3.js?v=45e2f645:21535
+[ 2991466ms] [LOG] [vite] server connection lost. polling for restart... @ http://127.0.0.1:3000/@vite/client:483
+[ 2991470ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2992478ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2993508ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2994519ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2995530ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2996538ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2997555ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2998560ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 2999577ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3000582ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3001598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3002617ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3003631ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3004648ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3005653ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3006667ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3007671ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3008685ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3009703ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3010718ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3011732ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3012740ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3013749ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3014757ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3015771ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3016784ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3017803ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3018807ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3019817ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3020837ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3021856ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3022870ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3023875ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3024895ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3025911ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3026923ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3027939ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3028945ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3029954ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3030973ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3031978ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3032998ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3034006ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3035011ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3036022ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3037028ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3038044ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3039061ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3040079ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3041096ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3042112ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3043132ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3044146ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3045159ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3046168ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3047180ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3048197ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3049202ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3050215ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3051233ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3052248ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3053264ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3054273ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3055281ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3056292ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3057298ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3058303ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3059318ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3060337ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3061341ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3062352ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3063369ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3064388ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3065403ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3066410ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3067421ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3068440ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3069455ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3070473ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3071487ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3072491ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3073507ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3074525ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3075541ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3076558ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3077575ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3078593ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3079610ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3080625ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3081642ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3082657ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3083675ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3084692ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3085708ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3086727ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3087740ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3088747ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3089763ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3090781ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3091799ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3092816ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3093832ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3094843ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3095848ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3096866ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3097872ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3098889ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3099905ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3100916ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3101931ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3102936ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3103946ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3104950ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3105955ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3106967ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3107984ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3108988ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3110001ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3111010ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3112021ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3113036ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3114047ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3115051ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3116054ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3117072ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3118087ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3119093ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3120104ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3121119ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3122137ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3123156ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3124174ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3125185ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3126205ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3127219ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3128227ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3129237ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3130252ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3131268ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3132281ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3133286ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3134291ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3135303ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3136316ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3137332ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3138336ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3139353ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3140357ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3141368ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3142371ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3143387ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3144391ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3145401ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3146417ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3147421ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3148433ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3149452ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3150459ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3151471ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3152478ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3153489ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3154494ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3155508ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3156512ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3157517ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3158538ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3159549ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3160566ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3161581ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3162594ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3163598ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3164605ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3165633ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3166644ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3167663ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3168682ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3169698ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3170712ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3171730ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3172742ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3173746ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3174753ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3175763ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3176777ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3177798ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3178811ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3179816ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3180827ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3181846ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3182863ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3183867ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3184879ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3185892ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3186912ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3187925ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3188931ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3189945ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3190964ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3191978ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3192983ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3193987ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3194995ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3196026ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3197035ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3198046ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3199059ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3200078ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3201081ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3202089ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3203107ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3204124ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3205141ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3206160ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3207177ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3208188ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3209202ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3210208ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3211221ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3212234ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3213246ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3214249ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3215259ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3216277ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3217293ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3218310ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3219326ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3220341ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3221345ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3222359ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3223376ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3224391ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3225410ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3226425ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3227442ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3228457ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3229474ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3230487ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3231491ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3232494ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3233507ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3234523ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3235539ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3236547ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3237557ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3238576ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3239586ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3240590ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3241605ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3242619ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3243636ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3244655ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3245665ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3246675ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3247688ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3248699ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3249708ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3250722ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3251737ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3252747ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3253759ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3254764ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3255770ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3256773ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3257776ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3258788ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3259806ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3260815ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3261822ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3262841ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3263853ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3264864ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3265870ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3266880ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3267887ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3268903ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3269912ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3270917ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3271926ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3272936ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3273946ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3274958ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3275969ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3276985ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3278003ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3279016ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3280024ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
+[ 3281033ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3000/:0
