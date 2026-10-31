@@ -3,7 +3,7 @@ import { createAtividade, updateAtividade, getUnidadesEAP } from '../../services
 import { useDialog } from '../../context/DialogContext';
 import { useNotification } from '../../context/NotificationContext';
 import { useLeaveGuard } from '../../context/LeaveGuardContext';
-import { activityPayload, initialDraft, nextChildCode, validateDraft } from './eapUtils';
+import { activityPayload, initialDraft, nextChildCode, validateDraft, isMeasurementOnlyDraft, parseMeasurementInput } from './eapUtils';
 import { registerEapNavigationGuard } from './eapNavigationGuard';
 
 export default function useEapEditor({ projectId, activities, onSaved }) {
@@ -38,7 +38,8 @@ export default function useEapEditor({ projectId, activities, onSaved }) {
 
   const begin = (activity = null, parentId = '', list = activities) => {
     const draft = initialDraft(activity, parentId, list);
-    setSession({ original: activity, initial: draft, draft });
+    const isGroup = Boolean(activity && list.some((item) => String(item.pai_id) === String(activity.id)));
+    setSession({ original: activity, initial: draft, draft, isGroup });
     setErrors({}); setError('');
   };
 
@@ -66,18 +67,23 @@ export default function useEapEditor({ projectId, activities, onSaved }) {
 
   const save = async ({ another = false } = {}) => {
     if (!session || submitting.current || (session.original && !dirty)) return false;
-    const nextErrors = validateDraft(session.draft, Boolean(session.original));
+    const measurementOnly = Boolean(session.original && !session.isGroup && isMeasurementOnlyDraft(session.draft, session.initial));
+    const priceChanged = Boolean(session.original && !session.isGroup && parseMeasurementInput(session.draft.valor_total_medicao) !== parseMeasurementInput(session.initial.valor_total_medicao));
+    let nextErrors = validateDraft(session.draft, Boolean(session.original));
+    if (measurementOnly) nextErrors = nextErrors.valor_total_medicao ? { valor_total_medicao: nextErrors.valor_total_medicao } : {};
     setErrors(nextErrors); setError('');
     setValidationAttempt((attempt) => attempt + 1);
     if (Object.keys(nextErrors).length) return false;
     submitting.current = true; setSaving(true);
     try {
-      if (session.original && !await confirm({
-        title: 'Recalcular EAP',
-        message: 'Ao alterar esta atividade da EAP, os RDOs relacionados serão recalculados (ajuste aplicado ao último RDO). Deseja continuar?',
+      if (session.original && (!measurementOnly || priceChanged) && !await confirm({
+        title: measurementOnly ? 'Atualizar valor de medição' : 'Recalcular EAP',
+        message: [!measurementOnly && 'Ao alterar esta atividade da EAP, os RDOs relacionados serão recalculados (ajuste aplicado ao último RDO).', priceChanged && 'O novo valor será aplicado a toda a execução aprovada, incluindo RDOs anteriores. Remover o preço deixará a atividade sem medição financeira.', 'Deseja continuar?'].filter(Boolean).join(' '),
         confirmText: 'Continuar', cancelText: 'Cancelar'
       })) return false;
-      const payload = activityPayload(session.draft, projectId, session.original);
+      const payload = measurementOnly
+        ? { valor_total_medicao: parseMeasurementInput(session.draft.valor_total_medicao) }
+        : activityPayload(session.draft, projectId, session.original, session.isGroup);
       const response = session.original
         ? await updateAtividade(session.original.id, payload)
         : await createAtividade(payload);
@@ -105,6 +111,7 @@ export default function useEapEditor({ projectId, activities, onSaved }) {
       if (/peso/i.test(message)) fields.peso_percentual_projeto = message;
       if (/data_fim_planejada/i.test(message)) fields.data_fim_planejada = message;
       if (/quantidade_total/i.test(message)) fields.quantidade_total = message;
+      if (/valor_total_medicao/i.test(message)) fields.valor_total_medicao = message;
       if (/unidade/i.test(message)) fields.unidade_medida = message;
       setErrors(fields);
       setValidationAttempt((attempt) => attempt + 1);

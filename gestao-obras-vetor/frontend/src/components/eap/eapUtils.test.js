@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { activityPayload, activityCounts, activityProgress, buildHierarchy, initialDraft, nextChildCode, validateDraft, visibleActivities } from './eapUtils.js';
+import { activityPayload, activityCounts, activityProgress, buildHierarchy, initialDraft, nextChildCode, validateDraft, visibleActivities, parseMeasurementInput, isMeasurementOnlyDraft, measurementSummary, formatCurrency } from './eapUtils.js';
 
 const activities = [
   { id: 1, codigo_eap: '1', nome: 'Fundação', pai_id: null, percentual_executado: 95 },
@@ -61,3 +61,25 @@ assert.ok(validateDraft({ ...draft, data_fim_planejada: '2026-09-30' }).data_fim
 assert.ok(validateDraft({ ...draft, peso_percentual_projeto: '101' }).peso_percentual_projeto);
 assert.deepEqual(validateDraft({ ...draft, peso_percentual_projeto: '0' }), {}, 'peso zero continua permitido');
 console.log('EAP: hierarquia, filtros, contadores, códigos e preservação do payload validados.');
+
+assert.equal(parseMeasurementInput('10.000,50'), 10000.5);
+assert.equal(parseMeasurementInput('10000.50'), 10000.5);
+assert.equal(parseMeasurementInput('0,00'), 0);
+assert.equal(parseMeasurementInput(''), null);
+for (const value of ['-1', '1,001', 'abc', '1e3', '10000000000000']) assert.equal(parseMeasurementInput(value), undefined);
+assert.equal(initialDraft({ valor_total_medicao: '123.45' }).valor_total_medicao, '123,45');
+assert.equal(activityPayload({ ...root, valor_total_medicao: '10.000,50' }, 42).valor_total_medicao, 10000.5);
+assert.equal(activityPayload({ ...root, valor_total_medicao: '' }, 42).valor_total_medicao, null);
+assert.equal('valor_total_medicao' in activityPayload(root, 42, original, true), false, 'agrupador não envia preço próprio');
+assert.ok(validateDraft({ ...root, valor_total_medicao: '1,001' }).valor_total_medicao);
+assert.equal(isMeasurementOnlyDraft({ ...draft, valor_total_medicao: '500' }, draft), true);
+assert.equal(isMeasurementOnlyDraft({ ...draft, valor_total_medicao: '500', nome: 'Outro' }, draft), false);
+const priced = [
+  { id: 1, pai_id: null, medicao: { valor_previsto: 1000, valor_medido: 300, atividades_sem_valor: 1 } },
+  { id: 2, pai_id: 1, medicao: { valor_previsto: 1000, valor_medido: 300, atividades_sem_valor: 0 } },
+  { id: 3, pai_id: 1, medicao: { valor_previsto: null, valor_medido: null, atividades_sem_valor: 1 } }
+];
+assert.deepEqual(measurementSummary(priced), { valor_previsto: 1000, valor_medido: 300, saldo: 700, atividades_sem_valor: 1 });
+assert.equal(formatCurrency(null), 'Não precificada');
+assert.match(formatCurrency(0), /0,00/);
+console.log('EAP medição: entrada em reais, payload, edição monetária e totais sem dupla contagem validados.');

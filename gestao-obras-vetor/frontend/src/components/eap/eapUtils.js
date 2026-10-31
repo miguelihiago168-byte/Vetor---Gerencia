@@ -1,6 +1,30 @@
 export const dateOnly = (value) => String(value || '').match(/^\d{4}-\d{2}-\d{2}/)?.[0] || '';
 export const formatDate = (value) => dateOnly(value).split('-').reverse().join('/') || '—';
 export const formatNumber = (value) => Number(value || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+export const formatCurrency = (value) => value == null ? 'Não precificada' : Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+export function parseMeasurementInput(value) {
+  let text = String(value ?? '').trim();
+  if (!text) return null;
+  if (/^\d{1,3}(\.\d{3})+(,\d{1,2})?$/.test(text)) text = text.replace(/\./g, '');
+  text = text.replace(',', '.');
+  return /^\d{1,13}(\.\d{1,2})?$/.test(text) ? Number(text) : undefined;
+}
+
+export const isMeasurementOnlyDraft = (draft, initial) => draft.valor_total_medicao !== initial.valor_total_medicao
+  && Object.keys(draft).every((key) => key === 'valor_total_medicao' || draft[key] === initial[key]);
+
+export function measurementSummary(activities) {
+  const parents = new Set(activities.map((activity) => String(activity.pai_id)));
+  const totals = activities.filter((activity) => !parents.has(String(activity.id))).reduce((sum, activity) => {
+    const measurement = activity.medicao;
+    sum.previsto += Math.round(Number(measurement?.valor_previsto || 0) * 100);
+    sum.medido += Math.round(Number(measurement?.valor_medido || 0) * 100);
+    sum.semValor += measurement?.atividades_sem_valor ?? 1;
+    return sum;
+  }, { previsto: 0, medido: 0, semValor: 0 });
+  return { valor_previsto: totals.previsto / 100, valor_medido: totals.medido / 100, saldo: (totals.previsto - totals.medido) / 100, atividades_sem_valor: totals.semValor };
+}
 export const activityLabel = (activity) => `${activity.codigo_eap || ''} — ${activity.nome || activity.descricao || 'Sem nome'}`;
 export const normalizeSearch = (value) => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 export const sortActivities = (items) => [...items].sort((a, b) => String(a.codigo_eap || '').localeCompare(String(b.codigo_eap || ''), 'pt-BR', { numeric: true, sensitivity: 'base' }));
@@ -86,6 +110,7 @@ export function initialDraft(activity = null, parentId = '', activities = []) {
     data_fim_planejada: dateOnly(activity?.data_fim_planejada),
     unidade_medida: activity?.unidade_medida || '',
     quantidade_total: String(activity?.quantidade_total ?? ''),
+    valor_total_medicao: String(activity?.valor_total_medicao ?? '').replace('.', ','),
     peso_percentual_projeto: String(activity?.peso_percentual_projeto ?? activity?.percentual_previsto ?? ''),
     pai_id: String(activity?.pai_id || parentId || ''),
     predecessora_id: String(activity?.predecessora_id || ''),
@@ -95,6 +120,7 @@ export function initialDraft(activity = null, parentId = '', activities = []) {
 
 export function validateDraft(draft, editing = false) {
   const errors = {};
+  if (parseMeasurementInput(draft.valor_total_medicao) === undefined) errors.valor_total_medicao = 'Informe um valor não negativo, com até 2 casas decimais (máximo R$ 9.999.999.999.999,99).';
   if (!draft.codigo_eap.trim()) errors.codigo_eap = 'Informe o código.';
   if (!draft.nome.trim()) errors.nome = 'Informe o nome da atividade.';
   if (draft.pai_id) {
@@ -109,7 +135,7 @@ export function validateDraft(draft, editing = false) {
   return errors;
 }
 
-export function activityPayload(draft, projectId, original = null) {
+export function activityPayload(draft, projectId, original = null, isGroup = false) {
   const payload = {
     projeto_id: projectId,
     codigo_eap: draft.codigo_eap,
@@ -123,6 +149,7 @@ export function activityPayload(draft, projectId, original = null) {
     data_inicio_planejada: draft.data_inicio_planejada || (original ? dateOnly(original.data_inicio_planejada) || null : ''),
     data_fim_planejada: draft.data_fim_planejada || (original ? dateOnly(original.data_fim_planejada) || null : '')
   };
+  if (!isGroup) payload.valor_total_medicao = parseMeasurementInput(draft.valor_total_medicao);
   // O PUT sincroniza as dependências quando recebe predecessora_id. Omitir o
   // vínculo intacto evita substituir outras predecessoras existentes.
   if (!original || String(original.predecessora_id || '') !== draft.predecessora_id || (original.tipo_vinculo_dependencia || 'FS') !== draft.tipo_vinculo_dependencia) {

@@ -3,17 +3,18 @@ import { createPortal } from 'react-dom';
 import { History, Save, X, Plus, Layers3, Info } from 'lucide-react';
 import Button, { IconButton } from '../ui/Button';
 import { getHistoricoAtividade } from '../../services/api';
-import { activityLabel, formatNumber, normalizeSearch, sortActivities } from './eapUtils';
+import { activityLabel, formatNumber, formatCurrency, normalizeSearch, sortActivities } from './eapUtils';
 
 export const FIELD_LABELS = {
   codigo_eap: 'Código EAP', nome: 'Nome da atividade', data_inicio_planejada: 'Início planejado',
   data_fim_planejada: 'Fim planejado', unidade_medida: 'Unidade', quantidade_total: 'Quantidade prevista',
-  peso_percentual_projeto: 'Peso (%)', descricao: 'Descrição'
+  peso_percentual_projeto: 'Peso (%)', descricao: 'Descrição', valor_total_medicao: 'Valor total de medição (R$)'
 };
 
 export function EapField({ editor, name, compact = false }) {
   const id = useId();
   const { draft, errors, update, saving, units } = editor;
+  if (name === 'valor_total_medicao' && editor.session.isGroup) return <div className="eap-edit-field eap-group-measurement"><span>{compact ? '' : 'Valor previsto'}</span><strong>{formatCurrency(editor.session.original.medicao?.valor_previsto)}</strong><small>Soma das atividades filhas</small></div>;
   const required = ['codigo_eap', 'nome'].includes(name) || (Boolean(draft.pai_id) && ['data_inicio_planejada', 'data_fim_planejada', 'unidade_medida', 'peso_percentual_projeto'].includes(name));
   const props = {
     id, name, value: draft[name], disabled: saving, required,
@@ -29,9 +30,10 @@ export function EapField({ editor, name, compact = false }) {
       <option value="">Selecione</option>
       {[...new Set([...(draft.unidade_medida ? [draft.unidade_medida] : []), ...units])].map((unit) => <option key={unit} value={unit}>{unit}</option>)}
     </select> : name === 'descricao' ? <textarea {...props} rows={3} /> : <input {...props} type={type}
+      {...(name === 'valor_total_medicao' ? { inputMode: 'decimal', maxLength: 20 } : {})}
       {...(type === 'number' ? { step: name === 'peso_percentual_projeto' ? '0.1' : '0.01' } : {})}
       {...(name === 'peso_percentual_projeto' ? { min: 0, max: 100 } : {})}
-      placeholder={name === 'codigo_eap' ? 'Ex.: 1.1' : name === 'nome' ? 'Nome da atividade' : undefined} />}
+      placeholder={name === 'codigo_eap' ? 'Ex.: 1.1' : name === 'nome' ? 'Nome da atividade' : name === 'valor_total_medicao' ? 'Ex.: 10.000,00' : undefined} />}
     {errors[name] && <small id={`${id}-error`} className="eap-field-error">{errors[name]}</small>}
   </div>;
 }
@@ -128,7 +130,13 @@ export function EapEditorContent({ editor, activities, tab, setTab }) {
         <EapField editor={editor} name="descricao" />
       </section>
       <section className="eap-editor-section"><h3>Planejamento e medição</h3>
-        <div className="eap-editor-grid">{['data_inicio_planejada', 'data_fim_planejada', 'unidade_medida', 'quantidade_total', 'peso_percentual_projeto'].map((name) => <EapField key={name} editor={editor} name={name} />)}</div>
+        <div className="eap-editor-grid">{['data_inicio_planejada', 'data_fim_planejada', 'unidade_medida', 'quantidade_total', 'peso_percentual_projeto', 'valor_total_medicao'].map((name) => <EapField key={name} editor={editor} name={name} />)}</div>
+        <p className="eap-editor-note">O valor é opcional. A medição considera a execução dos RDOs aprovados, inclusive anteriores ao cadastro do preço.</p>
+        {editor.session.original?.medicao && <div className="eap-measurement-detail" aria-label="Medição salva da atividade">
+          <div><span>Valor medido</span><strong>{formatCurrency(editor.session.original.medicao.valor_medido)}</strong></div>
+          <div><span>Saldo a medir</span><strong>{formatCurrency(editor.session.original.medicao.saldo)}</strong></div>
+          <small>{editor.session.original.medicao.atividades_sem_valor > 0 ? `${editor.session.original.medicao.atividades_sem_valor} atividade(s) sem preço. Totais parciais.` : 'Valores da última gravação. Alterações serão consideradas após salvar.'}</small>
+        </div>}
         {editor.unitsError && <div role="alert" className="eap-editor-error">{editor.unitsError} <Button size="sm" onClick={editor.loadUnits}>Recarregar unidades</Button></div>}
         <div className="eap-weight-hint"><Info size={16} /><WeightHint editor={editor} activities={activities} /></div>
       </section>

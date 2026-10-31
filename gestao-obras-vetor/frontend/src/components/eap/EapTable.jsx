@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, History, Pencil, Plus, Search, SlidersHorizontal, Trash2, X, Layers, Circle, Timer, CheckCircle2, ListTree, ShieldCheck } from 'lucide-react';
 import Button, { IconButton } from '../ui/Button';
-import { activityCounts, activityLabel, activityWeight, buildHierarchy, formatDate, formatNumber, STATUS_LABELS, visibleActivities } from './eapUtils';
+import { activityCounts, activityLabel, activityWeight, buildHierarchy, formatDate, formatNumber, formatCurrency, measurementSummary, STATUS_LABELS, visibleActivities } from './eapUtils';
 import { EapDrawer, EapField, EditorActions, WeightHint } from './EapEditor';
 import './EapWorkspace.css';
 
@@ -14,6 +14,7 @@ export default function EapTable({ activities, editor, onDelete, readOnly = fals
   const ref = useRef(null);
   const tree = useMemo(() => buildHierarchy(activities), [activities]);
   const counts = useMemo(() => activityCounts(activities), [activities]);
+  const measurement = useMemo(() => measurementSummary(activities), [activities]);
   const rows = useMemo(() => visibleActivities(tree, expanded, search, status), [tree, expanded, search, status]);
   const filtering = Boolean(search.trim() || status);
   const locked = editor.dirty || editor.saving;
@@ -74,10 +75,12 @@ export default function EapTable({ activities, editor, onDelete, readOnly = fals
       <tr className="eap-edit-row" data-activity-id={row?.id || 'new'}>
         {['codigo_eap', 'nome', 'data_inicio_planejada', 'data_fim_planejada', 'unidade_medida', 'quantidade_total', 'peso_percentual_projeto'].map((name, index) => <td key={name} className={index < 2 ? `eap-sticky-${index}` : ''}><EapField editor={editor} name={name} compact /></td>)}
         <td>{row ? <Progress row={row} /> : <span className="eap-muted">—</span>}</td>
+        <td className="eap-number"><EapField editor={editor} name="valor_total_medicao" compact /></td>
+        <td className="eap-number"><MeasurementValue measurement={row?.medicao} field="valor_medido" /></td>
         <td>{row ? <span className={`eap-table-status is-${row.tone}`}>{STATUS_LABELS[row.tone]}</span> : <span className="eap-table-status is-draft">Nova atividade</span>}</td>
         <td><Button size="sm" startIcon={SlidersHorizontal} onClick={() => { setTab('data'); setDrawer(true); }} disabled={editor.saving}>Detalhes</Button></td>
       </tr>
-      <tr className="eap-edit-support"><td colSpan={10}>
+      <tr className="eap-edit-support"><td colSpan={12}>
         <div className="eap-edit-support-inner">
           <div><strong>{row ? 'Editando atividade' : 'Cadastrando atividade'}{draftParent ? ` · Filha de ${activityLabel(draftParent)}` : ' · Raiz do projeto'}</strong>
             <p><WeightHint editor={editor} activities={activities} /></p><small>* Campos obrigatórios · Tab para navegar · Ctrl+Enter para salvar · Esc para cancelar</small>
@@ -103,6 +106,8 @@ export default function EapTable({ activities, editor, onDelete, readOnly = fals
       <td>{formatDate(row.data_inicio_planejada)}</td><td>{formatDate(row.data_fim_planejada)}</td>
       <td>{hasChildren ? '—' : row.unidade_medida || '—'}</td><td className="eap-number">{hasChildren ? '—' : formatNumber(row.quantidade_total)}</td>
       <td className="eap-number"><span className="eap-weight-value">{formatNumber(activityWeight(row))}%</span></td><td><Progress row={row} /></td>
+      <td className="eap-number"><MeasurementValue measurement={row.medicao} field="valor_previsto" /></td>
+      <td className="eap-number"><MeasurementValue measurement={row.medicao} field="valor_medido" /></td>
       <td><span className={`eap-table-status is-${row.tone}`}>{STATUS_LABELS[row.tone]}</span></td>
       <td><div className="eap-row-actions">
         <IconButton size="sm" variant="ghost" icon={Pencil} label={`Editar ${row.codigo_eap}`} onClick={() => start(row)} disabled={actionsDisabled} />
@@ -129,6 +134,16 @@ export default function EapTable({ activities, editor, onDelete, readOnly = fals
         <strong>{counts[key]}</strong><small>{detail}</small>
       </div>)}
     </div>
+    <section className="eap-financial-summary" aria-label="Medição financeira do projeto">
+      <div className="eap-financial-heading"><strong>Medição financeira</strong><span>{measurement.atividades_sem_valor > 0 ? 'Totais parciais' : 'RDOs aprovados'}</span></div>
+      <div className="eap-financial-values">
+        <div><span>Valor previsto</span><strong>{formatCurrency(measurement.valor_previsto)}</strong></div>
+        <div><span>Valor medido</span><strong>{formatCurrency(measurement.valor_medido)}</strong></div>
+        <div><span>Saldo a medir</span><strong>{formatCurrency(measurement.saldo)}</strong></div>
+        <div><span>Atividades sem preço</span><strong>{measurement.atividades_sem_valor}</strong></div>
+      </div>
+      {measurement.atividades_sem_valor > 0 && <p>Os totais consideram apenas as atividades precificadas.</p>}
+    </section>
     <section className="eap-structure" aria-labelledby="eap-structure-title">
     <div className="eap-structure-header">
       <div className="eap-structure-title"><span className="eap-structure-icon"><ListTree size={20} aria-hidden="true" /></span><div><h2 id="eap-structure-title">Estrutura de atividades</h2><p>Etapas, entregas e avanço da obra</p></div></div>
@@ -142,15 +157,19 @@ export default function EapTable({ activities, editor, onDelete, readOnly = fals
     {locked && <div className="eap-edit-notice"><Pencil size={14} aria-hidden="true" /> Edição em andamento. Salve ou cancele para filtrar ou recolher.</div>}
     <div className="eap-table-scroll" tabIndex={0} role="region" aria-label="Tabela da EAP">
       <table className="eap-data-table"><caption className="eap-sr-only">Atividades, planejamento e progresso da EAP</caption>
-        <colgroup>{[84, 290, 120, 120, 72, 108, 78, 128, 146, 144].map((width, index) => <col key={index} style={{ width }} />)}</colgroup>
-        <thead><tr>{['Código', 'Atividade', 'Início planejado', 'Fim planejado', 'Unidade', 'Qtd. prevista', 'Peso (%)', 'Executado', 'Situação', 'Ações'].map((label, index) => <th scope="col" key={label} className={index < 2 ? `eap-sticky-${index}` : [5, 6].includes(index) ? 'eap-number' : ''}>{label}</th>)}</tr></thead>
-        <tbody>{renderedRows}{!renderedRows.length && <tr><td colSpan={10}><div className="eap-empty"><Search size={28} /><strong>{activities.length ? 'Nenhuma atividade corresponde aos filtros' : 'Comece a estrutura do projeto'}</strong><p>{activities.length ? 'Altere a busca ou a situação para encontrar outras atividades.' : 'Adicione uma atividade raiz e depois detalhe suas subatividades.'}</p>{filtering && <Button size="sm" startIcon={X} onClick={() => { setSearch(''); setStatus(''); }}>Limpar filtros</Button>}</div></td></tr>}</tbody>
+        <colgroup>{[84, 290, 120, 120, 72, 108, 78, 128, 165, 165, 146, 144].map((width, index) => <col key={index} style={{ width }} />)}</colgroup>
+        <thead><tr>{['Código', 'Atividade', 'Início planejado', 'Fim planejado', 'Unidade', 'Qtd. prevista', 'Peso (%)', 'Executado', 'Valor previsto', 'Valor medido', 'Situação', 'Ações'].map((label, index) => <th scope="col" key={label} className={index < 2 ? `eap-sticky-${index}` : [5, 6, 8, 9].includes(index) ? 'eap-number' : ''}>{label}</th>)}</tr></thead>
+        <tbody>{renderedRows}{!renderedRows.length && <tr><td colSpan={12}><div className="eap-empty"><Search size={28} /><strong>{activities.length ? 'Nenhuma atividade corresponde aos filtros' : 'Comece a estrutura do projeto'}</strong><p>{activities.length ? 'Altere a busca ou a situação para encontrar outras atividades.' : 'Adicione uma atividade raiz e depois detalhe suas subatividades.'}</p>{filtering && <Button size="sm" startIcon={X} onClick={() => { setSearch(''); setStatus(''); }}>Limpar filtros</Button>}</div></td></tr>}</tbody>
       </table>
     </div>
     <div className="eap-table-caption"><span><ShieldCheck size={14} aria-hidden="true" /> Progresso atualizado pelos RDOs aprovados</span><span>{filtering ? 'Ancestrais preservados nos resultados' : 'Contadores sobre as atividades sem filhos da EAP completa'}</span></div>
     </section>
     {drawer && editor.session && <EapDrawer editor={editor} activities={activities} tab={tab} setTab={setTab} onClose={() => setDrawer(false)} onCancel={editor.cancel} />}
   </div>;
+}
+
+function MeasurementValue({ measurement, field }) {
+  return <div className="eap-measurement-value"><span>{formatCurrency(measurement?.[field])}</span>{measurement?.[field] != null && measurement?.atividades_sem_valor > 0 && <small>Parcial</small>}</div>;
 }
 
 function Progress({ row }) {

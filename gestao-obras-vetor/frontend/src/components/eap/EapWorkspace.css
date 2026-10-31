@@ -30,6 +30,25 @@ body.dark-mode .eap-workspace, body.dark-mode .eap-drawer, body.dark-mode .eap-s
   --ew-error: #ffaaa5;
 }
 .eap-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.eap-financial-summary { padding: 18px 20px; margin-bottom: 22px; border: 1px solid var(--ew-border); border-radius: 14px; background: var(--ew-surface); }
+.eap-financial-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.eap-financial-heading > strong { font-size: 14px; }
+.eap-financial-heading > span { font-size: 11px; color: var(--ew-blue); background: var(--ew-edit); border-radius: 6px; padding: 4px 8px; }
+.eap-financial-values { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+.eap-financial-values > div, .eap-measurement-detail > div { display: grid; gap: 7px; min-width: 0; }
+.eap-financial-values span, .eap-measurement-detail span { color: var(--ew-muted); font-size: 12px; }
+.eap-financial-values strong { font-size: clamp(16px, 1.5vw, 23px); font-weight: 650; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.eap-financial-summary > p { font-size: 12px; color: var(--ew-muted); margin: 12px 0 0; }
+.eap-measurement-value { display: grid; gap: 4px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.eap-measurement-value small, .eap-group-measurement small { color: var(--ew-muted); font-size: 10px; font-weight: 400; }
+.eap-group-measurement { margin-bottom: 0; }
+.eap-measurement-detail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; padding: 14px; margin-bottom: 18px; border-radius: 8px; background: var(--ew-subtle); }
+.eap-measurement-detail strong { font-size: 16px; overflow-wrap: anywhere; }
+.eap-measurement-detail > small { grid-column: 1 / -1; color: var(--ew-muted); line-height: 1.5; }
+@media (max-width: 650px) {
+  .eap-financial-summary { padding: 14px; }
+  .eap-financial-values { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; }
+}
 .eap-overview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 0 0 22px; }
 .eap-overview-item { position: relative; background: var(--ew-surface); border: 1px solid var(--ew-border); border-radius: 14px; padding: 15px 20px; box-shadow: 0 3px 6px rgba(24,40,62,.02); }
 .eap-overview-heading { display: flex; align-items: center; gap: 10px; padding-right: 34px; color: var(--ew-muted); font-size: 12px; font-weight: 500; }
@@ -64,7 +83,7 @@ body.dark-mode .eap-overview-item.is-done .eap-overview-icon { background: #1c40
 .eap-table-caption > span { display: flex; align-items: center; gap: 7px; }
 .eap-edit-notice { display: flex; align-items: center; gap: 8px; padding: 11px 22px; font-size: 11px; color: var(--ew-blue); background: var(--ew-edit); border-top: 1px solid var(--ew-border); }
 .eap-table-scroll { background: var(--ew-surface); border-top: 1px solid var(--ew-border); overflow: auto; max-height: 64vh; scrollbar-color: var(--ew-border) transparent; scrollbar-width: thin; }
-.eap-data-table { width: 100%; min-width: 1290px; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 12px; color: var(--ew-text); }
+.eap-data-table { width: 100%; min-width: 1720px; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 12px; color: var(--ew-text); }
 .eap-data-table th, .eap-data-table td { padding: 12px 10px; border-bottom: 1px solid var(--ew-border); background: var(--ew-surface); text-align: left; vertical-align: middle; }
 .eap-data-table thead th { position: sticky; top: 0; z-index: 3; background: var(--ew-subtle); color: var(--ew-muted); font-size: 10px; font-weight: 500; white-space: nowrap; height: 44px; }
 .eap-data-table tr:last-child > td { border-bottom: 0; }

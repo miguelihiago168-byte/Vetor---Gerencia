@@ -8,6 +8,7 @@ const { auth, isGestor } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
 const ganttService = require('../services/ganttService');
 const { ensureSchemaReady } = require('../utils/schemaGuard');
+const { normalizeMeasurementValue, getProjectMeasurements, isMeasurementOnlyUpdate } = require('../services/eapMeasurementService');
 const {
   ORIGINS,
   markRdosAffectedByEapEdit,
@@ -244,6 +245,7 @@ const ensureEapOptionalColumns = async () => {
         'tenant_id',
         'unidade_medida',
         'quantidade_total',
+        'valor_total_medicao',
         'id_atividade',
         'nome',
         'data_inicio_planejada',
@@ -814,7 +816,7 @@ router.get('/projeto/:projetoId', auth, async (req, res) => {
       return copy;
     });
 
-    res.json(atividadesOut);
+    res.json(await getProjectMeasurements({ projectId: projetoId, tenantId, activities: atividadesOut, allQuery }));
   } catch (error) {
     console.error('Erro ao listar atividades:', error);
     res.status(500).json({ erro: 'Erro ao listar atividades.' });
@@ -841,9 +843,9 @@ router.post('/copiar', [auth, isGestor], async (req, res) => {
 
     for (const a of atividades) {
       const result = await runQuery(`
-        INSERT INTO atividades_eap (tenant_id, projeto_id, codigo_eap, descricao, percentual_previsto, pai_id, ordem, unidade_medida, quantidade_total, criado_por)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [tenantId, targetProjetoId, a.codigo_eap, a.descricao + ` (copiado de projeto ${sourceProjetoId})`, a.percentual_previsto, null, a.ordem, a.unidade_medida, a.quantidade_total, req.usuario.id]);
+        INSERT INTO atividades_eap (tenant_id, projeto_id, codigo_eap, descricao, percentual_previsto, pai_id, ordem, unidade_medida, quantidade_total, criado_por, valor_total_medicao)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [tenantId, targetProjetoId, a.codigo_eap, a.descricao + ` (copiado de projeto ${sourceProjetoId})`, a.percentual_previsto, null, a.ordem, a.unidade_medida, a.quantidade_total, req.usuario.id, a.valor_total_medicao]);
       mapOldToNew[a.id] = result.lastID;
     }
 
@@ -959,11 +961,12 @@ router.post('/', auth, [
 
     const identificador = (id_atividade && String(id_atividade).trim()) || `ATV-${projeto_id}-${codigo_eap}`;
     const nomeAtividade = (nome && String(nome).trim()) || descricaoNormalizada || `Atividade ${codigo_eap}`;
+    const valorMedicao = normalizeMeasurementValue(req.body.valor_total_medicao);
 
     const result = await runQuery(`
       INSERT INTO atividades_eap 
-      (tenant_id, projeto_id, codigo_eap, descricao, percentual_previsto, pai_id, ordem, unidade_medida, quantidade_total, criado_por, id_atividade, nome, data_inicio_planejada, data_fim_planejada, peso_percentual_projeto, nivel)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (tenant_id, projeto_id, codigo_eap, descricao, percentual_previsto, pai_id, ordem, unidade_medida, quantidade_total, criado_por, id_atividade, nome, data_inicio_planejada, data_fim_planejada, peso_percentual_projeto, nivel, valor_total_medicao)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       tenantId,
       projeto_id,
@@ -980,7 +983,8 @@ router.post('/', auth, [
       dataInicio || null,
       dataFim || null,
       peso,
-      nivel
+      nivel,
+      valorMedicao
     ]);
 
     if (predecessora_id) {
@@ -1013,7 +1017,7 @@ router.post('/', auth, [
 
   } catch (error) {
     console.error('Erro ao criar atividade:', error);
-    res.status(500).json({ erro: 'Erro ao criar atividade.' });
+    res.status(error.status || 500).json({ erro: error.status ? error.message : 'Erro ao criar atividade.' });
   }
 });
 
@@ -1029,9 +1033,23 @@ router.put('/:id', auth, async (req, res) => {
       return res.status(400).json({ erro: 'percentual_executado só pode ser atualizado via RDO aprovado.' });
     }
 
-    const atividadeAnterior = await getQuery('SELECT * FROM atividades_eap WHERE id = ?', [id]);
+    if (!req.tenantId) return res.status(400).json({ erro: 'Tenant não definido.' });
+    const atividadeAnterior = await getQuery('SELECT * FROM atividades_eap WHERE id = ? AND tenant_id = ?', [id, req.tenantId]);
     if (!atividadeAnterior) {
       return res.status(404).json({ erro: 'Atividade não encontrada.' });
+    }
+
+    const valorMedicao = req.body.valor_total_medicao === undefined
+      ? atividadeAnterior.valor_total_medicao
+      : normalizeMeasurementValue(req.body.valor_total_medicao);
+    if (req.body.valor_total_medicao !== undefined && normalizeMeasurementValue(valorMedicao) !== normalizeMeasurementValue(atividadeAnterior.valor_total_medicao)) {
+      const children = await getQuery('SELECT COUNT(*) AS total FROM atividades_eap WHERE pai_id = ? AND projeto_id = ? AND tenant_id = ?', [id, atividadeAnterior.projeto_id, req.tenantId]);
+      if (Number(children?.total || 0) > 0) return res.status(400).json({ erro: 'O valor de medição de um agrupador é calculado pelas atividades filhas.' });
+    }
+    if (isMeasurementOnlyUpdate(atividadeAnterior, req.body)) {
+      await runQuery('UPDATE atividades_eap SET valor_total_medicao = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?', [valorMedicao, id, req.tenantId]);
+      await registrarAuditoria('atividades_eap', id, 'UPDATE', atividadeAnterior, { valor_total_medicao: valorMedicao }, req.usuario.id);
+      return res.json({ mensagem: 'Valor de medição atualizado com sucesso.', success: true, affectedRDOs: 0, rdos: [] });
     }
 
     const novoPaiId = (typeof pai_id !== 'undefined') ? (pai_id || null) : atividadeAnterior.pai_id;
@@ -1116,7 +1134,7 @@ router.put('/:id', auth, async (req, res) => {
       : Number(atividadeAnterior.ordem || 0);
     const novaQuantidadeTotal = (typeof quantidade_total !== 'undefined' && quantidade_total !== null && quantidade_total !== '')
       ? Number(quantidade_total)
-      : 0;
+      : (typeof quantidade_total === 'undefined' ? Number(atividadeAnterior.quantidade_total || 0) : 0);
 
     if (!Number.isFinite(novaOrdem)) {
       return res.status(400).json({ erro: 'ordem deve ser um número válido.' });
@@ -1131,9 +1149,9 @@ router.put('/:id', auth, async (req, res) => {
 
     await runQuery(`
       UPDATE atividades_eap 
-      SET codigo_eap = ?, descricao = ?, percentual_previsto = ?, ordem = ?, unidade_medida = ?, quantidade_total = ?, pai_id = ?, id_atividade = ?, nome = ?, data_inicio_planejada = ?, data_fim_planejada = ?, peso_percentual_projeto = ?, nivel = ?, atualizado_em = CURRENT_TIMESTAMP
+      SET codigo_eap = ?, descricao = ?, percentual_previsto = ?, ordem = ?, unidade_medida = ?, quantidade_total = ?, pai_id = ?, id_atividade = ?, nome = ?, data_inicio_planejada = ?, data_fim_planejada = ?, peso_percentual_projeto = ?, nivel = ?, valor_total_medicao = ?, atualizado_em = CURRENT_TIMESTAMP
       WHERE id = ?
-    `, [novoCodigoEap, novaDescricao, peso, novaOrdem, novaUnidadeMedida, novaQuantidadeTotal, novoPaiId, novoIdentificador, novoNome, dataInicio || null, dataFim || null, peso, novoNivel, id]);
+    `, [novoCodigoEap, novaDescricao, peso, novaOrdem, novaUnidadeMedida, novaQuantidadeTotal, novoPaiId, novoIdentificador, novoNome, dataInicio || null, dataFim || null, peso, novoNivel, valorMedicao, id]);
 
     if (typeof predecessora_id !== 'undefined') {
       if (predecessora_id) {

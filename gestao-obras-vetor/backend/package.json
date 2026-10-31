@@ -27,6 +27,8 @@
     "test:service-auth": "node tests/serviceAccountAuth.test.js && node tests/oauthRoute.test.js && node tests/serviceSessionRoute.test.js",
     "test:contact": "node tests/contactRoute.test.js",
     "test:eap-progress": "node tests/eapProgressService.test.js",
+    "test:eap-medicao": "node tests/eapMeasurementService.test.js",
+    "test:eap-medicao-db": "node tests/eapMeasurementDatabase.test.js",
     "test:rdo-horario": "node tests/rdoHorarioPropagation.test.js",
     "test:rdo-activity-resources": "node tests/rdoActivityResources.test.js",
     "test:rdo-presenca": "node tests/rdoAttendanceEligibility.test.js",
