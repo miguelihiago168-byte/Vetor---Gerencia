@@ -14,7 +14,9 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
 import { useNotification } from '../context/NotificationContext';
-import { Activity, Plus, Eye, ChevronRight, ChevronDown, Trash2, ArrowLeft, Download, Upload, X, AlertTriangle, CheckCircle2, MoreHorizontal, FileSpreadsheet } from 'lucide-react';
+import { Activity, Plus, ArrowLeft, Download, Upload, X, AlertTriangle, CheckCircle2, MoreHorizontal, FileSpreadsheet } from 'lucide-react';
+import EapTable from '../components/eap/EapTable';
+import useEapEditor from '../components/eap/useEapEditor';
 import './EAP.css';
 
 function EAP({ hideNavbar = false }) {
@@ -25,7 +27,7 @@ function EAP({ hideNavbar = false }) {
   const { success, error } = useNotification();
   const [atividades, setAtividades] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [expandedItems, setExpandedItems] = useState(new Set());
+  const [loadError, setLoadError] = useState('');
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importFile, setImportFile] = useState(null);
   const [importLoading, setImportLoading] = useState(false);
@@ -36,8 +38,17 @@ function EAP({ hideNavbar = false }) {
   const [recalculoResumo, setRecalculoResumo] = useState(null);
   const [recalculoLoading, setRecalculoLoading] = useState(false);
 
+  const editor = useEapEditor({
+    projectId: projetoId, activities: atividades,
+    onSaved: async () => {
+      const list = await carregarAtividades();
+      if (isGestor) await carregarResumoRecalculo();
+      return list;
+    }
+  });
+
   useEffect(() => {
-    carregarAtividades();
+    carregarAtividades(true);
     if (isGestor) carregarResumoRecalculo();
   }, [projetoId, isGestor]);
 
@@ -54,29 +65,20 @@ function EAP({ hideNavbar = false }) {
     return true;
   };
 
-  const carregarAtividades = async () => {
+  const carregarAtividades = async (initialLoad = false) => {
     try {
-      setLoading(true);
-      console.log('Carregando EAP para projeto:', projetoId);
+      if (initialLoad) setLoading(true);
+      setLoadError('');
       const response = await getAtividadesEAP(projetoId);
-      console.log('EAP carregada:', response.data);
-      setAtividades(response.data || []);
+      const list = response.data || [];
+      setAtividades(list);
+      return list;
     } catch (err) {
-      console.error('Erro ao carregar EAP:', err);
-      error('Erro ao carregar EAP: ' + (err.response?.data?.erro || err.message), 7000);
+      setLoadError('Não foi possível atualizar a EAP. Recarregue os dados para continuar.');
+      if (!initialLoad) throw err;
     } finally {
-      setLoading(false);
+      if (initialLoad) setLoading(false);
     }
-  };
-
-  const toggleExpanded = (id) => {
-    const newExpanded = new Set(expandedItems);
-    if (newExpanded.has(id)) {
-      newExpanded.delete(id);
-    } else {
-      newExpanded.add(id);
-    }
-    setExpandedItems(newExpanded);
   };
 
   const formatarDataBr = (valor) => {
@@ -221,211 +223,11 @@ function EAP({ hideNavbar = false }) {
       setRecalculoModalOpen(false);
       setRecalculoPreview(null);
       setRecalculoResumo({ total_atividades_afetadas: 0, atividades: [] });
-      carregarAtividades();
+      await carregarAtividades();
     } catch (err) {
       error('Erro ao recalcular EAP: ' + (err.response?.data?.erro || err.message), 7000);
     } finally {
       setRecalculoLoading(false);
-    }
-  };
-
-  const buildHierarchy = (atividades) => {
-    const byId = {};
-    const roots = [];
-
-    // Indexar todas as atividades por ID
-    atividades.forEach(atividade => {
-      byId[atividade.id] = { ...atividade, children: [] };
-    });
-
-    // Construir hierarquia
-    atividades.forEach(atividade => {
-      if (atividade.pai_id) {
-        if (byId[atividade.pai_id]) {
-          byId[atividade.pai_id].children.push(byId[atividade.id]);
-        }
-      } else {
-        roots.push(byId[atividade.id]);
-      }
-    });
-
-    // Ordenar raízes por código EAP (numérico)
-    roots.sort((a, b) => {
-      return String(a.codigo_eap || '').localeCompare(String(b.codigo_eap || ''), 'pt-BR', { numeric: true, sensitivity: 'base' });
-    });
-
-    // Ordenar filhos recursivamente por código EAP (numérico)
-    const ordenarFilhos = (atividade) => {
-      if (atividade.children && atividade.children.length > 0) {
-        atividade.children.sort((a, b) => {
-          return String(a.codigo_eap || '').localeCompare(String(b.codigo_eap || ''), 'pt-BR', { numeric: true, sensitivity: 'base' });
-        });
-        atividade.children.forEach(ordenarFilhos);
-      }
-    };
-
-    roots.forEach(ordenarFilhos);
-
-    return roots;
-  };
-
-  const getStatusByPercentual = (percentual) => {
-    const valor = Number(percentual || 0);
-    if (valor >= 100) return 'Concluída';
-    if (valor > 0) return 'Em andamento';
-    return 'Não iniciada';
-  };
-
-  const getPesoAtividade = (atividade) => Number(
-    atividade.peso_percentual_projeto || atividade.percentual_previsto || 0
-  );
-
-  const getPercentualAtividade = (atividade) => {
-    const filhos = atividade.children || [];
-    if (!filhos.length) {
-      return Number(atividade.percentual_executado || 0);
-    }
-
-    const percentuaisFilhos = filhos.map(getPercentualAtividade);
-    if (percentuaisFilhos.length && percentuaisFilhos.every((percentual) => percentual >= 100)) {
-      return 100;
-    }
-
-    let somaContribuicao = 0;
-    let somaPeso = 0;
-    let somaSimples = 0;
-
-    filhos.forEach((filho, index) => {
-      const percentual = percentuaisFilhos[index] || 0;
-      const peso = getPesoAtividade(filho);
-      somaSimples += percentual;
-      if (peso > 0) {
-        somaContribuicao += (percentual * peso) / 100;
-        somaPeso += peso;
-      }
-    });
-
-    const percentual = somaPeso > 0
-      ? somaContribuicao
-      : somaSimples / filhos.length;
-
-    return Math.min(Math.round(percentual * 100) / 100, 100);
-  };
-
-  const renderAtividade = (atividade, level = 0) => {
-    const hasChildren = atividade.children && atividade.children.length > 0;
-    const isExpanded = expandedItems.has(atividade.id);
-    const podeAdicionarFilha = true;
-    const tituloAtividade = `${atividade.codigo_eap} ${atividade.nome || atividade.descricao || ''}`.trim();
-    const descricaoExtra = (atividade.descricao && atividade.nome && atividade.descricao !== atividade.nome)
-      ? atividade.descricao
-      : '';
-    const percentualExecutado = getPercentualAtividade(atividade);
-    const percentualVisual = percentualExecutado > 0 ? Math.max(percentualExecutado, 2) : 0;
-    const statusAtividade = getStatusByPercentual(percentualExecutado);
-    const statusTone = getStatusTone(statusAtividade);
-
-    return (
-      <div key={atividade.id}>
-        <div
-          className={`eap-activity-card eap-activity-${statusTone}`}
-          style={{ '--eap-level': level }}
-        >
-          <div className="eap-activity-main">
-            <div className="eap-activity-content">
-              {hasChildren && (
-                <button
-                  type="button"
-                  className="eap-activity-toggle"
-                  onClick={() => toggleExpanded(atividade.id)}
-                  aria-label={isExpanded ? 'Recolher atividade' : 'Expandir atividade'}
-                >
-                  {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                </button>
-              )}
-              {!hasChildren && <span className="eap-activity-spacer" />}
-              
-              <div className="eap-activity-copy">
-                <div className="eap-activity-title-row">
-                  <strong className="eap-activity-title">{tituloAtividade}</strong>
-                  {descricaoExtra && (
-                    <span className="eap-activity-description">
-                      {descricaoExtra}
-                    </span>
-                  )}
-                </div>
-                <div className="eap-activity-meta">
-                  {/* Para atividades mãe, não exibir previsto */}
-                  {!hasChildren && (
-                    <span>Previsto: {atividade.quantidade_total || 0} {atividade.unidade_medida || ''}</span>
-                  )}
-                  <span>Peso: {atividade.peso_percentual_projeto || atividade.percentual_previsto || 0}%</span>
-                  <span>
-                    Planejado: <strong>{formatarDataBr(atividade.data_inicio_planejada)}</strong> até <strong>{formatarDataBr(atividade.data_fim_planejada)}</strong>
-                  </span>
-                  <span>Executado: <strong>{percentualExecutado}%</strong></span>
-                  <span className={`eap-status-chip eap-status-${statusTone}`}>{statusAtividade}</span>
-                </div>
-              </div>
-            </div>
-            
-            <div className="eap-activity-actions">
-              <IconButton
-                variant="ghost"
-                icon={Eye}
-                label="Editar atividade"
-                onClick={() => navigate(`/projeto/${projetoId}/eap/${atividade.id}`)}
-              />
-              {podeAdicionarFilha && (
-                <IconButton
-                  tone="primary"
-                  variant="ghost"
-                  icon={Plus}
-                  label="Adicionar atividade filha"
-                  onClick={() => navigate(`/projeto/${projetoId}/eap/novo?pai=${atividade.id}`)}
-                />
-              )}
-              <IconButton
-                tone="danger"
-                variant="ghost"
-                icon={Trash2}
-                label="Excluir atividade"
-                onClick={() => handleExcluirAtividade(atividade)}
-              />
-            </div>
-          </div>
-          
-          <div className="eap-progress-track" aria-label={`Progresso ${percentualExecutado}%`}>
-            <div
-              className="eap-progress-fill"
-              style={{ width: `${percentualVisual}%` }}
-            />
-          </div>
-          <div className="eap-progress-meta">
-            <span>{percentualExecutado}% executado</span>
-            {hasChildren && <span>{atividade.children.length} subatividade(s)</span>}
-          </div>
-        </div>
-        
-        {hasChildren && isExpanded && (
-          <div className="eap-children">
-            {atividade.children.map(child => renderAtividade(child, level + 1))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const getStatusTone = (status) => {
-    switch (status) {
-      case 'Concluída':
-        return 'done';
-      case 'Em andamento':
-        return 'active';
-      case 'Não iniciada':
-        return 'idle';
-      default:
-        return 'muted';
     }
   };
 
@@ -692,7 +494,7 @@ function EAP({ hideNavbar = false }) {
   if (loading) {
     return (
       <>
-        <Navbar />
+        {!hideNavbar && <Navbar />}
         <div className="container" style={{ textAlign: 'center', padding: '40px' }}>
           <div className="spinner"></div>
         </div>
@@ -700,7 +502,6 @@ function EAP({ hideNavbar = false }) {
     );
   }
 
-  const hierarchy = buildHierarchy(atividades);
   const totalRecalculoPendente = Number(recalculoResumo?.total_atividades_afetadas || 0);
 
   return (
@@ -710,12 +511,12 @@ function EAP({ hideNavbar = false }) {
         <div className="eap-list-header">
           <div className="eap-list-title-wrap">
             {!hideNavbar && (
-              <Button startIcon={ArrowLeft} onClick={() => navigate(`/projeto/${projetoId}/planejamento`)}>Planejamento</Button>
+              <Button startIcon={ArrowLeft} onClick={async () => { if (await editor.cancel()) navigate(`/projeto/${projetoId}/planejamento`); }}>Planejamento</Button>
             )}
-            <h1 className="eap-list-title">EAP do Projeto</h1>
+            <div><h1 className="eap-list-title">EAP do Projeto</h1><p style={{ fontSize: 12, color: 'var(--eap-muted)', marginTop: 7 }}>Organize as atividades e acompanhe o avanço da obra.</p></div>
           </div>
           <div className="eap-toolbar" aria-label="Acoes da EAP">
-            <Button tone="primary" variant="solid" startIcon={Plus} onClick={() => navigate(`/projeto/${projetoId}/eap/novo`)}>Nova Atividade</Button>
+            <Button tone="primary" variant="solid" startIcon={Plus} disabled={editor.saving || Boolean(loadError)} onClick={async () => { if (await editor.cancel()) editor.begin(); }}>Nova atividade</Button>
             <div className="eap-actions-menu">
               <Button
                 variant="ghost"
@@ -743,7 +544,8 @@ function EAP({ hideNavbar = false }) {
                     <button
                       className="eap-actions-item"
                       role="menuitem"
-                      onClick={() => {
+                      onClick={async () => {
+                        if (!await editor.cancel()) return;
                         setEapActionsOpen(false);
                         setImportModalOpen(true);
                       }}
@@ -753,7 +555,7 @@ function EAP({ hideNavbar = false }) {
                     </button>
                   )}
                   {isGestor && (
-                    <button className="eap-actions-item" role="menuitem" onClick={handleRecalcularEap}>
+                    <button className="eap-actions-item" role="menuitem" onClick={async () => { if (await editor.cancel()) handleRecalcularEap(); }}>
                       <Activity size={15} />
                       <span>Recalcular EAP</span>
                     </button>
@@ -774,19 +576,8 @@ function EAP({ hideNavbar = false }) {
           </div>
         )}
 
-        {hierarchy.length === 0 ? (
-          <div className="card text-center" style={{ padding: '60px' }}>
-            <Activity size={48} style={{ color: 'var(--gray-400)', marginBottom: '16px' }} />
-            <h3 style={{ color: 'var(--gray-500)' }}>Nenhuma atividade encontrada</h3>
-            <p style={{ color: 'var(--gray-400)', marginTop: '8px' }}>
-              Crie a primeira atividade para este projeto.
-            </p>
-          </div>
-        ) : (
-          <div>
-            {hierarchy.map(atividade => renderAtividade(atividade))}
-          </div>
-        )}
+        {loadError && <div className="alert alert-error" role="alert">{loadError} <Button onClick={() => carregarAtividades(true)}>Recarregar EAP</Button></div>}
+        <EapTable key={projetoId} activities={atividades} editor={editor} onDelete={handleExcluirAtividade} readOnly={Boolean(loadError)} />
       </div>
       {renderImportModal()}
       {renderRecalculoModal()}

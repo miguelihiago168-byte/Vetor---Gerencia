@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Check, Trash2, X } from 'lucide-react';
 import Button from '../components/ui/Button';
 
@@ -7,11 +7,37 @@ const DialogContext = createContext(null);
 export function DialogProvider({ children }) {
   const [dialog, setDialog] = useState(null);
   const [inputValue, setInputValue] = useState('');
+  const dialogRef = useRef(null);
+  const titleId = useId();
+
+  useEffect(() => {
+    if (!dialog) return undefined;
+    const previous = document.activeElement;
+    dialogRef.current?.querySelector('input, button')?.focus();
+    return () => {
+      requestAnimationFrame(() => {
+        if (!document.querySelector('.modal-overlay') && previous?.isConnected && !previous.disabled) previous.focus();
+      });
+    };
+  }, [dialog]);
 
   const closeWith = (value) => {
     if (dialog?.resolve) dialog.resolve(value);
     setDialog(null);
     setInputValue('');
+  };
+
+  const handleKeyDown = (event) => {
+    event.stopPropagation();
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeWith(dialog.type === 'confirm' ? false : dialog.type === 'prompt' ? null : undefined);
+    }
+    if (event.key !== 'Tab') return;
+    const elements = [...dialogRef.current.querySelectorAll('button:not(:disabled), input:not(:disabled)')];
+    const first = elements[0], last = elements.at(-1);
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+    if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
   };
 
   const showAlert = ({ title = 'Aviso', message = '', confirmText = 'OK' } = {}) => (
@@ -72,12 +98,12 @@ export function DialogProvider({ children }) {
     <DialogContext.Provider value={value}>
       {children}
       {dialog && (
-        <div className="modal-overlay fade-in" role="dialog" aria-modal="true" onClick={() => {
+        <div className="modal-overlay fade-in" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} onKeyDown={handleKeyDown} onClick={() => {
           if (dialog.type === 'alert') closeWith(undefined);
           else closeWith(dialog.type === 'confirm' ? false : null);
         }}>
           <div className="modal-card" style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ marginTop: 0, marginBottom: 10 }}>{dialog.title}</h3>
+            <h3 id={titleId} style={{ marginTop: 0, marginBottom: 10 }}>{dialog.title}</h3>
             {dialog.message ? <p style={{ marginTop: 0, color: 'var(--gray-600)', whiteSpace: 'pre-line' }}>{dialog.message}</p> : null}
 
             {dialog.type === 'prompt' && (
@@ -88,8 +114,7 @@ export function DialogProvider({ children }) {
                 placeholder={dialog.placeholder || ''}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') closeWith(inputValue);
-                  if (e.key === 'Escape') closeWith(null);
+                  if (e.key === 'Enter') { e.preventDefault(); closeWith(inputValue); }
                 }}
               />
             )}

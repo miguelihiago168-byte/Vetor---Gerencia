@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import { useLeaveGuard } from '../context/LeaveGuardContext';
+import { useDialog } from '../context/DialogContext';
 import EAP from './EAP';
 import CurvaS from './CurvaS';
 import CronogramaGantt from './CronogramaGantt';
@@ -11,6 +13,9 @@ function PlanejamentoDashboard() {
   const { projetoId } = useParams();
   const navigate = useNavigate();
   const [abaAtiva, setAbaAtiva] = useState('eap');
+  const { isDirty } = useLeaveGuard();
+  const { confirm } = useDialog();
+  const canLeave = async () => !isDirty || confirm({ title: 'Descartar alterações?', message: 'Há alterações não salvas. Deseja sair desta tela?', confirmText: 'Descartar', cancelText: 'Continuar editando' });
 
   const abas = [
     { 
@@ -66,7 +71,7 @@ function PlanejamentoDashboard() {
                 <button
                   key={aba.id}
                   className={`planejamento-aba ${isActive ? 'active' : ''}`}
-                  onClick={() => setAbaAtiva(aba.id)}
+                  onClick={async () => { if (aba.id !== abaAtiva && await canLeave()) setAbaAtiva(aba.id); }}
                 >
                   <div className="planejamento-aba-icon">
                     <Icon size={20} />
@@ -84,7 +89,8 @@ function PlanejamentoDashboard() {
           <div className="planejamento-footer">
             <button
               className="planejamento-btn-open"
-              onClick={() => {
+              onClick={async () => {
+                if (!await canLeave()) return;
                 const abaId = abas.find(a => a.id === abaAtiva)?.id;
                 if (abaId === 'eap') navigate(`/projeto/${projetoId}/eap`);
                 if (abaId === 'curva-s') navigate(`/projeto/${projetoId}/curva-s`);
