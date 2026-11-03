@@ -529,7 +529,7 @@ const recalcularEapAtividades = async (atividadeIds, options = {}) => {
           usuarioId: options.usuarioId
         });
       }
-      await recalcularPercentualPai(atividadeId);
+      await recalcularPercentualPai(atividadeId, options);
     } catch (err) {
       console.warn('Erro ao recalcular EAP para atividade', atividadeId, err);
     }
@@ -537,12 +537,14 @@ const recalcularEapAtividades = async (atividadeIds, options = {}) => {
 };
 
 // Recalcula percentual da atividade pai por contribuição de peso dos filhos (recursiva)
-const recalcularPercentualPai = async (atividadeId) => {
+const recalcularPercentualPai = async (atividadeId, options = {}) => {
   try {
     const paiRow = await getQuery('SELECT pai_id FROM atividades_eap WHERE id = ?', [atividadeId]);
     if (!paiRow || !paiRow.pai_id) return;
 
     const paiId = paiRow.pai_id;
+    const pai = await getQuery('SELECT percentual_executado FROM atividades_eap WHERE id = ?', [paiId]);
+    if (!pai) return;
 
     // Buscar filhos
     const filhos = await allQuery(`
@@ -581,8 +583,20 @@ const recalcularPercentualPai = async (atividadeId) => {
       [novoPerc, getEapStatusByPercentual(novoPerc), paiId]
     );
 
+    if (Math.abs(Number(pai.percentual_executado || 0) - novoPerc) > 0.0001) {
+      try {
+        await recordActivityEvent({ atividadeId: paiId, rdoId: options.rdoId,
+          origem: options.origem || ORIGINS.RECALCULO_MANUAL,
+          percentualAnterior: pai.percentual_executado, percentualNovo: novoPerc,
+          usuarioId: options.usuarioId,
+          mensagem: 'Avanço da atividade calculado a partir das atividades filhas.' });
+      } catch (error) {
+        console.warn('Falha ao registrar avanço da atividade pai:', error?.message || error);
+      }
+    }
+
     // Recurse up
-    await recalcularPercentualPai(paiId);
+    await recalcularPercentualPai(paiId, options);
   } catch (err) {
     console.warn('Erro ao recalcular percentual do pai:', err);
   }

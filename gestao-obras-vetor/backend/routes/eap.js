@@ -9,8 +9,10 @@ const { registrarAuditoria } = require('../middleware/auditoria');
 const ganttService = require('../services/ganttService');
 const { ensureSchemaReady } = require('../utils/schemaGuard');
 const { normalizeMeasurementValue, getProjectMeasurements, isMeasurementOnlyUpdate } = require('../services/eapMeasurementService');
+const { mergeActivityHistory, reconstructGroupHistory } = require('../services/eapHistoryService');
 const {
   ORIGINS,
+  recordActivityEvent,
   markRdosAffectedByEapEdit,
   getActivityHistory
 } = require('../services/eapActivityEventService');
@@ -1295,12 +1297,14 @@ const atualizarStatusAtividade = async (atividadeId) => {
 };
 
 // Recalcular percentual do pai com base nos filhos (contribuição por peso percentual)
-const recalcularPercentualPaiLocal = async (atividadeId) => {
+const recalcularPercentualPaiLocal = async (atividadeId, usuarioId) => {
   try {
     const paiRow = await getQuery('SELECT pai_id FROM atividades_eap WHERE id = ?', [atividadeId]);
     if (!paiRow || !paiRow.pai_id) return;
 
     const paiId = paiRow.pai_id;
+    const pai = await getQuery('SELECT percentual_executado FROM atividades_eap WHERE id = ?', [paiId]);
+    if (!pai) return;
 
     // Buscar filhos do pai
     const filhos = await allQuery(`
@@ -1338,8 +1342,18 @@ const recalcularPercentualPaiLocal = async (atividadeId) => {
       [novoPerc, getEapStatusByPercentual(novoPerc), paiId]
     );
 
+    if (Math.abs(Number(pai.percentual_executado || 0) - novoPerc) > 0.0001) {
+      try {
+        await recordActivityEvent({ atividadeId: paiId, origem: ORIGINS.RECALCULO_MANUAL,
+          percentualAnterior: pai.percentual_executado, percentualNovo: novoPerc, usuarioId,
+          mensagem: 'Avanço da atividade calculado a partir das atividades filhas.' });
+      } catch (error) {
+        console.warn('Falha ao registrar avanço da atividade pai:', error?.message || error);
+      }
+    }
+
     // Recalcular ancestral recursivamente
-    await recalcularPercentualPaiLocal(paiId);
+    await recalcularPercentualPaiLocal(paiId, usuarioId);
   } catch (err) {
     console.warn('Erro ao recalcular percentual do pai (local):', err);
   }
@@ -1474,6 +1488,11 @@ router.post('/:id/recalcular', auth, async (req, res) => {
 
     await registrarAuditoria('atividades_eap', id, 'RECALCULAR', null, { percentual_executado: percentualExecutado }, req.usuario.id);
     const mudouPercentual = Math.abs(Number(atividadeAtual?.percentual_executado || 0) - Number(percentualExecutado || 0)) > 0.0001;
+    if (mudouPercentual) {
+      await recordActivityEvent({ atividadeId: id, origem: ORIGINS.RECALCULO_MANUAL,
+        percentualAnterior: atividadeAtual.percentual_executado, percentualNovo: percentualExecutado,
+        usuarioId: req.usuario.id, mensagem: 'Avanço da atividade recalculado.' });
+    }
     const correctionResult = mudouPercentual
       ? await markRdosAffectedByEapEdit({
           atividadeIds: [id],
@@ -1502,10 +1521,12 @@ router.get('/:id/historico', auth, async (req, res) => {
 
     const eventos = await getActivityHistory(id);
     const historicoLegado = await allQuery(`
-      SELECT h.*, u.nome as usuario_nome, r.data_relatorio
+      SELECT h.*, u.nome as usuario_nome, r.data_relatorio,
+             ae.codigo_eap, ae.nome, ae.descricao
       FROM historico_atividades h
-      INNER JOIN usuarios u ON h.usuario_id = u.id
-      INNER JOIN rdos r ON h.rdo_id = r.id
+      LEFT JOIN usuarios u ON h.usuario_id = u.id
+      LEFT JOIN rdos r ON h.rdo_id = r.id
+      INNER JOIN atividades_eap ae ON ae.id = h.atividade_eap_id
       WHERE h.atividade_eap_id = ?
       ORDER BY h.data_execucao DESC
     `, [id]);
@@ -1532,7 +1553,46 @@ router.get('/:id/historico', auth, async (req, res) => {
       rdo_label: row.numero_rdo ? `RDO-${String(row.numero_rdo).padStart(3, '0')}` : (row.rdo_id ? `RDO-${String(row.rdo_id).padStart(3, '0')}` : null)
     }));
 
-    res.json([...eventosNormalizados, ...legadoNormalizado].sort((a, b) => {
+    // RDOs antigos (ou gravados quando a auditoria falhou) ainda guardam a
+    // execução na própria atividade do relatório.
+    const execucoes = await allQuery(`
+      SELECT ra.id, ra.atividade_eap_id, ra.rdo_id, ra.percentual_executado, ra.quantidade_executada,
+             ra.observacao, ra.criado_em, r.numero_rdo, r.data_relatorio,
+             r.status, u.nome AS usuario_nome, ae.codigo_eap, ae.nome, ae.descricao
+      FROM rdo_atividades ra
+      INNER JOIN rdos r ON r.id = ra.rdo_id
+      INNER JOIN atividades_eap ae ON ae.id = ra.atividade_eap_id
+      LEFT JOIN usuarios u ON u.id = r.criado_por
+      WHERE ra.atividade_eap_id = ?
+    `, [id]);
+    const arvore = await allQuery(`
+      WITH RECURSIVE arvore AS (
+        SELECT id, pai_id, projeto_id, tenant_id, quantidade_total, peso_percentual_projeto, percentual_previsto
+        FROM atividades_eap WHERE id = ?
+        UNION
+        SELECT filha.id, filha.pai_id, filha.projeto_id, filha.tenant_id, filha.quantidade_total,
+               filha.peso_percentual_projeto, filha.percentual_previsto
+        FROM atividades_eap filha JOIN arvore pai ON filha.pai_id = pai.id
+          AND filha.projeto_id = pai.projeto_id AND filha.tenant_id = pai.tenant_id
+      ) SELECT * FROM arvore
+    `, [id]);
+    let estimativas = [];
+    if (arvore.length > 1) {
+      const parentIds = new Set(arvore.map((row) => String(row.pai_id)));
+      const folhas = arvore.filter((row) => !parentIds.has(String(row.id))).map((row) => row.id);
+      if (folhas.length) {
+        const aprovados = await allQuery(`
+          SELECT ra.atividade_eap_id, ra.percentual_executado, ra.quantidade_executada,
+                 r.id AS rdo_id, r.numero_rdo, r.aprovado_em
+          FROM rdo_atividades ra JOIN rdos r ON r.id = ra.rdo_id
+          WHERE ra.atividade_eap_id IN (${folhas.map(() => '?').join(',')}) AND r.status = 'Aprovado'
+        `, folhas);
+        const cutoff = [...eventosNormalizados, ...legadoNormalizado]
+          .map((row) => row.criado_em).filter(Boolean).sort((a, b) => new Date(a) - new Date(b))[0];
+        estimativas = reconstructGroupHistory(id, arvore, aprovados, cutoff);
+      }
+    }
+    res.json([...mergeActivityHistory(eventosNormalizados, legadoNormalizado, execucoes), ...estimativas].sort((a, b) => {
       const da = new Date(a.criado_em || a.data_execucao || 0).getTime();
       const db = new Date(b.criado_em || b.data_execucao || 0).getTime();
       return db - da;
@@ -1586,6 +1646,7 @@ router.post('/projeto/:projetoId/recalcular-tudo', [auth, isGestor], async (req,
     const atividades = await allQuery('SELECT id, quantidade_total, percentual_executado FROM atividades_eap WHERE projeto_id = ?', [projetoId]);
     const atividadesImpactadas = [];
     for (const a of atividades) {
+      const atividadeAtual = await getQuery('SELECT percentual_executado FROM atividades_eap WHERE id = ?', [a.id]);
       const quantidadeTotal = a.quantidade_total || 0;
       let novoPerc = 0;
       if (quantidadeTotal && quantidadeTotal > 0) {
@@ -1615,8 +1676,14 @@ router.post('/projeto/:projetoId/recalcular-tudo', [auth, isGestor], async (req,
         [novoPerc, getEapStatusByPercentual(novoPerc), a.id]
       );
 
+      if (Math.abs(Number(atividadeAtual?.percentual_executado || 0) - novoPerc) > 0.0001) {
+        await recordActivityEvent({ atividadeId: a.id, origem: ORIGINS.RECALCULO_MANUAL,
+          percentualAnterior: atividadeAtual?.percentual_executado, percentualNovo: novoPerc,
+          usuarioId: req.usuario.id, mensagem: 'Avanço da atividade recalculado.' });
+      }
+
       // Após atualizar folha/filha, propagar cálculo para os pais
-      await recalcularPercentualPaiLocal(a.id);
+      await recalcularPercentualPaiLocal(a.id, req.usuario.id);
     }
 
     await registrarAuditoria('atividades_eap', null, 'RECALCULAR_TODAS', { projeto_id: projetoId }, null, req.usuario.id);

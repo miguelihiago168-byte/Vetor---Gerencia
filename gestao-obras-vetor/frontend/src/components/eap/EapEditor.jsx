@@ -70,7 +70,7 @@ export function EditorActions({ editor, onCancel, allowAnother = true }) {
   </div>;
 }
 
-const historyOrigin = (origin) => ({ rdo_criado: 'RDO criado', rdo_editado: 'RDO editado', rdo_aprovado: 'RDO aprovado', rdo_revertido: 'RDO revertido', eap_editada: 'Atividade EAP editada', recalculo_manual: 'Recálculo manual', historico_legado: 'Histórico legado' }[origin] || origin || 'Ajuste');
+const historyOrigin = (origin) => ({ rdo_criado: 'RDO criado', rdo_editado: 'RDO editado', rdo_aprovado: 'RDO aprovado', rdo_revertido: 'RDO revertido', eap_editada: 'Atividade EAP editada', recalculo_manual: 'Recálculo manual', historico_legado: 'Histórico legado', execucao_rdo: 'Execução no RDO', estimativa_rdo: 'Evolução estimada' }[origin] || origin || 'Ajuste');
 const historyDate = (value) => {
   if (!value) return '—';
   let text = String(value).trim();
@@ -79,7 +79,7 @@ const historyDate = (value) => {
   return Number.isNaN(date.getTime()) ? text : date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 };
 
-export function EapHistory({ activityId }) {
+export function EapHistory({ activityId, currentProgress }) {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -94,15 +94,18 @@ export function EapHistory({ activityId }) {
   }, [activityId, retry]);
   if (loading) return <p role="status" className="eap-editor-note">Carregando histórico…</p>;
   if (error) return <div className="eap-editor-error" role="alert">{error} <Button size="sm" onClick={() => setRetry((value) => value + 1)}>Tentar novamente</Button></div>;
-  if (!events.length) return <p className="eap-editor-note">Nenhum evento registrado para esta atividade.</p>;
+  if (!events.length) return <div className="eap-editor-note">
+    {Number(currentProgress) > 0 && <p>Andamento atual: <strong>{formatNumber(currentProgress)}%</strong>.</p>}
+    <p>Nenhuma alteração anterior foi registrada para esta atividade. O andamento atual não permite recuperar os percentuais anteriores.</p>
+  </div>;
   return <ol className="eap-event-list">{events.map((event, index) => <li key={`${event.fonte}-${event.id}-${index}`}>
     <div className="eap-event-heading"><strong>{historyOrigin(event.origem)}</strong><time>{historyDate(event.criado_em || event.data_execucao)}</time></div>
     <p>{event.mensagem || 'Alteração registrada na atividade.'}</p>
     <div className="eap-event-meta">
       {(event.rdo_label || event.rdo_id) && <span>{event.rdo_label || `RDO-${String(event.rdo_id).padStart(3, '0')}`}</span>}
       {event.usuario_nome && <span>{event.usuario_nome}</span>}
-      {(event.percentual_anterior != null || event.percentual_novo != null) && <span>{formatNumber(event.percentual_anterior)}% → {formatNumber(event.percentual_novo)}%</span>}
-      {(event.quantidade_anterior != null || event.quantidade_nova != null) && <span>Qtd. {formatNumber(event.quantidade_anterior)} → {formatNumber(event.quantidade_nova)}</span>}
+      {(event.percentual_anterior != null || event.percentual_novo != null) && <span>{event.percentual_anterior != null ? `${formatNumber(event.percentual_anterior)}%` : 'Anterior indisponível'} → {event.percentual_novo != null ? `${formatNumber(event.percentual_novo)}%` : 'novo percentual indisponível'}</span>}
+      {(event.quantidade_anterior != null || event.quantidade_nova != null) && <span>Qtd. {event.quantidade_anterior != null ? `${formatNumber(event.quantidade_anterior)} → ` : ''}{formatNumber(event.quantidade_nova)}</span>}
     </div>
   </li>)}</ol>;
 }
@@ -121,7 +124,7 @@ export function EapEditorContent({ editor, activities, tab, setTab }) {
       <button type="button" id={`${id}-data-tab`} role="tab" tabIndex={tab === 'data' ? 0 : -1} aria-selected={tab === 'data'} aria-controls={`${id}-data`} onClick={() => setTab('data')}><Layers3 size={16} /> Dados</button>
       <button type="button" id={`${id}-history-tab`} role="tab" tabIndex={tab === 'history' ? 0 : -1} aria-selected={tab === 'history'} aria-controls={`${id}-history`} onClick={() => setTab('history')}><History size={16} /> Histórico</button>
     </div>}
-    {tab === 'history' && editor.session.original ? <div id={`${id}-history`} role="tabpanel" aria-labelledby={`${id}-history-tab`} tabIndex={0}><EapHistory activityId={editor.session.original.id} /></div> : <div id={`${id}-data`} role={editor.session.original ? 'tabpanel' : undefined} aria-labelledby={editor.session.original ? `${id}-data-tab` : undefined}>
+    {tab === 'history' && editor.session.original ? <div id={`${id}-history`} role="tabpanel" aria-labelledby={`${id}-history-tab`} tabIndex={0}><EapHistory activityId={editor.session.original.id} currentProgress={editor.session.original.percentual_executado} /></div> : <div id={`${id}-data`} role={editor.session.original ? 'tabpanel' : undefined} aria-labelledby={editor.session.original ? `${id}-data-tab` : undefined}>
       {editor.error && <div className="eap-editor-error" role="alert">{editor.error}</div>}
       <p className="eap-editor-note">{editor.draft.pai_id ? 'Atividade filha' : 'Atividade raiz'} · Campos com * são obrigatórios.</p>
       <section className="eap-editor-section"><h3>Identificação e estrutura</h3>
