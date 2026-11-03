@@ -1,4 +1,5 @@
 const { allQuery, getQuery, runQuery } = require('../config/database');
+const { ensureSchemaReady } = require('../utils/schemaGuard');
 
 const EVENT_TYPES = {
   AVANCO: 'avanco',
@@ -30,82 +31,15 @@ const ORIGIN_LABELS = {
   [ORIGINS.RECALCULO_MANUAL]: 'Recálculo manual'
 };
 
-const hasTable = async (tableName) => {
-  const row = await getQuery(
-    `SELECT table_name FROM information_schema.tables
-     WHERE table_type = 'BASE TABLE' AND table_name = ?`,
-    [tableName]
-  );
-  return Boolean(row);
-};
-
-const tableColumns = async (tableName) => {
-  const rows = await allQuery(
-    `SELECT column_name AS name FROM information_schema.columns WHERE table_name = ?`,
-    [tableName]
-  );
-  return new Set((rows || []).map((row) => String(row.name)));
-};
-
-const addColumnIfMissing = async (tableName, columnSql) => {
-  if (!(await hasTable(tableName))) return;
-  const columnName = String(columnSql).trim().split(/\s+/)[0];
-  const columns = await tableColumns(tableName);
-  if (!columns.has(columnName)) {
-    await runQuery(`ALTER TABLE "${String(tableName).replace(/"/g, '""')}" ADD COLUMN IF NOT EXISTS ${columnSql}`);
-  }
-};
-
+// O esquema é mantido pelas migrations; a aplicação não executa DDL em requisições.
 const ensureEapActivityEventSchema = async () => {
-  await runQuery(`
-    CREATE TABLE IF NOT EXISTS atividade_eap_eventos (
-      id SERIAL PRIMARY KEY,
-      atividade_eap_id INTEGER NOT NULL,
-      rdo_id INTEGER,
-      tipo TEXT NOT NULL,
-      origem TEXT NOT NULL,
-      percentual_anterior REAL,
-      percentual_novo REAL,
-      quantidade_anterior REAL,
-      quantidade_nova REAL,
-      mensagem TEXT,
-      usuario_id INTEGER,
-      criado_em TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
-
-  await runQuery(`
-    CREATE TABLE IF NOT EXISTS rdo_alertas_atividade (
-      id SERIAL PRIMARY KEY,
-      rdo_id INTEGER NOT NULL,
-      atividade_eap_id INTEGER,
-      tipo TEXT NOT NULL,
-      mensagem TEXT NOT NULL,
-      ativo INTEGER DEFAULT 1,
-      criado_por INTEGER,
-      criado_em TIMESTAMPTZ DEFAULT NOW(),
-      resolvido_em TIMESTAMPTZ
-    )
-  `);
-
-  await addColumnIfMissing('atividade_eap_eventos', 'percentual_anterior REAL');
-  await addColumnIfMissing('atividade_eap_eventos', 'percentual_novo REAL');
-  await addColumnIfMissing('atividade_eap_eventos', 'quantidade_anterior REAL');
-  await addColumnIfMissing('atividade_eap_eventos', 'quantidade_nova REAL');
-  await addColumnIfMissing('atividade_eap_eventos', 'mensagem TEXT');
-  await addColumnIfMissing('atividade_eap_eventos', 'usuario_id INTEGER');
-  await addColumnIfMissing('rdo_alertas_atividade', 'ativo INTEGER DEFAULT 1');
-  await addColumnIfMissing('rdo_alertas_atividade', 'resolvido_em DATETIME');
-
-  await runQuery('CREATE INDEX IF NOT EXISTS idx_atividade_eap_eventos_atividade ON atividade_eap_eventos(atividade_eap_id, criado_em)');
-  await runQuery('CREATE INDEX IF NOT EXISTS idx_atividade_eap_eventos_rdo ON atividade_eap_eventos(rdo_id)');
-  await runQuery('CREATE INDEX IF NOT EXISTS idx_rdo_alertas_atividade_rdo ON rdo_alertas_atividade(rdo_id, ativo)');
-
-  await runQuery(`
-    UPDATE rdo_alertas_atividade
-    SET ativo = 0, resolvido_em = COALESCE(resolvido_em, CURRENT_TIMESTAMP)
-    WHERE ativo = 1
-  `);
+  await ensureSchemaReady({ getQuery, allQuery }, {
+    tables: ['atividade_eap_eventos', 'rdo_alertas_atividade'],
+    columns: {
+      atividade_eap_eventos: ['atividade_eap_id', 'rdo_id', 'tipo', 'origem', 'percentual_anterior', 'percentual_novo', 'quantidade_anterior', 'quantidade_nova', 'mensagem', 'usuario_id', 'criado_em'],
+      rdo_alertas_atividade: ['rdo_id', 'ativo', 'resolvido_em']
+    }
+  }, '000001_initial_schema');
 };
 
 const normalizeNumber = (value) => {
