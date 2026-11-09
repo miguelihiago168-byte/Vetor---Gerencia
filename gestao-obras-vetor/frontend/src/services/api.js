@@ -461,6 +461,15 @@ export const updateModeloFolha = (id, data) => api.patch(`/folhas-verificacao/mo
 
 export const getRdoLogs = (rdoId) => api.get(`/rdos/${rdoId}/logs`);
 // Rastreabilidade de materiais
+export const getRirs = (projetoId) => api.get(`/rir/projeto/${projetoId}`);
+export const getRirEntradas = (projetoId) => api.get(`/rir/projeto/${projetoId}/entradas`);
+export const getRir = (id) => api.get(`/rir/${id}`);
+export const createRir = (data) => api.post('/rir', data);
+export const updateRir = (id, data) => api.put(`/rir/${id}`, data);
+export const uploadRirAnexo = (id, data) => api.post(`/rir/${id}/anexos`, data, { headers: { 'Content-Type': 'multipart/form-data' } });
+export const deleteRirAnexo = (id, anexoId) => api.delete(`/rir/${id}/anexos/${anexoId}`);
+export const getRirPdf = (id) => api.get(`/rir/${id}/pdf`, { responseType: 'blob' });
+export const getRirAnexo = (id, anexoId) => api.get(`/rir/${id}/anexos/${anexoId}`, { responseType: 'blob' });
 export const getMaterialTraceConfig = () => api.get('/rastreabilidade/configuracao');
 export const getMaterialTraceIndicators = (projetoId) => api.get(`/rastreabilidade/indicadores/${projetoId}`);
 export const getMaterialRecebimentos = (projetoId, params) => api.get(`/rastreabilidade/projeto/${projetoId}`, { params });

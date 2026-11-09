@@ -47,7 +47,7 @@ import FolhaVerificacaoForm from './pages/FolhaVerificacaoForm';
 import FolhaVerificacaoDetalhe from './pages/FolhaVerificacaoDetalhe';
 import FolhasVerificacaoCivil from './pages/FolhasVerificacaoCivil';
 import ModelosFolha from './pages/ModelosFolha';
-import RastreabilidadeMateriais from './pages/RastreabilidadeMateriais';
+import RastreabilidadeMateriais from './pages/RirMateriais';
 import RastreabilidadeForm from './pages/RastreabilidadeForm';
 import RastreabilidadeDetalhe from './pages/RastreabilidadeDetalhe';
 import RastreabilidadeSaidas from './pages/RastreabilidadeSaidas';

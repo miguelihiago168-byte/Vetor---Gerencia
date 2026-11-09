@@ -23,6 +23,7 @@
     "test:rdo-workflow": "node tests/rdoWorkflowService.test.js",
     "test:estoque": "node tests/estoqueModule.test.js",
     "test:estoque-rastreabilidade": "node tests/estoqueRastreabilidadeUnificada.test.js",
+    "test:rir": "node tests/rirIntegration.test.js",
     "test:rls": "node tests/rlsArchitecture.test.js",
     "test:service-auth": "node tests/serviceAccountAuth.test.js && node tests/oauthRoute.test.js && node tests/serviceSessionRoute.test.js",
     "test:contact": "node tests/contactRoute.test.js",

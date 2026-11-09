@@ -54,6 +54,7 @@ const oauthRoutes = require('./routes/oauth');
 const serviceAuthRoutes = require('./routes/service_auth');
 const transferenciasRoutes = require('./routes/transferencias');
 const estoqueRoutes = require('./routes/estoque');
+const rirRoutes = require('./routes/rir');
 const contatoRoutes = require('./routes/contato');
 const folhasVerificacaoRoutes = require('./routes/folhas_verificacao');
 // Startup nao executa migrations automaticas. Use npm run migrate/status antes de subir a aplicacao.
@@ -79,6 +80,7 @@ app.use('/api/requisicoes', requisicoesRoutes);
 app.use('/api/fornecedores', fornecedoresRoutes);
 app.use('/api/transferencias', transferenciasRoutes);
 app.use('/api/estoque', estoqueRoutes);
+app.use('/api/rir', rirRoutes);
 // FINANCEIRO DESATIVADO
 // app.use('/api/financeiro', financeiroRoutes);
 app.use('/api/notificacoes', notificacoesRoutes);

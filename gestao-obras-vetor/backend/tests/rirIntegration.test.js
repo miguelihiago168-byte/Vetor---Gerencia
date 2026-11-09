@@ -1,0 +1,73 @@
+// Uses temporary PostgreSQL tables and rolls back all database changes.
+const assert = require('node:assert/strict');
+const path = require('node:path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+if (process.env.DB_HOST && !['localhost', '127.0.0.1', '::1'].includes(process.env.DB_HOST)) throw new Error('Este teste requer PostgreSQL local.');
+const db = require('../config/database');
+const migration = require('../scripts/migrations/000027_rir');
+const freeItemsMigration = require('../scripts/migrations/000028_rir_itens_livres');
+const mock = (name, exports) => { const id = require.resolve(name); require.cache[id] = { id, filename: id, loaded: true, exports }; };
+
+(async () => {
+  const client = await db.pool.connect(); let server;
+  try {
+    await client.query('BEGIN');
+    await client.query(`
+      CREATE TEMP TABLE tenants (id BIGINT PRIMARY KEY);
+      CREATE TEMP TABLE usuarios (id BIGINT PRIMARY KEY);
+      CREATE TEMP TABLE projetos (id BIGINT PRIMARY KEY, tenant_id BIGINT, nome TEXT);
+      CREATE TEMP TABLE projeto_usuarios (id BIGSERIAL PRIMARY KEY, projeto_id BIGINT, usuario_id BIGINT);
+      CREATE TEMP TABLE estoque_insumos (id BIGINT PRIMARY KEY, nome TEXT, unidade TEXT);
+      CREATE TEMP TABLE material_recebimentos (id BIGINT PRIMARY KEY, tenant_id BIGINT, projeto_id BIGINT, quantidade_recebida NUMERIC);
+      CREATE TEMP TABLE estoque_lotes (id BIGINT PRIMARY KEY, tenant_id BIGINT, insumo_id BIGINT, material_recebimento_id BIGINT, lote TEXT, nota_fiscal TEXT, fornecedor_nome TEXT, status_qualidade TEXT);
+      CREATE TEMP TABLE estoque_movimentacoes (id BIGSERIAL PRIMARY KEY, tenant_id BIGINT, lote_id BIGINT, projeto_destino_id BIGINT, tipo TEXT, quantidade NUMERIC);
+      INSERT INTO tenants VALUES (1),(2); INSERT INTO usuarios VALUES (1),(2);
+      INSERT INTO projetos VALUES (10,1,'Obra A'),(20,2,'Obra B');
+      INSERT INTO projeto_usuarios (projeto_id,usuario_id) VALUES (10,1);
+      INSERT INTO estoque_insumos VALUES (1,'Cabo','m'),(2,'Duto','un');
+      INSERT INTO material_recebimentos VALUES (50,1,10,100);
+      INSERT INTO estoque_lotes VALUES (11,1,1,NULL,'L1','NF1','Fornecedor','APROVADO'),(12,1,2,NULL,'L2','NF1','Fornecedor','REPROVADO'),(13,1,1,50,'Antigo','NF2','Fornecedor','NAO_APLICAVEL'),(21,2,1,NULL,'Outro','NF3','Outro','APROVADO');
+      INSERT INTO estoque_movimentacoes (tenant_id,lote_id,projeto_destino_id,tipo,quantidade) VALUES (1,11,10,'ENTRADA_COMPRA',40),(1,12,10,'ENTRADA_COMPRA',5),(1,13,10,'MIGRACAO_HISTORICO',2),(2,21,20,'ENTRADA_COMPRA',9);
+    `);
+    await migration.up({ run: sql => client.query(sql.replace('CREATE TABLE IF NOT EXISTS', 'CREATE TEMP TABLE IF NOT EXISTS')) });
+    await client.query("INSERT INTO rir_relatorios (tenant_id,projeto_id,dados,criado_por) VALUES (1,10,'{}',1)");
+    await client.query("INSERT INTO rir_itens (tenant_id,rir_id,lote_id,codigo,quantidade_prevista,quantidade_recebida,resultado,observacoes) VALUES (1,1,11,'ANTIGO',50,40,'Parcial','Nota antiga')");
+    await freeItemsMigration.up({ run: sql => client.query(sql) });
+    const query = async (sql, args = []) => client.query(db.translateQuery(sql), args);
+    const get = async (sql, args) => (await query(sql, args)).rows[0] || null;
+    const all = async (sql, args) => (await query(sql, args)).rows;
+    const exec = async (sql, args) => { const result = await query(/^\s*INSERT/i.test(sql) ? `${sql} RETURNING id` : sql, args); return { lastID: result.rows[0]?.id, changes: result.rowCount }; };
+    const withClient = async fn => { await client.query('SAVEPOINT route_test'); try { const value = await fn(client); await client.query('RELEASE SAVEPOINT route_test'); return value; } catch (e) { await client.query('ROLLBACK TO SAVEPOINT route_test'); throw e; } };
+    mock('../config/database', { getQuery: get, allQuery: all, runQuery: exec, withClient, getWithClient: (_c, s, p) => get(s,p), execWithClient: (_c, s, p) => exec(s,p) });
+    mock('../middleware/auth', { auth: (req, _res, next) => { req.tenantId = Number(req.headers['x-tenant'] || 1); req.usuario = { id: Number(req.headers['x-user'] || 1), perfil: req.headers['x-role'] || 'ADM' }; next(); } });
+    const express = require('express'); const app = express(); app.use(express.json()); app.use('/rir', require('../routes/rir'));
+    server = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
+    const base = `http://127.0.0.1:${server.address().port}/rir`;
+    const call = async (route, options = {}) => { const response = await fetch(base + route, options); return { response, data: response.headers.get('content-type')?.includes('application/json') ? await response.json() : await response.arrayBuffer() }; };
+    const send = (body, headers = {}) => ({ method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) });
+    let result = await call('/1'); assert.equal(result.response.status, 200);
+    const legacy = result.data; assert.equal(legacy.itens[0].descricao,'Cabo'); assert.equal(legacy.itens[0].unidade,'m'); assert.equal(Number(legacy.itens[0].quantidade_total),50); assert.equal(Number(legacy.itens[0].quantidade_recebida),40);
+    result = await call('/1', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ dados:legacy.dados, itens:legacy.itens }) });
+    assert.equal(result.response.status,200); assert.equal(Number(result.data.itens[0].lote_id),11); assert.equal(result.data.itens[0].observacoes,'Nota antiga');
+    const items = [{ codigo:'CAB-1',descricao:'Cabo livre',unidade:'m',quantidade:50,quantidade_recebida:40,quantidade_total:100 }, { codigo:'D-1',descricao:'Duto livre',unidade:'un',quantidade:5,quantidade_recebida:6,quantidade_total:5 }];
+    result = await call('/', send({ projeto_id: 10, dados: { nota_fiscal: 'NF1' }, itens: items }));
+    assert.equal(result.response.status, 201); const rir = result.data; assert.deepEqual(rir.itens.map(x => Number(x.quantidade_recebida)), [40,6]); assert.ok(rir.itens.every(x => x.lote_id === null));
+    const observacoes = 'A carga foi conferida no recebimento. Os itens e as condições de descarga foram registrados para acompanhamento da equipe. '.repeat(5);
+    result = await call(`/${rir.id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({dados:{ ...rir.dados, fornecedor:'Fornecedor Exemplo', data:'2026-11-09', observacoes }, itens:[{ ...rir.itens[0], codigo:'C1' }, { descricao:'Cabo novo', unidade:'m', quantidade:120, quantidade_recebida:100, quantidade_total:120 }]}) });
+    assert.equal(result.response.status, 200); assert.deepEqual(result.data.itens.map(x => Number(x.quantidade_recebida)), [40,100]); assert.equal(result.data.itens[0].codigo, 'C1');
+    assert.equal((await all('SELECT * FROM estoque_movimentacoes')).length, 4);
+    result = await call('/', send({ projeto_id: 10, itens: [{ ...items[0], quantidade_total: 0 }] })); assert.equal(result.response.status, 400);
+    result = await call('/', send({ projeto_id: 10, itens: [{ ...items[0], quantidade_recebida: -1 }] })); assert.equal(result.response.status, 400);
+    result = await call(`/${rir.id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({dados:{}, itens:[{...items[0],id:legacy.itens[0].id}]}) }); assert.equal(result.response.status,400);
+    result = await call(`/${rir.id}`, { headers: { 'x-tenant':'2' } }); assert.equal(result.response.status, 404);
+    result = await call('/', send({ projeto_id:10, itens:items }, { 'x-role':'Gestor da Obra' })); assert.equal(result.response.status, 403);
+    result = await call(`/${rir.id}/pdf`); assert.equal(result.response.status, 200); assert.equal(Buffer.from(result.data).subarray(0,5).toString(), '%PDF-');
+    const imagesBefore = (Buffer.from(result.data).toString('latin1').match(/\/Subtype \/Image/g) || []).length;
+    const form = new FormData(); form.append('arquivo', new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64')], { type:'image/png' }), 'foto.png'); form.append('legenda','Carga');
+    result = await call(`/${rir.id}/anexos`, { method:'POST', body:form }); assert.equal(result.response.status, 201); const attachment = result.data.anexos[0];
+    result = await call(`/${rir.id}/pdf`); assert.equal(result.response.status, 200); assert.equal(Buffer.from(result.data).subarray(0,5).toString(), '%PDF-'); assert.ok((Buffer.from(result.data).toString('latin1').match(/\/Subtype \/Image/g) || []).length > imagesBefore);
+    if (process.env.RIR_TEST_PDF) require('node:fs').writeFileSync(process.env.RIR_TEST_PDF, Buffer.from(result.data));
+    result = await call(`/${rir.id}/anexos/${attachment.id}`, { method:'DELETE' }); assert.equal(result.response.status, 200); assert.equal(result.data.anexos.length, 0);
+    console.log(JSON.stringify({ ok:true, suite:'rirIntegration', scenarios:14 }));
+  } finally { if (server) await new Promise(resolve => server.close(resolve)); await client.query('ROLLBACK'); client.release(); await db.pool.end(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });
