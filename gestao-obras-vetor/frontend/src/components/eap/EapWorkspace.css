@@ -101,10 +101,11 @@ body.dark-mode .eap-overview-item.is-done .eap-overview-icon { background: #1c40
 .eap-tree-toggle:disabled { cursor: default; }
 .eap-tree-dot { flex: 0 0 4px; height: 4px; border-radius: 50%; background: var(--ew-border); margin: 0 9px; }
 .eap-name-button { display: grid; gap: 3px; min-width: 0; border: 0; padding: 0; background: transparent; text-align: left; color: var(--ew-text); font: inherit; cursor: pointer; }
-.eap-name-button strong { font-weight: 500; line-height: 1.5; overflow-wrap: anywhere; }
-.eap-group-row .eap-name-button strong { font-weight: 600; }
+.eap-activity-name { font-weight: 400; line-height: 1.5; overflow-wrap: anywhere; }
+.eap-root-row .eap-activity-name { font-weight: 700; text-transform: uppercase; }
+.eap-deep-row .eap-activity-name { font-style: italic; }
 .eap-name-button small { display: flex; align-items: center; gap: 5px; color: var(--ew-muted); font-size: 10px; margin-top: 2px; }
-.eap-name-button:hover strong { color: var(--ew-blue); }
+.eap-name-button:hover .eap-activity-name { color: var(--ew-blue); }
 .eap-row-actions { display: flex; gap: 1px; }
 .eap-row-actions .ui-button { min-width: 29px; width: 29px; height: 32px; padding: 0; }
 .eap-row-actions .ui-button--danger { color: var(--ew-muted); }

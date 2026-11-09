@@ -97,11 +97,11 @@ export default function EapTable({ activities, editor, onDelete, readOnly = fals
     if (editor.session && String(row.id) === String(editingId)) return renderEdit(row);
     const hasChildren = row.children.length > 0;
     const isExpanded = filtering || expanded.has(String(row.id));
-    return <tr key={row.id} className={`${hasChildren ? 'eap-group-row' : 'eap-leaf-row'}${row.contextOnly ? ' is-context' : ''}`} data-activity-id={row.id}>
+    return <tr key={row.id} className={`${hasChildren ? 'eap-group-row' : 'eap-leaf-row'}${row.level === 0 ? ' eap-root-row' : ''}${row.level >= 2 ? ' eap-deep-row' : ''}${row.contextOnly ? ' is-context' : ''}`} data-activity-id={row.id}>
       <td className="eap-sticky-0"><span className="eap-code">{row.codigo_eap}</span></td>
       <td className="eap-sticky-1"><div className="eap-tree-name" style={{ '--depth': row.level }}>
         {hasChildren ? <button type="button" className="eap-tree-toggle" aria-label={`${isExpanded ? 'Recolher' : 'Expandir'} ${row.codigo_eap}`} aria-expanded={isExpanded} disabled={locked || filtering} onClick={() => toggle(row.id)}>{isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button> : <span className="eap-tree-dot" />}
-        <button className="eap-name-button" type="button" onClick={() => start(row, '', true)} disabled={actionsDisabled} title={row.nome || row.descricao}><strong>{row.nome || row.descricao}</strong>{hasChildren && <small><Layers size={11} aria-hidden="true" />{row.children.length} subatividade{row.children.length !== 1 ? 's' : ''}</small>}</button>
+        <button className="eap-name-button" type="button" onClick={() => start(row, '', true)} disabled={actionsDisabled} title={row.nome || row.descricao}><span className="eap-activity-name">{row.nome || row.descricao}</span>{hasChildren && <small><Layers size={11} aria-hidden="true" />{row.children.length} subatividade{row.children.length !== 1 ? 's' : ''}</small>}</button>
       </div></td>
       <td>{formatDate(row.data_inicio_planejada)}</td><td>{formatDate(row.data_fim_planejada)}</td>
       <td>{hasChildren ? '—' : row.unidade_medida || '—'}</td><td className="eap-number">{hasChildren ? '—' : formatNumber(row.quantidade_total)}</td>
