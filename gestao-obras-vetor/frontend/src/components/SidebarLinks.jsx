@@ -20,7 +20,6 @@ export default function SidebarLinks({ projetoId, perfil, isGestor, counts, onNa
     ...(project && (quality || perfil === 'ADM' || perfil === 'Almoxarife') ? [{ id: 'qualidade', label: 'Qualidade', Icon: ShieldCheck, badge: isGestor && counts.rnc, match: /\/(qualidade|rnc|rastreabilidade-materiais)(\/|$)/, items: [
       ...(quality ? [['Visão geral', `${base}/qualidade`], ['RNC', `${base}/rnc`]] : []),
       ...(perfil !== 'Almoxarife' ? [['Folhas de verificação', `${base}/qualidade/folhas`]] : []),
-      ...(['Gestor Geral', 'Gestor da Qualidade', 'Gestor de Qualidade', 'ADM'].includes(perfil) ? [['Modelos de folhas', `${base}/qualidade/modelos`]] : []),
       ...(perfil !== 'Gestor Local' ? [['RIR - Relatório de Inspeção e Recebimento', `${base}/rastreabilidade-materiais`]] : []),
     ] }] : []),
     ...(project && assets ? [{ id: 'ativos', label: 'Ativos', Icon: Boxes, match: /\/almoxarifado(\/|$)/, items: [['Visão geral', `${base}/almoxarifado`], ['Cadastro de ativos', `${base}/almoxarifado/ferramentas`], ['Retirada', `${base}/almoxarifado/retirada`], ['Devolução', `${base}/almoxarifado/devolucao`], ['Manutenção', `${base}/almoxarifado/manutencao`], ['Perdas', `${base}/almoxarifado/perdas`], ['Relatórios', `${base}/almoxarifado/relatorios`]] }] : []),
