@@ -1232,6 +1232,7 @@ a.btn.btn-outline:hover { background: var(--button-primary-soft); transform: non
 .pd-mini-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); }
 
 @media (max-width: 900px) {
+  body.has-app-sidebar .navbar { backdrop-filter: none; }
   .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
   .pd-grid-2, .pd-grid-3 { grid-template-columns: 1fr; }
   .pd-mini-grid-2, .pd-mini-grid-3 { grid-template-columns: 1fr 1fr; }
@@ -1786,4 +1787,38 @@ body.dark-mode {
   background: var(--bg-tertiary);
   color: var(--text-primary);
   border-color: var(--border-medium);
+}
+/* Global sidebar navigation */
+@media (min-width: 901px) {
+  body.has-app-sidebar #root { padding-left: 248px; }
+  body.has-app-sidebar.app-sidebar-collapsed #root { padding-left: 68px; }
+  body.has-app-sidebar .navbar { backdrop-filter: none; }
+}
+.app-sidebar { position: fixed; inset: 0 auto 0 0; z-index: 50; width: 248px; display: flex; flex-direction: column; background: var(--card-bg, #fff); border-right: 1px solid var(--border-default); box-shadow: 2px 0 14px rgba(15, 23, 42, .05); }
+.app-sidebar.collapsed { width: 68px; }
+.app-sidebar-heading { height: 68px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; color: var(--text-primary); font-size: 14px; font-weight: 700; border-bottom: 1px solid var(--border-default); flex-shrink: 0; }
+.app-sidebar-heading button { display: grid; place-items: center; width: 36px; height: 36px; border: 0; border-radius: 8px; background: transparent; color: var(--text-secondary); cursor: pointer; }
+.app-sidebar-heading button:hover { background: var(--link-hover-bg); color: var(--text-primary); }
+.app-sidebar-links { overflow-y: auto; overflow-x: hidden; padding: 12px 10px 24px; flex: 1; }
+.sidebar-link, .sidebar-group-toggle, .sidebar-sublink { display: flex; align-items: center; gap: 11px; width: 100%; min-height: 42px; padding: 10px 12px; border: 0; border-radius: 8px; background: transparent; color: var(--text-secondary); text-align: left; text-decoration: none; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.sidebar-link svg, .sidebar-group-toggle svg { flex-shrink: 0; }
+.sidebar-link:hover, .sidebar-group-toggle:hover, .sidebar-sublink:hover { color: var(--text-primary); background: var(--link-hover-bg); }
+.sidebar-link.active, .sidebar-group-toggle.active, .sidebar-sublink.active { color: var(--link-active-color); background: var(--button-primary-soft); }
+.sidebar-sublink.active { box-shadow: inset 3px 0 var(--primary); }
+.sidebar-submenu { padding: 2px 0 6px 30px; }
+.sidebar-sublink { min-height: 36px; padding: 8px 10px; font-size: 12px; font-weight: 500; }
+.sidebar-chevron { margin-left: auto; transition: transform .2s; }
+.sidebar-chevron.open { transform: rotate(180deg); }
+.sidebar-badge { margin-left: auto; padding: 2px 6px; border-radius: 999px; background: var(--badge-gray-bg); color: var(--badge-gray-color); font-size: 10px; line-height: 1.4; }
+.sidebar-badge.highlight, .sidebar-group-toggle > .sidebar-badge, .sidebar-link > .sidebar-badge { background: var(--badge-red-bg); color: var(--badge-red-color); }
+.sidebar-group-toggle > .sidebar-badge + .sidebar-chevron { margin-left: 0; }
+.sidebar-link:focus-visible, .sidebar-group-toggle:focus-visible, .sidebar-sublink:focus-visible, .app-sidebar-heading button:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.app-sidebar.collapsed .app-sidebar-heading { justify-content: center; padding: 0; }
+.app-sidebar.collapsed .app-sidebar-heading > span, .app-sidebar.collapsed .sidebar-link > span, .app-sidebar.collapsed .sidebar-group-toggle > span, .app-sidebar.collapsed .sidebar-chevron, .app-sidebar.collapsed .sidebar-submenu { display: none; }
+.app-sidebar.collapsed .sidebar-link, .app-sidebar.collapsed .sidebar-group-toggle { justify-content: center; padding-inline: 0; }
+.suprimentos-shell .almox-layout, .assets-workspace .almox-layout { grid-template-columns: minmax(0, 1fr); }
+@media (max-width: 900px) {
+  .navbar-mobile-drawer { left: 0; right: auto; max-width: 360px; border-left: 0; border-right: 1px solid var(--border-default); transform: translateX(-100%); background: var(--card-bg, #fff); }
+  .navbar-mobile-account { background: var(--card-bg, #fff); }
+  .navbar-mobile-menu { gap: 2px; padding: 12px 10px; }
 }

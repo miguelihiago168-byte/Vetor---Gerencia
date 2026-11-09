@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Bell, LogOut, User, ChevronDown, Menu, X, CalendarDays } from 'lucide-react';
+import { Bell, LogOut, User, ChevronDown, Menu, X, CalendarDays, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useLeaveGuard } from '../context/LeaveGuardContext';
 import {
   getRDOs, getRNCs, getRequisicoesBadges, getMensagensNaoLidasCount,
@@ -10,6 +10,7 @@ import {
 import { useDialog } from '../context/DialogContext';
 import ThemeToggle from './ThemeToggle';
 import MeetingReminderNotice from './agenda/MeetingReminderNotice';
+import SidebarLinks from './SidebarLinks';
 
 function Navbar() {
   const { usuario, logout, selecionarTenant, isGestor, perfil } = useAuth();
@@ -41,9 +42,11 @@ function Navbar() {
 
   const isProjectContext = Boolean(projetoIdAtual);
   const projetoId = isProjectContext ? projetoIdAtual : null;
-  const isProjetoEntryActive = location.pathname === '/projetos' || /^\/projeto\/\d+\/?$/.test(location.pathname);
 
   const [pendRequisicoes, setPendRequisicoes] = useState(0);
+  const [supplyCounts, setSupplyCounts] = useState({});
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => { try { return sessionStorage.getItem('vetor_sidebar_collapsed') === 'true'; } catch { return false; } });
+  const [openGroups, setOpenGroups] = useState({});
   const [pendRdos, setPendRdos] = useState(0);
   const [pendRnc, setPendRnc] = useState(0);
   const [pendMensagens, setPendMensagens] = useState(0);
@@ -118,6 +121,9 @@ function Navbar() {
           .filter((item) => statusAbertos.has(item.status))
           .reduce((sum, item) => sum + Number(item.count || 0), 0);
         setPendRequisicoes(total);
+        const counts = {};
+        (response.data || []).forEach((item) => { counts[item.status] = (counts[item.status] || 0) + Number(item.count || 0); });
+        setSupplyCounts(counts);
       } catch (_) {
         setPendRequisicoes(0);
       }
@@ -264,32 +270,14 @@ function Navbar() {
     mobileDrawerRef.current?.focus();
   }, [isMobileMenuOpen]);
 
-  const rotaDashboard = isProjectContext ? `/projeto/${projetoId}` : '/projetos';
-  const rotaCompras = isProjectContext ? `/projeto/${projetoId}/compras` : '/compras';
-  const rotaUsuarios = isProjectContext ? `/projeto/${projetoId}/usuarios` : '/usuarios';
-  const rotaAlmox = isProjectContext ? `/projeto/${projetoId}/almoxarifado` : '/ativos';
-  const rotaExecucao = isProjectContext ? `/projeto/${projetoId}/rdos` : '/rdos';
-  const rotaQualidade = isProjectContext ? `/projeto/${projetoId}/qualidade` : '/rnc';
-  const rotaPlanejamento = isProjectContext ? `/projeto/${projetoId}/planejamento` : '/planejamento';
-  const rotaEmail = isProjectContext ? `/projeto/${projetoId}/email-dashboard` : '/email-dashboard';
-  const rotaMensagens = isProjectContext ? `/projeto/${projetoId}/mensagens` : '/mensagens';
   const rotaPerfil = '/perfil';
   const isGestorGeral = perfil === 'Gestor Geral';
   const isGestorObra = perfil === 'Gestor da Obra' || perfil === 'Gestor Local';
-  const isGestorQualidade = perfil === 'Gestor da Qualidade' || perfil === 'Gestor de Qualidade';
   const isAdministrativo = perfil === 'ADM';
   const isFinanceiro = perfil === 'Financeiro';
   const isAlmoxarife = perfil === 'Almoxarife';
-  const isFiscal = perfil === 'Fiscal';
 
-  const canViewRdo = isGestorGeral || isGestorObra || isGestorQualidade || isFiscal;
-  const canViewRnc = isGestorGeral || isGestorObra || isGestorQualidade || isFiscal;
-  const canViewPlanejamento = isGestorGeral || isGestorObra || isGestorQualidade || isFiscal;
   const canViewCompras = isGestorGeral || isGestorObra || isAdministrativo || isFinanceiro || isAlmoxarife;
-  const canViewAtivos = isGestorGeral || isGestorObra || isAdministrativo || isAlmoxarife;
-  const canViewExecucao = isGestorGeral || isGestorObra || isGestorQualidade || isFiscal;
-  const canViewQualidade = isGestorGeral || isGestorObra || isGestorQualidade || isFiscal;
-  const canViewUsuarios = isGestorGeral || isAdministrativo;
 
   const handleMenuNavigation = async (e, to) => {
     const ok = await confirmNav(e, to);
@@ -438,111 +426,19 @@ function Navbar() {
     </div>
   );
 
-  const renderMainLinks = () => (
-    <>
-      {isProjectContext && (
-        <NavLink
-          to="/projetos"
-          onClick={(e) => handleMenuNavigation(e, '/projetos')}
-          className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}
-        >
-          Projetos
-        </NavLink>
-      )}
-
-      {isProjectContext && (
-        <NavLink to={rotaDashboard} end onClick={(e) => handleMenuNavigation(e, rotaDashboard)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-          Dashboard
-        </NavLink>
-      )}
-
-      {!isProjectContext && (
-        <NavLink
-          to="/projetos"
-          onClick={(e) => handleMenuNavigation(e, '/projetos')}
-          className={({ isActive }) => `navbar-link${(isActive || isProjetoEntryActive) ? ' active' : ''}`}
-        >
-          Projetos
-        </NavLink>
-      )}
-
-      {!isProjectContext && canViewCompras && (
-        <NavLink to={rotaCompras} onClick={(e) => handleMenuNavigation(e, rotaCompras)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-          Suprimentos
-          {pendRequisicoes > 0 && (
-            <span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendRequisicoes}</span>
-          )}
-        </NavLink>
-      )}
-
-      {!isProjectContext && canViewUsuarios && (
-        <NavLink to={rotaUsuarios} onClick={(e) => handleMenuNavigation(e, rotaUsuarios)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-          Usuários
-        </NavLink>
-      )}
-
-      {isProjectContext && canViewExecucao && (
-        <NavLink to={rotaExecucao} onClick={(e) => handleMenuNavigation(e, rotaExecucao)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-          RDOs
-          {isGestor && pendRdos > 0 && (<span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendRdos}</span>)}
-        </NavLink>
-      )}
-
-      {isProjectContext && canViewPlanejamento && (
-        <NavLink to={rotaPlanejamento} onClick={(e) => handleMenuNavigation(e, rotaPlanejamento)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-          Planejamento
-        </NavLink>
-      )}
-
-      {isProjectContext && canViewQualidade && (
-        <NavLink to={rotaQualidade} onClick={(e) => handleMenuNavigation(e, rotaQualidade)} className={({ isActive }) => `navbar-link${(isActive || /^\/projeto\/\d+\/(rnc|rastreabilidade-materiais)/.test(location.pathname)) ? ' active' : ''}`}>
-          Qualidade
-          {isGestor && pendRnc > 0 && (<span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendRnc}</span>)}
-        </NavLink>
-      )}
-
-      {isProjectContext && canViewAtivos && (
-        <NavLink to={rotaAlmox} onClick={(e) => handleMenuNavigation(e, rotaAlmox)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-          Ativos
-        </NavLink>
-      )}
-
-      {isProjectContext && canViewCompras && (
-        <NavLink to={rotaCompras} onClick={(e) => handleMenuNavigation(e, rotaCompras)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-          Suprimentos
-          {pendRequisicoes > 0 && (
-            <span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendRequisicoes}</span>
-          )}
-        </NavLink>
-      )}
-
-      {isProjectContext && (
-        <NavLink to={rotaEmail} onClick={(e) => handleMenuNavigation(e, rotaEmail)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-          Email
-        </NavLink>
-      )}
-
-      {isProjectContext && (
-        <NavLink to={rotaMensagens} onClick={(e) => handleMenuNavigation(e, rotaMensagens)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-          Mensagens
-          {pendMensagens > 0 && (<span className="badge badge-red" style={{ marginLeft: 6, padding: '2px 6px', fontSize: 11 }}>{pendMensagens}</span>)}
-        </NavLink>
-      )}
-
-      {isProjectContext && canViewUsuarios && (
-        <NavLink to={rotaUsuarios} onClick={(e) => handleMenuNavigation(e, rotaUsuarios)} className={({ isActive }) => `navbar-link${isActive ? ' active' : ''}`}>
-          Usuários
-        </NavLink>
-      )}
-
-    </>
-  );
+  useEffect(() => {
+    document.body.classList.add('has-app-sidebar');
+    document.body.classList.toggle('app-sidebar-collapsed', sidebarCollapsed);
+    try { sessionStorage.setItem('vetor_sidebar_collapsed', String(sidebarCollapsed)); } catch (_) { /* armazenamento opcional */ }
+    return () => document.body.classList.remove('has-app-sidebar', 'app-sidebar-collapsed');
+  }, [sidebarCollapsed]);
+  const renderMainLinks = () => <SidebarLinks projetoId={projetoId} perfil={perfil} isGestor={isGestor} counts={{ supply: pendRequisicoes, status: supplyCounts, rdos: pendRdos, rnc: pendRnc, messages: pendMensagens }} onNavigate={handleMenuNavigation} collapsed={!isMobileViewport && sidebarCollapsed} onExpand={() => setSidebarCollapsed(false)} />;
 
   return (
     <nav className="navbar">
       <div className="navbar-container">
         <div className="navbar-content">
-          <NavLink to="/projetos" className="navbar-brand">
+          <NavLink to="/projetos" onClick={(e) => handleMenuNavigation(e, "/projetos")} className="navbar-brand">
             <div className="navbar-brand-left">
               <img src={`${import.meta.env.BASE_URL}logo_vetor.png`} alt="Vetor" className="navbar-logo-img" />
               <span className="navbar-brand-name">Vetor</span>
@@ -550,13 +446,7 @@ function Navbar() {
             </div>
           </NavLink>
 
-          <div className="navbar-main">
-            {!isMobileViewport && (
-              <div className="navbar-menu grouped-menu">
-                {renderMainLinks()}
-              </div>
-            )}
-          </div>
+          <div className="navbar-main" />
 
           <div className="navbar-mobile-supply-bell">
             {renderNotificationBell()}
@@ -618,6 +508,10 @@ function Navbar() {
         </div>
       </div>
 
+      {!isMobileViewport && <aside className={`app-sidebar${sidebarCollapsed ? ' collapsed' : ''}`} aria-label="Menu principal">
+        <div className="app-sidebar-heading"><span>Navegação</span><button type="button" onClick={() => setSidebarCollapsed((value) => !value)} aria-label={sidebarCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'} title={sidebarCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}>{sidebarCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}</button></div>
+        <div className="app-sidebar-links" role="navigation" aria-label="Navegação principal">{renderMainLinks()}</div>
+      </aside>}
       {isMobileViewport && (
         <>
           <div
