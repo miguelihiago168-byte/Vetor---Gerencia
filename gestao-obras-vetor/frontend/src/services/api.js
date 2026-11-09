@@ -422,6 +422,7 @@ export const getFolhasVerificacao = (projetoId, params) => api.get(`/folhas-veri
 export const getFolhasIndicadores = (projetoId) => api.get(`/folhas-verificacao/projeto/${projetoId}/indicadores`);
 export const getFolhaVerificacao = (id) => api.get(`/folhas-verificacao/${id}`);
 export const createFolhaVerificacao = (projetoId, data) => api.post(`/folhas-verificacao/projeto/${projetoId}`, data);
+export const getFiqsAtividades = (projetoId) => api.get(`/folhas-verificacao/projeto/${projetoId}/fiq-atividades`);
 export const updateFolhaVerificacao = (id, data) => api.patch(`/folhas-verificacao/${id}`, data);
 export const deleteFolhaVerificacao = (id) => api.delete(`/folhas-verificacao/${id}`);
 export const addFolhaPonto = (id, data) => api.post(`/folhas-verificacao/${id}/pontos`, data);
@@ -431,9 +432,12 @@ export const updateFolhaMedicao = (id, medicaoId, data) => api.patch(`/folhas-ve
 export const deleteFolhaMedicao = (id, medicaoId) => api.delete(`/folhas-verificacao/${id}/medicoes/${medicaoId}`);
 export const vincularFolha = (id, data) => api.post(`/folhas-verificacao/${id}/vinculos`, data);
 export const enviarFolhaAnalise = (id) => api.post(`/folhas-verificacao/${id}/enviar-analise`);
-export const aprovarFolha = (id) => api.post(`/folhas-verificacao/${id}/aprovar`);
+export const aprovarFolha = (id, data = {}) => api.post(`/folhas-verificacao/${id}/aprovar`, data);
 export const reprovarFolha = (id, data) => api.post(`/folhas-verificacao/${id}/reprovar`, data);
 export const gerarRncFolha = (id, data) => api.post(`/folhas-verificacao/${id}/rnc`, data);
+export const gerarRncItemFolha = (id, data) => api.post(`/folhas-verificacao/${id}/rnc-item`, data);
+export const abrirReinspecaoFiq = (id, justificativa) => api.post(`/folhas-verificacao/${id}/abrir-reinspecao`, { justificativa });
+export const retificarFiq = (id, justificativa) => api.post(`/folhas-verificacao/${id}/revisoes`, { justificativa });
 export const vincularRncFolha = (id, rncId) => api.post(`/folhas-verificacao/${id}/rnc/vincular`, { rnc_id: rncId });
 export const iniciarCorrecaoFolha = (id, data) => api.post(`/folhas-verificacao/${id}/correcoes`, data);
 export const finalizarCorrecaoFolha = (id, data) => api.post(`/folhas-verificacao/${id}/finalizar-correcao`, data);

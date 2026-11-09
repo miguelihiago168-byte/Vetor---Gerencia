@@ -138,4 +138,12 @@ const assertTransition = (from, to) => {
 
 const isImmutable = (status) => ![STATUS.RASCUNHO, STATUS.EM_CORRECAO, STATUS.EM_REINSPECAO].includes(status);
 
-module.exports = { ACCEPTANCE, STATUS, RESULT, calculateLimits, calculateMeasurementResult, summarizeLot, assertInstrument, assertTransition, isImmutable };
+const assertFiqApproval = (summary, justification) => {
+  if (summary.sampleIncomplete || summary.torqueBlocked || summary.itensPendentes > 0 || [RESULT.PENDENTE, RESULT.BLOQUEADO].includes(summary.result)) throw new Error('A folha não atende aos critérios para aprovação.');
+  const hasNonconformities = Number(summary.nonConforming || 0) > 0 || Number(summary.itensNaoConformes || 0) > 0;
+  if (hasNonconformities && !String(justification || '').trim()) throw new Error('Informe a justificativa para aceitar os itens não conformes.');
+  if (!hasNonconformities && summary.result === RESULT.NAO_CONFORME) throw new Error('A folha não atende aos critérios para aprovação.');
+  return hasNonconformities;
+};
+
+module.exports = { ACCEPTANCE, STATUS, RESULT, calculateLimits, calculateMeasurementResult, summarizeLot, assertInstrument, assertTransition, isImmutable, assertFiqApproval };

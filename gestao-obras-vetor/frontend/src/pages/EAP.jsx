@@ -4,6 +4,7 @@ import Navbar from '../components/Navbar';
 import Button, { IconButton } from '../components/ui/Button';
 import { 
   getAtividadesEAP, 
+  getFiqsAtividades,
   previewRecalculoEapProjeto,
   recalcularEapProjeto, 
   deleteAtividade,
@@ -26,6 +27,7 @@ function EAP({ hideNavbar = false }) {
   const { confirm, alert } = useDialog();
   const { success, error } = useNotification();
   const [atividades, setAtividades] = useState([]);
+  const [fiqsAtividades, setFiqsAtividades] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -49,6 +51,7 @@ function EAP({ hideNavbar = false }) {
 
   useEffect(() => {
     carregarAtividades(true);
+    getFiqsAtividades(projetoId).then((response) => setFiqsAtividades(response.data)).catch(() => setFiqsAtividades(null));
     if (isGestor) carregarResumoRecalculo();
   }, [projetoId, isGestor]);
 
@@ -577,7 +580,7 @@ function EAP({ hideNavbar = false }) {
         )}
 
         {loadError && <div className="alert alert-error" role="alert">{loadError} <Button onClick={() => carregarAtividades(true)}>Recarregar EAP</Button></div>}
-        <EapTable key={projetoId} activities={atividades} editor={editor} onDelete={handleExcluirAtividade} readOnly={Boolean(loadError)} />
+        <EapTable key={projetoId} activities={atividades} editor={editor} onDelete={handleExcluirAtividade} readOnly={Boolean(loadError)} fiqs={fiqsAtividades} projetoId={projetoId} />
       </div>
       {renderImportModal()}
       {renderRecalculoModal()}

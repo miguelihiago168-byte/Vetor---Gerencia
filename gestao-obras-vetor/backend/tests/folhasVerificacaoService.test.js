@@ -1,6 +1,13 @@
 const assert = require('assert');
 const rules = require('../services/folhasVerificacaoService');
 
+assert.equal(rules.assertFiqApproval({ result:rules.RESULT.CONFORME, itensPendentes:0 }, ''), false);
+assert.throws(() => rules.assertFiqApproval({ result:rules.RESULT.NAO_CONFORME, itensNaoConformes:1 }, '  '), /justificativa/i);
+assert.equal(rules.assertFiqApproval({ result:rules.RESULT.NAO_CONFORME, itensNaoConformes:1 }, 'Aceito após análise técnica'), true);
+assert.throws(() => rules.assertFiqApproval({ result:rules.RESULT.NAO_CONFORME, nonConforming:1, sampleIncomplete:true }, 'Aceito'), /critérios/i);
+assert.throws(() => rules.assertFiqApproval({ result:rules.RESULT.BLOQUEADO, nonConforming:1 }, 'Aceito'), /critérios/i);
+assert.throws(() => rules.assertFiqApproval({ result:rules.RESULT.PENDENTE, itensPendentes:1 }, 'Aceito'), /critérios/i);
+
 const limitsPercent = rules.calculateLimits({ expected: '55', toleranceType: 'PERCENTUAL', tolerance: '5' });
 assert.deepStrictEqual(limitsPercent, { expected: '55', lower: '52.25', upper: '57.75' });
 const limitsAbsolute = rules.calculateLimits({ expected: '55', toleranceType: 'ABSOLUTA', tolerance: '2.5' });

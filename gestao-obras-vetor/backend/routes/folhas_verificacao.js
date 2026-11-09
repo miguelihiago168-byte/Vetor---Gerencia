@@ -110,14 +110,29 @@ const history = async (client, { tenantId, folhaId, action, before, after, userI
 };
 const refreshSummary = async (client, sheet) => {
   const measurements = await allWithClient(client, "SELECT resultado AS result, COALESCE(NULLIF(dados_extras->>'quantidade_verificada','')::int, 1) AS quantity FROM folhas_verificacao_medicoes WHERE folha_id=?", [sheet.id]);
-  const answers = await allWithClient(client, 'SELECT resultado, item_snapshot FROM folhas_verificacao_respostas WHERE folha_id=?', [sheet.id]);
+  const answers = await allWithClient(client, 'SELECT resultado, item_snapshot, ponto_id FROM folhas_verificacao_respostas WHERE folha_id=?', [sheet.id]);
   const links = await allWithClient(client, `SELECT v.obrigatorio AS required, f.status, f.resultado_lote AS result
     FROM folhas_verificacao_vinculos v JOIN folhas_verificacao f ON f.id=v.folha_destino_id WHERE v.folha_origem_id=?`, [sheet.id]);
   const summary = rules.summarizeLot({ population: sheet.populacao_total, sampleSize: sheet.amostra_prevista, acceptanceCriterion: sheet.criterio_aceitacao, maxNonConformities: sheet.maximo_nc, measurements, requiredTorqueLinks: links });
   const modelSnapshot = parseJson(sheet.modelo_snapshot);
   const expectedRequiredAnswers = (modelSnapshot?.configuracao?.sections || []).reduce((total, section) => total + (section.optional ? 0 : Array.isArray(section.items) ? section.items.filter((item) => typeof item === 'string' || item?.obrigatorio !== false).length : 0), 0);
   const requiredAnswers = answers.filter((answer) => parseJson(answer.item_snapshot)?.obrigatorio !== false);
-  const pendingAnswers = Math.max(0, expectedRequiredAnswers - requiredAnswers.length) + requiredAnswers.filter((answer) => answer.resultado === rules.RESULT.PENDENTE).length;
+  let pendingAnswers = Math.max(0, expectedRequiredAnswers - requiredAnswers.length) + requiredAnswers.filter((answer) => answer.resultado === rules.RESULT.PENDENTE).length;
+  if (sheet.fiq_numero) {
+    const sections = [...(modelSnapshot?.configuracao?.sections || [])];
+    if (sheet.tipo_folha === 'ELETRICA') {
+      const type = parseJson(sheet.identificacao).empreendimento_tipo;
+      const key = ['INDUSTRIAL','PREDIAL'].includes(type) ? 'PREDIAL_INDUSTRIAL' : type;
+      const extra = modelSnapshot?.configuracao?.requisitosEspecificos?.[key] || [];
+      if (extra.length) sections.push({items:extra});
+    }
+    const byKey = new Map(answers.filter(a => !a.ponto_id).map(a => [parseJson(a.item_snapshot).chave,a]));
+    pendingAnswers = sections.reduce((total,section,sectionIndex) => total + (section.optional ? 0 : (section.items || []).reduce((count,item,itemIndex) => {
+      if (typeof item !== 'string' && item?.obrigatorio === false) return count;
+      const answer = byKey.get(`${sectionIndex}-${itemIndex}`);
+      return count + (!answer || answer.resultado === rules.RESULT.PENDENTE ? 1 : 0);
+    },0)),0);
+  }
   const nonConformingAnswers = answers.filter((answer) => answer.resultado === rules.RESULT.NAO_CONFORME).length;
   summary.itens = Math.max(answers.length, expectedRequiredAnswers);
   summary.itensPendentes = pendingAnswers;
@@ -191,7 +206,7 @@ router.get('/projeto/:projetoId/contexto', auth, async (req, res) => {
       catch (error) { console.warn(`[folhas-verificacao] contexto ${name}:`, error.message); return []; }
     };
     const [activities, rdos, users, tools] = await Promise.all([
-      optionalRows('EAP', 'SELECT id,codigo_eap AS codigo,descricao AS atividade FROM atividades_eap WHERE projeto_id=? ORDER BY codigo_eap,descricao'),
+      optionalRows('EAP', 'SELECT a.id,a.codigo_eap AS codigo,a.descricao AS atividade FROM atividades_eap a WHERE a.projeto_id=? AND NOT EXISTS (SELECT 1 FROM atividades_eap filho WHERE filho.pai_id=a.id AND filho.projeto_id=a.projeto_id AND filho.tenant_id=a.tenant_id) ORDER BY a.codigo_eap,a.descricao'),
       optionalRows('RDO', 'SELECT id,numero_rdo,data_relatorio,status FROM rdos WHERE projeto_id=? ORDER BY data_relatorio DESC,id DESC'),
       optionalRows('usuarios', `SELECT u.id,u.nome,u.perfil,u.funcao FROM usuarios u JOIN projeto_usuarios pu ON pu.usuario_id=u.id WHERE pu.projeto_id=? AND u.ativo=1 AND u.deletado_em IS NULL ORDER BY u.nome`),
       optionalRows('ativos', `SELECT id,codigo,nome,marca,modelo,unidade,quantidade_disponivel,quantidade_total,numero_serie,faixa_minima,faixa_maxima,certificado_calibracao,calibracao_valida_ate FROM almox_ferramentas WHERE projeto_id=? AND ativo=1 AND quantidade_total>0 ORDER BY codigo,nome`)
@@ -236,6 +251,24 @@ router.patch('/modelos/:id', [auth, requireProfiles(modelProfiles)], async (req,
   } catch (error) { res.status(500).json({ erro: 'Erro ao atualizar modelo.' }); }
 });
 
+router.get('/projeto/:projetoId/fiq-atividades', [auth, requireProfiles(viewProfiles)], async (req, res) => {
+  try {
+    const projectId = Number(req.params.projetoId);
+    if (!(await assertProjectAccess(req, res, projectId))) return;
+    const rows = await allQuery(`WITH atuais AS (
+      SELECT DISTINCT ON (fiq_numero) fiq_numero,atividade_eap_id,status
+      FROM folhas_verificacao WHERE tenant_id=? AND projeto_id=? AND fiq_numero IS NOT NULL
+      ORDER BY fiq_numero,revisao DESC,id DESC
+    ) SELECT atividade_eap_id,COUNT(*)::int total,
+      COUNT(*) FILTER (WHERE status IN ('RASCUNHO','EM_CORRECAO','EM_REINSPECAO'))::int pendentes,
+      COUNT(*) FILTER (WHERE status='EM_ANALISE')::int aguardando,
+      COUNT(*) FILTER (WHERE status='APROVADA')::int aprovadas,
+      COUNT(*) FILTER (WHERE status='REPROVADA_BLOQUEADA')::int reprovadas
+      FROM atuais WHERE atividade_eap_id IS NOT NULL GROUP BY atividade_eap_id`, [req.tenantId, projectId]);
+    res.json(rows);
+  } catch (error) { res.status(500).json({ erro:'Erro ao carregar inspeções das atividades.' }); }
+});
+
 router.get('/projeto/:projetoId/indicadores', [auth, requireProfiles(viewProfiles)], async (req, res) => {
   try {
     const projectId = Number(req.params.projetoId); if (!(await assertProjectAccess(req, res, projectId))) return;
@@ -255,8 +288,9 @@ router.get('/projeto/:projetoId', [auth, requireProfiles(viewProfiles)], async (
       else { params.push(req.query[field]); filters.push(`${column}=?`); }
     }
     if (req.query.lote) { params.push(`%${req.query.lote}%`); filters.push(`f.identificacao->>'codigo_lote' ILIKE ?`); }
+    if (req.query.atividade_eap_id) { params.push(Number(req.query.atividade_eap_id)); filters.push('f.atividade_eap_id=? AND f.fiq_numero IS NOT NULL'); }
     const page = Math.max(1, Number(req.query.page || 1)); const limit = Math.min(100, Math.max(1, Number(req.query.limit || 25))); params.push(limit, (page - 1) * limit);
-    const rows = await allQuery(`SELECT f.*,u.nome criador_nome,m.nome modelo_nome,(SELECT rnc_id FROM folhas_verificacao_rncs fr WHERE fr.folha_id=f.id) rnc_id,
+    const rows = await allQuery(`SELECT f.*,u.nome criador_nome,m.nome modelo_nome,(SELECT rnc_id FROM folhas_verificacao_rncs fr WHERE fr.folha_id=f.id ORDER BY fr.id LIMIT 1) rnc_id,
         (SELECT MAX(f2.revisao) FROM folhas_verificacao f2 WHERE f2.folha_origem_id=f.id AND f2.tenant_id=f.tenant_id) ultima_revisao_aberta
       FROM folhas_verificacao f LEFT JOIN usuarios u ON u.id=f.criado_por LEFT JOIN folhas_verificacao_modelos m ON m.id=f.modelo_id
       WHERE ${filters.join(' AND ')} ORDER BY f.criado_em DESC LIMIT ? OFFSET ?`, params);
@@ -272,9 +306,21 @@ router.post('/projeto/:projetoId', [auth, requireProfiles(writeProfiles), body('
     if (!model) return res.status(404).json({ erro: 'Modelo não encontrado ou inativo.' });
     const project = await getQuery('SELECT id,empresa_responsavel,empresa_executante FROM projetos WHERE id=? AND tenant_id=?', [projectId, req.tenantId]);
     if (!project) return res.status(404).json({ erro: 'Obra não encontrada.' });
+    req.body.identificacao = { ...(req.body.identificacao || {}) };
+    if (!req.body.identificacao.fiscal_inspetor_id) req.body.identificacao.fiscal_inspetor_id = req.usuario.id;
+    if (!req.body.identificacao.data_inspecao) req.body.identificacao.data_inspecao = new Date().toISOString().slice(0,10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(req.body.identificacao.data_inspecao) || Number.isNaN(Date.parse(`${req.body.identificacao.data_inspecao}T00:00:00Z`))) return res.status(400).json({ erro:'Data da inspeção inválida.' });
+    if (Number(req.body.identificacao.fiscal_inspetor_id) !== Number(req.usuario.id)) {
+      const inspector = await getQuery('SELECT u.id,u.nome FROM usuarios u JOIN projeto_usuarios pu ON pu.usuario_id=u.id WHERE u.id=? AND pu.projeto_id=? AND u.ativo=1 AND u.deletado_em IS NULL', [Number(req.body.identificacao.fiscal_inspetor_id),projectId]);
+      if (!inspector) return res.status(400).json({ erro:'O responsável pela inspeção deve pertencer à obra.' });
+      req.body.identificacao.fiscal_inspetor_nome = inspector.nome;
+    } else {
+      const inspector = await getQuery('SELECT nome FROM usuarios WHERE id=?', [req.usuario.id]);
+      req.body.identificacao.fiscal_inspetor_nome = inspector?.nome || null;
+    }
     if (req.body.atividade_eap_id) {
-      const activity = await getQuery('SELECT id FROM atividades_eap WHERE id=? AND projeto_id=? AND tenant_id=?', [Number(req.body.atividade_eap_id), projectId, req.tenantId]);
-      if (!activity) return res.status(400).json({ erro: 'Atividade da EAP não pertence à obra.' });
+      const activity = await getQuery('SELECT a.id FROM atividades_eap a WHERE a.id=? AND a.projeto_id=? AND a.tenant_id=? AND NOT EXISTS (SELECT 1 FROM atividades_eap filho WHERE filho.pai_id=a.id AND filho.projeto_id=a.projeto_id AND filho.tenant_id=a.tenant_id)', [Number(req.body.atividade_eap_id), projectId, req.tenantId]);
+      if (!activity) return res.status(400).json({ erro: 'Atividade da EAP inválida, não executável ou pertencente a outra obra.' });
     }
     if (req.body.rdo_id) {
       const rdo = await getQuery('SELECT id FROM rdos WHERE id=? AND projeto_id=? AND tenant_id=?', [Number(req.body.rdo_id), projectId, req.tenantId]);
@@ -296,14 +342,18 @@ router.post('/projeto/:projetoId', [auth, requireProfiles(writeProfiles), body('
       const number = `${prefix}-${String(sequence.ultimo_numero).padStart(6, '0')}`;
       const result = await execWithClient(client, `INSERT INTO folhas_verificacao (tenant_id,projeto_id,modelo_id,tipo_folha,numero,empresa_responsavel_snapshot,empresa_executante_snapshot,equipe_snapshot,identificacao,modelo_snapshot,populacao_total,unidade_populacao,amostra_prevista,criterio_aceitacao,maximo_nc,rdo_id,atividade_eap_id,criado_por,atualizado_por)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [req.tenantId, projectId, model.id, model.tipo_folha, number, JSON.stringify({ nome: project.empresa_responsavel || null }), JSON.stringify({ nome: project.empresa_executante || null }), JSON.stringify(req.body.equipe || []), JSON.stringify(req.body.identificacao || {}), JSON.stringify({ id:model.id,codigo:model.codigo,nome:model.nome,configuracao:parseJson(model.configuracao) }), req.body.populacao_total || null, req.body.unidade_populacao || null, req.body.amostra_prevista || null, req.body.criterio_aceitacao || rules.ACCEPTANCE.C_ZERO, req.body.maximo_nc || 0, req.body.rdo_id || null, req.body.atividade_eap_id || null, req.usuario.id, req.usuario.id]);
+      const fiqSequence = await getWithClient(client, `INSERT INTO folhas_verificacao_sequencias (tenant_id,projeto_id,tipo_folha,ultimo_numero) VALUES (?,?,'FIQ',1)
+        ON CONFLICT (tenant_id,projeto_id,tipo_folha) DO UPDATE SET ultimo_numero=folhas_verificacao_sequencias.ultimo_numero+1 RETURNING ultimo_numero`, [req.tenantId, projectId]);
+      const fiqNumero = `FIQ-${req.tenantId}-${projectId}-${String(fiqSequence.ultimo_numero).padStart(6, '0')}`;
+      await execWithClient(client, 'UPDATE folhas_verificacao SET fiq_numero=? WHERE id=? AND tenant_id=?', [fiqNumero, result.lastID, req.tenantId], { returnColumn:null });
       if (requiresTorque && req.body.torque) {
         const limits = rules.calculateLimits(req.body.torque);
         rules.assertInstrument({ expectedTorque: limits.expected, ...(req.body.torque.instrumento || {}), exceptionReleased: Boolean(req.body.torque.liberacao_excepcional), exceptionJustification: req.body.torque.liberacao_justificativa });
         await execWithClient(client, `INSERT INTO folhas_verificacao_torque_config (folha_id,tenant_id,tipo_ligacao,componente,fixador,classe_material,condicao_montagem,torque_esperado,unidade,tipo_tolerancia,tolerancia,limite_inferior,limite_superior,metodo_verificacao,fonte_requisito,documento_referencia,revisao_documento,instrumento_snapshot,liberacao_excepcional)
           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING folha_id`, [result.lastID, req.tenantId, req.body.torque.tipo_ligacao || null, req.body.torque.componente || null, req.body.torque.fixador || null, req.body.torque.classe_material || null, req.body.torque.condicao_montagem || null, limits.expected, req.body.torque.unidade, req.body.torque.toleranceType || req.body.torque.tipo_tolerancia, req.body.torque.tolerance ?? req.body.torque.tolerancia ?? null, limits.lower, limits.upper, req.body.torque.metodo_verificacao || null, req.body.torque.fonte_requisito || null, req.body.torque.documento_referencia || null, req.body.torque.revisao_documento || null, JSON.stringify(req.body.torque.instrumento || {}), JSON.stringify(req.body.torque.liberacao_excepcional ? { justificativa:req.body.torque.liberacao_justificativa, autorizado_por:req.usuario.id } : {})]);
       }
-      await history(client, { tenantId:req.tenantId, folhaId:result.lastID, action:'CREATE', userId:req.usuario.id, data:{ numero:number, tipo:model.tipo_folha } });
-      return { id:result.lastID, numero:number };
+      await history(client, { tenantId:req.tenantId, folhaId:result.lastID, action:'CREATE', userId:req.usuario.id, data:{ numero:number, fiq_numero:fiqNumero, tipo:model.tipo_folha } });
+      return { id:result.lastID, numero:number, fiq_numero:fiqNumero };
     });
     await registrarAuditoria('folhas_verificacao', sheet.id, 'CREATE', null, { numero:sheet.numero, projeto_id:projectId }, req.usuario.id, { tenantId:req.tenantId });
     res.status(201).json(sheet);
@@ -341,7 +391,8 @@ router.get('/:id', [auth, requireProfiles(viewProfiles)], async (req, res) => {
       ensaios: await allQuery('SELECT * FROM folhas_verificacao_eletrica_ensaios WHERE folha_id=? ORDER BY realizado_em,id', [sheet.id])
     } : null;
     const civil = sheet.tipo_folha === 'CIVIL' ? { registros:civilRecords, nao_conformidades:civilNonConformities } : null;
-    res.json({ ...sheet, torque, eletrica, civil, atividade_eap:activity, rdo, revisoes:revisions, pontos:points, medicoes:measurements, respostas:responses, vinculos:links, assinaturas:signatures, evidencias:evidences, historico:historyRows, rnc_id:rnc?.rnc_id || null, rnc_status:rnc?.rnc_status || null, rnc_descricao_correcao:rnc?.rnc_descricao_correcao || null });
+    const rncs = await allQuery('SELECT l.id,l.rnc_id,l.resposta_id,l.medicao_id,l.ensaio_eletrico_id,l.torque_eletrico_id,l.nao_conformidade_id,r.status,r.titulo FROM folhas_verificacao_rncs l JOIN rnc r ON r.id=l.rnc_id WHERE l.folha_id=? AND l.tenant_id=? ORDER BY l.id', [sheet.id,req.tenantId]);
+    res.json({ ...sheet, torque, eletrica, civil, atividade_eap:activity, rdo, revisoes:revisions, pontos:points, medicoes:measurements, respostas:responses, vinculos:links, assinaturas:signatures, evidencias:evidences, historico:historyRows, rncs, rnc_id:rnc?.rnc_id || null, rnc_status:rnc?.rnc_status || null, rnc_descricao_correcao:rnc?.rnc_descricao_correcao || null });
   } catch (error) { res.status(500).json({ erro: 'Erro ao carregar folha.' }); }
 });
 
@@ -349,6 +400,14 @@ router.patch('/:id', [auth, requireProfiles(writeProfiles)], async (req, res) =>
   try {
     const sheet = await assertSheetAccess(req, res, req.params.id); if (!sheet || !assertDraft(res, sheet)) return;
     if (req.body.versao && Number(req.body.versao) !== Number(sheet.versao)) return res.status(409).json({ erro: 'A folha foi alterada por outro usuário. Recarregue os dados.' });
+    if (req.body.atividade_eap_id) {
+      const activity = await getQuery('SELECT a.id FROM atividades_eap a WHERE a.id=? AND a.projeto_id=? AND a.tenant_id=? AND NOT EXISTS (SELECT 1 FROM atividades_eap filho WHERE filho.pai_id=a.id AND filho.projeto_id=a.projeto_id AND filho.tenant_id=a.tenant_id)', [Number(req.body.atividade_eap_id), sheet.projeto_id, req.tenantId]);
+      if (!activity) return res.status(400).json({ erro: 'Atividade da EAP inválida, não executável ou pertencente a outra obra.' });
+    }
+    if (req.body.rdo_id) {
+      const rdo = await getQuery('SELECT id FROM rdos WHERE id=? AND projeto_id=? AND tenant_id=?', [Number(req.body.rdo_id), sheet.projeto_id, req.tenantId]);
+      if (!rdo) return res.status(400).json({ erro: 'RDO não pertence à obra.' });
+    }
     await runQuery(`UPDATE folhas_verificacao SET identificacao=?,equipe_snapshot=?,populacao_total=?,unidade_populacao=?,amostra_prevista=?,criterio_aceitacao=?,maximo_nc=?,rdo_id=?,atividade_eap_id=?,versao=versao+1,atualizado_por=?,atualizado_em=NOW() WHERE id=?`,
       [JSON.stringify(req.body.identificacao ?? parseJson(sheet.identificacao)), JSON.stringify(req.body.equipe ?? parseJson(sheet.equipe_snapshot, [])), req.body.populacao_total ?? sheet.populacao_total, req.body.unidade_populacao ?? sheet.unidade_populacao, req.body.amostra_prevista ?? sheet.amostra_prevista, req.body.criterio_aceitacao ?? sheet.criterio_aceitacao, req.body.maximo_nc ?? sheet.maximo_nc, req.body.rdo_id ?? sheet.rdo_id, req.body.atividade_eap_id ?? sheet.atividade_eap_id, req.usuario.id, sheet.id]);
     await registrarAuditoria('folhas_verificacao', sheet.id, 'UPDATE_DRAFT', sheet, req.body, req.usuario.id, { tenantId:req.tenantId });
@@ -371,12 +430,29 @@ router.post('/:id/respostas', [auth, requireProfiles(writeProfiles)], async (req
     if (!['CONFORME', 'NAO_CONFORME', 'NAO_APLICAVEL', 'PENDENTE'].includes(result)) return res.status(400).json({ erro: 'Resultado inválido.' });
     if (result === 'NAO_APLICAVEL' && item.exige_justificativa !== false && !String(req.body.justificativa || '').trim()) return res.status(400).json({ erro: 'Justificativa obrigatória para não aplicável.' });
     if (!String(item.chave || '').trim() || !String(item.rotulo || '').trim()) return res.status(400).json({ erro: 'Item de verificação inválido.' });
+    if (sheet.fiq_numero && !req.body.ponto_id) {
+      const config = parseJson(sheet.modelo_snapshot).configuracao || {};
+      const sections = [...(config.sections || [])];
+      if (sheet.tipo_folha === 'ELETRICA') {
+        const type = parseJson(sheet.identificacao).empreendimento_tipo;
+        const key = ['INDUSTRIAL','PREDIAL'].includes(type) ? 'PREDIAL_INDUSTRIAL' : type;
+        const extra = config.requisitosEspecificos?.[key] || [];
+        if (extra.length) sections.push({items:extra});
+      }
+      const match = /^(\d+)-(\d+)$/.exec(String(item.chave));
+      const original = match && sections[Number(match[1])]?.items?.[Number(match[2])];
+      if (!original) return res.status(400).json({ erro:'Critério não pertence ao modelo desta FIQ.' });
+      item.rotulo = typeof original === 'string' ? original : (original.rotulo || original.label);
+      item.obrigatorio = typeof original === 'string' || original.obrigatorio !== false;
+      item.exige_justificativa = typeof original === 'string' || original.exige_justificativa !== false;
+      if (result === 'NAO_APLICAVEL' && item.exige_justificativa && !String(req.body.justificativa || '').trim()) return res.status(400).json({ erro:'Justificativa obrigatória para não aplicável.' });
+    }
     const prior = await getQuery(`SELECT id FROM folhas_verificacao_respostas WHERE folha_id=? AND ponto_id IS NOT DISTINCT FROM ? AND item_snapshot->>'chave'=? LIMIT 1`, [sheet.id, req.body.ponto_id || null, item.chave]);
     const snapshot = { chave:item.chave, rotulo:item.rotulo, obrigatorio:item.obrigatorio !== false, tipo_resposta:item.tipo_resposta || 'STATUS', exige_justificativa:item.exige_justificativa !== false };
     // The sheet-level checklist is a creation-stage snapshot. It is never
     // overwritten during execution; point-level model answers may still be
     // adjusted while the draft is open.
-    if (prior && !req.body.ponto_id && sheet.tipo_folha !== 'CIVIL') return res.status(409).json({ erro:'A verificação preliminar já foi registrada e não pode ser alterada. Use reinspeção quando necessário.' });
+    if (prior && !req.body.ponto_id && sheet.tipo_folha !== 'CIVIL' && !(sheet.fiq_numero && sheet.folha_origem_id)) return res.status(409).json({ erro:'A verificação preliminar já foi registrada e não pode ser alterada. Use reinspeção quando necessário.' });
     if (prior) await runQuery(`UPDATE folhas_verificacao_respostas SET resultado=?,valor_texto=?,valor_numero=?,justificativa=?,observacao=?,responsavel_id=?,prazo_correcao=?,atualizado_em=NOW() WHERE id=?`, [result, req.body.valor_texto || null, req.body.valor_numero || null, req.body.justificativa || null, req.body.observacao || null, req.body.responsavel_id || null, req.body.prazo_correcao || null, prior.id]);
     else await runQuery(`INSERT INTO folhas_verificacao_respostas (tenant_id,folha_id,ponto_id,item_snapshot,resultado,valor_texto,valor_numero,justificativa,observacao,responsavel_id,prazo_correcao) VALUES (?,?,?,?,?,?,?,?,?,?,?)`, [req.tenantId,sheet.id,req.body.ponto_id || null,JSON.stringify(snapshot),result,req.body.valor_texto || null,req.body.valor_numero || null,req.body.justificativa || null,req.body.observacao || null,req.body.responsavel_id || null,req.body.prazo_correcao || null]);
     await withClient(async client => refreshSummary(client, sheet));
@@ -584,32 +660,51 @@ router.delete('/:id/eletrica/:resource/:resourceId', [auth, requireProfiles(writ
 
 router.post('/:id/vinculos', [auth, requireProfiles(writeProfiles)], async (req,res) => { try { const sheet=await assertSheetAccess(req,res,req.params.id); if (!sheet || !assertDraft(res,sheet)) return; const target=await getQuery('SELECT * FROM folhas_verificacao WHERE id=? AND tenant_id=?',[Number(req.body.folha_destino_id),req.tenantId]); if (!target) return res.status(404).json({erro:'Folha complementar não encontrada.'}); if (target.projeto_id !== sheet.projeto_id) return res.status(400).json({erro:'Folhas devem pertencer à mesma obra.'}); await runQuery('INSERT INTO folhas_verificacao_vinculos (tenant_id,folha_origem_id,folha_destino_id,tipo_vinculo,obrigatorio,bloqueia_liberacao,criado_por) VALUES (?,?,?,?,?,?,?)',[req.tenantId,sheet.id,target.id,req.body.tipo_vinculo || 'COMPLEMENTAR',Boolean(req.body.obrigatorio),Boolean(req.body.bloqueia_liberacao),req.usuario.id]); res.status(201).json({mensagem:'Folha vinculada.'}); } catch(error) {res.status(409).json({erro:error.message || 'Erro ao vincular folha.'});} });
 
-router.post('/:id/enviar-analise', [auth, requireProfiles(writeProfiles)], async (req,res) => { try { const sheet=await assertSheetAccess(req,res,req.params.id); if (!sheet || !assertDraft(res,sheet)) return; if (String(sheet.criado_por)!==String(req.usuario.id) && !can(req,approveProfiles)) return res.status(403).json({erro:'Somente criador, responsável ou gestor pode enviar.'}); const summary=await withClient(async client=>refreshSummary(client,sheet)); if (summary.sampleIncomplete || summary.torqueBlocked || (sheet.tipo_folha==='CIVIL' && summary.itensPendentes>0)) return res.status(409).json({erro:sheet.tipo_folha==='CIVIL'&&summary.itensPendentes>0?'Conclua os itens obrigatórios do checklist civil antes de enviar.':'Amostra incompleta ou folha complementar obrigatória pendente.'}); await runQuery('UPDATE folhas_verificacao SET status=?,enviado_em=NOW(),atualizado_por=? WHERE id=?',[rules.STATUS.EM_ANALISE,req.usuario.id,sheet.id]); await runQuery('INSERT INTO folhas_verificacao_historico (tenant_id,folha_id,acao,status_anterior,status_novo,dados,usuario_id) VALUES (?,?,?,?,?,?,?)',[req.tenantId,sheet.id,'SEND',sheet.status,rules.STATUS.EM_ANALISE,JSON.stringify(summary),req.usuario.id]); res.json({mensagem:'Folha enviada para análise.'}); } catch(error) {res.status(400).json({erro:error.message || 'Erro ao enviar folha.'});} });
+router.post('/:id/enviar-analise', [auth, requireProfiles(writeProfiles)], async (req,res) => { try { const sheet=await assertSheetAccess(req,res,req.params.id); if (!sheet || !assertDraft(res,sheet)) return; if (String(sheet.criado_por)!==String(req.usuario.id) && !can(req,approveProfiles)) return res.status(403).json({erro:'Somente criador, responsável ou gestor pode enviar.'}); const summary=await withClient(async client=>refreshSummary(client,sheet)); if (summary.sampleIncomplete || summary.torqueBlocked || ((sheet.fiq_numero || sheet.tipo_folha==='CIVIL') && summary.itensPendentes>0)) return res.status(409).json({erro:sheet.tipo_folha==='CIVIL'&&summary.itensPendentes>0?'Conclua os itens obrigatórios do checklist civil antes de enviar.':'Amostra incompleta ou folha complementar obrigatória pendente.'}); await runQuery('UPDATE folhas_verificacao SET status=?,enviado_em=NOW(),atualizado_por=? WHERE id=?',[rules.STATUS.EM_ANALISE,req.usuario.id,sheet.id]); await runQuery('INSERT INTO folhas_verificacao_historico (tenant_id,folha_id,acao,status_anterior,status_novo,dados,usuario_id) VALUES (?,?,?,?,?,?,?)',[req.tenantId,sheet.id,'SEND',sheet.status,rules.STATUS.EM_ANALISE,JSON.stringify(summary),req.usuario.id]); res.json({mensagem:'Folha enviada para análise.'}); } catch(error) {res.status(400).json({erro:error.message || 'Erro ao enviar folha.'});} });
 
 router.post('/:id/aprovar', [auth, requireProfiles(approveProfiles)], async (req,res) => {
   try {
     const sheet = await assertSheetAccess(req, res, req.params.id); if (!sheet) return;
     rules.assertTransition(sheet.status, rules.STATUS.APROVADA);
     const approver = await getQuery('SELECT nome,perfil,assinatura_png FROM usuarios WHERE id=?', [req.usuario.id]);
-    if (!approver?.assinatura_png) return res.status(409).json({ erro: 'Cadastre sua assinatura no perfil antes de aprovar a folha.' });
+    if (!approver || (!sheet.fiq_numero && !approver.assinatura_png)) return res.status(409).json({ erro: 'Cadastre sua assinatura no perfil antes de aprovar a folha.' });
     const summary = await withClient(async (client) => refreshSummary(client, sheet));
-    if ([rules.RESULT.PENDENTE, rules.RESULT.NAO_CONFORME, rules.RESULT.BLOQUEADO].includes(summary.result)) return res.status(409).json({ erro: 'A folha não atende aos critérios para aprovação.' });
+    let disciplineNonconformities = 0;
+    if (sheet.fiq_numero && sheet.tipo_folha === 'CIVIL') {
+      const civil = await getQuery("SELECT COUNT(*)::int total FROM folhas_verificacao_nao_conformidades WHERE folha_id=? AND status<>'RESOLVIDO'", [sheet.id]);
+      disciplineNonconformities = Number(civil.total);
+    }
+    if (sheet.fiq_numero && sheet.tipo_folha === 'ELETRICA') {
+      const electrical = await getQuery(`SELECT
+        (SELECT COUNT(*)::int FROM folhas_verificacao_eletrica_ensaios WHERE folha_id=? AND resultado='NAO_CONFORME') +
+        (SELECT COUNT(*)::int FROM folhas_verificacao_eletrica_torques WHERE folha_id=? AND resultado='NAO_CONFORME') AS nao_conformes,
+        (SELECT COUNT(*)::int FROM folhas_verificacao_eletrica_ensaios WHERE folha_id=? AND resultado IN ('PENDENTE','BLOQUEADO')) +
+        (SELECT COUNT(*)::int FROM folhas_verificacao_eletrica_torques WHERE folha_id=? AND resultado IN ('PENDENTE','BLOQUEADO')) AS pendentes`, [sheet.id,sheet.id,sheet.id,sheet.id]);
+      if (Number(electrical.pendentes)) return res.status(409).json({ erro:'Existem ensaios ou torques elétricos pendentes ou bloqueados.' });
+      disciplineNonconformities = Number(electrical.nao_conformes);
+    }
+    summary.itensNaoConformes = Number(summary.itensNaoConformes || 0) + disciplineNonconformities;
+    const hasNonconformities = Number(summary.nonConforming || 0) > 0 || Number(summary.itensNaoConformes || 0) > 0;
+    const justification = String(req.body.justificativa_nok || '').trim();
+    if (sheet.fiq_numero) {
+      try { rules.assertFiqApproval(summary, justification); } catch (error) { return res.status(409).json({ erro:error.message }); }
+    } else if ([rules.RESULT.PENDENTE,rules.RESULT.NAO_CONFORME,rules.RESULT.BLOQUEADO].includes(summary.result)) return res.status(409).json({ erro:'A folha não atende aos critérios para aprovação.' });
     if (sheet.tipo_folha === 'CIVIL') {
       const pendingCivil = await getQuery("SELECT COUNT(*)::int total FROM folhas_verificacao_nao_conformidades WHERE folha_id=? AND status<>'RESOLVIDO'", [sheet.id]);
-      if (Number(pendingCivil?.total || 0) > 0) return res.status(409).json({ erro:'Existem não conformidades civis sem tratamento concluído.' });
+      if (!sheet.fiq_numero && Number(pendingCivil?.total || 0) > 0) return res.status(409).json({ erro:'Existem não conformidades civis sem tratamento concluído.' });
     }
     if (sheet.tipo_folha === 'ELETRICA') {
       const pending = await getQuery(`SELECT
         (SELECT COUNT(*)::int FROM folhas_verificacao_eletrica_ensaios WHERE folha_id=? AND resultado IN ('PENDENTE','NAO_CONFORME','BLOQUEADO')) +
         (SELECT COUNT(*)::int FROM folhas_verificacao_eletrica_torques WHERE folha_id=? AND resultado IN ('PENDENTE','NAO_CONFORME','BLOQUEADO')) AS total`, [sheet.id, sheet.id]);
-      if (Number(pending?.total || 0) > 0) return res.status(409).json({ erro: 'Existem ensaios ou torques elétricos pendentes/reprovados.' });
+      if (!sheet.fiq_numero && Number(pending?.total || 0) > 0) return res.status(409).json({ erro: 'Existem ensaios ou torques elétricos pendentes/reprovados.' });
       const electricalConfig = parseJson(sheet.modelo_snapshot, {})?.configuracao || {};
       const requiredTests = (electricalConfig.ensaios_obrigatorios || []).filter((test) => test?.obrigatorio !== false && test?.tipo);
       if (requiredTests.length) {
         const registeredTests = await allQuery('SELECT tipo,resultado,instrumento_snapshot FROM folhas_verificacao_eletrica_ensaios WHERE folha_id=?', [sheet.id]);
         for (const requiredTest of requiredTests) {
           const satisfied = registeredTests.some((test) => {
-            if (test.tipo !== requiredTest.tipo || test.resultado !== rules.RESULT.CONFORME) return false;
+            if (test.tipo !== requiredTest.tipo || (test.resultado !== rules.RESULT.CONFORME && !(sheet.fiq_numero && justification && test.resultado === rules.RESULT.NAO_CONFORME))) return false;
             if (!requiredTest.exige_instrumento) return true;
             const instrument = parseJson(test.instrumento_snapshot, {});
             const validUntil = instrument.calibrationValidUntil || instrument.calibracao_valida_ate;
@@ -619,14 +714,32 @@ router.post('/:id/aprovar', [auth, requireProfiles(approveProfiles)], async (req
         }
       }
     }
-    await runQuery('UPDATE folhas_verificacao SET status=?,aprovado_em=NOW(),aprovado_por=?,atualizado_por=? WHERE id=?', [rules.STATUS.APROVADA, req.usuario.id, req.usuario.id, sheet.id]);
-    await runQuery('INSERT INTO folhas_verificacao_assinaturas (tenant_id,folha_id,tipo,usuario_id,nome_snapshot,perfil_snapshot,assinatura_snapshot,versao_folha,ip) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT (folha_id,tipo,versao_folha) DO UPDATE SET usuario_id=EXCLUDED.usuario_id,nome_snapshot=EXCLUDED.nome_snapshot,perfil_snapshot=EXCLUDED.perfil_snapshot,assinatura_snapshot=EXCLUDED.assinatura_snapshot,ip=EXCLUDED.ip,assinado_em=NOW()', [req.tenantId, sheet.id, 'APROVADOR', req.usuario.id, approver.nome, approver.perfil, approver.assinatura_png, sheet.versao, req.ip]);
-    await runQuery('INSERT INTO folhas_verificacao_historico (tenant_id,folha_id,acao,status_anterior,status_novo,dados,usuario_id) VALUES (?,?,?,?,?,?,?)', [req.tenantId, sheet.id, 'APPROVE', sheet.status, rules.STATUS.APROVADA, JSON.stringify(summary), req.usuario.id]);
+    await withClient(async (client) => {
+      const locked = await getWithClient(client, 'SELECT status,versao FROM folhas_verificacao WHERE id=? AND tenant_id=? FOR UPDATE', [sheet.id, req.tenantId]);
+      if (!locked || locked.status !== sheet.status || Number(locked.versao) !== Number(sheet.versao)) throw new Error('A folha foi alterada. Recarregue antes de aprovar.');
+      await execWithClient(client, 'UPDATE folhas_verificacao SET status=?,aprovado_em=NOW(),aprovado_por=?,atualizado_por=? WHERE id=?', [rules.STATUS.APROVADA, req.usuario.id, req.usuario.id, sheet.id], { returnColumn:null });
+      await execWithClient(client, 'INSERT INTO folhas_verificacao_assinaturas (tenant_id,folha_id,tipo,usuario_id,nome_snapshot,perfil_snapshot,assinatura_snapshot,versao_folha,ip) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT (folha_id,tipo,versao_folha) DO UPDATE SET usuario_id=EXCLUDED.usuario_id,nome_snapshot=EXCLUDED.nome_snapshot,perfil_snapshot=EXCLUDED.perfil_snapshot,assinatura_snapshot=EXCLUDED.assinatura_snapshot,ip=EXCLUDED.ip,assinado_em=NOW()', [req.tenantId, sheet.id, 'APROVADOR', req.usuario.id, approver.nome, approver.perfil, approver.assinatura_png, sheet.versao, req.ip]);
+      await history(client, { tenantId:req.tenantId, folhaId:sheet.id, action:'APPROVE', before:sheet.status, after:rules.STATUS.APROVADA, userId:req.usuario.id, data:{ ...summary, justificativa_nok:hasNonconformities ? justification : null, aprovador_nome:approver.nome } });
+    });
     res.json({ mensagem: 'Folha aprovada e assinatura do aprovador registrada.' });
   } catch (error) { res.status(400).json({ erro: error.message || 'Erro ao aprovar folha.' }); }
 });
 
-router.post('/:id/reprovar', [auth, requireProfiles(writeProfiles)], async (req,res) => { try { const sheet=await assertSheetAccess(req,res,req.params.id); if (!sheet) return; rules.assertTransition(sheet.status,rules.STATUS.REPROVADA_BLOQUEADA); const summary=await withClient(async client=>refreshSummary(client,sheet)); await runQuery('UPDATE folhas_verificacao SET status=?,resultado_lote=?,atualizado_por=? WHERE id=?',[rules.STATUS.REPROVADA_BLOQUEADA,rules.RESULT.BLOQUEADO,req.usuario.id,sheet.id]); await runQuery('INSERT INTO folhas_verificacao_historico (tenant_id,folha_id,acao,status_anterior,status_novo,dados,usuario_id) VALUES (?,?,?,?,?,?,?)',[req.tenantId,sheet.id,'REJECT',sheet.status,rules.STATUS.REPROVADA_BLOQUEADA,JSON.stringify({summary,decisao:req.body.decisao || null,justificativa:req.body.justificativa || null}),req.usuario.id]); res.json({mensagem:'Folha reprovada e bloqueada.'}); } catch(error) {res.status(400).json({erro:error.message || 'Erro ao reprovar folha.'});} });
+router.post('/:id/reprovar', [auth, requireProfiles(writeProfiles)], async (req,res) => {
+  try {
+    const sheet=await assertSheetAccess(req,res,req.params.id); if (!sheet) return;
+    if (sheet.fiq_numero && !can(req,approveProfiles)) return res.status(403).json({erro:'Apenas aprovadores podem reprovar uma FIQ.'});
+    await withClient(async client => {
+      const locked=await getWithClient(client,'SELECT * FROM folhas_verificacao WHERE id=? AND tenant_id=? FOR UPDATE',[sheet.id,req.tenantId]);
+      if (!locked) throw new Error('Folha não encontrada.');
+      rules.assertTransition(locked.status,rules.STATUS.REPROVADA_BLOQUEADA);
+      const summary=await refreshSummary(client,locked);
+      await execWithClient(client,'UPDATE folhas_verificacao SET status=?,resultado_lote=?,atualizado_por=? WHERE id=?',[rules.STATUS.REPROVADA_BLOQUEADA,rules.RESULT.BLOQUEADO,req.usuario.id,sheet.id],{returnColumn:null});
+      await history(client,{tenantId:req.tenantId,folhaId:sheet.id,action:'REJECT',before:locked.status,after:rules.STATUS.REPROVADA_BLOQUEADA,userId:req.usuario.id,data:{summary,decisao:req.body.decisao || null,justificativa:req.body.justificativa || null}});
+    });
+    res.json({mensagem:'Folha reprovada e bloqueada.'});
+  } catch(error) {res.status(400).json({erro:error.message || 'Erro ao reprovar folha.'});}
+});
 
 router.post('/:id/correcoes', [auth, requireProfiles(writeProfiles)], async (req, res) => {
   try {
@@ -634,6 +747,8 @@ router.post('/:id/correcoes', [auth, requireProfiles(writeProfiles)], async (req
     rules.assertTransition(sheet.status, rules.STATUS.EM_CORRECAO);
     const rnc = await getQuery('SELECT l.rnc_id,r.status FROM folhas_verificacao_rncs l JOIN rnc r ON r.id=l.rnc_id WHERE l.folha_id=?', [sheet.id]);
     if (!rnc) return res.status(409).json({ erro:'Gere e vincule a RNC antes de iniciar a correção.' });
+    const openRncs = await getQuery("SELECT COUNT(*)::int AS total FROM folhas_verificacao_rncs l JOIN rnc r ON r.id=l.rnc_id WHERE l.folha_id=? AND r.status<>'Encerrada'", [sheet.id]);
+    if (Number(openRncs.total)) return res.status(409).json({ erro:'Todas as RNCs vinculadas devem estar encerradas antes da correção.' });
     if (rnc.status !== 'Encerrada') return res.status(409).json({ erro:'A correção da folha só pode iniciar após o plano de ação da RNC ser aprovado e encerrado pela Qualidade.' });
     if (!String(req.body.justificativa || '').trim() || !req.body.prazo) return res.status(400).json({ erro:'Prazo e descrição da correção são obrigatórios.' });
     const responsibleId = req.body.responsavel_id || req.usuario.id;
@@ -649,6 +764,8 @@ router.post('/:id/finalizar-correcao', [auth, requireProfiles(writeProfiles)], a
     if (![rules.STATUS.EM_CORRECAO, rules.STATUS.REPROVADA_BLOQUEADA].includes(sheet.status)) return res.status(409).json({ erro:'A folha não está pronta para abrir uma nova revisão.' });
     const rnc = await getQuery('SELECT l.rnc_id,r.status,r.descricao_correcao FROM folhas_verificacao_rncs l JOIN rnc r ON r.id=l.rnc_id WHERE l.folha_id=?', [sheet.id]);
     if (!rnc) return res.status(409).json({ erro:'A folha reprovada precisa ter uma RNC vinculada.' });
+    const openRncs = await getQuery("SELECT COUNT(*)::int AS total FROM folhas_verificacao_rncs l JOIN rnc r ON r.id=l.rnc_id WHERE l.folha_id=? AND r.status<>'Encerrada'", [sheet.id]);
+    if (Number(openRncs.total)) return res.status(409).json({ erro:'Todas as RNCs vinculadas devem estar encerradas antes da reinspeção.' });
     if (rnc.status !== 'Encerrada') return res.status(409).json({ erro:'A RNC vinculada precisa estar aprovada e encerrada antes de abrir a revisão.' });
     const resolution = String(req.body.resolucao || rnc.descricao_correcao || '').trim();
     if (!resolution) return res.status(400).json({ erro:'A RNC encerrada não possui uma resolução registrada.' });
@@ -675,6 +792,7 @@ router.post('/:id/finalizar-correcao', [auth, requireProfiles(writeProfiles)], a
       const next = await getWithClient(client, 'SELECT COALESCE(MAX(revisao),0)+1 AS revisao FROM folhas_verificacao WHERE tenant_id=? AND projeto_id=? AND tipo_folha=? AND numero=?', [req.tenantId, sheet.projeto_id, sheet.tipo_folha, sheet.numero]);
       const inserted = await execWithClient(client, `INSERT INTO folhas_verificacao (tenant_id,projeto_id,modelo_id,tipo_folha,numero,revisao,versao,status,resultado_lote,empresa_responsavel_snapshot,empresa_executante_snapshot,equipe_snapshot,identificacao,modelo_snapshot,populacao_total,unidade_populacao,amostra_prevista,criterio_aceitacao,maximo_nc,resumo,rdo_id,atividade_eap_id,folha_origem_id,criado_por,atualizado_por)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [req.tenantId,sheet.projeto_id,sheet.modelo_id,sheet.tipo_folha,sheet.numero,next.revisao,1,rules.STATUS.RASCUNHO,rules.RESULT.PENDENTE,sheet.empresa_responsavel_snapshot,sheet.empresa_executante_snapshot,sheet.equipe_snapshot,sheet.identificacao,sheet.modelo_snapshot,sheet.populacao_total,sheet.unidade_populacao,sheet.amostra_prevista,sheet.criterio_aceitacao,sheet.maximo_nc,JSON.stringify({}),sheet.rdo_id,sheet.atividade_eap_id,sheet.id,req.usuario.id,req.usuario.id]);
+      if (sheet.fiq_numero) await execWithClient(client, 'UPDATE folhas_verificacao SET fiq_numero=? WHERE id=? AND tenant_id=?', [sheet.fiq_numero, inserted.lastID, req.tenantId], { returnColumn:null });
       const oldPoints = await allWithClient(client, 'SELECT * FROM folhas_verificacao_pontos WHERE folha_id=? ORDER BY id', [sheet.id]);
       const pointMap = new Map();
       for (const point of oldPoints) {
@@ -714,6 +832,29 @@ router.post('/:id/finalizar-correcao', [auth, requireProfiles(writeProfiles)], a
   } catch (error) { res.status(400).json({ erro:error.message || 'Erro ao finalizar correção.' }); }
 });
 
+router.post('/:id/abrir-reinspecao', [auth, requireProfiles(writeProfiles)], async (req,res) => {
+  try {
+    const sheet = await assertSheetAccess(req,res,req.params.id); if (!sheet) return;
+    const reason = String(req.body.justificativa || '').trim();
+    if (!sheet.fiq_numero || sheet.status !== rules.STATUS.REPROVADA_BLOQUEADA || !reason) return res.status(409).json({ erro:'Informe a justificativa para reinspecionar uma FIQ reprovada.' });
+    const result = await withClient(async client => {
+      const locked = await getWithClient(client, 'SELECT status FROM folhas_verificacao WHERE id=? AND tenant_id=? FOR UPDATE', [sheet.id,req.tenantId]);
+      if (locked?.status !== rules.STATUS.REPROVADA_BLOQUEADA) throw new Error('A FIQ já foi alterada. Recarregue a tela.');
+      const open = await getWithClient(client, "SELECT COUNT(*)::int total FROM folhas_verificacao_rncs l JOIN rnc r ON r.id=l.rnc_id WHERE l.folha_id=? AND r.status<>'Encerrada'", [sheet.id]);
+      if (Number(open.total)) throw new Error('Existem RNCs ainda não encerradas.');
+      const next = await getWithClient(client, 'SELECT COALESCE(MAX(revisao),0)+1 AS revisao FROM folhas_verificacao WHERE tenant_id=? AND projeto_id=? AND tipo_folha=? AND numero=?', [req.tenantId,sheet.projeto_id,sheet.tipo_folha,sheet.numero]);
+      const copy = await getWithClient(client, `INSERT INTO folhas_verificacao (tenant_id,projeto_id,modelo_id,tipo_folha,numero,fiq_numero,revisao,status,resultado_lote,empresa_responsavel_snapshot,empresa_executante_snapshot,equipe_snapshot,identificacao,modelo_snapshot,populacao_total,unidade_populacao,amostra_prevista,criterio_aceitacao,maximo_nc,rdo_id,atividade_eap_id,folha_origem_id,criado_por,atualizado_por)
+        SELECT tenant_id,projeto_id,modelo_id,tipo_folha,numero,fiq_numero,?,'RASCUNHO','PENDENTE',empresa_responsavel_snapshot,empresa_executante_snapshot,equipe_snapshot,identificacao,modelo_snapshot,populacao_total,unidade_populacao,amostra_prevista,criterio_aceitacao,maximo_nc,rdo_id,atividade_eap_id,id,?,? FROM folhas_verificacao WHERE id=? AND tenant_id=? RETURNING id`, [next.revisao,req.usuario.id,req.usuario.id,sheet.id,req.tenantId]);
+      await copyRevisionData(client,{source:sheet,targetId:copy.id,tenantId:req.tenantId});
+      await execWithClient(client, 'UPDATE folhas_verificacao SET status=?,atualizado_por=?,atualizado_em=NOW() WHERE id=?', [rules.STATUS.EM_REINSPECAO,req.usuario.id,sheet.id], {returnColumn:null});
+      await history(client,{tenantId:req.tenantId,folhaId:sheet.id,action:'REINSPECTION',before:sheet.status,after:rules.STATUS.EM_REINSPECAO,userId:req.usuario.id,data:{justificativa:reason,folha_revisao_id:copy.id}});
+      await history(client,{tenantId:req.tenantId,folhaId:copy.id,action:'REVISION_CREATED_FROM_CORRECTION',userId:req.usuario.id,data:{origem:sheet.id,justificativa:reason,revisao:next.revisao}});
+      return copy;
+    });
+    res.status(201).json(result);
+  } catch(error) { res.status(409).json({erro:error.message || 'Erro ao abrir reinspeção.'}); }
+});
+
 router.post('/:id/reinspecoes', [auth, requireProfiles(writeProfiles)], async (req, res) => {
   try {
     const sheet = await assertSheetAccess(req, res, req.params.id); if (!sheet) return;
@@ -742,15 +883,49 @@ router.post('/:id/revisoes', [auth, requireProfiles(approveProfiles)], async (re
   try {
     const sheet = await assertSheetAccess(req, res, req.params.id); if (!sheet) return;
     if (sheet.status !== rules.STATUS.APROVADA) return res.status(409).json({ erro:'Somente folha aprovada pode gerar revisão.' });
+    const reason = String(req.body.justificativa || '').trim();
+    if (sheet.fiq_numero && !reason) return res.status(400).json({ erro:'Informe o motivo da retificação.' });
     const copy = await withClient(async (client) => {
       const next = await getWithClient(client,'SELECT COALESCE(MAX(revisao),0)+1 AS revisao FROM folhas_verificacao WHERE tenant_id=? AND projeto_id=? AND tipo_folha=? AND numero=?',[req.tenantId,sheet.projeto_id,sheet.tipo_folha,sheet.numero]);
       const inserted = await execWithClient(client,`INSERT INTO folhas_verificacao (tenant_id,projeto_id,modelo_id,tipo_folha,numero,revisao,versao,status,resultado_lote,empresa_responsavel_snapshot,empresa_executante_snapshot,equipe_snapshot,identificacao,modelo_snapshot,populacao_total,unidade_populacao,amostra_prevista,criterio_aceitacao,maximo_nc,resumo,rdo_id,atividade_eap_id,folha_origem_id,criado_por,atualizado_por)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,[req.tenantId,sheet.projeto_id,sheet.modelo_id,sheet.tipo_folha,sheet.numero,next.revisao,1,rules.STATUS.RASCUNHO,rules.RESULT.PENDENTE,sheet.empresa_responsavel_snapshot,sheet.empresa_executante_snapshot,sheet.equipe_snapshot,sheet.identificacao,sheet.modelo_snapshot,sheet.populacao_total,sheet.unidade_populacao,sheet.amostra_prevista,sheet.criterio_aceitacao,sheet.maximo_nc,JSON.stringify({}),sheet.rdo_id,sheet.atividade_eap_id,sheet.id,req.usuario.id,req.usuario.id]);
+      if (sheet.fiq_numero) await execWithClient(client, 'UPDATE folhas_verificacao SET fiq_numero=? WHERE id=? AND tenant_id=?', [sheet.fiq_numero, inserted.lastID, req.tenantId], { returnColumn:null });
       await copyRevisionData(client,{source:sheet,targetId:inserted.lastID,tenantId:req.tenantId});
-      await history(client,{tenantId:req.tenantId,folhaId:inserted.lastID,action:'REVISION_CREATED',userId:req.usuario.id,data:{origem:sheet.id,revisao:next.revisao}}); return inserted.lastID;
+      await history(client,{tenantId:req.tenantId,folhaId:inserted.lastID,action:'REVISION_CREATED',userId:req.usuario.id,data:{origem:sheet.id,revisao:next.revisao,justificativa:reason || null}}); return inserted.lastID;
     });
     res.status(201).json({ id:copy });
   } catch (error) { res.status(500).json({ erro:error.message || 'Erro ao criar revisão.' }); }
+});
+
+router.post('/:id/rnc-item', [auth, requireProfiles(writeProfiles)], async (req,res) => {
+  try {
+    const sheet = await assertSheetAccess(req,res,req.params.id); if (!sheet) return;
+    if (!sheet.fiq_numero) return res.status(409).json({ erro:'Esta ação está disponível para FIQs.' });
+    if ([rules.STATUS.APROVADA,rules.STATUS.CANCELADA].includes(sheet.status)) return res.status(409).json({ erro:'FIQ aprovada ou cancelada não pode receber novas ocorrências.' });
+    const itemTypes = {resposta_id:'folhas_verificacao_respostas',medicao_id:'folhas_verificacao_medicoes',ensaio_eletrico_id:'folhas_verificacao_eletrica_ensaios',torque_eletrico_id:'folhas_verificacao_eletrica_torques',nao_conformidade_id:'folhas_verificacao_nao_conformidades'};
+    const selected = Object.keys(itemTypes).filter(field => Number(req.body[field] || 0) > 0);
+    if (selected.length !== 1) return res.status(400).json({ erro:'Informe exatamente um item não conforme.' });
+    const field = selected[0], itemId = Number(req.body[field]);
+    const result = await withClient(async client => {
+      await getWithClient(client, 'SELECT id FROM folhas_verificacao WHERE id=? AND tenant_id=? FOR UPDATE', [sheet.id,req.tenantId]);
+      const existing = await getWithClient(client, `SELECT rnc_id FROM folhas_verificacao_rncs WHERE tenant_id=? AND folha_id=? AND ${field}=?`, [req.tenantId,sheet.id,itemId]);
+      const separateReason = String(req.body.justificativa_nova_ocorrencia || '').trim();
+      if (existing && !separateReason) return { id:existing.rnc_id, reused:true };
+      const predicate = field === 'nao_conformidade_id' ? "status<>'RESOLVIDO'" : "resultado='NAO_CONFORME'";
+      const item = await getWithClient(client, `SELECT * FROM ${itemTypes[field]} WHERE id=? AND folha_id=? AND tenant_id=? AND ${predicate}`, [itemId,sheet.id,req.tenantId]);
+      if (!item) throw new Error('Item não conforme não encontrado nesta FIQ.');
+      const label = field === 'resposta_id' ? parseJson(item.item_snapshot).rotulo : item.descricao || item.criterio || item.tipo || [item.elemento || item.componente,item.localizacao || item.ponto_conexao].filter(Boolean).join(' - ');
+      const activity = sheet.atividade_eap_id ? await getWithClient(client, 'SELECT codigo_eap,descricao FROM atividades_eap WHERE id=? AND projeto_id=? AND tenant_id=?', [sheet.atividade_eap_id,sheet.projeto_id,req.tenantId]) : null;
+      const evidence = await allWithClient(client, `SELECT id,nome_arquivo,caminho_arquivo,descricao FROM folhas_verificacao_evidencias WHERE folha_id=? AND tenant_id=? AND (${field}=? OR id=?)`, [sheet.id,req.tenantId,itemId,field === 'nao_conformidade_id' ? item.evidencia_id || null : null]);
+      const description = [`FIQ ${sheet.fiq_numero}, folha ${sheet.numero}.`, label || 'Item não conforme.', item.observacao || '', activity ? `EAP ${activity.codigo_eap}: ${activity.descricao}.` : '', separateReason ? `Nova ocorrência: ${separateReason}` : ''].filter(Boolean).join(' ');
+      const photos = evidence.filter(e => /\.(jpe?g|png|webp|heic|heif)$/i.test(e.nome_arquivo || '')).map(e => ({caminho_arquivo:e.caminho_arquivo}));
+      const rnc = await execWithClient(client, `INSERT INTO rnc (tenant_id,projeto_id,rdo_id,titulo,descricao,gravidade,status,acao_corretiva,origem,area_afetada,registros_fotograficos,criado_por) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, [req.tenantId,sheet.projeto_id,sheet.rdo_id || null,`Não conformidade ${sheet.fiq_numero}`,description,'Média','Aberta','Tratar e reinspecionar o item não conforme.','FIQ',item.localizacao || parseJson(sheet.identificacao).area || null,JSON.stringify(photos),req.usuario.id]);
+      await execWithClient(client, `INSERT INTO folhas_verificacao_rncs (tenant_id,folha_id,rnc_id,${field},dados_snapshot) VALUES (?,?,?,?,?)`, [req.tenantId,sheet.id,rnc.lastID,itemId,JSON.stringify({ fiq:sheet.fiq_numero,item,atividade:activity,evidencias:evidence })]);
+      await history(client,{tenantId:req.tenantId,folhaId:sheet.id,action:'RNC_CREATE',userId:req.usuario.id,data:{rnc_id:rnc.lastID,[field]:itemId,justificativa:separateReason || null}});
+      return {id:rnc.lastID,reused:false};
+    });
+    res.status(result.reused ? 200 : 201).json(result);
+  } catch(error) { res.status(409).json({ erro:error.message || 'Erro ao gerar RNC.' }); }
 });
 
 router.post('/:id/rnc', [auth, requireProfiles(writeProfiles)], async (req,res) => {
@@ -771,19 +946,29 @@ router.post('/:id/rnc', [auth, requireProfiles(writeProfiles)], async (req,res) 
     const correctiveAction = treatments.map(item=>item.acao_imediata).filter(Boolean).join('; ') || `Corrigir os itens não conformes da folha ${sheet.numero} e realizar a reinspeção antes da liberação.`;
     const description = `Gerada pela Folha de Verificação ${sheet.numero}. ${descriptions.length ? `Itens NC: ${descriptions.join('; ')}.` : ''} ${locations.length ? `Locais: ${locations.join(', ')}.` : ''}`.trim();
     const result=await withClient(async client=>{
+      await getWithClient(client,'SELECT id FROM folhas_verificacao WHERE id=? AND tenant_id=? FOR UPDATE',[sheet.id,req.tenantId]);
+      const concurrent=await getWithClient(client,'SELECT rnc_id FROM folhas_verificacao_rncs WHERE folha_id=? AND tenant_id=? ORDER BY id LIMIT 1',[sheet.id,req.tenantId]);
+      if (concurrent) return {id:concurrent.rnc_id,reused:true};
       const rnc=await execWithClient(client,`INSERT INTO rnc (tenant_id,projeto_id,rdo_id,titulo,descricao,gravidade,status,acao_corretiva,responsavel_id,data_prevista_encerramento,criado_por) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,[req.tenantId,sheet.projeto_id,sheet.rdo_id||null,`Não conformidade ${sheet.numero}`,description,req.body.gravidade||'Média','Aberta',correctiveAction,treatments.find(item=>item.responsavel_id)?.responsavel_id||null,treatments.find(item=>item.prazo)?.prazo||null,req.usuario.id]);
       const snapshot={origem:'Folha de Verificação',folha:sheet.numero,medicoes:measurements,respostas:answers,tratamentos:treatments,evidencias:evidences,acao_corretiva:correctiveAction};
       await execWithClient(client,'INSERT INTO folhas_verificacao_rncs (tenant_id,folha_id,rnc_id,dados_snapshot) VALUES (?,?,?,?)',[req.tenantId,sheet.id,rnc.lastID,JSON.stringify(snapshot)]);
       await history(client,{tenantId:req.tenantId,folhaId:sheet.id,action:'RNC_CREATE',userId:req.usuario.id,data:{rnc_id:rnc.lastID}});
-      return rnc.lastID;
+      return {id:rnc.lastID,reused:false};
     });
-    res.status(201).json({id:result});
+    res.status(result.reused ? 200 : 201).json(result);
   } catch(error) {res.status(409).json({erro:error.message || 'Erro ao gerar RNC.'});}
 });
 
-router.post('/:id/assinaturas/:tipo', [auth, requireProfiles(writeProfiles)], async (req,res) => { try { const sheet=await assertSheetAccess(req,res,req.params.id); if (!sheet) return; const type=String(req.params.tipo || '').toUpperCase(); if (!['EXECUTANTE','INSPETOR','APROVADOR'].includes(type)) return res.status(400).json({erro:'Tipo de assinatura inválido.'}); if (type==='APROVADOR' && !can(req,approveProfiles)) return res.status(403).json({erro:'Aprovador sem permissão.'}); const user=await getQuery('SELECT nome,perfil,assinatura_png FROM usuarios WHERE id=?',[req.usuario.id]); if (!user?.assinatura_png) return res.status(409).json({erro:'Cadastre sua assinatura no perfil antes de assinar.'}); await runQuery('INSERT INTO folhas_verificacao_assinaturas (tenant_id,folha_id,tipo,usuario_id,nome_snapshot,perfil_snapshot,assinatura_snapshot,versao_folha,ip) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT (folha_id,tipo,versao_folha) DO UPDATE SET usuario_id=EXCLUDED.usuario_id,nome_snapshot=EXCLUDED.nome_snapshot,perfil_snapshot=EXCLUDED.perfil_snapshot,assinatura_snapshot=EXCLUDED.assinatura_snapshot,ip=EXCLUDED.ip,assinado_em=NOW()',[req.tenantId,sheet.id,type,req.usuario.id,user.nome,user.perfil,user.assinatura_png,sheet.versao,req.ip]); res.json({mensagem:'Assinatura registrada.'}); } catch(error) {res.status(500).json({erro:error.message || 'Erro ao assinar.'});} });
+router.post('/:id/assinaturas/:tipo', [auth, requireProfiles(writeProfiles)], async (req,res) => { try { const sheet=await assertSheetAccess(req,res,req.params.id); if (!sheet) return; if (sheet.fiq_numero && [rules.STATUS.APROVADA,rules.STATUS.CANCELADA].includes(sheet.status)) return res.status(409).json({erro:'FIQ aprovada ou cancelada não pode ser alterada.'}); const type=String(req.params.tipo || '').toUpperCase(); if (!['EXECUTANTE','INSPETOR','APROVADOR'].includes(type)) return res.status(400).json({erro:'Tipo de assinatura inválido.'}); if (type==='APROVADOR' && !can(req,approveProfiles)) return res.status(403).json({erro:'Aprovador sem permissão.'}); const user=await getQuery('SELECT nome,perfil,assinatura_png FROM usuarios WHERE id=?',[req.usuario.id]); if (!user?.assinatura_png) return res.status(409).json({erro:'Cadastre sua assinatura no perfil antes de assinar.'}); await runQuery('INSERT INTO folhas_verificacao_assinaturas (tenant_id,folha_id,tipo,usuario_id,nome_snapshot,perfil_snapshot,assinatura_snapshot,versao_folha,ip) VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT (folha_id,tipo,versao_folha) DO UPDATE SET usuario_id=EXCLUDED.usuario_id,nome_snapshot=EXCLUDED.nome_snapshot,perfil_snapshot=EXCLUDED.perfil_snapshot,assinatura_snapshot=EXCLUDED.assinatura_snapshot,ip=EXCLUDED.ip,assinado_em=NOW()',[req.tenantId,sheet.id,type,req.usuario.id,user.nome,user.perfil,user.assinatura_png,sheet.versao,req.ip]); res.json({mensagem:'Assinatura registrada.'}); } catch(error) {res.status(500).json({erro:error.message || 'Erro ao assinar.'});} });
 
-router.post('/:id/evidencias', [auth, requireProfiles(writeProfiles), evidenceUpload.single('arquivo')], async (req,res) => { try { const sheet=await assertSheetAccess(req,res,req.params.id); if (!sheet) return; if (!req.file) return res.status(400).json({erro:'Arquivo obrigatório.'}); const stored=path.posix.join(`tenant_${req.tenantId}`,req.file.filename); const result=await runQuery('INSERT INTO folhas_verificacao_evidencias (tenant_id,projeto_id,folha_id,medicao_id,resposta_id,categoria,nome_arquivo,caminho_arquivo,tipo,tamanho,descricao,localizacao,criado_por) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',[req.tenantId,sheet.projeto_id,sheet.id,req.body.medicao_id || null,req.body.resposta_id || null,req.body.categoria || 'EVIDENCIA',req.file.originalname,stored,req.file.mimetype,req.file.size,req.body.descricao || null,JSON.stringify(req.body.localizacao ? parseJson(req.body.localizacao) : null),req.usuario.id]); res.status(201).json({id:result.lastID,caminho_arquivo:stored}); } catch(error) { if(req.file?.path) fs.unlink(req.file.path,()=>{}); res.status(500).json({erro:error.message || 'Erro ao enviar evidência.'});} });
+router.post('/:id/evidencias', [auth, requireProfiles(writeProfiles), async (req, res, next) => {
+  try {
+    const sheet = await assertSheetAccess(req, res, req.params.id);
+    if (!sheet) return;
+    if (!['RASCUNHO', 'EM_CORRECAO', 'EM_REINSPECAO'].includes(sheet.status)) return res.status(409).json({ erro: 'Anexos não podem ser alterados neste estado da folha.' });
+    next();
+  } catch (error) { next(error); }
+}, evidenceUpload.single('arquivo')], async (req,res) => { try { const sheet=await assertSheetAccess(req,res,req.params.id); if (!sheet) { if(req.file?.path) fs.unlink(req.file.path,()=>{}); return; } if (!req.file) return res.status(400).json({erro:'Arquivo obrigatório.'}); if (!['RASCUNHO', 'EM_CORRECAO', 'EM_REINSPECAO'].includes(sheet.status)) { fs.unlink(req.file.path,()=>{}); return res.status(409).json({erro:'Anexos não podem ser alterados neste estado da folha.'}); } for (const [field,table] of [['resposta_id','folhas_verificacao_respostas'],['medicao_id','folhas_verificacao_medicoes'],['ensaio_eletrico_id','folhas_verificacao_eletrica_ensaios'],['torque_eletrico_id','folhas_verificacao_eletrica_torques'],['nao_conformidade_id','folhas_verificacao_nao_conformidades']]) { if (req.body[field] && !await getQuery(`SELECT id FROM ${table} WHERE id=? AND folha_id=? AND tenant_id=?`, [Number(req.body[field]),sheet.id,req.tenantId])) { fs.unlink(req.file.path,()=>{}); return res.status(400).json({erro:'O item da evidência não pertence a esta folha.'}); } } const stored=path.posix.join(`tenant_${req.tenantId}`,req.file.filename); const result=await runQuery('INSERT INTO folhas_verificacao_evidencias (tenant_id,projeto_id,folha_id,medicao_id,resposta_id,categoria,nome_arquivo,caminho_arquivo,tipo,tamanho,descricao,localizacao,criado_por,ensaio_eletrico_id,torque_eletrico_id,nao_conformidade_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',[req.tenantId,sheet.projeto_id,sheet.id,req.body.medicao_id || null,req.body.resposta_id || null,req.body.categoria || 'EVIDENCIA',req.file.originalname,stored,req.file.mimetype,req.file.size,req.body.descricao || null,JSON.stringify(req.body.localizacao ? parseJson(req.body.localizacao) : null),req.usuario.id,req.body.ensaio_eletrico_id || null,req.body.torque_eletrico_id || null,req.body.nao_conformidade_id || null]); res.status(201).json({id:result.lastID,caminho_arquivo:stored}); } catch(error) { if(req.file?.path) fs.unlink(req.file.path,()=>{}); res.status(500).json({erro:error.message || 'Erro ao enviar evidência.'});} });
 
 router.delete('/:id/evidencias/:evidenciaId', [auth, requireProfiles(writeProfiles)], async (req,res) => {
   try {
@@ -791,6 +976,9 @@ router.delete('/:id/evidencias/:evidenciaId', [auth, requireProfiles(writeProfil
     if (!['RASCUNHO', 'EM_CORRECAO', 'EM_REINSPECAO'].includes(sheet.status)) return res.status(409).json({ erro: 'Anexos não podem ser alterados após a aprovação da folha.' });
     const evidence = await getQuery('SELECT * FROM folhas_verificacao_evidencias WHERE id=? AND folha_id=? AND tenant_id=?', [Number(req.params.evidenciaId), sheet.id, req.tenantId]);
     if (!evidence) return res.status(404).json({ erro: 'Anexo não encontrado.' });
+    const linked = await getQuery(`SELECT 1 AS found FROM folhas_verificacao_rncs r, LATERAL jsonb_array_elements(COALESCE(r.dados_snapshot->'evidencias','[]'::jsonb)) e
+      WHERE r.folha_id=? AND r.tenant_id=? AND e->>'id'=? LIMIT 1`, [sheet.id,req.tenantId,String(evidence.id)]);
+    if (linked) return res.status(409).json({ erro:'Esta evidência está vinculada a uma RNC e deve ser preservada.' });
     await runQuery('DELETE FROM folhas_verificacao_evidencias WHERE id=? AND folha_id=? AND tenant_id=?', [evidence.id, sheet.id, req.tenantId]);
     const storedPath = path.resolve(uploadsDir, String(evidence.caminho_arquivo || '').replace(/\\/g, '/'));
     const uploadsRoot = path.resolve(uploadsDir);
@@ -804,15 +992,20 @@ router.get('/:id/pdf', [auth, requireProfiles(writeProfiles)], async (req,res) =
 router.post('/:id/cancelar', [auth, requireProfiles(approveProfiles)], async (req,res) => {
   try {
     const sheet=await assertSheetAccess(req,res,req.params.id); if (!sheet) return;
-    if (sheet.tipo_folha !== 'CIVIL') return res.status(409).json({ erro:'Cancelamento por esta rota está disponível somente para FV-CIV.' });
+    if (sheet.tipo_folha !== 'CIVIL' && !sheet.fiq_numero) return res.status(409).json({ erro:'Cancelamento por esta rota está disponível somente para FV-CIV ou FIQ.' });
     if (![rules.STATUS.RASCUNHO,rules.STATUS.EM_ANALISE].includes(sheet.status)) return res.status(409).json({ erro:'Somente folha civil em preparação ou pendente pode ser cancelada.' });
     const reason=String(req.body.justificativa||'').trim(); if (!reason) return res.status(400).json({ erro:'Justificativa do cancelamento é obrigatória.' });
-    await withClient(async client=>{ await execWithClient(client,'UPDATE folhas_verificacao SET status=?,atualizado_por=?,atualizado_em=NOW() WHERE id=?',[rules.STATUS.CANCELADA,req.usuario.id,sheet.id],{returnColumn:null}); await history(client,{tenantId:req.tenantId,folhaId:sheet.id,action:'CANCEL',before:sheet.status,after:rules.STATUS.CANCELADA,userId:req.usuario.id,data:{justificativa:reason}}); });
+    await withClient(async client=>{
+      const locked=await getWithClient(client,'SELECT status FROM folhas_verificacao WHERE id=? AND tenant_id=? FOR UPDATE',[sheet.id,req.tenantId]);
+      if (!locked || ![rules.STATUS.RASCUNHO,rules.STATUS.EM_ANALISE].includes(locked.status)) throw new Error('A folha foi alterada e não pode mais ser cancelada.');
+      await execWithClient(client,'UPDATE folhas_verificacao SET status=?,atualizado_por=?,atualizado_em=NOW() WHERE id=?',[rules.STATUS.CANCELADA,req.usuario.id,sheet.id],{returnColumn:null});
+      await history(client,{tenantId:req.tenantId,folhaId:sheet.id,action:'CANCEL',before:locked.status,after:rules.STATUS.CANCELADA,userId:req.usuario.id,data:{justificativa:reason}});
+    });
     res.json({ mensagem:'Folha civil cancelada.' });
   } catch(error) { res.status(400).json({ erro:error.message||'Erro ao cancelar folha.' }); }
 });
 
-router.delete('/:id', [auth, requireProfiles(writeProfiles)], async (req,res) => { try { const sheet=await assertSheetAccess(req,res,req.params.id); if(!sheet || !assertDraft(res,sheet)) return; if(String(sheet.criado_por)!==String(req.usuario.id) && !can(req,approveProfiles)) return res.status(403).json({erro:'Somente criador ou gestor pode excluir rascunho.'}); await runQuery('DELETE FROM folhas_verificacao WHERE id=? AND tenant_id=?',[sheet.id,req.tenantId]); await registrarAuditoria('folhas_verificacao',sheet.id,'DELETE',sheet,null,req.usuario.id,{tenantId:req.tenantId}); res.json({mensagem:'Rascunho removido.'}); } catch {res.status(500).json({erro:'Erro ao remover rascunho.'});} });
+router.delete('/:id', [auth, requireProfiles(writeProfiles)], async (req,res) => { try { const sheet=await assertSheetAccess(req,res,req.params.id); if(!sheet || !assertDraft(res,sheet)) return; if(sheet.fiq_numero) return res.status(409).json({erro:'Cancele a FIQ com justificativa para preservar a rastreabilidade.'}); if(String(sheet.criado_por)!==String(req.usuario.id) && !can(req,approveProfiles)) return res.status(403).json({erro:'Somente criador ou gestor pode excluir rascunho.'}); await runQuery('DELETE FROM folhas_verificacao WHERE id=? AND tenant_id=?',[sheet.id,req.tenantId]); await registrarAuditoria('folhas_verificacao',sheet.id,'DELETE',sheet,null,req.usuario.id,{tenantId:req.tenantId}); res.json({mensagem:'Rascunho removido.'}); } catch {res.status(500).json({erro:'Erro ao remover rascunho.'});} });
 
 // Vincula uma RNC criada pelo formulário padrão à folha que originou a NC.
 router.post('/:id/rnc/vincular', [auth, requireProfiles(writeProfiles)], async (req,res) => {
@@ -823,6 +1016,7 @@ router.post('/:id/rnc/vincular', [auth, requireProfiles(writeProfiles)], async (
     const [nc, answerNc] = await Promise.all([allQuery(`SELECT * FROM folhas_verificacao_medicoes WHERE folha_id=? AND resultado='NAO_CONFORME' ORDER BY id`, [sheet.id]),allQuery(`SELECT * FROM folhas_verificacao_respostas WHERE folha_id=? AND resultado='NAO_CONFORME' ORDER BY id`, [sheet.id])]);
     if (!nc.length && !answerNc.length) return res.status(409).json({ erro:'Não há itens não conformes para vincular à RNC.' });
     const result = await withClient(async (client) => {
+      await getWithClient(client,'SELECT id FROM folhas_verificacao WHERE id=? AND tenant_id=? FOR UPDATE',[sheet.id,req.tenantId]);
       const existing = await getWithClient(client, 'SELECT rnc_id FROM folhas_verificacao_rncs WHERE folha_id=?', [sheet.id]);
       if (existing) {
         if (Number(existing.rnc_id) === rncId) return rncId;

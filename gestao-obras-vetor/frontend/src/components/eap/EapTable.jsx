@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, History, Pencil, Plus, Search, SlidersHorizontal, Trash2, X, Layers, Circle, Timer, CheckCircle2, ListTree, ShieldCheck } from 'lucide-react';
 import Button, { IconButton } from '../ui/Button';
 import { activityCounts, activityLabel, activityWeight, buildHierarchy, formatDate, formatNumber, formatCurrency, measurementSummary, STATUS_LABELS, visibleActivities } from './eapUtils';
 import { EapDrawer, EapField, EditorActions, WeightHint } from './EapEditor';
 import './EapWorkspace.css';
 
-export default function EapTable({ activities, editor, onDelete, readOnly = false }) {
+export default function EapTable({ activities, editor, onDelete, readOnly = false, fiqs, projetoId }) {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [expanded, setExpanded] = useState(new Set());
@@ -96,12 +98,13 @@ export default function EapTable({ activities, editor, onDelete, readOnly = fals
   const renderRow = (row) => {
     if (editor.session && String(row.id) === String(editingId)) return renderEdit(row);
     const hasChildren = row.children.length > 0;
+    const fiq = fiqs?.find((entry) => String(entry.atividade_eap_id) === String(row.id));
     const isExpanded = filtering || expanded.has(String(row.id));
     return <tr key={row.id} className={`${hasChildren ? 'eap-group-row' : 'eap-leaf-row'}${row.level === 0 ? ' eap-root-row' : ''}${row.level >= 2 ? ' eap-deep-row' : ''}${row.contextOnly ? ' is-context' : ''}`} data-activity-id={row.id}>
       <td className="eap-sticky-0"><span className="eap-code">{row.codigo_eap}</span></td>
       <td className="eap-sticky-1"><div className="eap-tree-name" style={{ '--depth': row.level }}>
         {hasChildren ? <button type="button" className="eap-tree-toggle" aria-label={`${isExpanded ? 'Recolher' : 'Expandir'} ${row.codigo_eap}`} aria-expanded={isExpanded} disabled={locked || filtering} onClick={() => toggle(row.id)}>{isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button> : <span className="eap-tree-dot" />}
-        <button className="eap-name-button" type="button" onClick={() => start(row, '', true)} disabled={actionsDisabled} title={row.nome || row.descricao}><span className="eap-activity-name">{row.nome || row.descricao}</span>{hasChildren && <small><Layers size={11} aria-hidden="true" />{row.children.length} subatividade{row.children.length !== 1 ? 's' : ''}</small>}</button>
+        <button className="eap-name-button" type="button" onClick={() => start(row, '', true)} disabled={actionsDisabled} title={row.nome || row.descricao}><span className="eap-activity-name">{row.nome || row.descricao}</span>{hasChildren && <small><Layers size={11} aria-hidden="true" />{row.children.length} subatividade{row.children.length !== 1 ? 's' : ''}</small>}{!hasChildren && fiqs && <small>FIQ: {fiq?.total || 0} · Pendentes {fiq?.pendentes || 0} · Em aprovação {fiq?.aguardando || 0} · Aprovadas {fiq?.aprovadas || 0} · Reprovadas {fiq?.reprovadas || 0}</small>}</button>
       </div></td>
       <td>{formatDate(row.data_inicio_planejada)}</td><td>{formatDate(row.data_fim_planejada)}</td>
       <td>{hasChildren ? '—' : row.unidade_medida || '—'}</td><td className="eap-number">{hasChildren ? '—' : formatNumber(row.quantidade_total)}</td>
@@ -110,6 +113,7 @@ export default function EapTable({ activities, editor, onDelete, readOnly = fals
       <td className="eap-number"><MeasurementValue measurement={row.medicao} field="valor_medido" /></td>
       <td><span className={`eap-table-status is-${row.tone}`}>{STATUS_LABELS[row.tone]}</span></td>
       <td><div className="eap-row-actions">
+        {!hasChildren && fiqs && <button type="button" disabled={locked} onClick={() => navigate(`/projeto/${projetoId}/qualidade/folhas?atividade_eap_id=${row.id}`)}>FIQs</button>}
         <IconButton size="sm" variant="ghost" icon={Pencil} label={`Editar ${row.codigo_eap}`} onClick={() => start(row)} disabled={actionsDisabled} />
         <IconButton size="sm" variant="ghost" tone="primary" icon={Plus} label={`Adicionar subatividade em ${row.codigo_eap}`} onClick={() => start(null, String(row.id))} disabled={actionsDisabled} />
         <IconButton size="sm" variant="ghost" icon={History} label={`Histórico de ${row.codigo_eap}`} onClick={() => start(row, '', true, 'history')} disabled={actionsDisabled} />

@@ -24,8 +24,8 @@ const pageBottom = 766;
 const drawMiniHeader = (doc, folha) => {
   doc.save().rect(0, 0, 595, 42).fill('#f7fbff').restore();
   doc.save().rect(0, 40, 595, 2).fill('#123b7a').restore();
-  doc.fillColor('#123b7a').font('Helvetica-Bold').fontSize(10).text('VETOR | FOLHA DE VERIFICAÇÃO', 38, 14);
-  doc.font('Helvetica').fontSize(8).text(`${folha.numero} - Rev. ${folha.revisao} - ${statusLabel(folha.status)}`, 350, 16, { width: 207, align: 'right' });
+  doc.fillColor('#123b7a').font('Helvetica-Bold').fontSize(10).text(folha.fiq_numero ? 'VETOR | FIQ' : 'VETOR | FOLHA DE VERIFICAÇÃO', 38, 14);
+  doc.font('Helvetica').fontSize(8).text(`${folha.fiq_numero || folha.numero} - Rev. ${folha.revisao} - ${statusLabel(folha.status)}`, 350, 16, { width: 207, align: 'right' });
 };
 const newPage = (doc, folha) => { doc.addPage(); drawMiniHeader(doc, folha); doc.y = 60; doc.fillColor('#1f2937').font('Helvetica').fontSize(9); };
 const ensureSpace = (doc, amount, folha) => { if (doc.y + amount > pageBottom) newPage(doc, folha); };
@@ -69,7 +69,7 @@ async function loadData(folhaId) {
     allQuery('SELECT * FROM folhas_verificacao_evidencias WHERE folha_id=? ORDER BY criado_em', [folhaId]),
     allQuery('SELECT * FROM folhas_verificacao_assinaturas WHERE folha_id=? ORDER BY assinado_em', [folhaId]),
     allQuery('SELECT f.numero,f.status,f.resultado_lote,v.tipo_vinculo,v.obrigatorio FROM folhas_verificacao_vinculos v JOIN folhas_verificacao f ON f.id=v.folha_destino_id WHERE v.folha_origem_id=?', [folhaId]),
-    getQuery('SELECT r.* FROM folhas_verificacao_rncs fr JOIN rnc r ON r.id=fr.rnc_id WHERE fr.folha_id=?', [folhaId]),
+    allQuery('SELECT r.* FROM folhas_verificacao_rncs fr JOIN rnc r ON r.id=fr.rnc_id WHERE fr.folha_id=? ORDER BY fr.id', [folhaId]),
     folha.atividade_eap_id ? getQuery('SELECT codigo_eap,descricao FROM atividades_eap WHERE id=?', [folha.atividade_eap_id]) : Promise.resolve(null),
     folha.rdo_id ? getQuery('SELECT numero_rdo,data_relatorio FROM rdos WHERE id=?', [folha.rdo_id]) : Promise.resolve(null),
     folha.tipo_folha === 'ELETRICA' ? allQuery('SELECT * FROM folhas_verificacao_eletrica_circuitos WHERE folha_id=? ORDER BY tag', [folhaId]) : Promise.resolve([]),
@@ -95,14 +95,15 @@ async function generateFolhaVerificacaoPdfBuffer(folhaId) {
   const doc = new PDFDocument({ size: 'A4', margin: 38, bufferPages: true });
   const chunks = []; doc.on('data', (chunk) => chunks.push(chunk)); const complete = new Promise((resolve) => doc.on('end', () => resolve(Buffer.concat(chunks))));
   const identification = json(folha.identificacao); const summary = json(folha.resumo); const instrument = json(torque?.instrumento_snapshot);
+  const approval = folha.fiq_numero ? await getQuery("SELECT h.dados,h.criado_em,u.nome FROM folhas_verificacao_historico h LEFT JOIN usuarios u ON u.id=h.usuario_id WHERE h.folha_id=? AND h.acao='APPROVE' ORDER BY h.criado_em DESC LIMIT 1", [folha.id]) : null;
 
   doc.save().rect(0, 0, 595, 116).fill('#f7fbff').restore();
   doc.save().rect(0, 0, 595, 6).fill('#123b7a').restore();
   doc.save().rect(0, 110, 595, 6).fill('#dceff1').restore();
   if (fs.existsSync(logoFile)) doc.image(logoFile, 40, 16, { fit: [68, 68], align: 'center', valign: 'center' });
   doc.fillColor('#123b7a').font('Helvetica-Bold').fontSize(9).text('VETOR', 38, 89); doc.font('Helvetica').fontSize(6.5).text('GESTÃO DE OBRAS', 38, 101);
-  doc.fillColor('#10264a').font('Helvetica-Bold').fontSize(19).text('Folha de Verificação', 132, 18);
-  doc.font('Helvetica').fontSize(9.5).text(`${folha.tipo_folha === 'TORQUE' ? 'Controle de torque' : folha.tipo_folha === 'CIVIL' ? 'Controle de qualidade civil' : 'Controle de qualidade'} - ${folha.numero}`, 132, 47, { width: 270 });
+  doc.fillColor('#10264a').font('Helvetica-Bold').fontSize(19).text(folha.fiq_numero ? 'Ficha de Inspeção de Qualidade' : 'Folha de Verificação', 132, 18, { width: 290 });
+  doc.font('Helvetica').fontSize(9.5).text(`${folha.fiq_numero ? `${folha.fiq_numero} | ` : ''}${folha.numero}`, 132, 47, { width: 270 });
   doc.fillColor('#55758a').fontSize(7.5).text(`Obra: ${value(folha.projeto_nome)}`, 132, 65, { width: 270, ellipsis: true });
   doc.text(`Contratante: ${snapshotName(folha.empresa_responsavel_snapshot || folha.empresa_responsavel)}`, 132, 79, { width: 270, ellipsis: true });
   doc.text(`Executante: ${snapshotName(folha.empresa_executante_snapshot || folha.empresa_executante)}`, 132, 93, { width: 270, ellipsis: true });
@@ -112,12 +113,17 @@ async function generateFolhaVerificacaoPdfBuffer(folhaId) {
 
   sectionTitle(doc, '1. Identificação e rastreabilidade', folha, 42 + 3 * 57 + 8);
   drawGrid(doc, [
-    ['Status', statusLabel(folha.status)], ['Obra', folha.projeto_nome], ['Código do lote', identification.codigo_lote], ['Descrição do lote', identification.descricao_lote],
+    ['Status', statusLabel(folha.status)], ['Obra', folha.projeto_nome], ['Código do lote', identification.codigo_lote], ['Descrição do lote', identification.descricao_lote], ['Data da inspeção', identification.data_inspecao], ['Responsável pela inspeção', identification.fiscal_inspetor_nome || folha.criador_nome],
     ['Área / setor / trecho', identification.area || identification.area_setor_trecho], ['População total', `${value(folha.populacao_total, '0')} ${value(folha.unidade_populacao, '')}`], ['Amostra prevista', folha.amostra_prevista],
     ['Critério de aceitação', folha.criterio_aceitacao === 'CEM_PORCENTO' ? 'Inspeção 100%' : folha.criterio_aceitacao === 'MAX_NC' ? `Máximo de ${value(folha.maximo_nc, '0')} NC` : 'C=0'],
     ['Atividade EAP', activity ? `${value(activity.codigo_eap)} - ${value(activity.descricao)}` : 'Não vinculada'], ['RDO relacionado', rdo ? `${value(rdo.numero_rdo)} - ${value(rdo.data_relatorio)}` : 'Não vinculado'],
     ['Empresa responsável', snapshotName(folha.empresa_responsavel_snapshot || folha.empresa_responsavel)], ['Empresa executante', snapshotName(folha.empresa_executante_snapshot || folha.empresa_executante)]
   ], 4, folha);
+  if (approval && json(approval.dados).justificativa_nok) {
+    sectionTitle(doc, 'Aceitação de não conformidade', folha);
+    doc.font('Helvetica').fontSize(9).fillColor('#1f2937').text(`Aprovada por ${value(approval.nome)} em ${dateTime(approval.criado_em)}.`, { width:519 });
+    doc.text(`Justificativa: ${json(approval.dados).justificativa_nok}`, { width:519 });
+  }
   if (folha.tipo_folha === 'CIVIL') drawGrid(doc, [
     ['Cliente', identification.cliente], ['Atividade executada', identification.atividade_executada], ['Data da inspeção', identification.data_inspecao], ['Hora da inspeção', identification.hora_inspecao],
     ['Documento de referência', identification.documento_referencia], ['Revisão', identification.revisao_documento], ['Procedimento executivo', identification.procedimento_executivo], ['Frente / local', identification.area]
@@ -184,9 +190,17 @@ async function generateFolhaVerificacaoPdfBuffer(folhaId) {
     drawGrid(doc, civilNonConformities.flatMap((item,index)=>[[`NC ${index+1}`,item.descricao],['Local / responsável',`${value(item.localizacao)} - ${value(item.responsavel_nome)}`],['Ação imediata',item.acao_imediata],['Prazo / status',`${value(item.prazo)} - ${value(item.status).replaceAll('_',' ')}`]]), 2, folha);
   }
   if (links.length) { sectionTitle(doc, '6. Folhas vinculadas', folha, 42 + Math.ceil(links.length / 2) * 57 + 8); drawGrid(doc, links.map((link) => [link.numero, `${value(link.tipo_vinculo)} - ${statusLabel(link.status)} - ${resultLabel(link.resultado_lote)}`]), 2, folha); }
-  if (rnc) { sectionTitle(doc, '7. RNC e tratamento', folha, 42 + 3 * 57 + 8); drawGrid(doc, [['RNC', `#${rnc.id}`], ['Status', value(rnc.status)], ['Gravidade', value(rnc.gravidade)], ['Título', rnc.titulo], ['Descrição', rnc.descricao], ['Ação corretiva', rnc.acao_corretiva]], 2, folha); }
+  if (rnc.length) { sectionTitle(doc, '7. RNC e tratamento', folha, 42 + 3 * 57 + 8); for (const occurrence of rnc) drawGrid(doc, [['RNC', `#${occurrence.id}`], ['Status', value(occurrence.status)], ['Gravidade', value(occurrence.gravidade)], ['Título', occurrence.titulo], ['Descrição', occurrence.descricao], ['Ação corretiva', occurrence.acao_corretiva]], 2, folha); }
   sectionTitle(doc, '8. Evidências anexadas', folha, 42 + Math.max(1, Math.ceil(evidences.length / 2)) * 57 + 8);
   if (evidences.length) drawGrid(doc, evidences.map((evidence) => [evidence.categoria || 'Documento', `${value(evidence.nome_arquivo)}${evidence.descricao ? ` - ${evidence.descricao}` : ''}`]), 2, folha); else { ensureSpace(doc, 32, folha); doc.fillColor('#64748b').font('Helvetica').fontSize(9).text('Nenhuma evidência anexada.'); doc.y += 26; }
+  for (const evidence of evidences.filter(item => /\.(jpe?g|png)$/i.test(item.nome_arquivo || ''))) {
+    const root = path.resolve(__dirname, '..', 'uploads', `tenant_${folha.tenant_id}`);
+    const file = path.resolve(__dirname, '..', 'uploads', String(evidence.caminho_arquivo || ''));
+    if (!file.startsWith(`${root}${path.sep}`) || !fs.existsSync(file)) continue;
+    ensureSpace(doc, 215, folha);
+    doc.fillColor('#1f2937').font('Helvetica').fontSize(8).text(value(evidence.descricao || evidence.nome_arquivo), { width:519 });
+    try { doc.image(file, 40, doc.y + 4, { fit:[510,180] }); doc.y += 190; } catch { doc.text('Imagem indisponível no PDF.'); }
+  }
 
   sectionTitle(doc, '9. Assinaturas e aprovação', folha);
   const signaturesByType = new Map(signatures.map((signature) => [signature.tipo, signature])); const signatureTypes = ['EXECUTANTE', 'INSPETOR', 'APROVADOR']; const signatureGap = 10; const cardWidth = (519 - signatureGap * 2) / 3; const cardHeight = 120;
