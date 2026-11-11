@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { listarRequisicoesProjeto, listarRequisicoes, concluirRequisicao } from '../services/api';
 import { useNotification } from '../context/NotificationContext';
 import { Search, FileText, Clock } from 'lucide-react';
+import { numeroRequisicaoExibicao, buscaNumeroRequisicao } from '../utils/numeroRequisicao';
 
 // Mapeamento: slug -> { label, statuses[] }
 // "Cotações recebidas" é a etapa oficial de decisão do Gestor Geral.
@@ -90,7 +91,7 @@ export default function ComprasStatusList() {
 
   const filtradas = busca
     ? requisicoes.filter((r) =>
-        r.numero_requisicao?.toLowerCase().includes(busca.toLowerCase()) ||
+        buscaNumeroRequisicao(r.numero_requisicao, r.id, busca) ||
         r.tipo_material?.toLowerCase().includes(busca.toLowerCase()) ||
         r.solicitante_nome?.toLowerCase().includes(busca.toLowerCase()) ||
         r.projeto_nome?.toLowerCase().includes(busca.toLowerCase())
@@ -178,8 +179,8 @@ export default function ComprasStatusList() {
                     onMouseLeave={(e) => { e.currentTarget.style.filter = 'none'; }}
                   >
                     <td style={{ whiteSpace: 'nowrap' }}>
-                      <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.82rem', color: 'var(--primary)' }}>
-                        {req.numero_requisicao}
+                      <span title={req.numero_requisicao} style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.82rem', color: 'var(--primary)' }}>
+                        {numeroRequisicaoExibicao(req.numero_requisicao, req.id)}
                       </span>
                     </td>
                     {!projetoId && (
@@ -226,7 +227,7 @@ export default function ComprasStatusList() {
                                   setBusyId(req.id);
                                   try {
                                     await concluirRequisicao(req.id);
-                                    success(`Pedido ${req.numero_requisicao} concluído e entregue.`, 5000);
+                                    success(`Pedido ${numeroRequisicaoExibicao(req.numero_requisicao, req.id)} concluído e entregue.`, 5000);
                                     carregar();
                                   } catch (err) {
                                     error(err?.response?.data?.erro || 'Erro ao finalizar entrega.', 7000);

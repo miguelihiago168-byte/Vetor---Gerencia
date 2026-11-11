@@ -805,6 +805,7 @@ function detectarAtividadesAtrasadas(atividades, opcoes = {}) {
 }
 
 module.exports = {
+  adicionarDiasUteis,
   calcularScoreDependencia,
   detectarCiclos,
   calcularCaminoCritico,

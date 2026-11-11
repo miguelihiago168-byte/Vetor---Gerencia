@@ -5,6 +5,7 @@ import { getCockpitReturnContext } from '../components/CockpitReturnButton';
 import Button from '../components/ui/Button';
 import { useAuth } from '../context/AuthContext';
 import { fmtTs, fmtData } from '../utils/date';
+import { numeroRequisicaoExibicao } from '../utils/numeroRequisicao';
 import {
   detalharRequisicao, analisarItemRequisicao, inserirCotacaoItem, editarCotacaoItem,
   selecionarCotacaoItem, marcarItemComprado, cancelarItemRequisicao, devolverCotacaoItem,
@@ -31,8 +32,6 @@ const STATUS_REQ_BADGE = {
   'Compra autorizada': 'badge badge-green', 'Finalizada': 'badge badge-green',
   'Encerrada sem compra': 'badge badge-red',
 };
-const URGENCIA_COLOR = { Normal: '#5b6472', Urgente: '#b76b08', Emergencial: '#c83a3a' };
-
 const fmt = (v) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—';
 
 const SLOT_VAZIO = { fornecedor_nome: '', cnpj: '', telefone: '', email: '', valor_unitario: '', frete: '0', prazo_entrega: '' };
@@ -329,11 +328,11 @@ export default function RequisicaoDetalhe() {
   const voltarLabel  = cockpitReturn ? 'Cockpit' : 'Requisições';
 
   return (
-    <ComprasLayout title={req.numero_requisicao}>
+    <ComprasLayout title={numeroRequisicaoExibicao(req.numero_requisicao, req.id)}>
       {/* Breadcrumb */}
       <p style={{ marginTop: -8, marginBottom: 16, fontSize: '0.85rem', color: 'var(--gray-500)' }}>
         <Link to={voltarLink} style={{ color: 'var(--primary)', textDecoration: 'none' }}>{voltarLabel}</Link>
-        {' / '}{req.numero_requisicao}
+        {' / '}<span title={req.numero_requisicao}>{numeroRequisicaoExibicao(req.numero_requisicao, req.id)}</span>
       </p>
 
       {/* Cabeçalho */}
@@ -346,9 +345,7 @@ export default function RequisicaoDetalhe() {
               {req.projeto_nome || `Obra #${req.projeto_id}`}
             </p>
           </div>
-          <div className="suprimentos-status-cluster">
-            <span className={URGENCIA_BADGE[req.urgencia] || 'badge badge-gray'} style={{ color: URGENCIA_COLOR[req.urgencia] || undefined }}>{req.urgencia}</span>
-            <span className={STATUS_REQ_BADGE[req.status_requisicao] || 'badge badge-gray'}>{req.status_requisicao}</span>
+          <div className="suprimentos-summary-actions">
             {podeGestor && temAgAnalise && (
               <Button size="sm" tone="success" variant="soft" startIcon={CheckCircle2} onClick={aprovarTodos}>Aprovar Todos</Button>
             )}
@@ -357,7 +354,15 @@ export default function RequisicaoDetalhe() {
             )}
           </div>
         </div>
-        <div className="suprimentos-meta-grid">
+        <div className="suprimentos-meta-grid suprimentos-summary-metrics" aria-label="Situação e dados da requisição">
+          <div className="suprimentos-summary-status">
+            <small>Situação</small>
+            <span className={`${STATUS_REQ_BADGE[req.status_requisicao] || 'badge badge-gray'} suprimentos-summary-badge`}>{req.status_requisicao || 'Não informada'}</span>
+          </div>
+          <div className="suprimentos-summary-status">
+            <small>Prioridade</small>
+            <span className={`${URGENCIA_BADGE[req.urgencia] || 'badge badge-gray'} suprimentos-summary-badge`}>{req.urgencia || 'Não informada'}</span>
+          </div>
           <div className="suprimentos-meta-item">
             <small>Solicitante</small>
             <strong>{req.solicitante_nome || '—'}</strong>
@@ -369,7 +374,7 @@ export default function RequisicaoDetalhe() {
             </div>
           )}
           <div className="suprimentos-meta-item">
-            <small>Data</small>
+            <small>Criada em</small>
             <strong>{fmtData(req.criado_em)}</strong>
           </div>
           <div className="suprimentos-meta-item">

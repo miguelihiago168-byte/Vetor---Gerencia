@@ -4,6 +4,7 @@ import ComprasLayout from '../components/ComprasLayout';
 import CockpitReturnButton, { forwardCockpitNavigationState, getCockpitReturnContext } from '../components/CockpitReturnButton';
 import { useAuth } from '../context/AuthContext';
 import { listarRequisicoesProjeto, listarRequisicoes, criarRequisicao, getProjeto, getProjetos } from '../services/api';
+import { numeroRequisicaoExibicao } from '../utils/numeroRequisicao';
 
 const TIPOS_MATERIAL = ['Materiais Elétricos','Materiais Civis','Materiais Eletrônicos','Ferramentas','EPIs','Serviços','Outros'];
 const URGENCIAS = ['Normal','Urgente','Emergencial'];
@@ -166,7 +167,7 @@ export default function Requisicoes() {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <div>
-                  <span style={{ color: 'var(--gray-400)', fontSize: '0.8rem' }}>{r.numero_requisicao}</span>
+                  <span title={r.numero_requisicao} style={{ color: 'var(--gray-400)', fontSize: '0.8rem' }}>{numeroRequisicaoExibicao(r.numero_requisicao, r.id)}</span>
                   <h3 style={{ margin: '0.2rem 0 0', fontSize: '1rem', fontWeight: 700 }}>{r.tipo_material}</h3>
                   {r.descricao_itens && (
                     <p style={{ margin: '0.15rem 0 0', fontSize: '0.85rem', color: 'var(--gray-600)', fontWeight: 500 }}>{r.descricao_itens}</p>

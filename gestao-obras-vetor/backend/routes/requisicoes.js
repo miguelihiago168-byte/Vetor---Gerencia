@@ -336,6 +336,7 @@ router.get('/finalizadas', async (req, res) => {
     let sql = `
       SELECT
         i.id AS item_id,
+        r.id AS requisicao_id,
         i.descricao AS item_descricao,
         i.quantidade,
         i.unidade,
@@ -508,6 +509,7 @@ router.get('/negadas', async (req, res) => {
     let sql = `
       SELECT
         i.id AS item_id,
+        r.id AS requisicao_id,
         i.descricao AS item_descricao,
         i.quantidade,
         i.unidade,

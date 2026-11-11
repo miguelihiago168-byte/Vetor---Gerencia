@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useState, useCallback } from 'react';
 import ComprasLayout from '../components/ComprasLayout';
 import { listarCotacoesNegadas, getProjetos } from '../services/api';
+import { numeroRequisicaoExibicao } from '../utils/numeroRequisicao';
 
 export default function CotacoesNegadas() {
   const [itens, setItens] = useState([]);
@@ -87,7 +88,7 @@ export default function CotacoesNegadas() {
             <tbody>
               {itensFiltrados.map((i) => (
                 <tr key={`${i.origem || 'requisicao'}-${i.item_id}`}>
-                  <td><span style={{ color: 'var(--primary)', fontSize: '0.82rem' }}>{i.numero_requisicao}</span></td>
+                  <td><span title={i.numero_requisicao} style={{ color: 'var(--primary)', fontSize: '0.82rem' }}>{numeroRequisicaoExibicao(i.numero_requisicao, i.requisicao_id)}</span></td>
                   <td><strong>{i.item_descricao}</strong></td>
                   <td style={{ textAlign: 'center' }}>{i.quantidade} {i.unidade || ''}</td>
                   <td>

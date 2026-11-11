@@ -30,6 +30,7 @@ import Estoque from './pages/Estoque';
 // FINANCEIRO DESATIVADO
 // import FinanceiroFluxoCaixa from './pages/FinanceiroFluxoCaixa';
 import EAP from './pages/EAP';
+import MapaSuprimentos from './pages/MapaSuprimentos';
 import EAPForm from './pages/EAPForm';
 import CurvaS from './pages/CurvaS';
 import CronogramaGantt from './pages/CronogramaGantt';
@@ -108,6 +109,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
               <ProjetoDetalhes />
             </PrivateRoute>
           } />
+          <Route path="/projeto/:projetoId/mapa-suprimentos" element={<PrivateRoute allowedPerfis={PERFIS_EAP}><MapaSuprimentos /></PrivateRoute>} />
           <Route path="/projeto/:projetoId/eap" element={
             <PrivateRoute allowedPerfis={PERFIS_EAP}>
               <EAP />

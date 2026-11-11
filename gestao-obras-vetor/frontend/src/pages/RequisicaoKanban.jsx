@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { numeroRequisicaoExibicao } from '../utils/numeroRequisicao';
 import {
   DndContext,
   DragOverlay,
@@ -136,7 +137,7 @@ function DraggableCard({ req, colId, projetoId, onAprovar, canDrag }) {
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
         <span style={{ fontWeight: 700, fontSize: '0.82rem', color: '#1e293b', fontFamily: 'monospace' }}>
-          {req.numero_requisicao}
+          {numeroRequisicaoExibicao(req.numero_requisicao, req.id)}
         </span>
         <span style={{
           fontSize: '0.68rem', fontWeight: 700, borderRadius: 99,
@@ -238,7 +239,7 @@ function CompactRow({ req, colId, projetoId, onAprovar, canDrag }) {
       }}
       onClick={() => navigate(projetoId ? `/projeto/${projetoId}/compras/${req.id}` : `/compras/${req.id}`)}
     >
-      <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#334155', flexShrink: 0 }}>{req.numero_requisicao}</span>
+      <span title={req.numero_requisicao} style={{ fontFamily: 'monospace', fontWeight: 700, color: '#334155', flexShrink: 0 }}>{numeroRequisicaoExibicao(req.numero_requisicao, req.id)}</span>
       <span style={{ color: '#64748b', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{req.tipo_material}</span>
       <span style={{ fontWeight: 700, color: '#1e293b', flexShrink: 0 }}>{fmt(req.valor_total)}</span>
       <span style={{ color: '#94a3b8', flexShrink: 0 }}>{req.total_itens}i</span>
@@ -266,7 +267,7 @@ function GhostCard({ req }) {
       opacity: 0.92,
     }}>
       <div style={{ fontWeight: 700, fontSize: '0.82rem', color: '#1e293b', fontFamily: 'monospace' }}>
-        {req?.numero_requisicao}
+        {numeroRequisicaoExibicao(req?.numero_requisicao, req?.id)}
       </div>
       <div style={{ fontSize: '0.83rem', color: '#334155', marginTop: 4 }}>{req?.tipo_material}</div>
       <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#1e293b', marginTop: 6 }}>{fmt(req?.valor_total)}</div>
@@ -281,7 +282,7 @@ function ConfirmModal({ req, colFrom, colTo, onConfirm, onCancel, loading }) {
       <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
         <h3 style={{ margin: 0, marginBottom: 12, fontSize: '1rem', color: '#1e293b' }}>Confirmar movimentação</h3>
         <p style={{ margin: 0, marginBottom: 6, fontSize: '0.88rem', color: '#475569' }}>
-          Requisição: <strong>{req.numero_requisicao}</strong>
+          Requisição: <strong>{numeroRequisicaoExibicao(req.numero_requisicao, req.id)}</strong>
         </p>
         <p style={{ margin: 0, marginBottom: 16, fontSize: '0.88rem', color: '#475569' }}>
           <span style={{ background: '#f1f5f9', padding: '2px 8px', borderRadius: 6 }}>{colFrom}</span>

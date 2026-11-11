@@ -35,7 +35,7 @@ export function AssetsTable({ label, columns, rows, className = '' }) {
   </table></div>;
 }
 
-export function AssetsModal({ title, description, onClose, closeDisabled = false, children }) {
+export function AssetsModal({ title, description, onClose, closeDisabled = false, overlayClassName = '', children }) {
   const titleId = useId();
   const modalRef = useRef(null);
   const closeRef = useRef({ onClose, closeDisabled });
@@ -69,7 +69,7 @@ export function AssetsModal({ title, description, onClose, closeDisabled = false
       if (previous?.isConnected) previous.focus();
     };
   }, []);
-  return createPortal(<div className="modal-overlay assets-modal-overlay" onClick={(event) => { if (event.target === event.currentTarget && !closeDisabled) onClose(); }}>
+  return createPortal(<div className={`modal-overlay assets-modal-overlay ${overlayClassName}`} onClick={(event) => { if (event.target === event.currentTarget && !closeDisabled) onClose(); }}>
     <div ref={modalRef} className="modal-card assets-modal" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
       <header className="assets-modal-heading"><div><h2 id={titleId}>{title}</h2>{description && <p>{description}</p>}</div><button className="btn btn-ghost" type="button" aria-label="Fechar janela" disabled={closeDisabled} onClick={onClose}><X size={18} aria-hidden="true" /></button></header>
       {children}

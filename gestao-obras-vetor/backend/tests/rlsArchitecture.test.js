@@ -3,7 +3,8 @@ const fs = require('fs');
 const path = require('path');
 
 const read = (...parts) => fs.readFileSync(path.join(__dirname, '..', ...parts), 'utf8');
-const migration = read('scripts', 'migrations', '000013_postgres_rls_groups.js');
+const migration = read('scripts', 'migration-history', '000013_postgres_rls_groups.js');
+const baseline = read('scripts', 'migrations', '000001_initial_schema.js');
 const database = read('config', 'database.js');
 const runner = read('scripts', 'runMigrations.js');
 
@@ -15,6 +16,7 @@ assert.match(migration, /FORCE ROW LEVEL SECURITY/);
 assert.match(migration, /app_has_tenant_access/);
 assert.match(migration, /tenant_destino_id/);
 assert.match(migration, /grupo_id/);
+assert.match(baseline, /'000013_postgres_rls_groups'/);
 assert.match(database, /SELECT set_config\(\$1, \$2, true\)/);
 assert.doesNotMatch(database, /tenantSchema|SET search_path TO tenant_/);
 assert.doesNotMatch(runner, /schema_name LIKE 'tenant_%'/);

@@ -2,6 +2,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import ComprasLayout from '../components/ComprasLayout';
 import { listarCotacoesFinalizadas, getProjetos, listarRequisicoesEncerradas } from '../services/api';
+import { numeroRequisicaoExibicao, buscaNumeroRequisicao } from '../utils/numeroRequisicao';
 
 const fmt = (v) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—';
 const fmtData = (iso) => iso ? new Date(iso).toLocaleDateString('pt-BR') : '—';
@@ -44,11 +45,11 @@ export default function CotacoesFinalizadas() {
   useEffect(() => { carregar(); }, [carregar]);
 
   const itensFiltrados = busca
-    ? itens.filter((i) => i.item_descricao?.toLowerCase().includes(busca.toLowerCase()) || i.fornecedor_nome?.toLowerCase().includes(busca.toLowerCase()))
+    ? itens.filter((i) => buscaNumeroRequisicao(i.numero_requisicao, i.requisicao_id, busca) || i.item_descricao?.toLowerCase().includes(busca.toLowerCase()) || i.fornecedor_nome?.toLowerCase().includes(busca.toLowerCase()))
     : itens;
 
   const reqsFiltradas = busca
-    ? reqs.filter((r) => r.numero_requisicao?.toLowerCase().includes(busca.toLowerCase()) || r.tipo_material?.toLowerCase().includes(busca.toLowerCase()) || r.solicitante_nome?.toLowerCase().includes(busca.toLowerCase()))
+    ? reqs.filter((r) => buscaNumeroRequisicao(r.numero_requisicao, r.id, busca) || r.tipo_material?.toLowerCase().includes(busca.toLowerCase()) || r.solicitante_nome?.toLowerCase().includes(busca.toLowerCase()))
     : reqs;
 
   const totalGasto = itensFiltrados.reduce((acc, i) => acc + numeroFinito(i.valor_total), 0);
@@ -115,7 +116,7 @@ export default function CotacoesFinalizadas() {
                       onClick={() => irParaReq(r.id)}
                     >
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--primary)' }}>{r.numero_requisicao}</span>
+                        <span title={r.numero_requisicao} style={{ fontSize: '0.75rem', color: 'var(--primary)' }}>{numeroRequisicaoExibicao(r.numero_requisicao, r.id)}</span>
                         <strong style={{ fontSize: '0.9rem' }}>{r.tipo_material}</strong>
                         <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Solicitante: {r.solicitante_nome || '—'} · {fmtData(r.atualizado_em)}</span>
                       </div>
@@ -146,7 +147,7 @@ export default function CotacoesFinalizadas() {
                 <tbody>
                   {itensFiltrados.map((i) => (
                     <tr key={`${i.origem || 'requisicao'}-${i.item_id}`}>
-                      <td><span style={{ color: 'var(--primary)', fontSize: '0.82rem' }}>{i.numero_requisicao}</span></td>
+                      <td><span title={i.numero_requisicao} style={{ color: 'var(--primary)', fontSize: '0.82rem' }}>{numeroRequisicaoExibicao(i.numero_requisicao, i.requisicao_id)}</span></td>
                       <td><strong>{i.item_descricao}</strong></td>
                       <td style={{ textAlign: 'center' }}>{i.quantidade} {i.unidade || ''}</td>
                       <td>

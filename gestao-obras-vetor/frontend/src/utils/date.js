@@ -13,7 +13,10 @@ export const parseTs = (str) => {
   const s = String(str).trim();
   // Tem componente de hora (contém ':')
   if (s.includes(':')) {
-    return new Date(s.replace(' ', 'T') + 'Z'); // UTC → fuso local
+    let normalized = s.replace(' ', 'T');
+    const hasTimezone = /(?:z|[+-]\d{2}(?::?\d{2})?)$/i.test(normalized);
+    if (/[+-]\d{2}$/.test(normalized)) normalized += ':00';
+    return new Date(hasTimezone ? normalized : `${normalized}Z`); // UTC → fuso local
   }
   // Só data — adiciona meio-dia local para não virar o dia em UTC-3
   return new Date(s + 'T12:00:00');

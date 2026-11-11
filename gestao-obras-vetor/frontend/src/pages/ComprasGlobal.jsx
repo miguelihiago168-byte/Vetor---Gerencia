@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import ComprasLayout from '../components/ComprasLayout';
 import { useAuth } from '../context/AuthContext';
 import { listarRequisicoes, criarRequisicao, getProjetos } from '../services/api';
+import { numeroRequisicaoExibicao, buscaNumeroRequisicao } from '../utils/numeroRequisicao';
 
 const TIPOS_MATERIAL = ['Materiais Elétricos','Materiais Civis','Materiais Eletrônicos','Ferramentas','EPIs','Serviços','Outros'];
 const URGENCIAS      = ['Normal','Urgente','Emergencial'];
@@ -97,7 +98,7 @@ export default function ComprasGlobal() {
 
   const lista = busca
     ? requisicoes.filter((r) =>
-        r.numero_requisicao?.toLowerCase().includes(busca.toLowerCase()) ||
+        buscaNumeroRequisicao(r.numero_requisicao, r.id, busca) ||
         r.tipo_material?.toLowerCase().includes(busca.toLowerCase()) ||
         r.projeto_nome?.toLowerCase().includes(busca.toLowerCase()) ||
         r.solicitante_nome?.toLowerCase().includes(busca.toLowerCase())
@@ -180,7 +181,7 @@ export default function ComprasGlobal() {
             <tbody>
               {lista.map((r) => (
                 <tr key={r.id}>
-                  <td><span style={{ color: 'var(--primary)', fontSize: '0.82rem', fontWeight: 600 }}>{r.numero_requisicao}</span></td>
+                  <td><span title={r.numero_requisicao} style={{ color: 'var(--primary)', fontSize: '0.82rem', fontWeight: 600 }}>{numeroRequisicaoExibicao(r.numero_requisicao, r.id)}</span></td>
                   <td style={{ fontWeight: 600 }}>{r.projeto_nome || `#${r.projeto_id}`}</td>
                   <td style={{ fontSize: '0.85rem' }}>
                     {r.tipo_material}
