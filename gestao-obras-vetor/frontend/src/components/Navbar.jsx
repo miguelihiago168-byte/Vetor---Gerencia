@@ -1,14 +1,14 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Bell, LogOut, User, ChevronDown, Menu, X, CalendarDays, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Bell, LogOut, User, Settings, SlidersHorizontal, Sparkles, Menu, X, CalendarDays, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useLeaveGuard } from '../context/LeaveGuardContext';
 import {
   getRDOs, getRNCs, getRequisicoesBadges, getMensagensNaoLidasCount,
   getNotificacoes, marcarNotificacaoLida, marcarTodasNotificacoesLidas
 } from '../services/api';
 import { useDialog } from '../context/DialogContext';
-import ThemeToggle from './ThemeToggle';
+import './AccountSettings.css';
 import MeetingReminderNotice from './agenda/MeetingReminderNotice';
 import SidebarLinks from './SidebarLinks';
 
@@ -54,6 +54,8 @@ function Navbar() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [isMarkingNotifications, setIsMarkingNotifications] = useState(false);
   const [perfilDropdownOpen, setPerfilDropdownOpen] = useState(false);
+  const settingsTriggerRef=useRef(null);
+  useEffect(()=>{if(!perfilDropdownOpen)return;const onKey=e=>{if(e.key==='Escape'){setPerfilDropdownOpen(false);settingsTriggerRef.current?.focus();}};document.addEventListener('keydown',onKey);return()=>document.removeEventListener('keydown',onKey);},[perfilDropdownOpen]);
   const [isMobileViewport, setIsMobileViewport] = useState(() => {
     if (typeof window === 'undefined') return false;
     return window.matchMedia('(max-width: 900px)').matches;
@@ -325,6 +327,11 @@ function Navbar() {
   const notificationBadgeCount = notificacoes.length + (canViewCompras ? pendRequisicoes : 0);
 
   const abrirNotificacao = async (notificacao) => {
+    if(notificacao?.referencia_tipo==='sistema_atualizacao' && notificacao?.nota_slug){
+      const to=`/notas-de-atualizacao?nota=${encodeURIComponent(notificacao.nota_slug)}`;
+      if(!await confirmNav(null,to))return;
+      setNotifOpen(false);navigate(to);return;
+    }
     if (notificacao?.referencia_tipo === 'reuniao' && notificacao?.projeto_id) {
       if (!await confirmNav()) return;
       await marcarNotificacao(notificacao.id);
@@ -387,17 +394,17 @@ function Navbar() {
               <div className="notif-empty">Não há notificações não lidas.</div>
             ) : notificacoes.map((notificacao) => (
               <div
-                className={`notif-item${['reuniao', 'estoque_transferencia'].includes(notificacao.referencia_tipo) ? ' notif-item-clickable' : ''}`}
+                className={`notif-item${['reuniao', 'estoque_transferencia','sistema_atualizacao'].includes(notificacao.referencia_tipo) ? ' notif-item-clickable' : ''}`}
                 key={notificacao.id}
                 onClick={() => abrirNotificacao(notificacao)}
-                role={['reuniao', 'estoque_transferencia'].includes(notificacao.referencia_tipo) ? 'button' : undefined}
-                tabIndex={['reuniao', 'estoque_transferencia'].includes(notificacao.referencia_tipo) ? 0 : undefined}
+                role={['reuniao', 'estoque_transferencia','sistema_atualizacao'].includes(notificacao.referencia_tipo) ? 'button' : undefined}
+                tabIndex={['reuniao', 'estoque_transferencia','sistema_atualizacao'].includes(notificacao.referencia_tipo) ? 0 : undefined}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') abrirNotificacao(notificacao);
+                  if(event.target===event.currentTarget && (event.key==='Enter'||event.key===' ')){event.preventDefault();abrirNotificacao(notificacao);}
                 }}
               >
                 <div className="notif-item-icon">
-                  {notificacao.referencia_tipo === 'reuniao'
+                  {notificacao.referencia_tipo==='sistema_atualizacao'?<Sparkles size={16} aria-hidden="true"/>:notificacao.referencia_tipo === 'reuniao'
                     ? <CalendarDays size={16} aria-hidden="true" />
                     : <Bell size={16} aria-hidden="true" />}
                 </div>
@@ -471,15 +478,20 @@ function Navbar() {
             {renderNotificationBell()}
             <div className="navbar-perfil-dropdown" ref={perfilDropdownRef}>
               <button
+                type="button"
+                ref={settingsTriggerRef}
+                aria-label="Configurações e conta"
+                title="Configurações e conta"
+                aria-expanded={perfilDropdownOpen}
+                aria-controls="navbar-settings-menu"
                 className={`navbar-link navbar-perfil-btn${perfilDropdownOpen ? ' active' : ''}`}
-                onClick={() => setPerfilDropdownOpen((v) => !v)}
+                onClick={() => {setNotifOpen(false);setPerfilDropdownOpen((v) => !v);}}
               >
-                <User size={16} />
-                Perfil
-                <ChevronDown size={14} style={{ transition: 'transform 0.2s', transform: perfilDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+                <Settings size={20} />
+                {notificacoes.some(n=>n.referencia_tipo==='sistema_atualizacao')&&<span className="account-settings-dot" aria-label="Novas notas de atualização"/>}
               </button>
               {perfilDropdownOpen && (
-                <div className="navbar-perfil-menu">
+                <div className="navbar-perfil-menu" id="navbar-settings-menu">
                   {usuario && (
                     <div className="navbar-perfil-menu-user">
                       {usuario.nome || usuario.login}
@@ -493,6 +505,8 @@ function Navbar() {
                     <User size={14} />
                     Meu Perfil
                   </NavLink>
+                  <NavLink to="/configuracoes" onClick={e=>handleMenuNavigation(e,'/configuracoes')} className="navbar-perfil-menu-link"><SlidersHorizontal size={14}/>Configurações do sistema</NavLink>
+                  <NavLink to="/notas-de-atualizacao" onClick={e=>handleMenuNavigation(e,'/notas-de-atualizacao')} className="navbar-perfil-menu-link"><Sparkles size={14}/>Notas de atualização{notificacoes.some(n=>n.referencia_tipo==='sistema_atualizacao')&&<span className="account-settings-new">Nova</span>}</NavLink>
                   <button
                     onClick={handleLogout}
                     className="navbar-perfil-menu-logout"
@@ -503,7 +517,6 @@ function Navbar() {
                 </div>
               )}
             </div>
-            <ThemeToggle />
           </div>
         </div>
       </div>
@@ -568,9 +581,8 @@ function Navbar() {
                 Sair
               </button>
 
-              <div className="navbar-mobile-theme-toggle">
-                <ThemeToggle />
-              </div>
+              <NavLink to="/configuracoes" className="navbar-link" onClick={e=>handleMenuNavigation(e,'/configuracoes')}><SlidersHorizontal size={16}/>Configurações do sistema</NavLink>
+              <NavLink to="/notas-de-atualizacao" className="navbar-link" onClick={e=>handleMenuNavigation(e,'/notas-de-atualizacao')}><Sparkles size={16}/>Notas de atualização{notificacoes.some(n=>n.referencia_tipo==='sistema_atualizacao')&&<span className="account-settings-new">Nova</span>}</NavLink>
             </div>
           </aside>
         </>

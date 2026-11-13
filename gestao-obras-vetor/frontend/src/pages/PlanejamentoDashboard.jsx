@@ -4,6 +4,7 @@ import Navbar from '../components/Navbar';
 import { useLeaveGuard } from '../context/LeaveGuardContext';
 import { useDialog } from '../context/DialogContext';
 import EAP from './EAP';
+import RelatorioSemanal from './RelatorioSemanal';
 import CurvaS from './CurvaS';
 import CronogramaGantt from './CronogramaGantt';
 import { Maximize2, LayoutDashboard } from 'lucide-react';
@@ -14,15 +15,17 @@ function PlanejamentoDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
   const requestedTab = new URLSearchParams(location.search).get('aba');
-  const abaAtiva = ['eap', 'curva-s', 'gantt'].includes(requestedTab) ? requestedTab : 'eap';
+  const abaAtiva = ['eap', 'curva-s', 'gantt', 'relatorio-semanal'].includes(requestedTab) ? requestedTab : 'eap';
   const { isDirty } = useLeaveGuard();
   const { confirm } = useDialog();
   const canLeave = async () => !isDirty || confirm({ title: 'Descartar alterações?', message: 'Há alterações não salvas. Deseja sair desta tela?', confirmText: 'Descartar', cancelText: 'Continuar editando' });
 
-  const abas = [{ id: 'eap', label: 'EAP' }, { id: 'curva-s', label: 'Curva S' }, { id: 'gantt', label: 'Cronograma' }];
+  const abas = [{ id: 'eap', label: 'EAP' }, { id: 'curva-s', label: 'Curva S' }, { id: 'gantt', label: 'Cronograma' }, { id: 'relatorio-semanal', label: 'Relatório semanal' }];
 
   const renderConteudo = () => {
     switch (abaAtiva) {
+      case 'relatorio-semanal':
+        return <RelatorioSemanal />;
       case 'eap':
         return <EAP hideNavbar={true} />;
       case 'curva-s':
@@ -47,7 +50,7 @@ function PlanejamentoDashboard() {
           </div>
           
 
-          <div className="planejamento-footer">
+          {abaAtiva !== 'relatorio-semanal' && <div className="planejamento-footer">
             <button
               className="planejamento-btn-open"
               onClick={async () => {
@@ -61,7 +64,7 @@ function PlanejamentoDashboard() {
               <Maximize2 size={16} aria-hidden="true" />
               Abrir em tela cheia
             </button>
-          </div>
+          </div>}
         </div>
 
         <main className="planejamento-conteudo" aria-label={abaAtualLabel}>

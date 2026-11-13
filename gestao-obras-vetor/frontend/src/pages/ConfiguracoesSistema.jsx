@@ -1,0 +1,6 @@
+﻿import React from 'react';
+import {Sun,Moon,Check,Palette} from 'lucide-react';
+import Navbar from '../components/Navbar';
+import {useTheme} from '../context/ThemeContext';
+import './Sistema.css';
+export default function ConfiguracoesSistema(){const {theme,setTheme}=useTheme();return <><Navbar/><main className="sistema-page"><header className="sistema-header"><span>SUAS PREFERÊNCIAS</span><h1>Configurações do sistema</h1><p>Ajuste a aparência do Vetor para o seu dia a dia.</p></header><section className="sistema-card"><div className="sistema-section-title"><Palette size={22}/><div><h2>Aparência</h2><p>Escolha o tema. Sua preferência é salva automaticamente neste navegador.</p></div></div><div className="sistema-themes" role="group" aria-label="Tema do sistema">{[['light','Claro',Sun],['dark','Escuro',Moon]].map(([key,label,Icon])=><button type="button" key={key} aria-pressed={theme===key} className={`sistema-theme ${key} ${theme===key?'selected':''}`} onClick={()=>setTheme(key)}><div className="sistema-theme-preview"><i/><div><b/><b/><b/></div></div><span><Icon size={18}/>{label}{theme===key&&<Check size={18} className="sistema-theme-check"/>}</span></button>)}</div></section></main></>;}

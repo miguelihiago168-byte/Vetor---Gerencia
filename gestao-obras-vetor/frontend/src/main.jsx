@@ -61,6 +61,9 @@ import AlmoxManutencao from './pages/AlmoxManutencao';
 import AlmoxPerdas from './pages/AlmoxPerdas';
 import AlmoxRelatorios from './pages/AlmoxRelatorios';
 import MeuPerfil from './pages/MeuPerfil';
+import ConfiguracoesSistema from './pages/ConfiguracoesSistema';
+import NotasAtualizacao from './pages/NotasAtualizacao';
+import {ThemeProvider} from './context/ThemeContext';
 import PrimeiroAcesso from './pages/PrimeiroAcesso';
 import EmailDashboard from './pages/EmailDashboard';
 import Mensagens from './pages/Mensagens';
@@ -82,6 +85,7 @@ const PERFIS_USUARIOS = ['Gestor Geral', 'ADM'];
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
+    <ThemeProvider>
     <ModalBackdropGuard />
     <NotificationProvider>
       <AuthProvider>
@@ -97,6 +101,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/criar-conta" element={<Login initialMode="cadastro" />} />
           <Route path="/primeiro-acesso" element={<PrivateRoute allowPendingFirstAccess><PrimeiroAcesso /></PrivateRoute>} />
           <Route path="/perfil" element={<PrivateRoute><MeuPerfil /></PrivateRoute>} />
+          <Route path="/configuracoes" element={<PrivateRoute><ConfiguracoesSistema /></PrivateRoute>} />
+          <Route path="/notas-de-atualizacao" element={<PrivateRoute><NotasAtualizacao /></PrivateRoute>} />
           {/* Redirecionar Dashboard para Projetos */}
           <Route path="/dashboard" element={<Navigate to="/projetos" replace />} />
           <Route path="/projetos" element={
@@ -383,5 +389,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         </UserPreferencesProvider>
       </AuthProvider>
     </NotificationProvider>
+  </ThemeProvider>
   </React.StrictMode>
 );
