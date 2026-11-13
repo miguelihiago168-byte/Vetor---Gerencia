@@ -69,6 +69,7 @@ app.use('/api/usuarios', usuariosRoutes);
 app.use('/api/projetos', projetosRoutes);
 app.use('/api/eap', eapRoutes);
 app.use('/api/mapa-suprimentos', mapaSuprimentosRoutes);
+app.use('/api/relatorios-semanais', require('./routes/relatorio_semanal'));
 app.use('/api/rdos', rdoOccurrencesRoutes);
 app.use('/api/rdos', rdosRoutes);
 app.use('/api/anexos', anexosRoutes);
