@@ -1,0 +1,11 @@
+﻿const express=require('express');
+const {auth}=require('../middleware/auth');
+const {getNotificacoesReadColumn}=require('../utils/notificacoesSchema');
+const {createUpdatesService}=require('../services/notasAtualizacaoService');
+const service=createUpdatesService(require('../config/database'));
+const router=express.Router();router.use(auth);
+const fail=(res,error)=>{console.error('[atualizações]',error);res.status(500).json({erro:'Não foi possível carregar as notas de atualização.'});};
+router.get('/',async(req,res)=>{try{const rows=await service.list(req.usuario.id,req.tenantId,await getNotificacoesReadColumn());res.json(rows.map(({novidades,melhorias,correcoes,...note})=>note));}catch(e){fail(res,e);}});
+router.get('/:slug',async(req,res)=>{try{if(!service.find(req.params.slug))return res.status(404).json({erro:'Nota de atualização não encontrada.'});const rows=await service.list(req.usuario.id,req.tenantId,await getNotificacoesReadColumn());res.json(rows.find(n=>n.slug===req.params.slug));}catch(e){fail(res,e);}});
+router.patch('/:slug/lida',async(req,res)=>{try{const ok=await service.markRead(req.params.slug,req.usuario.id,req.tenantId,await getNotificacoesReadColumn());if(!ok)return res.status(404).json({erro:'Nota de atualização não encontrada.'});res.json({mensagem:'Nota marcada como lida.'});}catch(e){fail(res,e);}});
+module.exports=router;

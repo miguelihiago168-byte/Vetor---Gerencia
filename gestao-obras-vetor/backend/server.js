@@ -87,6 +87,7 @@ app.use('/api/rir', rirRoutes);
 // FINANCEIRO DESATIVADO
 // app.use('/api/financeiro', financeiroRoutes);
 app.use('/api/notificacoes', notificacoesRoutes);
+app.use('/api/atualizacoes', require('./routes/atualizacoes'));
 app.use('/api/almoxarifado', almoxarifadoRoutes);
 app.use('/api/email', emailRoutes);
 app.use('/api/mensagens', mensagensRoutes);

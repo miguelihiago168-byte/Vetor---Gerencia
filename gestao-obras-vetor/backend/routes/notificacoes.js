@@ -5,16 +5,14 @@ const { gerarLembretes } = require('../services/reuniaoLembretes');
 
 const router = express.Router();
 
-const getNotificacoesReadColumn = async () => {
-  const columns = await allQuery('PRAGMA table_info(notificacoes)');
-  const names = new Set((columns || []).map((column) => String(column.name)));
-  return names.has('lido') ? 'lido' : 'lida';
-};
+const {getNotificacoesReadColumn}=require('../utils/notificacoesSchema');
+const updates=require('../services/notasAtualizacaoService').createUpdatesService(require('../config/database'));
 
 // Listar notificações do usuário logado
 router.get('/', auth, async (req, res) => {
   try {
     const readColumn = await getNotificacoesReadColumn();
+    await updates.ensure(req.usuario.id,req.tenantId,readColumn);
     await withClient((client) => gerarLembretes(client, { tenantId: req.tenantId, usuarioId: req.usuario.id, readColumn }));
     const lista = await allQuery(
       `SELECT n.*, mr.inicio_em AS reuniao_inicio_em,
@@ -38,7 +36,8 @@ router.get('/', auth, async (req, res) => {
        LIMIT 50`,
       [req.usuario.id, req.tenantId]
     );
-    res.json(lista);
+    const notes=new Map(updates.published().map(n=>[String(n.id),n.slug]));
+    res.json(lista.map(n=>n.referencia_tipo==='sistema_atualizacao'?{...n,nota_slug:notes.get(String(n.referencia_id))}:n));
   } catch (error) {
     console.error('Erro ao listar notificações:', error);
     res.status(500).json({ erro: 'Erro ao listar notificações.' });
@@ -50,6 +49,7 @@ router.patch('/:id/read', auth, async (req, res) => {
   try {
     const { id } = req.params;
     const readColumn = await getNotificacoesReadColumn();
+    await updates.ensure(req.usuario.id,req.tenantId,readColumn);
     const notif = await getQuery('SELECT * FROM notificacoes WHERE id = ? AND tenant_id = ?', [id, req.tenantId]);
     if (!notif) return res.status(404).json({ erro: 'Notificação não encontrada.' });
     if (Number(notif.usuario_id) !== Number(req.usuario.id)) return res.status(403).json({ erro: 'Sem permissão.' });
@@ -66,6 +66,7 @@ router.patch('/:id/read', auth, async (req, res) => {
 router.patch('/marcar-todas-lidas', auth, async (req, res) => {
   try {
     const readColumn = await getNotificacoesReadColumn();
+    await updates.ensure(req.usuario.id,req.tenantId,readColumn);
     await runQuery(`UPDATE notificacoes SET ${readColumn} = 1 WHERE usuario_id = ? AND tenant_id = ? AND COALESCE(${readColumn}, 0) = 0`, [req.usuario.id, req.tenantId]);
     res.json({ mensagem: 'Todas as notificações marcadas como lidas.' });
   } catch (error) {
