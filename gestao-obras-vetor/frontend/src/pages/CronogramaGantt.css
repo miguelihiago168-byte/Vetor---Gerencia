@@ -133,3 +133,5 @@ body.dark-mode .cronograma-analise-modal .btn-outline:hover {
   background: #1f3044;
   border-color: #3a5272;
 }
+.cronograma-gantt-card header p, .cronograma-gantt-hint { font-size: 12px; }
+.cronograma-gantt-card h2 { font-size: 19px; }

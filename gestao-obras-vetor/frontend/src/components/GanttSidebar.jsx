@@ -321,8 +321,8 @@ const GanttSidebar = ({ isOpen, onClose, dadosGantt, caminhoCritico, folgas, emb
 /* ─── SVG Gantt Chart com setas de dependência ─── */
 
 const MARGIN_LEFT = 280;
-const ROW_HEIGHT = 44;
-const HEADER_HEIGHT = 40;
+const ROW_HEIGHT = 54;
+const HEADER_HEIGHT = 52;
 const MIN_PIXELS_PER_DAY = 9;
 
 const GanttChartSVG = ({ dados, escalaMin, escalaMax, getCor, formatDateBR, calcularPosicaoTooltip, setTooltip, isDark }) => {
@@ -425,20 +425,23 @@ const GanttChartSVG = ({ dados, escalaMin, escalaMax, getCor, formatDateBR, calc
           </marker>
         </defs>
 
+        {dados.map((d, i) => (
+          <rect key={`fundo-${d.id}`} x={0} y={HEADER_HEIGHT + i * ROW_HEIGHT} width={svgWidth} height={ROW_HEIGHT} fill={i % 2 === 0 ? c.rowEven : c.rowOdd} />
+        ))}
         {/* Grade vertical e labels do eixo X */}
         {ticks.map((t) => {
           const x = MARGIN_LEFT + (t - escalaMin) * pixelsPerDay;
           return (
             <g key={t}>
               <line x1={x} y1={HEADER_HEIGHT} x2={x} y2={svgHeight} stroke={c.grid} />
-              <text x={x} y={HEADER_HEIGHT - 14} textAnchor="middle" fontSize={9} fontWeight={700} fill={c.tickLabel}>
+              <text x={x} y={HEADER_HEIGHT - 14} textAnchor="middle" fontSize={11} fontWeight={700} fill={c.tickLabel}>
                 {formatDateBR(addBusinessDays(projectStart, t - escalaMin)).slice(0, 5)}
               </text>
             </g>
           );
         })}
 
-        <text x={12} y={HEADER_HEIGHT - 14} fontSize={9} fontWeight={800} letterSpacing="1" fill={c.tickLabel}>ATIVIDADE</text>
+        <text x={12} y={HEADER_HEIGHT - 14} fontSize={11} fontWeight={800} letterSpacing="1" fill={c.tickLabel}>ATIVIDADE</text>
         <line x1={MARGIN_LEFT} y1={0} x2={MARGIN_LEFT} y2={svgHeight} stroke={c.separator} strokeWidth={1} />
 
         {/* Linha separadora do header */}
@@ -455,12 +458,11 @@ const GanttChartSVG = ({ dados, escalaMin, escalaMax, getCor, formatDateBR, calc
           const label = d.nomeExibicao.length > 26 ? d.nomeExibicao.slice(0, 24) + '…' : d.nomeExibicao;
           return (
             <g key={d.id}>
-              {/* Fundo alternado */}
-              <rect x={0} y={y} width={svgWidth} height={ROW_HEIGHT} fill={i % 2 === 0 ? c.rowEven : c.rowOdd} />
+              <line x1={0} y1={y + ROW_HEIGHT} x2={svgWidth} y2={y + ROW_HEIGHT} stroke={c.grid} />
               {/* Indicador de cor na margem esquerda */}
               <rect x={0} y={y + 8} width={3} height={ROW_HEIGHT - 16} rx={2} fill={cor} />
               {/* Label da atividade — alinhado à esquerda */}
-              <text x={8} y={y + ROW_HEIGHT / 2 + 4} textAnchor="start" fontSize={11} fill={c.rowLabel}>
+              <text x={8} y={y + ROW_HEIGHT / 2 + 4} textAnchor="start" fontSize={12} fill={c.rowLabel}>
                 {label}
               </text>
               {/* Fundo translúcido (duração planejada) */}
@@ -509,6 +511,7 @@ const GanttChartSVG = ({ dados, escalaMin, escalaMax, getCor, formatDateBR, calc
             stroke={c.arrow}
             strokeWidth={1.5}
             markerEnd="url(#gantt-arrow)"
+            pointerEvents="none"
           />
         ))}
       </svg>

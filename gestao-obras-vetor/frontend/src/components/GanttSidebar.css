@@ -582,3 +582,10 @@ body.dark-mode .gantt-footer { border-color: #2a3a4b; color: #8295a8; background
   .detalhe-item { align-items: flex-start; flex-direction: column; }
   .detalhe-col-datas, .detalhe-col-pred, .detalhe-col-pct, .detalhe-col-folga { width: auto; min-width: 0; text-align: left; }
 }
+.gantt-legenda, .gantt-legenda > strong { font-size: 11px; }
+.gantt-grafico { min-height: 0; max-height: 600px; }
+.gantt-tooltip { font-size: 12px; }
+.gantt-tooltip strong { font-size: 13px; }
+.gantt-detalhes summary, .info-item p, .info-item ul { font-size: 12px; }
+.detalhe-nome { font-size: 12px; }
+.detalhe-col-datas small, .detalhe-col-pred small, .detalhe-col-pct small, .detalhe-col-folga small { font-size: 11px; }
