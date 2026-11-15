@@ -537,19 +537,30 @@ a.btn.btn-outline:hover { background: var(--button-primary-soft); transform: non
 
 .navbar-brand-left {
   display: inline-flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
   line-height: 1;
-  gap: 2px;
+  gap: 8px;
 }
 
 .navbar-logo-img {
-  width: 92px;
-  height: 48px;
+  width: 43px;
+  height: 43px;
   object-fit: contain;
   object-position: center;
   display: block;
+}
+
+.navbar-brand-text { display: grid; text-align: left; color: #082e68; }
+.navbar-brand-text strong { font-size: 23px; letter-spacing: .02em; line-height: 1; }
+.navbar-brand-text small { margin-top: 3px; font-size: 10px; font-weight: 600; line-height: 1.15; white-space: nowrap; }
+
+@media (max-width: 480px) {
+  .navbar-brand-left { gap: 5px; }
+  .navbar-logo-img { width: 34px; height: 34px; }
+  .navbar-brand-text strong { font-size: 19px; }
+  .navbar-brand-text small { font-size: 8px; }
 }
 
 .navbar-brand-name {

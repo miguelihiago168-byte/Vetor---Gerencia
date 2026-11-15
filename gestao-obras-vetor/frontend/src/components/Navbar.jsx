@@ -447,9 +447,8 @@ function Navbar() {
         <div className="navbar-content">
           <NavLink to="/projetos" onClick={(e) => handleMenuNavigation(e, "/projetos")} className="navbar-brand">
             <div className="navbar-brand-left">
-              <img src={`${import.meta.env.BASE_URL}logo_vetor.png`} alt="Vetor" className="navbar-logo-img" />
-              <span className="navbar-brand-name">Vetor</span>
-              <span className="navbar-brand-subtitle">Gestão de Obras</span>
+              <img src={`${import.meta.env.BASE_URL}logo_vetor.png?v=3`} alt="" className="navbar-logo-img" />
+              <span className="navbar-brand-text"><strong>VETOR</strong><small>Gerenciamento, consultoria e tecnologia</small></span>
             </div>
           </NavLink>
 
