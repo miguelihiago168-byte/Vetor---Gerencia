@@ -11,4 +11,17 @@ module.exports=[{
  ],
  melhorias:[],
  correcoes:[]
+},{
+ id:2,
+ slug:'analise-cronograma-prioridades',
+ publicado_em:'2026-11-15T00:00:00Z',
+ titulo:'Análise do cronograma mais objetiva',
+ resumo:'Identifique as prioridades da obra e organize os próximos passos para recuperar o cronograma.',
+ novidades:[],
+ melhorias:[
+  'Atividades atrasadas aparecem em ordem de prioridade, com destaque para o caminho crítico e os bloqueios.',
+  'O plano de ação sugere próximos passos e apresenta as dependências em listas organizadas.',
+  'Etapas agrupadoras deixam de repetir as atividades executáveis na lista de prioridades.'
+ ],
+ correcoes:[]
 }];
