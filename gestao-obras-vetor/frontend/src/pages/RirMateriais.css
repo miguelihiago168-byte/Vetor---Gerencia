@@ -143,3 +143,18 @@ body.dark-mode .rir-remove,body.dark-mode .rir-photo-info button,body.dark-mode 
   .rir-form-footer .ui-button { flex:1; }
 }
 @media(max-width:380px) { .rir-fields { grid-template-columns:1fr; } .rir-photo-grid { grid-template-columns:1fr; } }
+.rir-order-picker { background: #f1f8fc; border: 1px solid #cce6f4; border-radius: 10px; margin: 0 0 18px; padding: 14px; }
+.rir-order-picker label { color: var(--text-primary, #172b45); display: grid; font-size: 13px; font-weight: 700; gap: 7px; }
+.rir-order-picker p { color: var(--text-muted, #52677e); font-size: 12px; line-height: 1.45; margin: 8px 0 0; }
+.rir-inspecao { display: grid; gap: 10px; margin-top: 14px; padding: 14px; border: 1px solid var(--border-default, #dbe2eb); border-radius: 10px; background: var(--bg-secondary, #f7fafc); }
+.rir-inspecao p { margin: 0; color: var(--text-muted, #52677e); font-size: .82rem; }
+.rir-inspecao label { display: grid; gap: 5px; font-size: .82rem; font-weight: 600; }
+.rir-inspecao .rir-fields { margin: 0; }
+.rir-workflow { background: var(--bg-primary, #fff); border: 1px solid var(--border-color, #dbe3ef); border-radius: 14px; margin: 16px 0; padding: 18px 20px; }
+.rir-workflow-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.rir-workflow-heading > div:first-child > span { color: #08799d; font-size: .7rem; font-weight: 800; letter-spacing: .06em; }
+.rir-workflow-heading h2 { margin: 5px 0; font-size: 1.05rem; }
+.rir-workflow-heading p, .rir-workflow details p { color: var(--text-muted, #52677e); font-size: .82rem; margin: 5px 0; }
+.rir-workflow-signers { display: flex; flex-wrap: wrap; gap: 12px 24px; border-top: 1px solid var(--border-color, #dbe3ef); padding-top: 12px; margin-top: 14px; font-size: .82rem; }
+.rir-workflow details { margin-top: 12px; font-size: .82rem; }
+.rir-correction { background: #fff6e5; color: #85510b; border-radius: 8px; padding: 10px; font-size: .85rem; }

@@ -345,6 +345,8 @@ export const getRequisicoesBadges = (projetoId) =>
   api.get('/requisicoes/badges', { params: projetoId ? { projeto_id: projetoId } : {} });
 export const editarCotacaoItem = (reqId, itemId, cotacaoId, data) =>
   api.patch(`/requisicoes/${reqId}/itens/${itemId}/cotacoes/${cotacaoId}`, data);
+export const atualizarPrevisaoCotacao = (reqId, itemId, cotacaoId, data) =>
+  api.patch(`/requisicoes/${reqId}/itens/${itemId}/cotacoes/${cotacaoId}/previsao-entrega`, { data_entrega_prevista: data });
 
 // Compras (Pedidos e Cotações) — legado
 export const criarPedidoCompra = (data) => api.post('/pedidos-compra', data);
@@ -363,7 +365,8 @@ export const detalharPedido = (id) => api.get(`/pedidos-compra/${id}`);
 // Estoque de insumos
 export const getEstoqueSaldos = (params) => api.get('/estoque/saldos', { params });
 export const getEstoqueLotes = (insumoId, params) => api.get(`/estoque/insumos/${insumoId}/lotes`, { params });
-export const getEstoquePendencias = () => api.get('/estoque/pendencias');
+export const getEstoquePendencias = (params) => api.get('/estoque/pendencias', { params });
+export const getRirPedidosPendentes = (projetoId) => api.get(`/rir/projeto/${projetoId}/pedidos-pendentes`);
 export const receberEstoquePendencia = (id, data) => api.post(`/estoque/pendencias/${id}/receber`, data);
 export const anexarDocumentoEstoque = (loteId, data) => api.post(`/estoque/lotes/${loteId}/anexos`, data, { headers: { 'Content-Type': 'multipart/form-data' } });
 export const getEstoqueTransferencias = () => api.get('/estoque/transferencias');
@@ -376,6 +379,7 @@ export const rejeitarEstoqueTransferencia = (id, justificativa) => api.post(`/es
 export const cancelarEstoqueTransferencia = (id, justificativa) => api.post(`/estoque/transferencias/${id}/cancelar`, { justificativa });
 export const getEstoqueMovimentacoes = (params) => api.get('/estoque/movimentacoes', { params });
 export const registrarSaidaEstoque = (data) => api.post('/estoque/saidas', data);
+export const getSaidasEstoque = (projetoId) => api.get('/estoque/saidas', { params: { projeto_id: projetoId } });
 export const getEstoqueRastreabilidade = (params) => api.get('/estoque/rastreabilidade', { params });
 export const getEstoqueRastreabilidadeDetalhe = (loteId) => api.get(`/estoque/rastreabilidade/${loteId}`);
 export const inspecionarEntradaEstoque = (loteId, data) => api.post(`/estoque/rastreabilidade/${loteId}/inspecoes`, data);
@@ -464,6 +468,8 @@ export const getRdoLogs = (rdoId) => api.get(`/rdos/${rdoId}/logs`);
 export const getRirs = (projetoId) => api.get(`/rir/projeto/${projetoId}`);
 export const getRirEntradas = (projetoId) => api.get(`/rir/projeto/${projetoId}/entradas`);
 export const getRir = (id) => api.get(`/rir/${id}`);
+export const conferirItemRir = (id, itemId, data) => api.post(`/rir/${id}/itens/${itemId}/conferir`, data);
+export const executarFluxoRir = (id, acao, motivo) => api.patch(`/rir/${id}/fluxo`, { acao, motivo });
 export const createRir = (data) => api.post('/rir', data);
 export const updateRir = (id, data) => api.put(`/rir/${id}`, data);
 export const uploadRirAnexo = (id, data) => api.post(`/rir/${id}/anexos`, data, { headers: { 'Content-Type': 'multipart/form-data' } });

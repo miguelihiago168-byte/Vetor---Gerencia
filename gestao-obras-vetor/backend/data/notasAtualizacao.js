@@ -24,4 +24,13 @@ module.exports=[{
   'Etapas agrupadoras deixam de repetir as atividades executáveis na lista de prioridades.'
  ],
  correcoes:[]
+},{
+ id:3,
+ slug:'melhorias-suprimentos-recebimentos',
+ publicado_em:'2026-11-16T00:00:00Z',
+ titulo:'Muitas melhorias para facilitar sua rotina',
+ resumo:'Hoje o dia foi puxado por aqui! Tivemos muitas melhorias no planejamento de suprimentos, nas compras, no estoque e no processo de recebimento e aprovação de materiais. Também fizemos ajustes nas telas e nos relatórios para deixar a navegação e a consulta das informações mais claras. Aproveite as novidades! Se encontrar algum erro ou tiver uma sugestão de melhoria, entre em contato com o suporte.',
+ novidades:[],
+ melhorias:[],
+ correcoes:[]
 }];

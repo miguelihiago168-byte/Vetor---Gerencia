@@ -1,4 +1,12 @@
 .estoque-page { display: grid; gap: 16px; }
+.estoque-page .estoque-intro, .estoque-page .estoque-list, .estoque-page .estoque-baixa { padding: 20px; }
+.estoque-page .estoque-list h3 { display: flex; align-items: center; gap: 8px; }
+.estoque-page .estoque-form label { display: grid; gap: 6px; font-size: .85rem; font-weight: 600; }
+.estoque-form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.estoque-old-transfer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border-color, #dbe3ef); }
+.estoque-old-transfer > div { display: flex; gap: 6px; flex-wrap: wrap; }
+.estoque-search { display: flex; align-items: center; gap: 8px; }
+.estoque-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 .estoque-intro { display: flex; justify-content: space-between; gap: 20px; align-items: center; }
 .estoque-intro h2 { display: flex; align-items: center; gap: 9px; margin: 4px 0; }
 .estoque-intro p { margin: 0; color: var(--text-muted); }

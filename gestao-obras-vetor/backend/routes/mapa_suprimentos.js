@@ -75,18 +75,39 @@ router.get('/projeto/:projetoId', async (req, res) => {
     if (hasPermission(req.usuario, PERMISSIONS.REQUISICAO_VIEW)) {
       const links = await allQuery(`SELECT v.necessidade_id, v.quantidade, v.requisicao_item_id, i.quantidade AS quantidade_item, i.status_item,
         r.id AS requisicao_id, r.numero_requisicao, p.quantidade_comprada, p.quantidade_recebida,
+        c.data_entrega_prevista AS data_entrega_cotacao, c.valor_unitario AS valor_unitario_cotacao,
         (SELECT MAX(l.recebido_em) FROM estoque_lotes l WHERE l.tenant_id=v.tenant_id AND l.pendencia_recebimento_id=p.id) AS ultima_entrega,
         (SELECT COUNT(*) FROM mapa_suprimentos_requisicoes t WHERE t.tenant_id=v.tenant_id AND t.requisicao_item_id=v.requisicao_item_id) AS vinculos_item,
         (SELECT SUM(t.quantidade) FROM mapa_suprimentos_requisicoes t WHERE t.tenant_id=v.tenant_id AND t.requisicao_item_id=v.requisicao_item_id) AS total_vinculado
         FROM mapa_suprimentos_requisicoes v JOIN mapa_suprimentos m ON m.id=v.necessidade_id
         LEFT JOIN requisicao_itens i ON i.id=v.requisicao_item_id
         LEFT JOIN requisicoes r ON r.id=i.requisicao_id
+        LEFT JOIN LATERAL (SELECT data_entrega_prevista, valor_unitario FROM requisicao_cotacoes WHERE item_id=i.id AND selecionada=1 ORDER BY id DESC LIMIT 1) c ON TRUE
         LEFT JOIN estoque_pendencias_recebimento p ON p.tenant_id=v.tenant_id AND p.referencia_tipo='REQUISICAO_ITEM' AND p.referencia_id=i.id
         WHERE v.tenant_id=? AND m.projeto_id=?`, [req.tenantId, project.id]);
       for (const item of items) item.compras = links.filter((link) => String(link.necessidade_id) === String(item.id));
     }
-    res.json({ projeto: project, necessidades: items });
+    const selectedActivities = await allQuery('SELECT atividade_id FROM mapa_suprimentos_atividades WHERE tenant_id=? AND projeto_id=?', [req.tenantId, project.id]);
+    res.json({ projeto: project, necessidades: items, atividades_selecionadas: selectedActivities.map(row => row.atividade_id) });
   } catch (error) { console.error('[mapa] consulta:', error); res.status(500).json({ erro: 'Não foi possível carregar o mapa.' }); }
+});
+
+router.put('/projeto/:projetoId/atividades', isGestor, async (req, res) => {
+  try {
+    const project = await access(req, res); if (!project) return;
+    const ids = req.body.atividades;
+    if (!Array.isArray(ids) || ids.length > 5000 || ids.some(id => !Number.isSafeInteger(Number(id)) || Number(id) < 1) || new Set(ids.map(Number)).size !== ids.length) return res.status(400).json({ erro: 'Lista de atividades inválida.' });
+    await withClient(async client => {
+      await getWithClient(client, 'SELECT id FROM projetos WHERE id=? AND tenant_id=? FOR UPDATE', [project.id, req.tenantId]);
+      if (ids.length) {
+        const valid = await allWithClient(client, `SELECT a.id FROM atividades_eap a WHERE a.tenant_id=? AND a.projeto_id=? AND a.id IN (${ids.map(() => '?').join(',')}) AND NOT EXISTS (SELECT 1 FROM atividades_eap c WHERE c.pai_id=a.id AND c.projeto_id=a.projeto_id AND c.tenant_id=a.tenant_id)`, [req.tenantId, project.id, ...ids]);
+        if (valid.length !== ids.length) throw conflict('Selecione somente atividades válidas desta obra.');
+      }
+      await execWithClient(client, 'DELETE FROM mapa_suprimentos_atividades WHERE tenant_id=? AND projeto_id=?', [req.tenantId, project.id]);
+      for (const id of ids) await execWithClient(client, 'INSERT INTO mapa_suprimentos_atividades (tenant_id,projeto_id,atividade_id) VALUES (?,?,?)', [req.tenantId, project.id, Number(id)], { returnColumn: null });
+    });
+    res.json({ mensagem: 'Atividades atualizadas.' });
+  } catch (error) { if (error.status) return res.status(error.status).json({ erro: error.message }); console.error('[mapa] atividades:', error); res.status(500).json({ erro: 'Não foi possível salvar as atividades.' }); }
 });
 
 router.get('/projeto/:projetoId/insumos', async (req, res) => {

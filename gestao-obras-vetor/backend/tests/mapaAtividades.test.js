@@ -1,0 +1,43 @@
+const assert = require('node:assert/strict');
+const path = require('node:path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+if (process.env.DB_HOST && !['localhost', '127.0.0.1', '::1'].includes(process.env.DB_HOST)) throw new Error('Este teste requer PostgreSQL local.');
+const db = require('../config/database');
+const migration = require('../scripts/migrations/000034_mapa_atividades_cotacao');
+const mock = (name, exports) => { const id = require.resolve(name); require.cache[id] = { id, filename: id, loaded: true, exports }; };
+(async () => {
+  const client = await db.pool.connect(); let server;
+  try {
+    await client.query('BEGIN');
+    await client.query(`CREATE TEMP TABLE tenants (id BIGINT PRIMARY KEY);
+      CREATE TEMP TABLE projetos (id BIGINT PRIMARY KEY, tenant_id BIGINT, nome TEXT);
+      CREATE TEMP TABLE atividades_eap (id BIGINT PRIMARY KEY, tenant_id BIGINT, projeto_id BIGINT, pai_id BIGINT);
+      CREATE TEMP TABLE mapa_suprimentos (tenant_id BIGINT, projeto_id BIGINT, atividade_id BIGINT, removido_em TIMESTAMPTZ);
+      CREATE TEMP TABLE requisicao_cotacoes (id BIGINT PRIMARY KEY);
+      INSERT INTO tenants VALUES (1); INSERT INTO projetos VALUES (10,1,'Obra'),(20,1,'Outra');
+      INSERT INTO atividades_eap VALUES (1,1,10,NULL),(2,1,10,1),(3,1,10,1),(4,1,20,NULL);
+      INSERT INTO mapa_suprimentos VALUES (1,10,2,NULL)`);
+    await migration.up({ run: sql => client.query(sql.replace('CREATE TABLE IF NOT EXISTS mapa_suprimentos_atividades', 'CREATE TEMP TABLE IF NOT EXISTS mapa_suprimentos_atividades')) });
+    const query = (sql, args = []) => client.query(db.translateQuery(sql), args);
+    const get = async (sql, args) => (await query(sql,args)).rows[0] || null;
+    const all = async (sql, args) => (await query(sql,args)).rows;
+    const exec = async (sql, args) => { const r = await query(sql,args); return { changes:r.rowCount }; };
+    assert.deepEqual((await all('SELECT atividade_id FROM mapa_suprimentos_atividades')).map(x => Number(x.atividade_id)), [2]);
+    const withClient = async fn => { await client.query('SAVEPOINT route_test'); try { const v = await fn(client); await client.query('RELEASE SAVEPOINT route_test'); return v; } catch (e) { await client.query('ROLLBACK TO SAVEPOINT route_test'); throw e; } };
+    mock('../config/database', { allQuery:all, getQuery:get, runQuery:exec, withClient, getWithClient:(_c,s,p)=>get(s,p), allWithClient:(_c,s,p)=>all(s,p), execWithClient:(_c,s,p)=>exec(s,p) });
+    mock('../middleware/auth', { auth:(req,_res,next)=>{ req.tenantId=1; req.usuario={ id:1 }; next(); }, isGestor:(_req,_res,next)=>next() });
+    mock('../middleware/rbac', { PERMISSIONS:{ EAP_VIEW:'view' }, requirePermission:()=> (_req,_res,next)=>next(), assertProjectAccess: async()=>true });
+    const express = require('express'); const app = express(); app.use(express.json()); app.use('/mapa',require('../routes/mapa_suprimentos'));
+    server = await new Promise(resolve => { const s=app.listen(0,'127.0.0.1',()=>resolve(s)); });
+    const save = async (atividades) => fetch(`http://127.0.0.1:${server.address().port}/mapa/projeto/10/atividades`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({atividades})});
+    assert.equal((await save([3])).status,200);
+    assert.deepEqual((await all('SELECT atividade_id FROM mapa_suprimentos_atividades')).map(x=>Number(x.atividade_id)),[3]);
+    assert.equal((await save([4])).status,409);
+    assert.equal((await save([1])).status,409);
+    assert.deepEqual((await all('SELECT atividade_id FROM mapa_suprimentos_atividades')).map(x=>Number(x.atividade_id)),[3]);
+    assert.equal((await save([])).status,200);
+    assert.equal((await all('SELECT * FROM mapa_suprimentos')).length,1);
+    assert.equal((await save([2])).status,200);
+    console.log('mapaAtividades: migração, seleção, preservação e validação por obra verificadas.');
+  } finally { if (server) await new Promise(resolve=>server.close(resolve)); await client.query('ROLLBACK'); client.release(); await db.pool.end(); }
+})().catch(e=>{ console.error(e); process.exitCode=1; });

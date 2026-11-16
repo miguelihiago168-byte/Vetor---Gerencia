@@ -11,7 +11,7 @@ import {
   selecionarCotacaoItem, marcarItemComprado, cancelarItemRequisicao, devolverCotacaoItem,
   solicitarCorrecaoItem,
   finalizarCotacaoItem, alterarQuantidadeItem, editarRequisicaoHeader, editarItemRequisicao,
-  aprovarTodosItens,
+  aprovarTodosItens, atualizarPrevisaoCotacao,
 } from '../services/api';
 import { ArrowLeft, CheckCircle2, Pencil, Plus, RotateCcw, Save, ShoppingCart, X } from 'lucide-react';
 
@@ -34,7 +34,7 @@ const STATUS_REQ_BADGE = {
 };
 const fmt = (v) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—';
 
-const SLOT_VAZIO = { fornecedor_nome: '', cnpj: '', telefone: '', email: '', valor_unitario: '', frete: '0', prazo_entrega: '' };
+const SLOT_VAZIO = { fornecedor_nome: '', cnpj: '', telefone: '', email: '', valor_unitario: '', frete: '0', prazo_entrega: '', data_entrega_prevista: '' };
 
 export default function RequisicaoDetalhe() {
   const { projetoId, id } = useParams();
@@ -131,6 +131,7 @@ export default function RequisicaoDetalhe() {
         valor_unitario: String(cot.valor_unitario || ''),
         frete: String(cot.frete ?? '0'),
         prazo_entrega: cot.prazo_entrega || '',
+        data_entrega_prevista: String(cot.data_entrega_prevista || '').slice(0, 10),
       };
     });
     setSlots(novoSlots);
@@ -161,7 +162,8 @@ export default function RequisicaoDetalhe() {
           norm(slot.email) !== norm(cot.email) ||
           normNum(slot.valor_unitario) !== normNum(cot.valor_unitario) ||
           normNum(slot.frete) !== normNum(cot.frete) ||
-          norm(slot.prazo_entrega) !== norm(cot.prazo_entrega)
+          norm(slot.prazo_entrega) !== norm(cot.prazo_entrega) ||
+          norm(slot.data_entrega_prevista) !== norm(String(cot.data_entrega_prevista || '').slice(0, 10))
         );
       };
 
@@ -176,6 +178,7 @@ export default function RequisicaoDetalhe() {
           valor_unitario: Number(s.valor_unitario),
           frete: Number(s.frete || 0),
           prazo_entrega: s.prazo_entrega || undefined,
+          data_entrega_prevista: s.data_entrega_prevista || null,
         };
         if (editando && cotacoesExistentes[i]) {
           if (slotMudou(s, cotacoesExistentes[i])) {
@@ -408,6 +411,7 @@ export default function RequisicaoDetalhe() {
           onSolicitarCorrecao={() => { setMotivoCorrecao(''); setModalCorrecao({ itemId: item.id }); setErro(''); }}
           onCotacoes={() => abrirModalCotacao(item)}
           onSelecionar={selecionarFornecedor}
+          onPrevisao={async (itemId, cotId, date) => { try { await atualizarPrevisaoCotacao(id, itemId, cotId, date); showToast('Previsão de entrega atualizada.'); await carregar(); } catch (err) { setErro(err.response?.data?.erro || 'Não foi possível atualizar a previsão.'); } }}
           onAutorizar={() => autorizarCompra(item.id)}
           onCancelar={() => { setMotivoCancelar(''); setModalCancelar({ itemId: item.id }); setErro(''); }}
           onDevolver={() => { setMotivoDevolver(''); setModalDevolver({ itemId: item.id }); setErro(''); }}
@@ -630,6 +634,7 @@ export default function RequisicaoDetalhe() {
                         <label className="form-label" style={{ fontSize: '0.78rem' }}>Prazo de Entrega</label>
                         <input className="form-input" style={{ padding: '0.45rem 0.75rem', fontSize: '0.86rem' }} value={slot.prazo_entrega} onChange={(e) => updateSlot(idx, 'prazo_entrega', e.target.value)} placeholder="Ex: 5 dias úteis" />
                       </div>
+                      <div><label className="form-label" style={{ fontSize: '0.78rem' }}>Data prevista de entrega</label><input className="form-input" type="date" value={slot.data_entrega_prevista} onChange={(e) => updateSlot(idx, 'data_entrega_prevista', e.target.value)} /></div>
                     </div>
                   );
                 })}
@@ -822,8 +827,14 @@ export default function RequisicaoDetalhe() {
 /* ──────────────────────────────────────────────────────────────────────────
    Sub-componente: card de item ativo
 ──────────────────────────────────────────────────────────────────────────── */
+function PrevisaoEntrega({ cot, onSave }) {
+  const [date, setDate] = useState(String(cot.data_entrega_prevista || '').slice(0, 10));
+  const [saving, setSaving] = useState(false);
+  return <form style={{ marginTop: 10 }} onSubmit={async event => { event.preventDefault(); setSaving(true); try { await onSave(date); } finally { setSaving(false); } }}><label className="form-label">Previsão de entrega<input className="form-input" type="date" required value={date} onChange={event => setDate(event.target.value)} /></label><Button type="submit" size="sm" loading={saving} style={{ marginTop: 6 }}>Salvar previsão</Button></form>;
+}
+
 function ItemCard({ item, idx, perfil, podeGestor, podeCotar, podeComprar, isSolicitante, reqId, reqStatus,
-  onAnalisar, onSolicitarCorrecao, onCotacoes, onSelecionar, onAutorizar, onCancelar, onDevolver, onAlterar, onEditar }) {
+  onAnalisar, onSolicitarCorrecao, onCotacoes, onSelecionar, onPrevisao, onAutorizar, onCancelar, onDevolver, onAlterar, onEditar }) {
 
   const temCotacoes  = (item.cotacoes?.length || 0) > 0;
   const cotCompletas = (item.cotacoes?.length || 0) >= 3;
@@ -903,7 +914,9 @@ function ItemCard({ item, idx, perfil, podeGestor, podeCotar, podeComprar, isSol
                       Total c/ frete: {fmt(total)}
                     </span>
                     {cot.prazo_entrega && <span> · Entrega: {cot.prazo_entrega}</span>}
+                    {cot.data_entrega_prevista && <span> · Prevista: {String(cot.data_entrega_prevista).slice(0, 10).split('-').reverse().join('/')}</span>}
                   </div>
+                  {!!cot.selecionada && ['Aprovado para compra', 'Comprado'].includes(item.status_item) && ['ADM', 'Financeiro', 'Gestor Geral', 'Gestor Local'].includes(perfil) && <PrevisaoEntrega cot={cot} onSave={date => onPrevisao(item.id, cot.id, date)} />}
                   {perfil === 'Gestor Geral' && item.status_item === 'Cotação finalizada' && !cot.selecionada && (
                     <Button size="sm" fullWidth tone="primary" variant="solid" startIcon={CheckCircle2} style={{ marginTop: '0.5rem' }}
                       onClick={() => onSelecionar(reqId, item.id, cot.id)}>

@@ -1,3 +1,11 @@
+// Remove apenas zeros finais; não converte para Number para preservar precisão.
+export function quantidadeParaEdicao(value) {
+  if (value == null || value === '') return '';
+  const text = String(value);
+  if (!/^\d+(?:\.\d+)?$/.test(text)) return text;
+  return text.includes('.') ? text.replace(/0+$/, '').replace(/\.$/, '') : text;
+}
+
 export function resumoQuantidade(recebida, total) {
   if (recebida === '' || recebida == null || total === '' || total == null) return null;
   const r = Number(recebida); const t = Number(total);

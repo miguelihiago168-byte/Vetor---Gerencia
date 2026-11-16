@@ -6,6 +6,7 @@ const { auth } = require('../middleware/auth');
 const { PERFIS, inferirPerfil } = require('../constants/access');
 const { withClient, runQuery, getQuery, allQuery, getWithClient, allWithClient, execWithClient } = require('../config/database');
 const { normalizarNomeInsumo } = require('../utils/estoque');
+const { editableStatus } = require('../services/rdoWorkflowService');
 
 const router = express.Router();
 router.use(auth);
@@ -154,11 +155,15 @@ router.get('/saldos', async (req, res) => {
         SUM(s.quantidade) AS quantidade_fisica,
         SUM(s.quantidade_reservada) AS quantidade_reservada,
         SUM(s.quantidade_quarentena) AS quantidade_quarentena,
+        SUM(CASE WHEN l.status_qualidade='AGUARDANDO_INSPECAO' THEN s.quantidade_quarentena ELSE 0 END) AS aguardando_inspecao,
+        SUM(LEAST(s.quantidade_quarentena, COALESCE(x.quantidade_bloqueada,0))) AS quantidade_bloqueada,
+        SUM(LEAST(GREATEST(0,s.quantidade_quarentena-COALESCE(x.quantidade_bloqueada,0)), COALESCE(x.quantidade_reprovada,0))) AS quantidade_rejeitada,
         SUM(s.quantidade-s.quantidade_reservada-s.quantidade_quarentena) AS quantidade_disponivel,
         COUNT(DISTINCT l.id) AS total_lotes
       FROM estoque_saldos s
       JOIN estoque_lotes l ON l.id=s.lote_id
       JOIN estoque_insumos i ON i.id=l.insumo_id
+      LEFT JOIN LATERAL (SELECT quantidade_bloqueada, quantidade_reprovada FROM estoque_inspecoes WHERE tenant_id=l.tenant_id AND lote_id=l.id ORDER BY id DESC LIMIT 1) x ON TRUE
       LEFT JOIN projetos p ON p.id=s.projeto_id
       WHERE ${where.join(' AND ')}
       GROUP BY i.id, i.nome, i.unidade, s.local_chave, s.tipo_local, s.projeto_id, p.nome
@@ -206,10 +211,27 @@ router.get('/pendencias', async (req, res) => {
     const params = isGlobal(req) ? [req.tenantId] : [req.tenantId, req.usuario.id];
     const rows = await allQuery(`
       SELECT pe.*, p.nome AS projeto_solicitante_nome,
+        (SELECT r.numero_requisicao FROM requisicao_itens i JOIN requisicoes r ON r.id=i.requisicao_id WHERE pe.referencia_tipo='REQUISICAO_ITEM' AND i.id=pe.referencia_id) AS numero_requisicao,
+        (SELECT i.requisicao_id FROM requisicao_itens i WHERE pe.referencia_tipo='REQUISICAO_ITEM' AND i.id=pe.referencia_id) AS requisicao_id,
+        (SELECT MAX(l.recebido_em) FROM estoque_lotes l WHERE l.tenant_id=pe.tenant_id AND l.pendencia_recebimento_id=pe.id) AS ultima_entrega,
+        COALESCE(qualidade.aprovada,0) AS quantidade_aprovada,
+        COALESCE(qualidade.bloqueada,0) AS quantidade_bloqueada,
+        COALESCE(qualidade.rejeitada,0) AS quantidade_rejeitada,
+        COALESCE(qualidade.aguardando,0) AS quantidade_aguardando_inspecao,
+        GREATEST(0, pe.quantidade_recebida - COALESCE(qualidade.aprovada,0) - COALESCE(qualidade.bloqueada,0) - COALESCE(qualidade.rejeitada,0) - COALESCE(qualidade.aguardando,0)) AS quantidade_sem_classificacao,
         pe.quantidade_comprada-pe.quantidade_recebida AS quantidade_pendente
       FROM estoque_pendencias_recebimento pe
       LEFT JOIN projetos p ON p.id=pe.projeto_solicitante_id
-      WHERE pe.tenant_id=? AND pe.status IN ('AGUARDANDO_RECEBIMENTO','RECEBIMENTO_PARCIAL')${visibility}
+      LEFT JOIN LATERAL (
+        SELECT SUM(COALESCE(x.quantidade_aprovada,0)) AS aprovada, SUM(COALESCE(x.quantidade_bloqueada,0)) AS bloqueada,
+          SUM(COALESCE(x.quantidade_reprovada,0)) AS rejeitada,
+          SUM(CASE WHEN l.status_qualidade='AGUARDANDO_INSPECAO' THEN COALESCE(m.recebido,0) ELSE 0 END) AS aguardando
+        FROM estoque_lotes l
+        LEFT JOIN LATERAL (SELECT id, quantidade_aprovada, quantidade_bloqueada, quantidade_reprovada FROM estoque_inspecoes WHERE tenant_id=l.tenant_id AND lote_id=l.id ORDER BY id DESC LIMIT 1) x ON TRUE
+        LEFT JOIN LATERAL (SELECT SUM(quantidade) AS recebido FROM estoque_movimentacoes WHERE tenant_id=l.tenant_id AND lote_id=l.id AND tipo='ENTRADA_COMPRA') m ON TRUE
+        WHERE l.tenant_id=pe.tenant_id AND l.pendencia_recebimento_id=pe.id
+      ) qualidade ON TRUE
+      WHERE pe.tenant_id=? ${req.query.todos === '1' ? '' : "AND pe.status IN ('AGUARDANDO_RECEBIMENTO','RECEBIMENTO_PARCIAL')"}${visibility}
       ORDER BY pe.criado_em ASC
     `, params);
     res.json(rows);
@@ -335,52 +357,8 @@ router.get('/transferencias/:id', async (req, res) => {
   }
 });
 
-router.post('/transferencias', async (req, res) => {
-  try {
-    if (!ensureOperation(req, res)) return;
-    const body = req.body || {};
-    const origem = local(body.origem_projeto_id ? Number(body.origem_projeto_id) : null);
-    const destino = local(body.destino_projeto_id ? Number(body.destino_projeto_id) : null);
-    if (origem.chave === destino.chave) return fail(res, 400, 'Origem e destino devem ser diferentes.');
-    if (![PERFIS.ADM, PERFIS.GESTOR_GERAL, PERFIS.GESTOR_OBRA].includes(perfil(req))) return fail(res, 403, 'Somente gestor local ou gestor geral pode solicitar transferencia.');
-    if (isLocalManager(req) && (!destino.projetoId || !(await canAccessProject(req, destino.projetoId)))) return fail(res, 403, 'Gestor local so pode solicitar para uma obra vinculada a ele.');
-    if (!isLocalManager(req) && !(await canAccessLocation(req, origem))) return fail(res, 403, 'Sem acesso ao estoque de origem.');
-    if (destino.projetoId && !(await getProject(destino.projetoId, req.tenantId))) return fail(res, 400, 'Obra de destino invalida.');
-    if (!Array.isArray(body.itens) || !body.itens.length) return fail(res, 400, 'Informe ao menos um lote para transferir.');
-    const transferId = await withClient(async (client) => {
-      const created = await execWithClient(client, `
-        INSERT INTO estoque_transferencias (tenant_id,origem_chave,origem_projeto_id,destino_chave,destino_projeto_id,justificativa,solicitada_por)
-        VALUES (?,?,?,?,?,?,?)
-      `, [req.tenantId, origem.chave, origem.projetoId, destino.chave, destino.projetoId, body.justificativa || null, req.usuario.id]);
-      for (const item of body.itens) {
-        const qty = Number(item.quantidade);
-        if (!(qty > 0)) throw new Error('Quantidade de transferencia invalida.');
-        const lote = await getWithClient(client, `
-          SELECT l.id, i.nome, i.unidade, s.quantidade, s.quantidade_reservada, s.quantidade_quarentena FROM estoque_lotes l
-          JOIN estoque_insumos i ON i.id=l.insumo_id
-          JOIN estoque_saldos s ON s.lote_id=l.id
-          WHERE l.id=? AND l.tenant_id=? AND s.local_chave=?
-        `, [Number(item.lote_id), req.tenantId, origem.chave]);
-        if (!lote || Number(lote.quantidade) - Number(lote.quantidade_reservada) - Number(lote.quantidade_quarentena) + 0.000001 < qty) {
-          throw new Error('Saldo disponível insuficiente ou em quarentena para a transferência.');
-        }
-        await execWithClient(client, 'INSERT INTO estoque_transferencia_itens (transferencia_id,lote_id,quantidade,descricao_snapshot,unidade_snapshot) VALUES (?,?,?,?,?)', [created.lastID, lote.id, qty, lote.nome, lote.unidade]);
-      }
-      return created.lastID;
-    });
-    const transfer = await hydrateTransfer(transferId, req.tenantId);
-    await notificarTransferencia(transfer, {
-      tipo: 'estoque_transferencia_solicitada',
-      titulo: 'Transferência solicitada',
-      mensagem: 'Uma transferência de insumos aguarda aprovação.',
-      destinatarios: { gestoresGlobais: true, almoxarifes: true }
-    }, req.usuario.id);
-    res.status(201).json(transfer);
-  } catch (error) {
-    console.error('[estoque] criar transferencia:', error);
-    fail(res, 409, error.message || 'Erro ao criar transferencia.');
-  }
-});
+// Transferências existentes continuam acessíveis para conclusão ou cancelamento.
+router.post('/transferencias', (_req, res) => fail(res, 410, 'Novas transferências de insumos entre obras não estão disponíveis.'));
 
 router.post('/transferencias/:id/aprovar', async (req, res) => {
   try {
@@ -605,6 +583,8 @@ router.post('/rastreabilidade/:loteId/inspecoes', async (req, res) => {
     if ([aprovado, bloqueado, reprovado].some((value) => value < 0 || !Number.isFinite(value))) return fail(res, 400, 'Quantidades de inspeção inválidas.');
     if (['BLOQUEADO', 'REPROVADO', 'APROVADO_COM_RESSALVA'].includes(resultado) && !String(body.motivo || body.ressalvas || '').trim()) return fail(res, 400, 'Informe o motivo ou ressalva da inspeção.');
     await withClient(async (client) => {
+      const rir = await getWithClient(client, `SELECT r.* FROM rir_relatorios r JOIN rir_itens ri ON ri.rir_id=r.id AND ri.tenant_id=r.tenant_id WHERE ri.lote_id=? AND r.tenant_id=? FOR UPDATE OF r`, [Number(req.params.loteId), req.tenantId]);
+      if (rir && (!editableStatus(rir.status) || Number(rir.criado_por) !== Number(req.usuario.id))) throw new Error('A conferência da RIR só pode ser alterada pelo criador enquanto estiver em preenchimento ou correção.');
       const lote = await getWithClient(client, 'SELECT * FROM estoque_lotes WHERE id=? AND tenant_id=? FOR UPDATE', [Number(req.params.loteId), req.tenantId]);
       if (!lote || !lote.requer_inspecao || lote.status_qualidade !== 'AGUARDANDO_INSPECAO') throw new Error('Esta entrada não está aguardando inspeção.');
       const saldos = await allWithClient(client, 'SELECT * FROM estoque_saldos WHERE tenant_id=? AND lote_id=? FOR UPDATE', [req.tenantId, lote.id]);
@@ -658,6 +638,7 @@ router.post('/saidas', async (req, res) => {
     const quantidade = Number(body.quantidade);
     if (!projetoId || !(await canAccessProject(req, projetoId))) return fail(res, 403, 'Selecione uma obra à qual você tenha acesso.');
     if (!(quantidade > 0) || !Number.isFinite(quantidade)) return fail(res, 400, 'Informe uma quantidade válida.');
+    if (body.aplicado_em && Number.isNaN(Date.parse(body.aplicado_em))) return fail(res, 400, 'Informe uma data de retirada válida.');
     if (!String(body.responsavel_nome || '').trim()) return fail(res, 400, 'Informe o responsável pela retirada.');
     if (!String(body.frente_servico || '').trim() && !body.atividade_eap_id) return fail(res, 400, 'Informe a frente de serviço ou a atividade EAP.');
     await withClient(async (client) => {
@@ -674,6 +655,19 @@ router.post('/saidas', async (req, res) => {
     console.error('[estoque] saida para uso:', error);
     fail(res, 409, error.message || 'Erro ao registrar baixa para uso.');
   }
+});
+
+router.get('/saidas', async (req, res) => {
+  try {
+    if (!ensureView(req, res)) return;
+    const projetoId = Number(req.query.projeto_id);
+    if (!Number.isSafeInteger(projetoId) || projetoId < 1 || !await canAccessProject(req, projetoId)) return fail(res, 403, 'Selecione uma obra à qual você tenha acesso.');
+    const rows = await allQuery(`SELECT a.id, a.quantidade, a.unidade, a.responsavel_nome, a.frente_servico, a.elemento_construtivo, a.aplicado_em, a.observacoes, i.nome, u.nome AS registrado_por
+      FROM estoque_aplicacoes a JOIN estoque_lotes l ON l.id=a.lote_id AND l.tenant_id=a.tenant_id
+      JOIN estoque_insumos i ON i.id=l.insumo_id AND i.tenant_id=a.tenant_id LEFT JOIN usuarios u ON u.id=a.criado_por
+      WHERE a.tenant_id=? AND a.projeto_id=? ORDER BY a.aplicado_em DESC, a.id DESC LIMIT 300`, [req.tenantId, projetoId]);
+    res.json(rows);
+  } catch (error) { console.error('[estoque] histórico de baixas:', error); fail(res, 500, 'Erro ao consultar baixas.'); }
 });
 
 router.get('/movimentacoes', async (req, res) => {

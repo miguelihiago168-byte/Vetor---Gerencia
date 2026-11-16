@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ComprasLayout from '../components/ComprasLayout';
-import { listarCotacoesFinalizadas, getProjetos, listarRequisicoesEncerradas } from '../services/api';
+import { listarCotacoesFinalizadas, listarCotacoesNegadas, getProjetos, listarRequisicoesEncerradas } from '../services/api';
 import { numeroRequisicaoExibicao, buscaNumeroRequisicao } from '../utils/numeroRequisicao';
 
 const fmt = (v) => v != null ? `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '—';
@@ -21,6 +21,9 @@ export default function CotacoesFinalizadas() {
   const navigate = useNavigate();
   const [itens, setItens] = useState([]);
   const [reqs, setReqs] = useState([]);
+  const [negados, setNegados] = useState([]);
+  const [status, setStatus] = useState('');
+  const [erro, setErro] = useState('');
   const [projetos, setProjetos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtros, setFiltros] = useState({ projeto_id: projetoId || '' });
@@ -30,27 +33,30 @@ export default function CotacoesFinalizadas() {
     setLoading(true);
     try {
       const params = filtros.projeto_id ? { projeto_id: filtros.projeto_id } : {};
-      const [res, projRes, reqsRes] = await Promise.all([
+      const [res, projRes, reqsRes, negadosRes] = await Promise.all([
         listarCotacoesFinalizadas(params),
         getProjetos(),
         listarRequisicoesEncerradas(params),
+        listarCotacoesNegadas(params),
       ]);
       setItens(res.data);
       setProjetos(projRes.data);
       setReqs(reqsRes.data || []);
-    } catch { /* ignore */ }
+      setNegados(negadosRes.data || []); setErro('');
+    } catch { setErro('Não foi possível carregar o histórico de compras.'); }
     finally { setLoading(false); }
   }, [filtros]);
 
   useEffect(() => { carregar(); }, [carregar]);
 
-  const itensFiltrados = busca
+  const itensFiltrados = status && status !== 'Comprado' ? [] : busca
     ? itens.filter((i) => buscaNumeroRequisicao(i.numero_requisicao, i.requisicao_id, busca) || i.item_descricao?.toLowerCase().includes(busca.toLowerCase()) || i.fornecedor_nome?.toLowerCase().includes(busca.toLowerCase()))
     : itens;
 
-  const reqsFiltradas = busca
+  const reqsFiltradas = status ? [] : busca
     ? reqs.filter((r) => buscaNumeroRequisicao(r.numero_requisicao, r.id, busca) || r.tipo_material?.toLowerCase().includes(busca.toLowerCase()) || r.solicitante_nome?.toLowerCase().includes(busca.toLowerCase()))
     : reqs;
+  const negadosFiltrados = negados.filter(i => (!status || i.status_item === status) && (!busca || buscaNumeroRequisicao(i.numero_requisicao, i.requisicao_id, busca) || String(i.item_descricao || '').toLowerCase().includes(busca.toLowerCase())));
 
   const totalGasto = itensFiltrados.reduce((acc, i) => acc + numeroFinito(i.valor_total), 0);
   const economiaMedia = itensFiltrados.length
@@ -62,9 +68,9 @@ export default function CotacoesFinalizadas() {
   };
 
   return (
-    <ComprasLayout title="Finalizadas">
+    <ComprasLayout title="Histórico de compras">
       <p style={{ marginTop: -8, marginBottom: 16, color: 'var(--gray-500)', fontSize: '0.88rem' }}>
-        Compras concluídas e requisições encerradas
+        Compras concluídas, itens reprovados ou cancelados e requisições encerradas.
       </p>
 
       {/* Resumo */}
@@ -74,6 +80,7 @@ export default function CotacoesFinalizadas() {
           { label: 'Valor total gasto', valor: fmt(totalGasto), cls: 'badge badge-green' },
           { label: 'Economia média', valor: `${economiaMedia.toFixed(1)}%`, cls: 'badge badge-yellow' },
           { label: 'Requisições encerradas', valor: reqsFiltradas.length, cls: 'badge badge-gray' },
+          { label: 'Negados ou cancelados', valor: negadosFiltrados.length, cls: 'badge badge-red' },
         ].map((c) => (
           <div key={c.label} className="card suprimentos-kpi-card">
             <p className="suprimentos-kpi-label">{c.label}</p>
@@ -86,6 +93,7 @@ export default function CotacoesFinalizadas() {
       <div className="card suprimentos-filter-card">
       <div className="suprimentos-filter-row">
         <input className="form-input" style={{ flex: 1, minWidth: 200 }} placeholder="Buscar item, requisição ou fornecedor..." value={busca} onChange={(e) => setBusca(e.target.value)} />
+        <select className="form-input" style={{ width: 'auto' }} value={status} onChange={e => setStatus(e.target.value)}><option value="">Todas as situações</option><option value="Comprado">Comprado</option><option value="Reprovado">Reprovado</option><option value="Cancelado">Cancelado</option></select>
         {!projetoId && (
           <select className="form-input" style={{ width: 'auto' }} value={filtros.projeto_id} onChange={(e) => setFiltros({ ...filtros, projeto_id: e.target.value })}>
             <option value="">Todas as obras</option>
@@ -95,6 +103,7 @@ export default function CotacoesFinalizadas() {
       </div>
       </div>
 
+      {erro && <div className="alert alert-error" role="alert">{erro}</div>}
       {loading ? (
         <div className="card suprimentos-empty-card"><div className="spinner" style={{ margin: '0 auto' }} /></div>
       ) : (
@@ -129,17 +138,17 @@ export default function CotacoesFinalizadas() {
           )}
 
           {/* ── Seção: Itens comprados ── */}
-          <h3 className="suprimentos-section-title">
+          {(!status || status === 'Comprado') && <><h3 className="suprimentos-section-title">
             Itens comprados ({itensFiltrados.length})
           </h3>
           {itensFiltrados.length === 0 ? (
             <div className="card suprimentos-empty-card">Nenhuma compra finalizada encontrada.</div>
           ) : (
             <div className="card suprimentos-table-card" style={{ overflowX: 'auto' }}>
-              <table className="table" style={{ margin: 0 }}>
+              <table className="table historico-compras-table" style={{ margin: 0 }}>
                 <thead>
                   <tr>
-                    {['Requisição','Item','Qtd','Fornecedor','Valor Unit.','Valor Total','Economia','Tipo/Obra','Data','Responsável'].map((h) => (
+                    {['Requisição','Item','Qtd','Situação','Fornecedor','Valor Unit.','Valor Total','Economia','Tipo/Obra','Data','Responsável'].map((h) => (
                       <th key={h}>{h}</th>
                     ))}
                   </tr>
@@ -150,6 +159,7 @@ export default function CotacoesFinalizadas() {
                       <td><span title={i.numero_requisicao} style={{ color: 'var(--primary)', fontSize: '0.82rem' }}>{numeroRequisicaoExibicao(i.numero_requisicao, i.requisicao_id)}</span></td>
                       <td><strong>{i.item_descricao}</strong></td>
                       <td style={{ textAlign: 'center' }}>{i.quantidade} {i.unidade || ''}</td>
+                      <td><span className="badge badge-green">Comprado</span></td>
                       <td>
                         <div>{i.fornecedor_nome || '—'}</div>
                         {i.fornecedor_cnpj && <div style={{ color: 'var(--gray-400)', fontSize: '0.75rem' }}>{i.fornecedor_cnpj}</div>}
@@ -174,7 +184,8 @@ export default function CotacoesFinalizadas() {
                 </tbody>
               </table>
             </div>
-          )}
+          )}</>}
+          {(!status || status === 'Reprovado' || status === 'Cancelado') && <section style={{ marginTop:'2rem' }}><h3 className="suprimentos-section-title">Itens reprovados ou cancelados ({negadosFiltrados.length})</h3>{!negadosFiltrados.length ? <div className="card suprimentos-empty-card">Nenhum item encontrado.</div> : <div className="card suprimentos-table-card" style={{ overflowX:'auto' }}><table className="table historico-negados-table"><thead><tr><th>Requisição</th><th>Item</th><th>Quantidade</th><th>Situação</th><th>Motivo</th><th>Obra</th></tr></thead><tbody>{negadosFiltrados.map(i => <tr key={`${i.origem || 'req'}-${i.item_id}`}><td>{numeroRequisicaoExibicao(i.numero_requisicao, i.requisicao_id)}</td><td>{i.item_descricao}</td><td>{i.quantidade} {i.unidade}</td><td><span className={i.status_item === 'Reprovado' ? 'badge badge-red' : 'badge badge-gray'}>{i.status_item}</span></td><td>{i.motivo_reprovacao || '—'}</td><td>{i.projeto_nome || '—'}</td></tr>)}</tbody></table></div>}</section>}
         </>
       )}
     </ComprasLayout>

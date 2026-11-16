@@ -19,6 +19,7 @@ router.get('/', auth, async (req, res) => {
               CASE
                 WHEN n.referencia_tipo = 'reuniao' THEN mr.projeto_id
                 WHEN n.referencia_tipo = 'estoque_transferencia' THEN et.destino_projeto_id
+                WHEN n.referencia_tipo = 'rir' THEN rir.projeto_id
                 ELSE NULL
               END AS projeto_id
        FROM notificacoes n
@@ -29,6 +30,10 @@ router.get('/', auth, async (req, res) => {
        LEFT JOIN estoque_transferencias et
          ON n.referencia_tipo = 'estoque_transferencia'
         AND et.id = n.referencia_id
+       LEFT JOIN rir_relatorios rir
+         ON n.referencia_tipo = 'rir'
+        AND rir.id = n.referencia_id
+        AND rir.tenant_id = n.tenant_id
        WHERE n.usuario_id = ?
          AND n.tenant_id = ?
          AND COALESCE(n.${readColumn}, 0) = 0

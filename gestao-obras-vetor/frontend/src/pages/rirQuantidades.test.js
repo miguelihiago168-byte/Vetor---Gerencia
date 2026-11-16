@@ -1,5 +1,11 @@
 import assert from 'node:assert/strict';
-import { resumoQuantidade } from './rirQuantidades.js';
+import { quantidadeParaEdicao, resumoQuantidade } from './rirQuantidades.js';
+
+assert.equal(quantidadeParaEdicao('1250.0000'), '1250');
+assert.equal(quantidadeParaEdicao('12.3400'), '12.34');
+assert.equal(quantidadeParaEdicao('0.0001'), '0.0001');
+assert.equal(quantidadeParaEdicao('99999999999999.0000'), '99999999999999');
+assert.equal(quantidadeParaEdicao(''), '');
 
 assert.deepEqual(resumoQuantidade(0, 100), { saldo:100, percentual:0, status:'Aguardando recebimento' });
 assert.deepEqual(resumoQuantidade(40, 100), { saldo:60, percentual:40, status:'Recebimento parcial' });

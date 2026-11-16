@@ -22,11 +22,11 @@ import Requisicoes from './pages/Requisicoes';
 import RequisicaoDetalhe from './pages/RequisicaoDetalhe';
 import RequisicaoKanban from './pages/RequisicaoKanban';
 import CotacoesFinalizadas from './pages/CotacoesFinalizadas';
-import CotacoesNegadas from './pages/CotacoesNegadas';
 import Fornecedores from './pages/Fornecedores';
 import ComprasStatusList from './pages/ComprasStatusList';
 import ComprasGlobal from './pages/ComprasGlobal';
 import Estoque from './pages/Estoque';
+import AreaPedidos from './pages/AreaPedidos';
 // FINANCEIRO DESATIVADO
 // import FinanceiroFluxoCaixa from './pages/FinanceiroFluxoCaixa';
 import EAP from './pages/EAP';
@@ -181,7 +181,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           } />
           <Route path="/projeto/:projetoId/compras/negadas" element={
             <PrivateRoute allowedPerfis={PERFIS_COMPRAS}>
-              <CotacoesNegadas />
+              <CotacoesFinalizadas />
             </PrivateRoute>
           } />
           <Route path="/projeto/:projetoId/compras/fornecedores" element={
@@ -352,7 +352,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           } />
           <Route path="/compras/negadas" element={
             <PrivateRoute allowedPerfis={PERFIS_COMPRAS}>
-              <CotacoesNegadas />
+              <CotacoesFinalizadas />
             </PrivateRoute>
           } />
           <Route path="/compras/:id" element={
@@ -373,6 +373,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/gantt" element={<ProjetoSelector destino="gantt" />} />
           <Route path="/rnc" element={<ProjetoSelector destino="rnc" />} />
           <Route path="/compras" element={<PrivateRoute allowedPerfis={PERFIS_COMPRAS}><ComprasGlobal /></PrivateRoute>} />
+          <Route path="/compras/area-pedidos" element={<PrivateRoute allowedPerfis={PERFIS_COMPRAS}><AreaPedidos /></PrivateRoute>} />
+          <Route path="/projeto/:projetoId/compras/area-pedidos" element={<PrivateRoute allowedPerfis={PERFIS_COMPRAS}><AreaPedidos /></PrivateRoute>} />
           <Route path="/compras/estoque" element={<PrivateRoute allowedPerfis={PERFIS_COMPRAS}><Estoque /></PrivateRoute>} />
           <Route path="/compras/status/:statusSlug" element={<PrivateRoute allowedPerfis={PERFIS_COMPRAS}><ComprasStatusList /></PrivateRoute>} />
           {/* FINANCEIRO DESATIVADO: <Route path="/financeiro" element={<ProjetoSelector destino="financeiro" />} /> */}

@@ -345,6 +345,13 @@ function Navbar() {
       navigate(notificacao.projeto_id ? `/projeto/${notificacao.projeto_id}/compras/estoque` : '/compras/estoque');
       return;
     }
+    if (notificacao?.referencia_tipo === 'rir' && notificacao.projeto_id) {
+      if (!await confirmNav()) return;
+      await marcarNotificacao(notificacao.id);
+      setNotifOpen(false);
+      navigate(`/projeto/${notificacao.projeto_id}/rastreabilidade-materiais?rir=${notificacao.referencia_id}`);
+      return;
+    }
     await marcarNotificacao(notificacao.id);
   };
 
@@ -394,11 +401,11 @@ function Navbar() {
               <div className="notif-empty">Não há notificações não lidas.</div>
             ) : notificacoes.map((notificacao) => (
               <div
-                className={`notif-item${['reuniao', 'estoque_transferencia','sistema_atualizacao'].includes(notificacao.referencia_tipo) ? ' notif-item-clickable' : ''}`}
+                className={`notif-item${['reuniao', 'estoque_transferencia','sistema_atualizacao','rir'].includes(notificacao.referencia_tipo) ? ' notif-item-clickable' : ''}`}
                 key={notificacao.id}
                 onClick={() => abrirNotificacao(notificacao)}
-                role={['reuniao', 'estoque_transferencia','sistema_atualizacao'].includes(notificacao.referencia_tipo) ? 'button' : undefined}
-                tabIndex={['reuniao', 'estoque_transferencia','sistema_atualizacao'].includes(notificacao.referencia_tipo) ? 0 : undefined}
+                role={['reuniao', 'estoque_transferencia','sistema_atualizacao','rir'].includes(notificacao.referencia_tipo) ? 'button' : undefined}
+                tabIndex={['reuniao', 'estoque_transferencia','sistema_atualizacao','rir'].includes(notificacao.referencia_tipo) ? 0 : undefined}
                 onKeyDown={(event) => {
                   if(event.target===event.currentTarget && (event.key==='Enter'||event.key===' ')){event.preventDefault();abrirNotificacao(notificacao);}
                 }}

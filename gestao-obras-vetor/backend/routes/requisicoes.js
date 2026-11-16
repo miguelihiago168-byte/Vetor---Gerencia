@@ -346,8 +346,8 @@ router.get('/finalizadas', async (req, res) => {
         r.tipo_material,
         c.valor_unitario,
         (i.quantidade * c.valor_unitario) AS valor_total,
-        f.razao_social AS fornecedor_nome,
-        f.cnpj AS fornecedor_cnpj,
+        COALESCE(NULLIF(TRIM(c.fornecedor_nome), ''), NULLIF(TRIM(f.nome_fantasia), ''), f.razao_social) AS fornecedor_nome,
+        COALESCE(NULLIF(TRIM(c.cnpj), ''), f.cnpj) AS fornecedor_cnpj,
         c.prazo_entrega,
         c.condicao_pagamento,
         u.nome AS responsavel_nome,
@@ -526,12 +526,12 @@ router.get('/negadas', async (req, res) => {
       FROM requisicao_itens i
       JOIN requisicoes r ON r.id = i.requisicao_id
       JOIN projetos p ON p.id = r.projeto_id
-      LEFT JOIN (
-        SELECT h2.item_id, h2.usuario_id
+      LEFT JOIN LATERAL (
+        SELECT h2.usuario_id
         FROM requisicao_historico h2
-        WHERE h2.tipo_evento IN ('ITEM_REPROVADO', 'ITEM_CANCELADO')
-        GROUP BY h2.item_id
-      ) hult ON hult.item_id = i.id
+        WHERE h2.item_id=i.id AND h2.tipo_evento IN ('ITEM_REPROVADO', 'ITEM_CANCELADO')
+        ORDER BY h2.id DESC LIMIT 1
+      ) hult ON TRUE
       LEFT JOIN usuarios u ON u.id = hult.usuario_id
       WHERE i.status_item IN ('Reprovado', 'Cancelado')
     `;
@@ -1321,12 +1321,13 @@ router.post('/:id/itens/:itemId/cotacoes', async (req, res) => {
 
     const {
       fornecedor_id, fornecedor_nome, cnpj, telefone, email,
-      valor_unitario, frete, prazo_entrega, condicao_pagamento, observacao
+      valor_unitario, frete, prazo_entrega, data_entrega_prevista, condicao_pagamento, observacao
     } = req.body;
 
     if (!valor_unitario || isNaN(Number(valor_unitario)) || Number(valor_unitario) <= 0) {
       return res.status(400).json({ erro: 'valor_unitario inválido.' });
     }
+    if (data_entrega_prevista && (!/^\d{4}-\d{2}-\d{2}$/.test(data_entrega_prevista) || Number.isNaN(Date.parse(`${data_entrega_prevista}T00:00:00Z`)) || new Date(`${data_entrega_prevista}T00:00:00Z`).toISOString().slice(0, 10) !== data_entrega_prevista)) return res.status(400).json({ erro: 'Data prevista de entrega inválida.' });
 
     // Fornecedor por ID (registro) ou por nome livre — ao menos um obrigatório
     if (!fornecedor_id && !String(fornecedor_nome || '').trim()) {
@@ -1346,8 +1347,8 @@ router.post('/:id/itens/:itemId/cotacoes', async (req, res) => {
     const result = await runQuery(
       `INSERT INTO requisicao_cotacoes
          (item_id, fornecedor_id, fornecedor_nome, cnpj, telefone, email,
-          valor_unitario, frete, prazo_entrega, condicao_pagamento, observacao)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          valor_unitario, frete, prazo_entrega, data_entrega_prevista, condicao_pagamento, observacao)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         item.id,
         fornecedor_id || null,
@@ -1358,6 +1359,7 @@ router.post('/:id/itens/:itemId/cotacoes', async (req, res) => {
         Number(valor_unitario),
         frete ? Number(frete) : 0,
         prazo_entrega || null,
+        data_entrega_prevista || null,
         condicao_pagamento || null,
         observacao || null,
       ]
@@ -1425,12 +1427,13 @@ router.patch('/:id/itens/:itemId/cotacoes/:cotacaoId', async (req, res) => {
 
     const {
       fornecedor_nome, cnpj, telefone, email,
-      valor_unitario, frete, prazo_entrega, condicao_pagamento, observacao
+      valor_unitario, frete, prazo_entrega, data_entrega_prevista, condicao_pagamento, observacao
     } = req.body;
 
     if (valor_unitario !== undefined && (isNaN(Number(valor_unitario)) || Number(valor_unitario) <= 0)) {
       return res.status(400).json({ erro: 'valor_unitario inválido.' });
     }
+    if (data_entrega_prevista && (!/^\d{4}-\d{2}-\d{2}$/.test(data_entrega_prevista) || Number.isNaN(Date.parse(`${data_entrega_prevista}T00:00:00Z`)) || new Date(`${data_entrega_prevista}T00:00:00Z`).toISOString().slice(0, 10) !== data_entrega_prevista)) return res.status(400).json({ erro: 'Data prevista de entrega inválida.' });
 
     // Monta diffs antes de atualizar
     const alteracoes = [];
@@ -1448,6 +1451,7 @@ router.patch('/:id/itens/:itemId/cotacoes/:cotacaoId', async (req, res) => {
     comparar('valor_unitario',  cotacao.valor_unitario,   valor_unitario !== undefined ? Number(valor_unitario) : undefined, true);
     comparar('frete',           cotacao.frete,            frete !== undefined ? Number(frete) : undefined, true);
     comparar('prazo_entrega',   cotacao.prazo_entrega,    prazo_entrega !== undefined ? prazo_entrega || null : undefined);
+    comparar('data_entrega_prevista', cotacao.data_entrega_prevista ? new Date(cotacao.data_entrega_prevista).toISOString().slice(0, 10) : null, data_entrega_prevista !== undefined ? data_entrega_prevista || null : undefined);
 
     await runQuery(
       `UPDATE requisicao_cotacoes SET
@@ -1458,6 +1462,7 @@ router.patch('/:id/itens/:itemId/cotacoes/:cotacaoId', async (req, res) => {
          valor_unitario     = COALESCE(?, valor_unitario),
          frete              = COALESCE(?, frete),
          prazo_entrega      = COALESCE(?, prazo_entrega),
+         data_entrega_prevista = CASE WHEN ? THEN ? ELSE data_entrega_prevista END,
          condicao_pagamento = COALESCE(?, condicao_pagamento),
          observacao         = COALESCE(?, observacao)
        WHERE id = ?`,
@@ -1469,6 +1474,7 @@ router.patch('/:id/itens/:itemId/cotacoes/:cotacaoId', async (req, res) => {
         valor_unitario !== undefined ? Number(valor_unitario) : null,
         frete !== undefined ? Number(frete) : null,
         prazo_entrega !== undefined ? prazo_entrega || null : null,
+        data_entrega_prevista !== undefined, data_entrega_prevista || null,
         condicao_pagamento !== undefined ? condicao_pagamento || null : null,
         observacao !== undefined ? observacao || null : null,
         cotacao.id,
@@ -1618,6 +1624,26 @@ router.patch('/:id/itens/:itemId/cotacoes/:cotacaoId/selecionar', async (req, re
 
 // ─── PATCH /:id/itens/:itemId/comprado ────────────────────────────────────
 // ADM, Financeiro ou Gestor Geral marca item como Comprado
+router.patch('/:id/itens/:itemId/cotacoes/:cotacaoId/previsao-entrega', async (req, res) => {
+  try {
+    const usuario = await carregarPerfilUsuario(req.usuario.id);
+    if (!['ADM', 'Financeiro', 'Gestor Geral', 'Gestor Local'].includes(inferirPerfil(usuario))) return res.status(403).json({ erro: 'Sem permissão para atualizar a previsão.' });
+    const item = await getQuery('SELECT * FROM requisicao_itens WHERE id=? AND requisicao_id=?', [req.params.itemId, req.params.id]);
+    if (!item) return res.status(404).json({ erro: 'Item não encontrado.' });
+    const project = await getQuery('SELECT projeto_id FROM requisicoes WHERE id=?', [req.params.id]);
+    if (!project) return res.status(404).json({ erro: 'Requisição não encontrada.' });
+    if (!await assertProjectAccess(req, res, Number(project.projeto_id))) return;
+    const cotacao = await getQuery('SELECT * FROM requisicao_cotacoes WHERE id=? AND item_id=? AND selecionada=1', [req.params.cotacaoId, item.id]);
+    if (!cotacao || ![STATUS_ITEM.APROVADO, STATUS_ITEM.COMPRADO].includes(item.status_item)) return res.status(409).json({ erro: 'Selecione uma cotação antes de registrar a previsão.' });
+    const date = req.body.data_entrega_prevista;
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`)) || new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) !== date) return res.status(400).json({ erro: 'Informe uma data prevista válida.' });
+    const updated = await runQuery('UPDATE requisicao_cotacoes SET data_entrega_prevista=? WHERE id=? AND item_id=? AND selecionada=1', [date, cotacao.id, item.id]);
+    if (!updated.changes) return res.status(409).json({ erro: 'A cotação selecionada foi alterada. Atualize a página.' });
+    await registrarHistorico(Number(req.params.id), item.id, usuario.id, 'PREVISAO_ENTREGA_ALTERADA', null, null, { cotacao_id: cotacao.id, data_anterior: cotacao.data_entrega_prevista || null, data_prevista: date });
+    res.json({ data_entrega_prevista: date });
+  } catch (err) { console.error('[requisicoes] previsão de entrega:', err); res.status(500).json({ erro: 'Não foi possível atualizar a previsão.' }); }
+});
+
 router.patch('/:id/itens/:itemId/comprado', async (req, res) => {
   try {
     const usuario = await carregarPerfilUsuario(req.usuario.id);
