@@ -1,4 +1,5 @@
 import React from 'react';
+import { ArrowDownRight, CheckCircle2, ClipboardList, Clock3, AlertTriangle, Users } from 'lucide-react';
 import './RDOTimeline.css';
 
 /* ──────────────────────────────────────────────────────────────
@@ -24,22 +25,34 @@ function KPICards({ rdo, maoObra, atividadesExecutadas, ocorrencias }) {
 
   const cards = [
     {
-      label: 'Total Equipe',
+      label: 'Equipe no dia',
+      icon: Users,
+      tone: 'team',
+      target: 'equipe',
       value: totalEquipe != null ? totalEquipe : '—',
       sub: totalEquipe != null ? 'colaborador' + (totalEquipe !== 1 ? 'es' : '') : 'sem registro',
     },
     {
-      label: 'HH Mão de Obra Direta',
+      label: 'HH de mão de obra direta',
+      icon: Clock3,
+      tone: 'hours',
+      target: 'equipe',
       value: hhDireta != null ? hhDireta : '—',
       sub: hhDireta != null ? 'horas-homem no dia' : 'não calculado',
     },
     {
       label: 'Atividades',
+      icon: ClipboardList,
+      tone: 'activities',
+      target: 'atividades',
       value: atividadeCount != null ? atividadeCount : '—',
       sub: atividadeCount != null ? 'atividade' + (atividadeCount !== 1 ? 's' : '') + ' executada' + (atividadeCount !== 1 ? 's' : '') : 'sem registro',
     },
     {
       label: 'Ocorrências',
+      icon: ocorrenciaCount > 0 ? AlertTriangle : CheckCircle2,
+      tone: ocorrenciaCount > 0 ? 'warning' : 'events',
+      target: 'ocorrencias',
       value: ocorrenciaCount != null ? ocorrenciaCount : '—',
       sub: ocorrenciaCount != null
         ? (ocorrenciaCount === 0 ? 'nenhuma ocorrência' : ocorrenciaCount + ' registrada' + (ocorrenciaCount !== 1 ? 's' : ''))
@@ -50,12 +63,13 @@ function KPICards({ rdo, maoObra, atividadesExecutadas, ocorrencias }) {
 
   return (
     <div className="rdo-kpi-grid">
-      {cards.map((c) => (
-        <div key={c.label} className="rdo-kpi-card">
-          <span className="rdo-kpi-label">{c.label}</span>
-          <span className={`rdo-kpi-value${c.danger ? ' danger' : ''}`}>{c.value}</span>
-          <span className="rdo-kpi-sub">{c.sub}</span>
-        </div>
+      {cards.map(({ label, value, sub, icon: Icon, tone, target, danger }) => (
+        <a key={label} href={`#${target}`} className={`rdo-kpi-card is-${tone}`}>
+          <span className="rdo-kpi-top"><span className="rdo-kpi-icon"><Icon size={18} /></span><ArrowDownRight size={15} aria-hidden="true" /></span>
+          <span className="rdo-kpi-label">{label}</span>
+          <span className={`rdo-kpi-value${danger ? ' danger' : ''}`}>{value}</span>
+          <span className="rdo-kpi-sub">{sub}</span>
+        </a>
       ))}
     </div>
   );

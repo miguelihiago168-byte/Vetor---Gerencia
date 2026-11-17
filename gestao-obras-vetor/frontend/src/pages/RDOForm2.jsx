@@ -168,7 +168,9 @@ const prepararFotoRdo = async (file) => {
 };
 
 function RDOForm2() {
-  const { projetoId, rdoId } = useParams();
+  const { projetoId, rdoId: routeRdoId } = useParams();
+  const [createdRdoId, setCreatedRdoId] = useState(null);
+  const rdoId = routeRdoId || createdRdoId;
   const navigate = useNavigate();
   const location = useLocation();
   const { setDirty } = useLeaveGuard();
@@ -210,7 +212,6 @@ function RDOForm2() {
   const [anexosQueue, setAnexosQueue] = useState([]);
   const [isUploadingAnexo, setIsUploadingAnexo] = useState(false);
   const fotoInputRef = useRef(null);
-  const anexoInputRef = useRef(null);
 
   const [openSections, setOpenSections] = useState({
     horario: true, clima: true, maoObra: true, equip: true,
@@ -1799,35 +1800,44 @@ function RDOForm2() {
   };
 
   /* ── Anexos ─────────────────────────────────────── */
-  const handleAnexoUpload = async (file) => {
-    if (!file) return;
-    const nome = String(file.name || '').toLowerCase();
-    if (!ANEXO_EXT_RE.test(nome)) {
-      showRdoError('Tipo de arquivo não permitido para anexos do RDO.');
-      return;
+  const enviarAnexos = async (targetId, files) => {
+    const falhas = [];
+    for (const file of files) {
+      try {
+        const fd = new FormData();
+        fd.append('arquivo', file);
+        const { data } = await uploadAnexo(targetId, fd);
+        setAnexos(prev => [data.anexo, ...prev]);
+        setAnexosQueue(prev => prev.filter(item => item !== file));
+      } catch (error) {
+        falhas.push(`${file.name} (${error.response?.data?.erro || error.message})`);
+      }
     }
+    if (falhas.length) throw new Error(`Anexos pendentes: ${falhas.join('; ')}. Salve o RDO para tentar novamente.`);
+  };
+
+  const selecionarAnexos = async (event) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = '';
+    const validos = files.filter(file => ANEXO_EXT_RE.test(file.name) && file.size <= 25 * 1024 * 1024);
+    const invalidos = files.filter(file => !validos.includes(file));
+    if (invalidos.length) {
+      showRdoError(`Verifique o formato e o limite de 25 MB destes arquivos: ${invalidos.map(file => file.name).join(', ')}.`);
+    }
+    if (!validos.length) return;
+    setAnexosQueue(prev => [...prev, ...validos]);
     if (!rdoId) {
-      setAnexosQueue(prev => [...prev, file]);
-      if (anexoInputRef.current) anexoInputRef.current.value = '';
+      setDirty(true);
       return;
     }
     setIsUploadingAnexo(true);
-    const fd = new FormData();
-    fd.append('arquivo', file);
-    fd.append('nome', file.name);
     try {
-      await uploadAnexo(rdoId, fd);
-      try {
-        const lista = await getAnexos(rdoId);
-        setAnexos(lista.data || []);
-      } catch (listError) {
-        notifyInfo('Anexo enviado. Atualize a tela se ele não aparecer na lista.', 6000);
-      }
+      await enviarAnexos(rdoId, validos);
     } catch (e) {
-      showRdoError('Erro ao enviar anexo: ' + (e?.response?.data?.erro || e.message));
+      setDirty(true);
+      showRdoError(e.message);
     } finally {
       setIsUploadingAnexo(false);
-      if (anexoInputRef.current) anexoInputRef.current.value = '';
     }
   };
 
@@ -1842,6 +1852,7 @@ function RDOForm2() {
 
   /* ── Salvar ─────────────────────────────────────── */
   const salvar = async (targetStatus = 'analise') => {
+    if (isSaving || isUploadingAnexo) return;
     if (targetStatus === 'analise') {
       const confirmarEnvio = await confirm({
         title: 'Enviar para aprovação?',
@@ -1852,6 +1863,7 @@ function RDOForm2() {
       if (!confirmarEnvio) return;
     }
 
+    let finalId = rdoId;
     try {
       setErro('');
       setSucesso('');
@@ -1995,7 +2007,7 @@ function RDOForm2() {
         return fotosFalharam;
       };
 
-      let finalId = rdoId;
+      let resumoPropagacao = '';
       if (rdoId) {
         const respostaAtualizacao = await updateRDO(rdoId, body);
         const rdosHorarioAtualizados = Number(respostaAtualizacao.data?.rdos_horario_atualizados || 0);
@@ -2014,22 +2026,9 @@ function RDOForm2() {
         if (fotosFalharam.length) {
           showRdoError(`RDO salvo, mas ${fotosFalharam.length} foto(s) não foram enviadas: ${fotosFalharam.join('; ')}`, 9000);
         }
-        if (targetStatus === 'analise') {
-          try {
-            await executeRdoWorkflow(rdoId, 'ENVIAR_PARA_APROVACAO_GESTOR');
-          } catch (workflowError) {
-            const detalhe = workflowError.response?.data?.erro || workflowError.message;
-            showRdoError(`RDO salvo, mas não foi enviado para aprovação: ${detalhe}`, 9000);
-            return;
-          }
-        }
-        await carregarLogsRdo(rdoId);
-        const resumoPropagacao = rdosHorarioAtualizados > 0
+        resumoPropagacao = rdosHorarioAtualizados > 0
           ? ` Horário aplicado a ${rdosHorarioAtualizados} RDO(s) futuro(s) em preenchimento.`
           : '';
-        const msgRdo = (targetStatus === 'analise' ? 'RDO enviado para aprovação.' : 'RDO salvo com sucesso.') + resumoPropagacao;
-        setSucesso(msgRdo);
-        notifySuccess(msgRdo, 4500);
       } else {
         const res = await createRDO(body);
         finalId = res.data?.rdo?.id;
@@ -2063,35 +2062,28 @@ function RDOForm2() {
         if (fotosFalharam.length) {
           showRdoError(`RDO salvo, mas ${fotosFalharam.length} foto(s) não foram enviadas: ${fotosFalharam.join('; ')}`, 9000);
         }
-        // Upload anexos da fila
-        for (const file of anexosQueue) {
-          try {
-            const fd = new FormData();
-            fd.append('arquivo', file);
-            fd.append('nome', file.name);
-            await uploadAnexo(finalId, fd);
-          } catch {}
-        }
-        setAnexosQueue([]);
-        if (finalId) {
-          try { const lista = await getAnexos(finalId); setAnexos(lista.data || []); } catch {}
-        }
-        if (targetStatus === 'analise') {
-          try {
-            if (finalId) await executeRdoWorkflow(finalId, 'ENVIAR_PARA_APROVACAO_GESTOR');
-          } catch (workflowError) {
-            const detalhe = workflowError.response?.data?.erro || workflowError.message;
-            showRdoError(`RDO salvo, mas não foi enviado para aprovação: ${detalhe}`, 9000);
-            return;
-          }
-        }
-        const msgNovo = targetStatus === 'analise' ? 'RDO enviado para aprovação.' : 'RDO salvo com sucesso.';
-        setSucesso(msgNovo);
-        notifySuccess(msgNovo, 4500);
       }
 
-      try { setDirty(false); } catch {}
+      await enviarAnexos(finalId, anexosQueue);
+      if (targetStatus === 'analise') {
+        try {
+          await executeRdoWorkflow(finalId, 'ENVIAR_PARA_APROVACAO_GESTOR');
+        } catch (workflowError) {
+          throw new Error(`RDO salvo, mas não foi enviado para aprovação: ${workflowError.response?.data?.erro || workflowError.message}`);
+        }
+      }
+      if (routeRdoId) await carregarLogsRdo(rdoId);
+      const msg = (targetStatus === 'analise' ? 'RDO enviado para aprovação.' : 'RDO salvo com sucesso.') + resumoPropagacao;
+      setSucesso(msg);
+      notifySuccess(msg, 4500);
+      setDirty(false);
+      if (!routeRdoId) {
+        const destino = `/projeto/${projetoId}/rdos/${finalId}`;
+        setCreatedRdoId(null);
+        navigate(targetStatus === 'analise' ? destino : `${destino}/editar`, { replace: true });
+      }
     } catch (error) {
+      if (!rdoId && finalId) setCreatedRdoId(finalId);
       const msg = error.response?.data?.erro || error.message || 'Erro ao salvar RDO.';
       showRdoError(msg);
     } finally {
@@ -3249,30 +3241,30 @@ function RDOForm2() {
 
         {/* ══ SEÇÃO 10 — Anexos ═════════════════════════ */}
         <Section id="anexos" num="10" title="Anexos do RDO" badge={(anexosPdf.length + anexosQueue.length) || null} isOpen={openSections.anexos} onToggle={toggleSection}>
-          {!rdoId && anexosQueue.length > 0 && (
+          {anexosQueue.length > 0 && !isUploadingAnexo && !isSaving && (
             <div className="alert alert-info" style={{ marginBottom: '8px', fontSize: '12px' }}>
               {anexosQueue.length} arquivo(s) na fila — serão enviados ao salvar o RDO.
             </div>
           )}
           <label className="rdo-upload-zone rdo-upload-zone-polished">
-            <input ref={anexoInputRef} type="file" multiple accept={ANEXO_ACCEPT}
-              onChange={(e) => { Array.from(e.target.files || []).forEach(f => handleAnexoUpload(f)); }}
-              disabled={isUploadingAnexo} />
+            <input type="file" multiple accept={ANEXO_ACCEPT}
+              onChange={selecionarAnexos}
+              disabled={isUploadingAnexo || isSaving} />
             <span className="rdo-upload-zone-icon"><Upload size={22} /></span>
             <span className="rdo-upload-zone-title">{isUploadingAnexo ? 'Enviando...' : 'Clique para selecionar anexos'}</span>
             <span className="rdo-upload-zone-hint">PDF, imagens, DOCX e XLSX — máx. 25 MB cada</span>
           </label>
-          {!rdoId && anexosQueue.length > 0 && (
+          {anexosQueue.length > 0 && (
             <div style={{ marginTop: '10px' }}>
               {anexosQueue.map((f, i) => (
                 <div key={i} className="rdo-anexo-item">
                   <span className="anexo-icon"><FileText size={18} color="#94a3b8" /></span>
                   <div className="anexo-info">
                     <div className="anexo-nome">{f.name}</div>
-                    <div className="anexo-meta" style={{ color: '#f59e0b' }}>Na fila — será enviado ao salvar</div>
+                    <div className="anexo-meta" style={{ color: '#f59e0b' }}>{isUploadingAnexo || isSaving ? 'Enviando…' : 'Na fila — será enviado ao salvar'}</div>
                   </div>
                   <IconButton size="sm" tone="danger" variant="ghost" icon={Trash2} label={`Remover anexo ${f.name}`} style={{ flexShrink: 0 }}
-                    onClick={() => setAnexosQueue(prev => prev.filter((_, idx) => idx !== i))} />
+                    disabled={isUploadingAnexo || isSaving} onClick={() => setAnexosQueue(prev => prev.filter((_, idx) => idx !== i))} />
                 </div>
               ))}
             </div>
@@ -3331,10 +3323,10 @@ function RDOForm2() {
                   Voltar para RDOs
                 </Button>
                 {canEditRdo && <>
-                  <Button className="rdo-actions-menu-item" fullWidth tone="primary" variant="solid" startIcon={Save} onClick={() => { setActionsMenuOpen(false); salvar('rascunho'); }} loading={isSaving} disabled={!formData.data_relatorio}>
+                  <Button className="rdo-actions-menu-item" fullWidth tone="primary" variant="solid" startIcon={Save} onClick={() => { setActionsMenuOpen(false); salvar('rascunho'); }} loading={isSaving} disabled={isUploadingAnexo || !formData.data_relatorio}>
                     Salvar RDO
                   </Button>
-                  <Button className="rdo-actions-menu-item" fullWidth tone="primary" variant="outline" startIcon={Send} onClick={() => { setActionsMenuOpen(false); salvar('analise'); }} loading={isSaving} disabled={!formData.data_relatorio}>
+                  <Button className="rdo-actions-menu-item" fullWidth tone="primary" variant="outline" startIcon={Send} onClick={() => { setActionsMenuOpen(false); salvar('analise'); }} loading={isSaving} disabled={isUploadingAnexo || !formData.data_relatorio}>
                     Enviar para aprovação
                   </Button>
                 </>}

@@ -818,6 +818,7 @@ body.dark-mode .rnc-det-card        { background: #1b2836; border-color: #2a4060
 body.dark-mode .rdo-kpi-card { background: #1b2836; border-color: #2a4060; }
 
 body.dark-mode .rdo-kpi-label        { color: #607080; }
+body.dark-mode .rdo-kpi-card .rdo-kpi-label { color: var(--text-secondary); }
 body.dark-mode .rdo-kpi-value        { color: #e8edf3; }
 body.dark-mode .rdo-kpi-value.danger { color: #f87171; }
 body.dark-mode .rdo-kpi-sub          { color: #8fa3b9; }
@@ -839,44 +840,6 @@ body.dark-mode .rdo-tl-tag.tag-ok       { background: rgba(16, 185, 129, 0.12); 
 body.dark-mode .rdo-tl-tag.tag-info     { background: rgba(37, 99, 235, 0.12);  color: #60a5fa; }
 
 /* -- RDO detalhes: relatorio operacional ----------------- */
-body.dark-mode .rdo-report-hero {
-  background: linear-gradient(135deg, #1b2836 0%, #172b3e 58%, #2a2929 100%);
-  border-color: #2a4060;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
-}
-
-body.dark-mode .rdo-report-back-btn,
-body.dark-mode .rdo-report-status-row,
-body.dark-mode .rdo-report-meta-item {
-  background: rgba(17, 24, 39, 0.72);
-  border-color: #2a4060;
-}
-
-body.dark-mode .rdo-report-back-btn {
-  color: #a9bac9;
-}
-
-body.dark-mode .rdo-report-back-btn:hover {
-  background: #1f3044;
-  border-color: #3b82f6;
-  color: #7dd3fc;
-}
-
-body.dark-mode .rdo-report-eyebrow,
-body.dark-mode .rdo-report-status-row,
-body.dark-mode .rdo-report-meta-item span {
-  color: #8fa3b9;
-}
-
-body.dark-mode .rdo-report-title-row h1,
-body.dark-mode .rdo-report-meta-item strong {
-  color: #e8edf3;
-}
-
-body.dark-mode .rdo-report-meta-item svg {
-  color: #60a5fa;
-}
-
 body.dark-mode .rdo-correction-alert {
   background: rgba(127, 29, 29, 0.2);
   border-color: rgba(248, 113, 113, 0.38);

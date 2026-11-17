@@ -5,6 +5,9 @@ const { hydrateOccurrences } = require('./rdoOccurrenceService');
 const backendPackage = require('../package.json');
 
 const uploadsDir = path.join(__dirname, '..', 'uploads');
+const vetorLogoPath = path.join(__dirname, '..', 'assets', 'logo-vetor-cropped.png');
+const vetorLogoUri = `data:image/png;base64,${fs.readFileSync(vetorLogoPath).toString('base64')}`;
+const vetorTagline = 'Gerenciamento, consultoria e tecnologia';
 const PDF_TIME_ZONE = process.env.PDF_TIME_ZONE || process.env.APP_TIME_ZONE || 'America/Sao_Paulo';
 
 const escapeHtml = (value) => String(value ?? '')
@@ -402,6 +405,17 @@ async function loadRdoPdfData(id) {
   };
 }
 
+const reportIcons = {
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18"/>',
+  hours: '<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/>',
+  team: '<circle cx="9" cy="8" r="3"/><path d="M2 20v-2a7 7 0 0 1 14 0v2ZM16 5a3 3 0 0 1 0 6m2 3c3 1 4 3 4 6"/>',
+  layers: '<path d="m12 3 10 5-10 5L2 8Zm-10 9 10 5 10-5M2 16l10 5 10-5"/>'
+};
+
+function reportIcon(name) {
+  return `<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">${reportIcons[name]}</svg>`;
+}
+
 function renderHtml(data) {
   const { rdo, responsavelNome, atividadesPdf, maoObra, fotos, anexos, materiaisRecebidos, equipamentos, clima, ocorrencias, comentarios } = data;
   const displayId = displayRdoNumber(rdo);
@@ -451,6 +465,9 @@ function renderHtml(data) {
     ? null
     : Number(rdo.hh_mao_obra_direta);
 
+  const compactFieldTables = clima.length <= 3 && equipamentos.length <= 2 &&
+    equipamentos.every(item => [item.nome, item.descricao, item.observacao, item.horario_utilizacao]
+      .every(value => String(value || '').length < 64));
   const fotoCards = fotos.map((foto) => {
     const filePath = path.join(uploadsDir, foto.caminho_arquivo || '');
     const src = toDataUri(filePath, foto.tipo || 'image/jpeg');
@@ -578,23 +595,69 @@ function renderHtml(data) {
     .comment-text { color: #111827; white-space: normal; word-break: break-word; }
     .attachment-link { color: #0b5f86; text-decoration: underline; font-weight: 700; }
     .attachments-section { break-before: auto; page-break-before: auto; }
-    .signature-section { display: flex; flex-direction: column; justify-content: flex-end; margin-bottom: 0; break-inside: avoid; page-break-inside: avoid; }
-    .signature-footer { padding-top: 8mm; break-inside: avoid; page-break-inside: avoid; }
-    .signatures { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 36px; }
-    .signature-box { min-height: 38mm; display: flex; flex-direction: column; justify-content: flex-end; text-align: center; }
-    .signature-image { width: 100%; height: 22mm; object-fit: contain; margin-bottom: 2mm; }
-    .signature-line { border-top: 1px solid #111827; padding-top: 6px; text-align: center; color: #334155; }
+    .signatures { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); column-gap: 7mm; padding-top: 3mm; }
+    .signature-box { min-height: 24mm; display: grid; grid-template-rows: subgrid; grid-row: span 2; align-items: end; text-align: center; overflow-wrap: anywhere; }
+    .signature-image { grid-row: 1; width: 100%; height: 20mm; object-fit: contain; margin-bottom: 1mm; }
+    .signature-line { grid-row: 2; align-self: start; border-top: 1px solid #111827; padding-top: 4px; color: #334155; }
     .avoid-break { break-inside: avoid; page-break-inside: avoid; }
+    /* Hierarquia visual consistente para todas as seções impressas. */
+    body { color: #10243c; font-size: 8.5pt; }
+    .report-banner { display: flex; align-items: center; gap: 16px; min-height: 70px; margin-bottom: 14px; padding-right: 14px; color: white; background: linear-gradient(110deg,#104772,#072a48); border-radius: 7px; overflow: hidden; }
+    .vetor-brand { align-self: stretch; display: flex; align-items: center; gap: 7px; padding: 12px 29px 12px 14px; background: #e6f5fa; color: #092f53; clip-path: polygon(0 0,100% 0,calc(100% - 18px) 100%,0 100%); }
+    .vetor-brand img { width: 42px; height: auto; }
+    .vetor-brand b, .vetor-brand small { display: block; }
+    .vetor-brand b { font-size: 19pt; line-height: 1; }
+    .vetor-brand small { max-width: 128px; font-size: 7.2pt; line-height: 1.2; text-wrap: balance; margin-top: 3px; }
+    .report-project { min-width: 0; flex: 1; }
+    .report-project small { display: block; color: #b9d8ec; font-size: 7pt; font-weight: bold; letter-spacing: .08em; text-transform: uppercase; }
+    .report-project strong { display: block; font-size: 13pt; line-height: 1.2; overflow-wrap: anywhere; }
+    .report-project span { display: block; font-size: 8pt; margin-top: 3px; }
+    .report-banner .status { position: static; max-width: 38%; white-space: normal; text-align: center; border-radius: 5px; font-size: 7.5pt; }
+    .doc-title { min-height: 0; margin: 0 0 10px; padding: 0; }
+    .doc-title h1 { text-align: left; color: #0a2745; font-size: 15pt; letter-spacing: 0; }
+    .company-brands { margin-bottom: 10px; }
+    .company-brand { min-height: 58px; padding: 6px 9px; }
+    .company-brand img { height: 44px; }
+    .section { margin-bottom: 9px; break-inside: auto; page-break-inside: auto; }
+    .section-title { background: #084775; padding: 6px 9px; border-radius: 5px 5px 0 0; letter-spacing: .025em; break-after: avoid; page-break-after: avoid; }
+    .section-title::before { content: ''; display: inline-block; width: 5px; height: 9px; margin-right: 7px; background: #64c8f3; border-radius: 2px; }
+    .box { border-color: #c7d4df; border-radius: 0 0 5px 5px; padding: 7px 9px; }
+    .info-row { grid-template-columns: 34% 1fr; padding: 2px 0; gap: 8px; }
+    .info-row .label { color: #143757; background: #e9f0f7; padding: 1px 6px; border-radius: 3px; }
+    .kpi { min-height: 53px; padding: 8px; border-radius: 6px; background: #eaf5fd; border-color: #bbddf4; }
+    .kpi:nth-child(2) { background: #edf8ef; border-color: #c9e8d0; }
+    .kpi:nth-child(3) { background: #f2effc; border-color: #d9d0f4; }
+    .kpi:nth-child(4) { background: #fff7e8; border-color: #f1d7a3; }
+    .kpi strong { color: #093e6b; font-size: 17pt; }
+    .kpi span { font-size: 7pt; color: #263e53; }
+    th { background: #dce8f4; color: #102a45; text-transform: none; font-size: 7.5pt; padding: 4px 5px; }
+    td { padding: 4px 5px; font-size: 7.7pt; overflow-wrap: anywhere; }
+    tbody tr:nth-child(even) { background: #f8fafc; }
+    .status-cell { color: #07528a; }
+    .summary div { border-radius: 5px; background: #f4f8fb; }
+    .photo-card { border-radius: 5px; overflow: hidden; }
+    .kpi { display: grid; grid-template-columns: 24px minmax(0,1fr); align-content: center; align-items: center; column-gap: 7px; }
+    .kpi svg { width: 24px; height: 24px; grid-row: span 2; color: #165e89; }
+    .kpi:nth-child(2) svg { color: #267251; }
+    .kpi:nth-child(3) svg { color: #6652a4; }
+    .kpi:nth-child(4) svg { color: #976225; }
+    .kpi .unavailable { font-size: 10pt; line-height: 1.2; }
+    .field-pair { display: grid; grid-template-columns: 1fr 1.1fr; gap: 10px; break-inside: avoid; }
+    .field-pair th, .field-pair td { padding: 4px; }
+    .activity-state { display: inline-block; border-radius: 10px; padding: 2px 6px; background: #edf1f5; color: #435065; font-size: 7pt; }
+    .activity-state.running { background: #dff1fb; color: #154f75; }
+    .activity-state.done { background: #def4e9; color: #215f42; }
     @page { size: A4 portrait; margin: 12mm 10mm 14mm 10mm; }
   </style>
 </head>
 <body>
   <main class="page">
-    <div class="brand-line"></div>
-    <div class="doc-title avoid-break">
-      <h1>Relatório Diário de Obra (RDO)</h1>
+    <div class="report-banner avoid-break">
+      <div class="vetor-brand"><img src="${vetorLogoUri}" alt=""><div><b>VETOR</b><small>${vetorTagline}</small></div></div>
+      <div class="report-project"><small>Projeto</small><strong>${escapeHtml(rdo.projeto_nome || '-')}</strong><span>${displayId} &nbsp; | &nbsp; ${dataRelatorio}</span></div>
       <div class="status" style="${statusStyle}">${escapeHtml(rdo.status || 'Em preenchimento')}</div>
     </div>
+    <div class="doc-title avoid-break"><h1>Relatório Diário de Obra (RDO)</h1></div>
     ${companyBrandsHtml ? `<div class="company-brands avoid-break">${companyBrandsHtml}</div>` : ''}
 
     <section class="section">
@@ -618,13 +681,14 @@ function renderHtml(data) {
     <section class="section">
       <div class="section-title">Prazos, Jornada e Indicadores</div>
       <div class="box grid-4">
-        <div class="kpi"><strong>${diasRestantes == null ?'-' : diasRestantes}</strong><span>Dias restantes</span></div>
-        <div class="kpi"><strong>${hhMaoObraDireta === null ? 'Não calculado' : fmtNumber(hhMaoObraDireta)}</strong><span>HH mão de obra direta</span></div>
-        <div class="kpi"><strong>${totalEquipe || maoObra.length}</strong><span>Total equipe</span></div>
-        <div class="kpi"><strong>${atividadesPdf.length}</strong><span>Atividades</span></div>
+        <div class="kpi">${reportIcon('calendar')}<strong>${diasRestantes == null ?'-' : diasRestantes}</strong><span>Dias restantes</span></div>
+        <div class="kpi">${reportIcon('hours')}<strong class="${hhMaoObraDireta === null ? 'unavailable' : ''}">${hhMaoObraDireta === null ? 'Não calculado' : fmtNumber(hhMaoObraDireta)}</strong><span>HH mão de obra direta</span></div>
+        <div class="kpi">${reportIcon('team')}<strong>${totalEquipe || maoObra.length}</strong><span>Total equipe</span></div>
+        <div class="kpi">${reportIcon('layers')}<strong>${atividadesPdf.length}</strong><span>Atividades</span></div>
       </div>
     </section>
 
+    <div class="${compactFieldTables ? 'field-pair' : ''}">
     <section class="section">
       <div class="section-title">Condições Climáticas</div>
       <table>
@@ -634,6 +698,24 @@ function renderHtml(data) {
         `, 'Nenhum registro climático informado.', 4)}</tbody>
       </table>
     </section>
+
+    <section class="section">
+      <div class="section-title">Equipamentos (${equipamentos.length})</div>
+      <table>
+        <thead><tr><th>Equipamento</th><th>Qtd.</th><th>Horário</th><th>Horas utilizadas</th><th>Observação</th></tr></thead>
+        <tbody>${tableRows(equipamentos, (item) => `
+          <tr>
+            <td>${escapeHtml(item.nome || item.descricao || '-')}</td>
+            <td class="text-right">${fmtNumber(item.quantidade)}</td>
+            <td>${escapeHtml(item.horario_utilizacao || '-')}</td>
+            <td>${fmtNumber(item.horas_utilizadas)}</td>
+            <td>${escapeHtml(item.observacao || '-')}</td>
+          </tr>
+        `, 'Nenhum equipamento informado.', 5)}</tbody>
+      </table>
+    </section>
+
+    </div>
 
     <section class="section">
       <div class="section-title">Mão de Obra (${maoObra.length})</div>
@@ -655,22 +737,6 @@ function renderHtml(data) {
     </section>
 
     <section class="section">
-      <div class="section-title">Equipamentos (${equipamentos.length})</div>
-      <table>
-        <thead><tr><th>Equipamento</th><th>Qtd.</th><th>Horário</th><th>Horas utilizadas</th><th>Observação</th></tr></thead>
-        <tbody>${tableRows(equipamentos, (item) => `
-          <tr>
-            <td>${escapeHtml(item.nome || item.descricao || '-')}</td>
-            <td class="text-right">${fmtNumber(item.quantidade)}</td>
-            <td>${escapeHtml(item.horario_utilizacao || '-')}</td>
-            <td>${fmtNumber(item.horas_utilizadas)}</td>
-            <td>${escapeHtml(item.observacao || '-')}</td>
-          </tr>
-        `, 'Nenhum equipamento informado.', 5)}</tbody>
-      </table>
-    </section>
-
-    <section class="section">
       <div class="section-title">Atividades Executadas (${atividadesPdf.length})</div>
       <table>
         <thead><tr><th>Código</th><th>Atividade</th><th>Descrição executada</th><th>Prev.</th><th>Exec.</th><th>Un.</th><th>% dia</th><th>% acum.</th><th>Status</th></tr></thead>
@@ -687,7 +753,7 @@ function renderHtml(data) {
               <td>${escapeHtml(item.unidade)}</td>
               <td class="text-right">${fmtNumber(item.percentualDia)}%</td>
               <td class="text-right">${fmtNumber(item.percentualAcumulado)}%</td>
-              <td class="status-cell">${status}</td>
+              <td class="status-cell"><span class="activity-state ${acumulado >= 100 ? 'done' : acumulado > 0 ? 'running' : ''}">${status}</span></td>
             </tr>
           `;
         }, 'Nenhuma atividade informada.', 9)}</tbody>
@@ -764,9 +830,7 @@ function renderHtml(data) {
       </table>
     </section>
 
-    <section class="section signature-section avoid-break">
-      <div class="signature-footer">
-        <div class="signatures">
+    <section class="signatures avoid-break">
           <div class="signature-box">
             ${assinatura ? `<img class="signature-image" src="${assinatura}" alt="Assinatura de ${escapeHtml(rdo.criado_por_nome || responsavelNome)}">` : ''}
             <div class="signature-line">${escapeHtml(rdo.criado_por_nome || responsavelNome)}<br><small>Responsável pelo preenchimento</small></div>
@@ -789,8 +853,6 @@ function renderHtml(data) {
               <div class="signature-line">${escapeHtml(rdo.status === 'Aprovado' && rdo.aprovado_por_nome ? rdo.aprovado_por_nome : 'Aprovação / Fiscalização')}<br><small>Responsável pela aprovação</small></div>
             </div>
           ` : ''}
-        </div>
-      </div>
     </section>
   </main>
 </body>
@@ -841,35 +903,10 @@ async function renderWithPuppeteer(html, rdo, displayId) {
         });
       }));
     });
-    await page.evaluate(() => {
-      const signatureSection = document.querySelector('.signature-section');
-      if (!signatureSection) return;
 
-      signatureSection.style.paddingTop = '0';
-
-      const pxPerMm = 96 / 25.4;
-      const printablePageHeight = (297 - 12 - 14) * pxPerMm;
-      const bottomGap = 5 * pxPerMm;
-      const maxPadding = 42 * pxPerMm;
-      const rect = signatureSection.getBoundingClientRect();
-      const sectionBottom = window.scrollY + rect.top + rect.height;
-      const usedOnPage = sectionBottom % printablePageHeight;
-      const remainingOnPage = printablePageHeight - usedOnPage;
-
-      if (remainingOnPage > bottomGap && remainingOnPage < printablePageHeight - bottomGap) {
-        signatureSection.style.paddingTop = `${Math.min(remainingOnPage - bottomGap, maxPadding)}px`;
-      }
-    });
-
-    const headerStatusStyle = statusInlineStyle(rdo.status || '-');
-    const headerTemplate = `
-      <div style="box-sizing:border-box;font-size:7px;color:#334155;width:100%;padding:0 28px;font-family:Arial,sans-serif;display:flex;gap:8px;align-items:center;overflow:hidden;border-bottom:1px solid #d7dee8;height:22px;">
-        <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(rdo.projeto_nome || '-')}</span>
-        <span style="margin-left:auto;flex:0 0 auto;white-space:nowrap;">${displayId} | ${fmtDate(rdo.data_relatorio)} | <span style="display:inline-block;border:1px solid #0b5f86;border-radius:3px;padding:1px 4px;font-weight:700;${headerStatusStyle}">${escapeHtml(rdo.status || '-')}</span></span>
-      </div>
-    `;
     const footerTemplate = `
       <div style="box-sizing:border-box;font-size:7px;color:#64748b;width:100%;padding:0 28px;font-family:Arial,sans-serif;display:flex;gap:8px;align-items:center;overflow:hidden;border-top:1px solid #d7dee8;height:22px;">
+        <img src="${vetorLogoUri}" width="14" alt="Vetor">
         <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(rdo.projeto_nome || '-')} | ${displayId} | Gerado em ${new Date().toLocaleString('pt-BR')} | ${escapeHtml(getPdfVersionLabel())}</span>
         <span style="margin-left:auto;flex:0 0 auto;white-space:nowrap;">Página <span class="pageNumber"></span> de <span class="totalPages"></span></span>
       </div>
@@ -879,7 +916,7 @@ async function renderWithPuppeteer(html, rdo, displayId) {
       format: 'A4',
       printBackground: true,
       displayHeaderFooter: true,
-      headerTemplate,
+      headerTemplate: '<span></span>',
       footerTemplate,
       margin: { top: '12mm', right: '10mm', bottom: '14mm', left: '10mm' }
     });
@@ -897,6 +934,13 @@ async function renderFallbackPdf(data, reason) {
   const chunks = [];
   doc.on('data', (chunk) => chunks.push(chunk));
   const done = new Promise((resolve) => doc.on('end', () => resolve(Buffer.concat(chunks))));
+  const mastheadY = doc.y;
+  doc.roundedRect(36, mastheadY, doc.page.width - 72, 48, 5).fill('#e6f5fa');
+  doc.image(vetorLogoPath, 46, mastheadY + 9, { fit: [38, 30] });
+  doc.font('Helvetica-Bold').fontSize(18).fillColor('#092f53').text('VETOR', 90, mastheadY + 9);
+  doc.font('Helvetica').fontSize(8).text(vetorTagline, 90, mastheadY + 29);
+  doc.x = 36;
+  doc.y = mastheadY + 58;
   const logoPaths = [
     resolveProjectLogoPath(data.rdo.projeto_logo_empresa_responsavel),
     resolveProjectLogoPath(data.rdo.projeto_logo_empresa_executante)

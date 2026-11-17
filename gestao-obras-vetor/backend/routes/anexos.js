@@ -135,15 +135,16 @@ router.post('/upload/:rdoId', auth, uploadAnexoRdoSingle, async (req, res) => {
     const descricao = String(req.body?.descricao || '').trim() || null;
 
     const result = await runQuery(`
-      INSERT INTO anexos (rdo_id, tipo, nome_arquivo, caminho_arquivo, tamanho, descricao, criado_por)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `, [rdoId, mimetype, originalname, caminhoArquivo, size, descricao, req.usuario?.id || null]);
+      INSERT INTO anexos (rdo_id, tipo, nome_arquivo, caminho_arquivo, tamanho, descricao, criado_por, tenant_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `, [rdoId, mimetype, originalname, caminhoArquivo, size, descricao, req.usuario?.id || null, req.tenantId]);
 
     res.status(201).json({
       mensagem: 'Arquivo enviado com sucesso.',
       anexo: {
         id: result.lastID,
         nome_arquivo: originalname,
+        caminho_arquivo: caminhoArquivo,
         tipo: mimetype,
         tamanho: size,
         descricao,
@@ -152,6 +153,7 @@ router.post('/upload/:rdoId', auth, uploadAnexoRdoSingle, async (req, res) => {
     });
 
   } catch (error) {
+    removeUploadedFile(req.file);
     console.error('Erro ao fazer upload:', error);
     if (sendSchemaOutdated(res, error, 'Schema de anexos desatualizado. Execute as migrations pendentes.')) return;
     res.status(500).json({ erro: 'Erro ao fazer upload do arquivo.' });
@@ -247,7 +249,7 @@ router.get('/rdo/:rdoId', auth, async (req, res) => {
         `SELECT a.*, u.nome AS usuario_nome
          FROM anexos a
          LEFT JOIN usuarios u ON u.id = a.criado_por
-         WHERE a.rdo_id = ?
+         WHERE a.rdo_id = ? AND a.rnc_id IS NULL
          ORDER BY a.criado_em DESC, a.id DESC`,
         [rdoId]
       );
@@ -258,7 +260,7 @@ router.get('/rdo/:rdoId', auth, async (req, res) => {
       anexos = await allQuery(
         `SELECT a.*, NULL AS usuario_nome
          FROM anexos a
-         WHERE a.rdo_id = ?
+         WHERE a.rdo_id = ? AND a.rnc_id IS NULL
          ORDER BY a.id DESC`,
         [rdoId]
       );

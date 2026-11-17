@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import CockpitReturnButton from '../components/CockpitReturnButton';
-import Button, { IconButton } from '../components/ui/Button';
+import Button from '../components/ui/Button';
 import {
   getRDO,
   listRdoMaoObra,
@@ -27,7 +27,10 @@ import {
   FileText,
   Image as ImageIcon,
   MapPin,
-  Menu,
+  ChevronDown,
+  Clock3,
+  Sunrise,
+  Sunset,
   MessageSquare,
   Package,
   Paperclip,
@@ -121,8 +124,8 @@ const getAttachmentIcon = (kind) => {
   return File;
 };
 
-const Section = ({ icon: Icon, title, count, children }) => (
-  <section className="rdo-report-section">
+const Section = ({ id, icon: Icon, title, count, children }) => (
+  <section id={id} className="rdo-report-section" tabIndex={id ? -1 : undefined}>
     <div className="rdo-report-section-head">
       <div className="rdo-report-section-title">
         {Icon && (
@@ -157,7 +160,7 @@ function RDODetalhes() {
   const [maoObra, setMaoObra] = useState([]);
   const [materiais, setMateriais] = useState([]);
   const [ocorrencias, setOcorrencias] = useState([]);
-  const [anexos, setAnexos] = useState([]);
+  const [anexos, setAnexos] = useState(null);
   const [comentarios, setComentarios] = useState([]);
   const [showSolicitarCorrecaoModal, setShowSolicitarCorrecaoModal] = useState(false);
   const [acaoDevolucao, setAcaoDevolucao] = useState('SOLICITAR_CORRECAO');
@@ -197,7 +200,8 @@ function RDODetalhes() {
       }
 
       setMaoObra(maoObraRes.status === 'fulfilled' ? arrayOf(maoObraRes.value.data) : []);
-      setAnexos(anexosRes.status === 'fulfilled' ? arrayOf(anexosRes.value.data) : []);
+      const lista = anexosRes.status === 'fulfilled' ? anexosRes.value.data : null;
+      setAnexos(Array.isArray(lista) ? lista : rdoRes.value.data?.anexos ?? null);
     } catch (error) {
       console.error('Erro ao carregar RDO:', error);
       const msg = error.response?.data?.erro || error.message || 'Erro ao carregar RDO';
@@ -295,7 +299,7 @@ function RDODetalhes() {
   }
 
   const fotos = arrayOf(rdo.fotos);
-  const anexosLista = anexos.length > 0 ? anexos : arrayOf(rdo.anexos);
+  const anexosLista = arrayOf(anexos);
   const maoObraLista = arrayOf(rdo.mao_obra_detalhada).length > 0 ? arrayOf(rdo.mao_obra_detalhada) : maoObra;
   const equipamentosLista = arrayOf(rdo.equipamentos_lista);
   const atividadesEap = arrayOf(rdo.atividades).map(item => ({ ...item, tipo_relatorio: 'EAP' }));
@@ -310,6 +314,10 @@ function RDODetalhes() {
   const horarioFim = rdo.horario_fim || rdo.entrada_saida_fim || rdo.fim_jornada;
   const intervaloInicio = rdo.intervalo_almoco_inicio;
   const intervaloFim = rdo.intervalo_almoco_fim;
+  const aprovaComoGestor = canDecidirGestor && rdo.status === 'Em aprovação do gestor';
+  const aprovaComoFiscal = canDecidirFiscal && rdo.status === 'Em aprovação do fiscal';
+  const aguardaDecisao = aprovaComoGestor || aprovaComoFiscal;
+  const podeReabrir = rdo.status === 'Aprovado' && (canDecidirGestor || canDecidirFiscal);
   const intervalo = intervaloInicio && intervaloFim
     ? `${intervaloInicio} às ${intervaloFim}`
     : (rdo.intervalo || rdo.intervalo_almoco || rdo.horario_intervalo);
@@ -318,80 +326,67 @@ function RDODetalhes() {
     <>
       <Navbar />
       <main className="container rdo-report-page">
-        <div className="rdo-report-hero">
-          <div className="rdo-report-hero-main">
-            <CockpitReturnButton fallbackTo={`/projeto/${projetoId}/rdos`} className="btn rdo-report-back-btn" />
-            <div className="rdo-report-title-block">
-              {(rdo.logo_empresa_responsavel || rdo.logo_empresa_executante) && (
-                <div className="rdo-company-brands rdo-report-company-brands">
-                  {rdo.logo_empresa_responsavel && <div className="rdo-company-brand">
-                    <img src={getUploadUrl(rdo.logo_empresa_responsavel)} alt={`Logo ${rdo.empresa_responsavel}`} />
-                    <div><span>Contratante</span><strong>{rdo.empresa_responsavel}</strong></div>
-                  </div>}
-                  {rdo.logo_empresa_executante && <div className="rdo-company-brand">
-                    <img src={getUploadUrl(rdo.logo_empresa_executante)} alt={`Logo ${rdo.empresa_executante}`} />
-                    <div><span>Executante</span><strong>{rdo.empresa_executante}</strong></div>
-                  </div>}
-                </div>
-              )}
-              <div className="rdo-report-eyebrow">Relatório diário de obra</div>
-              <div className="rdo-report-title-row">
-                <h1>RDO {numeroRdoExibicao}</h1>
-              </div>
-              <div className="rdo-report-status-row">
-                <span>Status</span>
-                <strong className={`rdo-report-status ${statusClass(rdo.status)}`}>{statusLabel(rdo.status)}</strong>
-              </div>
-            </div>
-          </div>
-
-          <div className="rdo-report-actions">
-            <div className="rdo-report-actions-menu">
-              <IconButton icon={Menu} label="Opções do RDO" title="Opções do RDO" tone="primary" variant="outline" onClick={() => setReportActionsMenuOpen((open) => !open)} aria-expanded={reportActionsMenuOpen} />
-              {reportActionsMenuOpen && (
-                <div className="rdo-report-actions-menu-panel" role="menu" aria-label="Opções do RDO">
-                  <Button fullWidth tone="primary" variant="outline" startIcon={Download} className="rdo-report-menu-item" onClick={() => { setReportActionsMenuOpen(false); handleDownloadPDF(); }}>Baixar PDF</Button>
-                  {canDecidirGestor && rdo.status === 'Em aprovação do gestor' && <Button fullWidth tone="success" variant="solid" startIcon={CheckCircle2} className="rdo-report-menu-item" onClick={() => { setReportActionsMenuOpen(false); aprovarRDO('APROVAR_GESTOR'); }}>Aprovar como gestor</Button>}
-                  {canDecidirFiscal && rdo.status === 'Em aprovação do fiscal' && <Button fullWidth tone="success" variant="solid" startIcon={CheckCircle2} className="rdo-report-menu-item" onClick={() => { setReportActionsMenuOpen(false); aprovarRDO('APROVAR_FISCAL'); }}>Aprovar como fiscal</Button>}
-                  {((canDecidirGestor && rdo.status === 'Em aprovação do gestor') || (canDecidirFiscal && rdo.status === 'Em aprovação do fiscal')) && <>
-                    <Button fullWidth tone="warning" variant="soft" startIcon={RotateCcw} className="rdo-report-menu-item" onClick={() => { setReportActionsMenuOpen(false); setAcaoDevolucao('SOLICITAR_CORRECAO'); setShowSolicitarCorrecaoModal(true); }}>Solicitar correção</Button>
-                    <Button fullWidth tone="danger" variant="solid" startIcon={XCircle} className="rdo-report-menu-item" onClick={() => { setReportActionsMenuOpen(false); setAcaoDevolucao('REPROVAR'); setShowSolicitarCorrecaoModal(true); }}>Reprovar</Button>
-                  </>}
-                  {rdo.status === 'Aprovado' && (canDecidirGestor || canDecidirFiscal) && <Button fullWidth tone="warning" variant="soft" startIcon={RotateCcw} className="rdo-report-menu-item" onClick={() => { setReportActionsMenuOpen(false); voltarAprovadoParaCorrecao(); }}>Voltar para correção</Button>}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="rdo-report-meta-grid">
-            <div className="rdo-report-meta-item">
-              <Calendar size={16} />
-              <span>Data</span>
-              <strong>{formatLocalDate(rdo.data_relatorio)}</strong>
-            </div>
-            <div className="rdo-report-meta-item">
-              <User size={16} />
-              <span>Responsável</span>
-              <strong>{rdo.criado_por_nome || 'N/A'}</strong>
-            </div>
-            <div className="rdo-report-meta-item">
-              <MapPin size={16} />
-              <span>Local</span>
-              <strong>{cidadeUf}</strong>
-            </div>
-            <div className="rdo-report-meta-item">
-              <Building2 size={16} />
-              <span>Obra</span>
-              <strong>{rdo.projeto_nome || 'N/A'}</strong>
-            </div>
-            {(rdo.gestor_aprovado_por_nome || rdo.fiscal_aprovado_por_nome) && (
-              <div className="rdo-report-approval-summary">
-                {rdo.gestor_aprovado_por_nome && <span><CheckCircle2 size={15} />Gestor: <strong>{rdo.gestor_aprovado_por_nome}</strong></span>}
-                {rdo.fiscal_aprovado_por_nome && <span><CheckCircle2 size={15} />Fiscal: <strong>{rdo.fiscal_aprovado_por_nome}</strong></span>}
+        <div className="rdo-reading-toolbar">
+          <CockpitReturnButton fallbackTo={`/projeto/${projetoId}/rdos`} fallbackLabel="Voltar aos RDOs" variant="ghost" />
+          <div className="rdo-reading-tools">
+            <Button startIcon={Download} variant="solid" tone="primary" onClick={handleDownloadPDF}>Baixar PDF</Button>
+            {(aguardaDecisao || podeReabrir) && (
+              <div className="rdo-report-actions-menu"
+                onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setReportActionsMenuOpen(false); }}
+                onKeyDown={event => {
+                  if (event.key === 'Escape') {
+                    setReportActionsMenuOpen(false);
+                    event.currentTarget.querySelector('button')?.focus();
+                  }
+                }}>
+                <Button endIcon={ChevronDown} onClick={() => setReportActionsMenuOpen(open => !open)} aria-expanded={reportActionsMenuOpen}>Ações</Button>
+                {reportActionsMenuOpen && (
+                  <div className="rdo-report-actions-menu-panel" role="group" aria-label="Ações do RDO">
+                    {aguardaDecisao && <>
+                      <Button fullWidth tone="success" variant="solid" startIcon={CheckCircle2} className="rdo-report-menu-item" onClick={() => { setReportActionsMenuOpen(false); aprovarRDO(aprovaComoGestor ? 'APROVAR_GESTOR' : 'APROVAR_FISCAL'); }}>
+                        Aprovar como {aprovaComoGestor ? 'gestor' : 'fiscal'}
+                      </Button>
+                      <Button fullWidth tone="warning" variant="soft" startIcon={RotateCcw} className="rdo-report-menu-item" onClick={() => { setReportActionsMenuOpen(false); setAcaoDevolucao('SOLICITAR_CORRECAO'); setShowSolicitarCorrecaoModal(true); }}>Solicitar correção</Button>
+                      <Button fullWidth tone="danger" variant="solid" startIcon={XCircle} className="rdo-report-menu-item" onClick={() => { setReportActionsMenuOpen(false); setAcaoDevolucao('REPROVAR'); setShowSolicitarCorrecaoModal(true); }}>Reprovar</Button>
+                    </>}
+                    {podeReabrir && <Button fullWidth tone="warning" variant="soft" startIcon={RotateCcw} className="rdo-report-menu-item" onClick={() => { setReportActionsMenuOpen(false); voltarAprovadoParaCorrecao(); }}>Voltar para correção</Button>}
+                  </div>
+                )}
               </div>
             )}
           </div>
         </div>
+
+        <header className="rdo-cover">
+          <div className="rdo-cover-main">
+            <div className="rdo-cover-heading">
+              <p className="rdo-cover-label">Relatório diário de obra</p>
+              <div className="rdo-cover-title">
+                <h1>RDO {numeroRdoExibicao}</h1>
+                <strong className={`rdo-report-status ${statusClass(rdo.status)}`}>{statusLabel(rdo.status)}</strong>
+              </div>
+              <p className="rdo-cover-project"><Building2 size={17} />{rdo.projeto_nome || 'Obra não informada'}</p>
+            </div>
+            <div className="rdo-cover-parties">
+              {[
+                { role: 'Contratante', name: rdo.empresa_responsavel, logo: rdo.logo_empresa_responsavel },
+                { role: 'Executante', name: rdo.empresa_executante, logo: rdo.logo_empresa_executante }
+              ].filter(company => company.name || company.logo).map(company => (
+                <div className="rdo-cover-party" key={company.role}>
+                  {company.logo && <img src={getUploadUrl(company.logo)} alt={company.name ? '' : `Logo da empresa ${company.role.toLowerCase()}`} />}
+                  <div><span>{company.role}</span><strong>{company.name || 'Nome não informado'}</strong></div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <dl className="rdo-cover-facts">
+            <div><dt><Calendar size={15} />Data</dt><dd>{formatLocalDate(rdo.data_relatorio)}</dd></div>
+            <div><dt><User size={15} />Responsável</dt><dd>{rdo.criado_por_nome || 'N/A'}</dd></div>
+            <div><dt><MapPin size={15} />Local</dt><dd>{cidadeUf}</dd></div>
+            {rdo.gestor_aprovado_por_nome && <div><dt><CheckCircle2 size={15} />Aprovação do gestor</dt><dd>{rdo.gestor_aprovado_por_nome}</dd></div>}
+            {rdo.fiscal_aprovado_por_nome && <div><dt><CheckCircle2 size={15} />Aprovação do fiscal</dt><dd>{rdo.fiscal_aprovado_por_nome}</dd></div>}
+          </dl>
+        </header>
 
         {erro && <div className="alert alert-error rdo-report-alert">{erro}</div>}
         {sucesso && <div className="alert alert-success rdo-report-success-toast" role="status" aria-live="polite">{sucesso}</div>}
@@ -408,6 +403,7 @@ function RDODetalhes() {
           </div>
         )}
 
+        <h2 className="rdo-summary-title">Resumo do dia</h2>
         <KPICards
           rdo={rdo}
           maoObra={maoObraLista}
@@ -418,18 +414,18 @@ function RDODetalhes() {
         <Section icon={CloudSun} title="Clima e jornada">
           <div className="rdo-report-info-grid">
             <div className="rdo-report-daypart">
-              <strong>Manha</strong>
+              <strong><Sunrise size={18} />Manhã</strong>
               <div><span>Clima</span><b>{valueOrDash(rdo.clima_manha)}</b></div>
               <div><span>Praticabilidade</span><b>{valueOrDash(rdo.praticabilidade_manha)}</b></div>
             </div>
             <div className="rdo-report-daypart">
-              <strong>Tarde</strong>
+              <strong><Sunset size={18} />Tarde</strong>
               <div><span>Clima</span><b>{valueOrDash(rdo.clima_tarde)}</b></div>
               <div><span>Praticabilidade</span><b>{valueOrDash(rdo.praticabilidade_tarde)}</b></div>
             </div>
             <div className="rdo-report-daypart">
-              <strong>Jornada</strong>
-              <div><span>Inicio</span><b>{valueOrDash(horarioInicio)}</b></div>
+              <strong><Clock3 size={18} />Jornada</strong>
+              <div><span>Início</span><b>{valueOrDash(horarioInicio)}</b></div>
               <div><span>Fim</span><b>{valueOrDash(horarioFim)}</b></div>
               <div><span>Intervalo</span><b>{valueOrDash(intervalo)}</b></div>
               <div><span>Total</span><b>{rdo.horas_trabalhadas ? `${rdo.horas_trabalhadas}h` : '-'}</b></div>
@@ -437,7 +433,7 @@ function RDODetalhes() {
           </div>
         </Section>
 
-        <Section icon={Users} title="Mão de obra" count={maoObraLista.length}>
+        <Section id="equipe" icon={Users} title="Mão de obra" count={maoObraLista.length}>
           {maoObraLista.length > 0 ? (
             <div className="rdo-report-table-wrap">
               <table className="rdo-report-table">
@@ -493,7 +489,7 @@ function RDODetalhes() {
           )}
         </Section>
 
-        <Section icon={ClipboardList} title="Atividades executadas" count={atividadesRelatorio.length}>
+        <Section id="atividades" icon={ClipboardList} title="Atividades executadas" count={atividadesRelatorio.length}>
           {atividadesRelatorio.length > 0 ? (
             <div className="rdo-report-activity-list">
               {atividadesRelatorio.map((atividade, index) => (
@@ -628,7 +624,7 @@ function RDODetalhes() {
           )}
         </Section>
 
-        <Section icon={AlertTriangle} title="Ocorrências" count={ocorrencias.length}>
+        <Section id="ocorrencias" icon={AlertTriangle} title="Ocorrências" count={ocorrencias.length}>
           {ocorrencias.length > 0 ? (
             <div className="rdo-report-note-list">
               {ocorrencias.map((item, index) => (
@@ -668,8 +664,13 @@ function RDODetalhes() {
           )}
         </Section>
 
-        <Section icon={Paperclip} title="Anexos" count={anexosLista.length}>
-          {anexosLista.length > 0 ? (
+        <Section icon={Paperclip} title="Anexos" count={Array.isArray(anexos) ? anexosLista.length : undefined}>
+          {!Array.isArray(anexos) ? (
+            <div className="rdo-report-empty" role="alert">
+              <p>Não foi possível carregar os anexos deste RDO.</p>
+              <Button size="sm" onClick={carregarDados}>Tentar novamente</Button>
+            </div>
+          ) : anexosLista.length > 0 ? (
             <div className="rdo-report-attachment-grid">
               {anexosLista.map((anexo, index) => {
                 const kind = getAttachmentKind(anexo);
