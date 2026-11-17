@@ -122,7 +122,7 @@
   line-height: 1.2;
 }
 
-.rdo-kpi-label {
+.rdo-kpi .rdo-kpi-label {
   font-size: 10px;
   color: #94a3b8;
   margin-top: 4px;
@@ -1151,136 +1151,168 @@
   padding-bottom: 48px;
 }
 
-.rdo-report-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+.rdo-reading-toolbar,
+.rdo-reading-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rdo-reading-toolbar {
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.rdo-cover {
+  overflow: hidden;
+  border-radius: 16px;
+  border: 1px solid var(--border-default);
+  box-shadow: 0 8px 24px rgba(14, 46, 76, .08);
+  margin-bottom: 20px;
+}
+
+.rdo-cover-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 26px;
+  padding: clamp(24px, 3vw, 44px);
+  color: #fff;
+  background-color: #0a2d50;
+  background-image: linear-gradient(100deg, #081f3c 4%, rgba(9, 44, 77, .98) 36%, rgba(7, 52, 82, .76) 100%), url('/hero-construction-blueprint-v3.png');
+  background-position: center, right 57%;
+  background-size: cover;
+}
+
+.rdo-cover-heading {
+  flex: 1 1 310px;
+  min-width: 0;
+}
+
+.rdo-cover-label,
+.rdo-cover-party span {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+}
+
+.rdo-cover-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 10px;
+  color: #a7edff;
+  font-size: 11px;
+}
+
+.rdo-cover-label::before {
+  content: '';
+  width: 26px;
+  height: 3px;
+  background: #37cde6;
+}
+
+.rdo-cover-title,
+.rdo-cover-project {
+  display: flex;
+  align-items: center;
   gap: 14px;
-  align-items: start;
-  position: relative;
-  margin-bottom: 18px;
-  padding: 18px;
-  border: 1px solid #dbe4ef;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #ffffff 0%, #eef6ff 58%, #fff7ed 100%);
-  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
 }
 
-.rdo-report-hero-main {
-  display: block;
-  padding: 2px 24px 0 116px;
-  min-width: 0;
-}
+.rdo-cover-title { flex-wrap: wrap; }
 
-.rdo-report-back-btn {
-  position: absolute;
-  top: 18px;
-  left: 18px;
-  min-width: 0;
-  min-height: 40px;
-  flex-shrink: 0;
-  padding: 0 15px;
-  gap: 8px;
-  justify-content: center;
-  border-radius: 999px;
-  border-color: #dbe4ef;
-  color: #475569;
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow: none;
-  font-size: 14px;
-  font-weight: 800;
-  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
-}
-
-.rdo-report-back-btn:hover {
-  border-color: #bae6fd;
-  color: #075985;
-  background: #f0f9ff;
-  transform: translateY(-1px);
-}
-
-.rdo-report-title-block {
-  min-width: 0;
-  text-align: center;
-}
-
-.rdo-report-company-brands {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  width: min(540px, 100%);
-  gap: 8px;
-  margin: 0 auto 14px;
-}
-
-.rdo-report-company-brands .rdo-company-brand {
-  min-width: 0;
-  grid-template-columns: 56px minmax(0, 1fr);
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: 8px;
-  box-shadow: none;
-}
-
-.rdo-report-company-brands .rdo-company-brand img {
-  width: 56px;
-  height: 42px;
-  padding: 3px;
-  border-radius: 6px;
-}
-
-.rdo-report-company-brands .rdo-company-brand span {
-  margin-bottom: 1px;
-  font-size: 9px;
-}
-
-.rdo-report-company-brands .rdo-company-brand strong {
-  font-size: 12px;
-  line-height: 1.15;
+.rdo-cover-title h1 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(36px, 3.7vw, 56px);
+  line-height: 1.04;
+  letter-spacing: -.045em;
   overflow-wrap: anywhere;
 }
 
-.rdo-report-actions {
-  grid-column: 2;
-  grid-row: 1;
+.rdo-cover-project {
+  gap: 8px;
+  margin: 14px 0 0;
+  color: #e2edf6;
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
-.rdo-report-eyebrow {
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.rdo-cover-project svg,
+.rdo-cover-facts svg { flex-shrink: 0; }
+
+.rdo-cover-parties {
+  display: grid;
+  gap: 12px;
+  max-width: 100%;
 }
 
-.rdo-report-title-row {
+.rdo-cover-parties:empty { display: none; }
+
+.rdo-cover-party {
   display: flex;
   align-items: center;
-  justify-content: center;
-  margin-top: 3px;
+  gap: 10px;
+  color: #fff;
+  min-width: 0;
 }
 
-.rdo-report-title-row h1 {
+.rdo-cover-party img {
+  width: 48px;
+  height: 34px;
+  object-fit: contain;
+  border-radius: 5px;
+  background-color: #fff;
+  padding: 3px;
+}
+
+.rdo-cover-party span,
+.rdo-cover-party strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.rdo-cover-party span {
+  margin-bottom: 2px;
+  color: #c3e4ee;
+  font-size: 10px;
+}
+
+.rdo-cover-party strong { font-size: 13px; }
+
+.rdo-cover-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(145px, 100%), 1fr));
+  gap: 16px 24px;
+  padding: 18px clamp(20px, 3vw, 44px);
   margin: 0;
-  color: #07152f;
-  font-size: 44px;
-  line-height: 1;
-  font-weight: 800;
-  letter-spacing: 0;
+  background-color: var(--modal-bg);
 }
 
-.rdo-report-status-row {
-  display: inline-flex;
+.rdo-cover-facts dt {
+  display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-  padding: 5px 8px 5px 12px;
-  border: 1px solid #dbe4ef;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  gap: 6px;
+  margin-bottom: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.rdo-cover-facts dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.rdo-summary-title {
+  margin: 24px 0 12px;
+  color: var(--text-primary);
+  font-size: 19px;
+  letter-spacing: -.025em;
 }
 
 .rdo-report-status {
@@ -1330,14 +1362,6 @@
   color: #475569;
 }
 
-.rdo-report-actions {
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
 .rdo-report-actions-menu {
   position: relative;
 }
@@ -1359,88 +1383,6 @@
 
 .rdo-report-menu-item {
   justify-content: flex-start;
-}
-
-@media (max-width: 1200px) {
-  .rdo-report-hero {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .rdo-report-hero-main {
-    padding-right: 82px;
-  }
-
-  .rdo-report-actions {
-    position: absolute;
-    top: 18px;
-    right: 18px;
-  }
-}
-
-.rdo-report-meta-grid {
-  grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.rdo-report-approval-summary {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px 18px;
-  padding-top: 2px;
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.rdo-report-approval-summary span {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.rdo-report-approval-summary svg {
-  color: #16a34a;
-}
-
-.rdo-report-approval-summary strong {
-  color: #0f172a;
-}
-
-.rdo-report-meta-item {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  column-gap: 8px;
-  row-gap: 2px;
-  align-items: center;
-  min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.72);
-}
-
-.rdo-report-meta-item svg {
-  grid-row: 1 / span 2;
-  color: #2563eb;
-}
-
-.rdo-report-meta-item span {
-  color: #64748b;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.rdo-report-meta-item strong {
-  min-width: 0;
-  color: #0f172a;
-  font-size: 13px;
-  overflow-wrap: anywhere;
 }
 
 .rdo-report-alert {
@@ -1478,6 +1420,7 @@
 }
 
 .rdo-report-section {
+  scroll-margin-top: 88px;
   margin-bottom: 14px;
   overflow: hidden;
   border: 1px solid #e2e8f0;
@@ -1506,10 +1449,9 @@
 .rdo-report-section-title h2 {
   margin: 0;
   color: #25334a;
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -.02em;
 }
 
 .rdo-report-section-icon {
@@ -1555,8 +1497,13 @@
   background: #fbfdff;
 }
 
+.rdo-report-daypart > strong svg { color: #bb701c; }
+.rdo-report-daypart:last-child > strong svg { color: #327b9f; }
+
 .rdo-report-daypart > strong {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 10px;
   color: #0f172a;
   font-size: 15px;
@@ -1965,17 +1912,11 @@
 }
 
 @media (max-width: 920px) {
-  .rdo-report-hero,
-  .rdo-report-meta-grid,
   .rdo-report-info-grid {
     grid-template-columns: 1fr;
   }
 
-  .rdo-report-actions {
-    position: static;
-    margin-top: 4px;
-    justify-content: flex-start;
-  }
+
 
   .rdo-report-activity-item {
     grid-template-columns: 1fr;
@@ -1995,46 +1936,15 @@
     padding-top: 16px;
   }
 
-  .rdo-report-hero {
-    padding: 14px;
+  .rdo-cover-parties {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
   }
 
-  .rdo-report-hero-main {
-    padding: 48px 0 0;
-    text-align: center;
-  }
-
-  .rdo-report-back-btn {
-    top: 14px;
-    left: 14px;
-  }
-
-  .rdo-report-title-block {
-    width: 100%;
-  }
-
-  .rdo-report-company-brands {
-    grid-template-columns: 1fr;
-    width: 100%;
-  }
-
-  .rdo-report-title-row h1 {
-    font-size: 34px;
-  }
-
-  .rdo-report-actions {
-    display: grid;
+  .rdo-cover-facts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    width: 100%;
   }
-
-  .rdo-report-actions .btn {
-    width: 100%;
-    min-width: 0;
-    justify-content: center;
-    white-space: normal;
-  }
-
   .rdo-view-action-btn-wide {
     grid-column: 1 / -1;
   }
@@ -2157,9 +2067,7 @@
   overflow-wrap: anywhere;
 }
 
-.rdo-report-company-brands {
-  margin-bottom: 18px;
-}
+
 
 .rdo-page .rdo-header-meta {
   gap: 8px;
