@@ -2,6 +2,7 @@ import React from 'react';
 import { AlertCircle, ArrowUpRight, Building2, CalendarDays, CheckCircle2, Clock3, Gauge, MapPin, RefreshCw } from 'lucide-react';
 import Button from '../ui/Button';
 import { formatDate } from './cockpitTransforms';
+import '../../styles/construction-banner.css';
 
 export function CockpitSkeleton() {
   return <div className="cockpit-skeleton" aria-label="Carregando Cockpit"><span /><span /><span /><span /></div>;
@@ -39,7 +40,7 @@ export function CockpitHeader({ project, updatedAt, refreshing, onRefresh, deadl
   const archived = Number(project?.arquivado) === 1;
   const progress = indicators ? Number(indicators.avanco_real || 0) : null;
 
-  return <section className="cockpit-header">
+  return <section className="cockpit-header construction-banner">
     <div className="cockpit-header-main">
       <div className="cockpit-project-content">
         <div className="cockpit-header-topline">

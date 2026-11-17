@@ -803,20 +803,17 @@ router.get('/:id', auth, async (req, res) => {
     }
 
     // Buscar anexos
-    let anexos = [];
+    let anexos;
     try {
       anexos = await allQuery(`
         SELECT *
         FROM anexos
-        WHERE rdo_id = ?
-          AND (
-            LOWER(COALESCE(tipo, '')) LIKE '%pdf%'
-            OR LOWER(COALESCE(nome_arquivo, '')) LIKE '%.pdf'
-          )
-        ORDER BY criado_em DESC
+        WHERE rdo_id = ? AND rnc_id IS NULL
+        ORDER BY criado_em DESC, id DESC
       `, [id]);
-    } catch (_) {
-      anexos = [];
+    } catch (error) {
+      console.error('Erro ao carregar anexos do RDO:', error.message);
+      anexos = null;
     }
 
     // Buscar mão de obra vinculada ao RDO

@@ -160,7 +160,7 @@ function RDODetalhes() {
   const [maoObra, setMaoObra] = useState([]);
   const [materiais, setMateriais] = useState([]);
   const [ocorrencias, setOcorrencias] = useState([]);
-  const [anexos, setAnexos] = useState([]);
+  const [anexos, setAnexos] = useState(null);
   const [comentarios, setComentarios] = useState([]);
   const [showSolicitarCorrecaoModal, setShowSolicitarCorrecaoModal] = useState(false);
   const [acaoDevolucao, setAcaoDevolucao] = useState('SOLICITAR_CORRECAO');
@@ -200,7 +200,8 @@ function RDODetalhes() {
       }
 
       setMaoObra(maoObraRes.status === 'fulfilled' ? arrayOf(maoObraRes.value.data) : []);
-      setAnexos(anexosRes.status === 'fulfilled' ? arrayOf(anexosRes.value.data) : []);
+      const lista = anexosRes.status === 'fulfilled' ? anexosRes.value.data : null;
+      setAnexos(Array.isArray(lista) ? lista : rdoRes.value.data?.anexos ?? null);
     } catch (error) {
       console.error('Erro ao carregar RDO:', error);
       const msg = error.response?.data?.erro || error.message || 'Erro ao carregar RDO';
@@ -298,7 +299,7 @@ function RDODetalhes() {
   }
 
   const fotos = arrayOf(rdo.fotos);
-  const anexosLista = anexos.length > 0 ? anexos : arrayOf(rdo.anexos);
+  const anexosLista = arrayOf(anexos);
   const maoObraLista = arrayOf(rdo.mao_obra_detalhada).length > 0 ? arrayOf(rdo.mao_obra_detalhada) : maoObra;
   const equipamentosLista = arrayOf(rdo.equipamentos_lista);
   const atividadesEap = arrayOf(rdo.atividades).map(item => ({ ...item, tipo_relatorio: 'EAP' }));
@@ -663,8 +664,13 @@ function RDODetalhes() {
           )}
         </Section>
 
-        <Section icon={Paperclip} title="Anexos" count={anexosLista.length}>
-          {anexosLista.length > 0 ? (
+        <Section icon={Paperclip} title="Anexos" count={Array.isArray(anexos) ? anexosLista.length : undefined}>
+          {!Array.isArray(anexos) ? (
+            <div className="rdo-report-empty" role="alert">
+              <p>Não foi possível carregar os anexos deste RDO.</p>
+              <Button size="sm" onClick={carregarDados}>Tentar novamente</Button>
+            </div>
+          ) : anexosLista.length > 0 ? (
             <div className="rdo-report-attachment-grid">
               {anexosLista.map((anexo, index) => {
                 const kind = getAttachmentKind(anexo);

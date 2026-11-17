@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import { getProjetos, createProjeto, updateProjeto, deleteProjeto, uploadProjetoLogos, getUploadUrl, getUsuarios, arquivarProjeto, desarquivarProjeto, getDashboardAvanco, copiarEapProjeto } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
 import { useNotification } from '../context/NotificationContext';
-import { Plus, Edit, Users, Calendar, Archive, RotateCcw, Eye, EyeOff, MapPin, Trash2 } from 'lucide-react';
+import { Plus, Edit, Users, Calendar, Archive, RotateCcw, ArrowUpRight, MapPin, Trash2 } from 'lucide-react';
 import { IconButton } from '../components/ui/Button';
+import '../styles/construction-banner.css';
 import './Projetos.css';
 
 // Datas DATE do PostgreSQL podem chegar como "YYYY-MM-DD" ou como timestamp ISO.
@@ -58,7 +59,6 @@ function Projetos() {
   const [logoPreviews, setLogoPreviews] = useState({ responsavel: '', executante: '' });
   
   const { isGestor, perfil, usuario } = useAuth();
-  const navigate = useNavigate();
   const podeListarUsuarios = perfil === 'ADM' || perfil === 'Gestor Geral';
   const podeExcluirProjeto = perfil === 'Gestor Geral';
 
@@ -313,17 +313,19 @@ function Projetos() {
     <>
       <Navbar />
       <div className="container projetos-page">
-        <div className="projetos-header">
+        <header className="projetos-header construction-banner">
           <div>
             <h1>Projetos</h1>
-            <p>{showArquivados ? 'Projetos arquivados' : 'Obras ativas'}</p>
+            <p>{projetosFiltrados.length} {showArquivados
+              ? (projetosFiltrados.length === 1 ? 'projeto arquivado' : 'projetos arquivados')
+              : (projetosFiltrados.length === 1 ? 'obra ativa' : 'obras ativas')}</p>
           </div>
           <div className="projetos-actions">
             <button 
-              className={`btn projetos-btn-toggle ${showArquivados ? 'btn-secondary' : 'btn-outline'}`}
+              className="btn projetos-btn-toggle"
               onClick={() => setShowArquivados(!showArquivados)}
             >
-              {showArquivados ? <Eye size={18} /> : <EyeOff size={18} />}
+              {showArquivados ? <RotateCcw size={16} /> : <Archive size={16} />}
               {showArquivados ? 'Mostrar ativos' : 'Mostrar arquivados'}
             </button>
             {isGestor && (
@@ -333,7 +335,7 @@ function Projetos() {
               </button>
             )}
           </div>
-        </div>
+        </header>
 
         {sucesso && <div className="alert alert-success">{sucesso}</div>}
         {erro && <div className="alert alert-error">{erro}</div>}
@@ -357,15 +359,15 @@ function Projetos() {
               : `Vencido há ${Math.abs(diasRestantes)}d`;
 
             return (
-              <div
-                key={projeto.id}
-                onClick={() => navigate(perfil === 'Almoxarife' ? `/projeto/${projeto.id}/compras` : `/projeto/${projeto.id}`)}
-                className="projeto-card"
-              >
-                <div className="projeto-card-main">
+              <article key={projeto.id} className="projeto-card">
+                <Link
+                  className="projeto-card-main"
+                  to={perfil === 'Almoxarife' ? `/projeto/${projeto.id}/compras` : `/projeto/${projeto.id}`}
+                  aria-label={`Abrir projeto ${projeto.nome}`}
+                >
                   <div className="projeto-card-top">
                     <div className="projeto-title-block">
-                      <h3>{projeto.nome}</h3>
+                      <h2>{projeto.nome}</h2>
                       {projeto.cidade && (
                         <span className="projeto-city">
                           <MapPin size={12} />
@@ -373,16 +375,19 @@ function Projetos() {
                         </span>
                       )}
                     </div>
-                    <span className="projeto-progress-value">{pct}%</span>
+                    <ArrowUpRight className="projeto-open-icon" size={20} aria-hidden="true" />
                   </div>
 
                   <div className="projeto-meta">
-                    <span>Contratante: <strong>{projeto.empresa_responsavel || '-'}</strong></span>
-                    <span>Executante: <strong>{projeto.empresa_executante || '-'}</strong></span>
+                    <span>Contratante<strong>{projeto.empresa_responsavel || '—'}</strong></span>
+                    <span>Executante<strong>{projeto.empresa_executante || '—'}</strong></span>
                   </div>
 
-                  <div className="projeto-progress" aria-label={`Progresso ${pct}%`}>
-                    <div style={{ width: `${Math.min(Math.max(pct, 0), 100)}%` }} />
+                  <div>
+                    <div className="projeto-progress-label">Avanço físico <strong>{pct}%</strong></div>
+                    <div className="projeto-progress" aria-hidden="true">
+                      <div style={{ width: `${Math.min(Math.max(pct, 0), 100)}%` }} />
+                    </div>
                   </div>
 
                   <div className="projeto-date-row">
@@ -392,12 +397,9 @@ function Projetos() {
                     </span>
                     <strong className={`projeto-date-${prazoTone}`}>{prazoLabel}</strong>
                   </div>
-                </div>
+                </Link>
                 {isGestor && (
-                  <div
-                    className="projeto-card-actions"
-                    onClick={(e) => e.stopPropagation()}
-                  >
+                  <div className="projeto-card-actions">
                     <IconButton
                       onClick={() => abrirModal(projeto)}
                       icon={Edit}
@@ -426,14 +428,14 @@ function Projetos() {
                     )}
                   </div>
                 )}
-              </div>
+              </article>
             );
           })}
         </div>
 
-        {showArquivados && (
+        {projetos.length > 0 && projetosFiltrados.length === 0 && (
           <div className="projetos-archive-note">
-            Mostrando projetos <strong>arquivados</strong>.
+            {showArquivados ? 'Nenhum projeto arquivado.' : 'Nenhuma obra ativa.'}
           </div>
         )}
 
