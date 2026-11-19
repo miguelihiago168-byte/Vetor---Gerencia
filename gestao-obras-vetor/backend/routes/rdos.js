@@ -14,6 +14,7 @@ const backendPackage = require('../package.json');
 const { ensureRdoCorrectionColumns, clearRdoCorrection } = require('../services/rdoCorrectionService');
 const { generateRdoPdfBuffer } = require('../services/rdoPdfService');
 const { calcularHhMaoObraDireta } = require('../services/rdoWorkforceHoursService');
+const { cadastrarPessoasDoRdo } = require('../services/rdoHseService');
 const { ensureSchemaReady, sendSchemaOutdated } = require('../utils/schemaGuard');
 const { hydrateOccurrences, syncOccurrences, assertApprovalOccurrenceDeclaration } = require('../services/rdoOccurrenceService');
 const {
@@ -1186,7 +1187,8 @@ router.post('/', auth, [
 
     const initialStatus = RDO_STATUS.DRAFT;
 
-    const result = await runQuery(`
+    const result = await withClient(async client => {
+      const saved = await execWithClient(client, `
       INSERT INTO rdos (
         tenant_id, numero_rdo, projeto_id, data_relatorio, dia_semana,
         entrada_saida_inicio, entrada_saida_fim, intervalo_almoco_inicio, intervalo_almoco_fim, horas_trabalhadas,
@@ -1203,7 +1205,10 @@ router.post('/', auth, [
       clima_tarde || 'Claro', tempo_tarde || '★', praticabilidade_tarde || 'Praticável',
       mao_obra_direta || 0, mao_obra_indireta || 0, mao_obra_terceiros || 0,
       equipamentos, ocorrencias, comentarios, (Array.isArray(req.body.mao_obra_detalhada) ? JSON.stringify(maoObraDetalhada) : null), hhMaoObraDireta, (atividades_avulsas.length > 0 ? JSON.stringify(atividades_avulsas) : null), req.usuario.id, initialStatus
-    ]);
+      ]);
+      await cadastrarPessoasDoRdo(client,{tenantId:req.tenantId,usuarioId:req.usuario.id,pessoas:maoObraDetalhada});
+      return saved;
+    });
 
     const rdoId = result.lastID;
 
@@ -1432,7 +1437,8 @@ router.put('/:id', auth, async (req, res) => {
       }
     }
 
-    await runQuery(`
+    await withClient(async client => {
+      await execWithClient(client, `
       UPDATE rdos SET
         dia_semana = ?,
         entrada_saida_inicio = ?, entrada_saida_fim = ?,
@@ -1464,7 +1470,11 @@ router.put('/:id', auth, async (req, res) => {
         : rdoAtual.atividades_avulsas
       ),
       id
-    ]);
+      ]);
+      if (Array.isArray(req.body.mao_obra_detalhada)) {
+        await cadastrarPessoasDoRdo(client,{tenantId:req.tenantId,usuarioId:req.usuario.id,pessoas:maoObraDetalhadaEfetiva});
+      }
+    });
 
     // Horários alterados em um RDO passam a ser a referência dos próximos RDOs
     // editáveis do mesmo autor. Registros anteriores e já enviados/aprovados ficam intactos.

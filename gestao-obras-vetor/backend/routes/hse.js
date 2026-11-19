@@ -187,6 +187,7 @@ router.post('/mao-de-obra', async (req, res) => {
     return res.status(400).json({ erro: 'Informe nome, função e classificação válidos.' });
   try {
     const id = await withClient(async client => {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`hse-rdo:${req.tenantId}`]);
       const result = await client.query(`INSERT INTO mao_obra_direta (tenant_id,identificador,nome,funcao,ativo,criado_por)
         VALUES ($1,$2,$3,$4,1,$5) RETURNING id`, [req.tenantId, `HSE-${randomUUID()}`, name, role, req.usuario.id]);
       const id = result.rows[0].id;

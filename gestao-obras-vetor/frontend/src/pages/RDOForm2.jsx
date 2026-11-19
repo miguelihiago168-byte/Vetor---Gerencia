@@ -12,7 +12,7 @@ import {
   getRdoRecursosAtividadeDisponiveis,
   addRdoClima, addRdoComentario, addRdoMaterial,
   uploadRdoFoto, updateRdoFoto, deleteRdoFoto, reorderRdoFotos, executeRdoWorkflow, getExecucaoAcumulada,
-  getRdoColaboradores, createRdoColaborador,
+  getRdoColaboradores,
   getRdoEquipamentosCatalogo, getRdoEquipamentos, addRdoEquipamento, deleteRdoEquipamento,
   updateRdoEquipamentoCatalogo, deleteRdoEquipamentoCatalogo,
   getAnexos, uploadAnexo, deleteAnexo, getUploadUrl, getRdoOcorrenciasConfiguracao, vincularEvidenciaOcorrencia, desvincularEvidenciaOcorrencia
@@ -1192,6 +1192,10 @@ function RDOForm2() {
 
   const addColab = async () => {
     if (!draftColab.nome) return;
+    if (editingColabIndex === null && !String(draftColab.funcao || '').trim()) {
+      await alert({ title: 'Função obrigatória', message: 'Informe a função para cadastrar a pessoa no HSE.' });
+      return;
+    }
     if (editingColabIndex !== null) {
       const colaboradorAtualizado = { ...draftColab, nome: String(draftColab.nome).trim(), funcao: String(draftColab.funcao || '').trim() };
       setFormData((atual) => ({
@@ -1205,45 +1209,6 @@ function RDOForm2() {
       setColaboradorSelecionado('');
       setDirty(true);
       return;
-    }
-    const nomeDigitado = String(draftColab.nome || '').trim();
-    const funcaoDigitada = String(draftColab.funcao || '').trim();
-    const nomeExisteNaLista = colaboradoresDisponiveis.some(
-      item => String(item?.nome || '').trim().toLowerCase() === nomeDigitado.toLowerCase()
-    );
-    if (!nomeExisteNaLista) {
-      const desejaCadastrar = await confirm({
-        title: 'Cadastrar nova mão de obra?',
-        message: `"${nomeDigitado}" não está na lista. Deseja cadastrar como mão de obra direta?`,
-        confirmText: 'Cadastrar',
-        cancelText: 'Não cadastrar'
-      });
-      if (desejaCadastrar) {
-        if (!funcaoDigitada) {
-          await alert({ title: 'Função obrigatória', message: 'Para cadastrar nova mão de obra, informe a função.' });
-          return;
-        }
-        try {
-          const resp = await createRdoColaborador(projetoId, { nome: nomeDigitado, funcao: funcaoDigitada });
-          const novo = resp?.data?.item;
-          if (novo?.nome) {
-            setColaboradoresDisponiveis(prev => {
-              const jaExiste = prev.some(
-                item =>
-                  String(item.nome || '').trim().toLowerCase() === String(novo.nome || '').trim().toLowerCase() &&
-                  String(item.funcao || '').trim().toLowerCase() === String(novo.funcao || '').trim().toLowerCase()
-              );
-              return jaExiste ? prev : [...prev, { nome: novo.nome, funcao: novo.funcao || '', origem: 'mao_obra_direta' }];
-            });
-          }
-        } catch (e) {
-          await alert({
-            title: 'Erro',
-            message: `Não foi possível cadastrar: ${e?.response?.data?.erro || e?.message || 'erro inesperado'}`
-          });
-          return;
-        }
-      }
     }
     setFormData({ ...formData, mao_obra_detalhada: [...formData.mao_obra_detalhada, draftColab] });
     setDraftColab({ nome: '', funcao: '', tipo: 'Direta', ...horariosDoDia() });

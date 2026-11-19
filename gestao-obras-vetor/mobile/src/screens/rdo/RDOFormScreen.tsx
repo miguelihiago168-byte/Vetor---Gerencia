@@ -51,7 +51,7 @@ interface EapAtividade {
   id: number; codigo_eap: string; nome?: string; descricao?: string;
   unidade_medida?: string; quantidade_total?: number; pai_id?: number;
 }
-interface Colaborador { nome: string; funcao: string }
+interface Colaborador { nome: string; funcao: string; tipo?: string }
 
 const CONDICAO_TEMPO = ['Ensolarado', 'Nublado', 'Chuvoso', 'Parcialmente nublado', 'Tempestuoso'];
 const CONDICAO_TRABALHO = ['Praticável', 'Impraticável'];
@@ -348,7 +348,7 @@ export default function RDOFormScreen() {
 
   // ── Ações de lista ─────────────────────────────────────────────────────────
   const adicionarMaoObra = (c: Colaborador) => {
-    setMaoObra(p => [...p, { nome: c.nome, funcao: c.funcao, classificacao: 'Direta', entrada: '07:00', saida: '17:00' }]);
+    setMaoObra(p => [...p, { nome: c.nome, funcao: c.funcao, classificacao: CLASSIFICACOES.includes(c.tipo || '') ? c.tipo! : 'Direta', entrada: '07:00', saida: '17:00' }]);
     setMaoObraExpandida(null);
     setModalColab(false);
   };
