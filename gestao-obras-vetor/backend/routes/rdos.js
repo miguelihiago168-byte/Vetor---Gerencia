@@ -1202,7 +1202,7 @@ router.post('/', auth, [
       clima_manha || 'Claro', tempo_manha || '★', praticabilidade_manha || 'Praticável',
       clima_tarde || 'Claro', tempo_tarde || '★', praticabilidade_tarde || 'Praticável',
       mao_obra_direta || 0, mao_obra_indireta || 0, mao_obra_terceiros || 0,
-      equipamentos, ocorrencias, comentarios, (maoObraDetalhada.length ? JSON.stringify(maoObraDetalhada) : null), hhMaoObraDireta, (atividades_avulsas.length > 0 ? JSON.stringify(atividades_avulsas) : null), req.usuario.id, initialStatus
+      equipamentos, ocorrencias, comentarios, (Array.isArray(req.body.mao_obra_detalhada) ? JSON.stringify(maoObraDetalhada) : null), hhMaoObraDireta, (atividades_avulsas.length > 0 ? JSON.stringify(atividades_avulsas) : null), req.usuario.id, initialStatus
     ]);
 
     const rdoId = result.lastID;

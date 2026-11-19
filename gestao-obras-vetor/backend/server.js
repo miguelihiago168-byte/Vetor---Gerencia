@@ -66,6 +66,7 @@ app.use('/api/oauth', oauthRoutes);
 app.use('/api/auth/service', serviceAuthRoutes);
 app.use('/api/contato', contatoRoutes);
 app.use('/api/usuarios', usuariosRoutes);
+app.use('/api/hse', require('./routes/hse'));
 app.use('/api/projetos', projetosRoutes);
 app.use('/api/eap', eapRoutes);
 app.use('/api/mapa-suprimentos', mapaSuprimentosRoutes);

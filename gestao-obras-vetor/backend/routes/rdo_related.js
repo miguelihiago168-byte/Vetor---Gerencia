@@ -142,26 +142,29 @@ router.get('/projeto/:projetoId/colaboradores', auth, async (req, res) => {
     await garantirTabelaMaoObraDireta();
 
     const usuariosSistema = await allQuery(`
-            SELECT DISTINCT TRIM(u.nome) AS nome, TRIM(COALESCE(u.funcao, '')) AS funcao,
-              TRIM(COALESCE(u.perfil, '')) AS perfil, 'usuario_sistema' AS origem
+            SELECT DISTINCT TRIM(u.nome) AS nome, TRIM(COALESCE(h.funcao, u.funcao, '')) AS funcao,
+              TRIM(COALESCE(u.perfil, '')) AS perfil, 'usuario_sistema' AS origem, h.tipo
       FROM usuarios u
       INNER JOIN projeto_usuarios pu ON pu.usuario_id = u.id
+      LEFT JOIN hse_classificacoes h ON h.tenant_id=pu.tenant_id AND h.origem='usuario' AND h.pessoa_id=u.id
       WHERE pu.projeto_id = ?
+        AND pu.tenant_id = ?
         AND u.deletado_em IS NULL
         AND COALESCE(u.ativo, 1) = 1
         AND TRIM(COALESCE(u.nome, '')) <> ''
-    `, [projetoId]);
+    `, [projetoId,req.tenantId]);
 
     let maoObraDireta = [];
     try {
       maoObraDireta = await allQuery(`
-         SELECT TRIM(nome) AS nome, TRIM(COALESCE(funcao, '')) AS funcao,
-           '' AS perfil, 'mao_obra_direta' AS origem
-        FROM mao_obra_direta
-        WHERE COALESCE(ativo, 1) = 1
-          AND projeto_id = ?
-          AND TRIM(COALESCE(nome, '')) <> ''
-      `, [projetoId]);
+         SELECT TRIM(m.nome) AS nome, TRIM(COALESCE(h.funcao, m.funcao, '')) AS funcao,
+           '' AS perfil, 'mao_obra_direta' AS origem, COALESCE(h.tipo, 'Direta') AS tipo
+        FROM mao_obra_direta m
+        LEFT JOIN hse_classificacoes h ON h.tenant_id=m.tenant_id AND h.origem='mao_obra' AND h.pessoa_id=m.id
+        WHERE COALESCE(m.ativo, 1) = 1 AND m.tenant_id = ?
+          AND (m.projeto_id = ? OR m.projeto_id IS NULL)
+          AND TRIM(COALESCE(m.nome, '')) <> ''
+      `, [req.tenantId,projetoId]);
     } catch (erroTabela) {
       maoObraDireta = [];
     }
@@ -173,7 +176,7 @@ router.get('/projeto/:projetoId/colaboradores', auth, async (req, res) => {
       if (!nome) return;
       const chave = `${nome.toLowerCase()}|${funcao.toLowerCase()}`;
       if (!mapaUnico.has(chave)) {
-        mapaUnico.set(chave, { nome, funcao, origem: item.origem, perfil: item.perfil || null });
+        mapaUnico.set(chave, { nome, funcao, origem: item.origem, perfil: item.perfil || null, tipo: item.tipo || null });
       }
     });
 

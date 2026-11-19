@@ -1,0 +1,46 @@
+const assert = require('node:assert/strict');
+const { compararMaoObra } = require('../services/hseComparativo');
+const dates = ['2026-11-02','2026-11-03','2026-11-04','2026-11-05','2026-11-06'];
+const counts = [4,5,3,6,7];
+const rdos = dates.map((date,index) => ({id:index+1,data_relatorio:date,status:'Aprovado',mao_obra_detalhada:JSON.stringify(Array.from({length:counts[index]},(_,i)=>({nome:`Pessoa ${i}`,funcao:'Ajudante'})))}));
+const previsoes = [
+  {id:1,funcao:'Ajudante',quantidade:5,inicio:dates[0],fim:dates[2]},
+  {id:2,funcao:'Ajudante',quantidade:8,inicio:dates[3],fim:dates[4]}
+];
+const input = {inicio:dates[0],fim:dates[4],calendario:{dias:[1,2,3,4,5],excecoes:{}},previsoes,rdos};
+const result = compararMaoObra(input);
+assert.equal(result.funcoes[0].previsto,6.2);
+assert.equal(result.funcoes[0].real,5);
+assert.ok(Math.abs(result.funcoes[0].atendimento-80.64516129)<0.00001);
+assert.equal(result.incompleto,false);
+const missing = compararMaoObra({...input,rdos:rdos.slice(1)});
+assert.equal(missing.funcoes[0].dias_comparaveis,4);
+assert.equal(missing.incompleto,true);
+assert.equal(missing.dias[0].rdo,'ausente');
+const pending = compararMaoObra({...input,rdos:[{...rdos[0],status:'Pendente'},...rdos.slice(1)]});
+assert.equal(pending.dias[0].rdo,'incompleto');
+const zero = compararMaoObra({...input,inicio:dates[0],fim:dates[0],previsoes:[{...previsoes[0],quantidade:0}],rdos:[{...rdos[0],mao_obra_detalhada:'[]'}]});
+assert.equal(zero.funcoes[0].previsto,0);
+assert.equal(zero.funcoes[0].real,0);
+assert.equal(zero.funcoes[0].atendimento,null);
+const absentPlan = compararMaoObra({...input,previsoes:previsoes.slice(1)});
+assert.equal(absentPlan.dias[0].previsto,null);
+assert.equal(absentPlan.incompleto,true);
+const duplicates = compararMaoObra({...input,rdos:[rdos[0],{...rdos[0],id:8},...rdos.slice(1)]});
+assert.equal(duplicates.dias[0].real,4);
+const conflictingRoles = compararMaoObra({...input,rdos:[rdos[0],{...rdos[0],id:9,mao_obra_detalhada:JSON.stringify([{nome:'Pessoa 0',funcao:'Eletricista'}])},...rdos.slice(1)]});
+assert.equal(conflictingRoles.dias[0].rdo,'incompleto');
+const withoutCalendar = compararMaoObra({...input,calendario:null});
+assert.equal(withoutCalendar.calendario_configurado,false);
+assert.equal(withoutCalendar.funcoes[0].previsto,null);
+assert.equal(withoutCalendar.funcoes[0].real,null);
+assert.equal(withoutCalendar.dias[0].previsto,5);
+assert.equal(withoutCalendar.dias[0].real,4);
+assert.equal(withoutCalendar.dias[0].rdo,'completo');
+const weekend = compararMaoObra({...input,inicio:'2026-11-06',fim:'2026-11-08',previsoes:[{id:3,funcao:'Ajudante',quantidade:5,inicio:'2026-11-06',fim:'2026-11-08'}],rdos:[]});
+assert.equal(weekend.dias[1].operacao,'sem_operacao');
+const explicitWeekend = compararMaoObra({...input,inicio:'2026-11-07',fim:'2026-11-08',previsoes:[{id:4,funcao:'Ajudante',quantidade:5,inicio:'2026-11-07',fim:'2026-11-08'}],rdos:[]});
+assert.equal(explicitWeekend.dias[0].operacao,'prevista');
+const global = compararMaoObra({...input,previsoes:[...previsoes,{id:5,funcao:'Montador',quantidade:10,inicio:dates[0],fim:dates[4]}]});
+assert.ok(Math.abs(global.atendimento_global - (25/81*100)) < 0.00001);
+console.log('HSE: médias, lacunas, presença, previsão zero e duplicidade aprovadas.');

@@ -16,6 +16,7 @@ export default function SidebarLinks({ projetoId, perfil, isGestor, counts, onNa
   const statuses = [['solicitado', 'Solicitado', 'Em análise'], ['em-cotacao', 'Em cotação', 'Em cotação'], ['cotacoes-recebidas', 'Cotações recebidas', 'Cotações recebidas'], ['aprovado-compra', 'Aprovado p/ compra', 'Compra autorizada']];
   const highlight = { ADM: ['em-cotacao', 'aprovado-compra'], Financeiro: ['em-cotacao', 'aprovado-compra'], 'Gestor Geral': ['solicitado', 'cotacoes-recebidas'], 'Gestor da Obra': ['solicitado', 'cotacoes-recebidas'], 'Gestor Local': ['solicitado'], Almoxarife: ['solicitado'] };
   const groups = [
+    ...((manager || perfil === 'ADM') ? [{ id: 'hse', label: 'HSE', Icon: ShieldCheck, match: /\/hse(\/|$)/, items: [['Mão de obra', project ? `${base}/hse` : '/hse']] }] : []),
     ...(project && manager ? [{ id: 'planejamento', label: 'Planejamento', Icon: Layers, match: /\/(planejamento|eap|curva-s|gantt|mapa-suprimentos)(\/|$)/, items: [['EAP', `${base}/planejamento?aba=eap`], ['Curva S', `${base}/planejamento?aba=curva-s`], ['Cronograma', `${base}/planejamento?aba=gantt`], ['Relatório semanal', `${base}/planejamento?aba=relatorio-semanal`], ['Mapa de Suprimentos', `${base}/mapa-suprimentos`]] }] : []),
     ...(project && (quality || perfil === 'ADM' || perfil === 'Almoxarife') ? [{ id: 'qualidade', label: 'Qualidade', Icon: ShieldCheck, badge: isGestor && counts.rnc, match: /\/(qualidade|rnc|rastreabilidade-materiais)(\/|$)/, items: [
       ...(quality ? [['Visão geral', `${base}/qualidade`], ['RNC', `${base}/rnc`]] : []),

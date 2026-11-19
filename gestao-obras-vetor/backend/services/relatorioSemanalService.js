@@ -136,10 +136,21 @@ function buildSnapshot({ project, start, end, rdos, activities, entries, history
     items.push({ key: `avulsa:${rdo.id}:${i}`, nome: a.descricao || 'Atividade avulsa', status: completed ? 'Concluída' : 'Em andamento', data_conclusao: completed ? rdo.data_relatorio : null, incluir: null, previsao: '' });
   });
   const efetivo = [];
+  const presencasPorDia = new Map();
   for (const rdo of rdos) {
-    const counts = new Map();
-    for (const person of parseArray(rdo.mao_obra_detalhada)) { const role = String(person.funcao || 'Não informada').trim() || 'Não informada'; counts.set(role, (counts.get(role) || 0) + 1); }
-    for (const [funcao, quantidade] of counts) efetivo.push({ data: rdo.data_relatorio, funcao, quantidade });
+    const day = rdo.data_relatorio;
+    if (!presencasPorDia.has(day)) presencasPorDia.set(day, new Map());
+    const roles = presencasPorDia.get(day);
+    for (const [index, person] of parseArray(rdo.mao_obra_detalhada).entries()) {
+      const role = String(person.funcao || 'Não informada').trim() || 'Não informada';
+      if (!roles.has(role)) roles.set(role, new Set());
+      const name = String(person.nome || '').trim().toLocaleLowerCase('pt-BR');
+      // A legacy entry without a name cannot safely be identified as a duplicate.
+      roles.get(role).add(name || `sem-nome:${rdo.id}:${index}`);
+    }
+  }
+  for (const [data, roles] of presencasPorDia) {
+    for (const [funcao, people] of roles) efetivo.push({ data, funcao, quantidade: people.size });
   }
   const parentIds = new Set(activities.map(a => String(a.pai_id)));
   const today = dayOf(new Date());

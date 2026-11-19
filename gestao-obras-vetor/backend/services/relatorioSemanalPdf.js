@@ -90,8 +90,44 @@ function createWeeklyReportPdf(report) {
   text('VERDE: recebido   •   AMARELO: pendente / conferir   •   VERMELHO: atraso',left,cursor,width,7.5,true,COLORS.muted);cursor+=22;
   if(!report.suprimentos?.length)paragraph('Nenhum suprimento disponível neste relatório.');
   for(const s of report.suprimentos||[]){const color=s.cor==='verde'?COLORS.green:s.cor==='vermelho'?COLORS.red:COLORS.gold;const h=measure(s.descricao,width-20,10,true);ensure(h+75);doc.rect(left,cursor,3,h+65).fill(color);text(s.situacao,left+12,cursor,width-20,8,true,color);text(s.descricao,left+12,cursor+15,width-24,10,true);cursor+=h+22;text(`Necessário: ${s.quantidade} ${s.unidade}  |  Recebido: ${s.recebida??'a conferir'}  |  Falta: ${s.restante??'a conferir'}`,left+12,cursor,width-24,8);cursor+=17;text(`Necessidade: ${BR(s.necessidade)}  •  Entrega prevista: ${BR(s.previsao)}`,left+12,cursor,width-24,8,false,COLORS.muted);cursor+=29;}
+  const comparison = report.comparativo_mao_obra;
+  section('Histograma de Mão de Obra — Previsto × Realizado','Médias diárias dos dias comparáveis no intervalo', 60);
+  if (!comparison) paragraph('Comparativo indisponível para este relatório histórico.');
+  else {
+    if (comparison.incompleto) paragraph('Dados incompletos. As médias consideram somente dias com calendário, previsão e presença disponíveis em RDO aprovado.');
+    const rows = comparison.funcoes || [];
+    if (!rows.length) paragraph('Nenhuma função disponível no intervalo.');
+    const chartRows = rows.filter(row => row.previsto != null || row.real != null);
+    if (rows.length && !chartRows.length) {
+      paragraph('As médias comparáveis estão indisponíveis. A tabela apresenta os valores registrados nos dias com RDO aprovado.');
+      const daily = (comparison.dias || []).filter(day => day.rdo === 'completo' && (day.previsto != null || day.real != null));
+      if (daily.length) table(['Data','Função','Previsto','Presença no RDO'], daily.map(day => [BR(day.data),day.funcao,day.previsto == null ? 'Indisp.' : String(day.previsto),day.real == null ? 'Indisp.' : String(day.real)]), [.20,.40,.20,.20],[2,3]);
+    }
+    for (let offset=0; offset<chartRows.length; offset+=5) {
+      const group=chartRows.slice(offset,offset+5); ensure(170);
+      const chartX=left+24, chartY=cursor+8, chartWidth=width-30, height=95;
+      const max=Math.max(1,...group.flatMap(row=>[Number(row.previsto)||0,Number(row.real)||0]));
+      doc.moveTo(chartX,chartY+height).lineTo(chartX+chartWidth,chartY+height).lineWidth(.5).strokeColor(COLORS.border).stroke();
+      const slot=chartWidth/group.length;
+      group.forEach((row,i)=>{
+        const x=chartX+i*slot+slot/2;
+        [[row.previsto,COLORS.blue,-19],[row.real,COLORS.green,1]].forEach(([value,color,dx])=>{
+          if (value == null) return;
+          const h=Number(value)/max*height;
+          doc.rect(x+dx,chartY+height-h,18,Math.max(h,1)).fill(color);
+        });
+        text(row.funcao,chartX+i*slot+2,chartY+height+6,slot-4,7,false,COLORS.text,{align:'center',height:27,ellipsis:true});
+      });
+      cursor=chartY+height+39;
+      text('Azul: previsto médio   •   Verde: real médio',left,cursor,width,8,false,COLORS.muted); cursor+=18;
+    }
+    if (rows.length) table(['Função','Previsto','Real','Diferença','Atendimento','Dias'], rows.map(row=>[
+      row.funcao,row.previsto==null?'—':number(row.previsto),row.real==null?'—':number(row.real),row.diferenca==null?'—':number(row.diferenca),percentage(row.atendimento),`${row.dias_comparaveis}/${row.dias_considerados}`
+    ]),[.25,.14,.13,.15,.19,.14],[1,2,3,4,5]);
+    paragraph(`Atendimento global: ${percentage(comparison.atendimento_global)}.`);
+  }
   const workforce=report.efetivo||[], dates=[...new Set(workforce.map(r=>r.data))].sort();
-  section('Presença por função','Quantidade de pessoas por função e dia',workforce.length?215:25);
+  section('Presença por função','Quantidades informadas nos RDOs aprovados por dia',workforce.length?215:25);
   if(!workforce.length)paragraph('Sem presença registrada.');
   for(const date of dates){const rows=workforce.filter(r=>r.data===date);for(let offset=0;offset<rows.length;offset+=7){const group=rows.slice(offset,offset+7);if(cursor+210>bottom){newPage();text('Presença por função • continuação',left,cursor,width,10,true);cursor+=22;}text(BR(date),left,cursor,width,9,true);cursor+=24;const x=left+26,y=cursor,h=105,w=width-36,max=Math.max(1,...group.map(r=>Number(r.quantidade)||0));const ceiling=Math.max(1,Math.ceil(max*1.15));const tickStep=Math.max(1,Math.ceil(ceiling/4));for(let value=0;value<=ceiling;value+=tickStep){const yy=y+h-h*value/ceiling;doc.moveTo(x,yy).lineTo(x+w,yy).lineWidth(.5).strokeColor(COLORS.border).stroke();text(value,left,yy-4,18,7,false,COLORS.muted,{align:'right'});}const slot=w/group.length;group.forEach((r,i)=>{const n=Number(r.quantidade)||0,bh=n/ceiling*h,bw=Math.min(43,slot*.48),bx=x+i*slot+(slot-bw)/2;doc.rect(bx,y+h-bh,bw,Math.max(1,bh)).fill(palette[i%palette.length]);text(n,bx-8,y+h-bh-17,bw+16,9,true,COLORS.text,{align:'center'});text(r.funcao,x+i*slot+3,y+h+8,slot-6,7.5,true,COLORS.text,{align:'center',height:32,ellipsis:true});text(`${n} pessoa(s)`,x+i*slot+3,y+h+43,slot-6,7,false,COLORS.muted,{align:'center'});});cursor=y+h+67;}}
   section('Condições climáticas');if(report.clima?.length)table(['Data / período','Condição','Chuva'],report.clima.map(c=>[`${BR(c.data)} • ${c.periodo}`,`${c.condicao_tempo||'—'}${c.condicao_trabalho?' / '+c.condicao_trabalho:''}`,`${Number(c.pluviometria_mm||0)} mm`]),[.32,.53,.15]);else paragraph('Sem condições climáticas registradas.');

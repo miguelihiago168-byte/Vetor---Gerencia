@@ -1187,7 +1187,7 @@ function RDOForm2() {
     if (valorSelecionado === '') return;
     const item = colaboradoresSelecionaveis.find(c => chaveColaborador(c?.nome, c?.funcao) === valorSelecionado);
     if (!item) return;
-    setDraftColab(prev => ({ ...prev, nome: item.nome || prev.nome, funcao: item.funcao || prev.funcao, origem: item.origem, perfil: item.perfil }));
+    setDraftColab(prev => ({ ...prev, nome: item.nome || prev.nome, funcao: item.funcao || prev.funcao, origem: item.origem, perfil: item.perfil, tipo: item.tipo || prev.tipo }));
   };
 
   const addColab = async () => {

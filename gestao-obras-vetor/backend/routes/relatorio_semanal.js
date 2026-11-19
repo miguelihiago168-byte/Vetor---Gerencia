@@ -8,6 +8,7 @@ const { auth } = require('../middleware/auth');
 const { PERMISSIONS, requirePermission, assertProjectAccess, hasPermission } = require('../middleware/rbac');
 const { allQuery, getQuery, runQuery } = require('../config/database');
 const { validPeriod, physicalHistory, buildSnapshot, mergeChoices, restoreSavedActivities, validateChoices } = require('../services/relatorioSemanalService');
+const { compararMaoObra } = require('../services/hseComparativo');
 const router = express.Router();
 router.use(auth, requirePermission(PERMISSIONS.EAP_VIEW));
 async function projectAccess(req, res) {
@@ -43,9 +44,13 @@ async function source(req, project, inicio, fim) {
       WHERE v.tenant_id=? AND m.projeto_id=?`,[req.tenantId,project.id]);
   }
   const snapshot=buildSnapshot({ project, start: inicio, end: fim, rdos, activities, entries, history, photos, weather, supplies, supplyLinks, supplyAvailable });
+  const calendario = await getQuery('SELECT dias,excecoes FROM hse_calendarios WHERE tenant_id=? AND projeto_id=?',[req.tenantId,project.id]);
+  const previsoes = await allQuery('SELECT id,funcao,quantidade,inicio,fim FROM hse_previsoes WHERE tenant_id=? AND projeto_id=? AND ativa AND inicio<=? AND fim>=?',[req.tenantId,project.id,fim,inicio]);
+  const rdosPresenca = await allQuery('SELECT id,data_relatorio,status,mao_obra_detalhada FROM rdos WHERE tenant_id=? AND projeto_id=? AND data_relatorio>=? AND data_relatorio<=? ORDER BY data_relatorio,id',[req.tenantId,project.id,inicio,fim]);
+  snapshot.comparativo_mao_obra = compararMaoObra({inicio,fim,calendario,previsoes,rdos:rdosPresenca});
   const items = snapshot.eap.map(({id,codigo,nome,inicio,fim,fisico}) => [id,codigo,nome,inicio,fim,fisico]);
   snapshot.revisao_atividades = createHash('sha256')
-    .update(JSON.stringify([items,snapshot.atividades,snapshot.proximas])).digest('hex');
+    .update(JSON.stringify([items,snapshot.atividades,snapshot.proximas,snapshot.comparativo_mao_obra])).digest('hex');
   snapshot.curva_s=await cutoffCurve(req,project.id,fim,activities,entries);
   snapshot.logos_empresas=companyLogos(project,req.tenantId);
   return snapshot;
@@ -91,6 +96,8 @@ const visibleReport = (data,req) => ({ ...withoutImages(data), suprimentos:hasPe
 function restoreSavedSources(fresh, saved) {
   restoreSavedActivities(fresh, saved);
   restorePhotos(fresh, saved);
+  // O comparativo é parte do retrato emitido, mesmo ao atualizar outras fontes.
+  fresh.comparativo_mao_obra = saved.comparativo_mao_obra;
 }
 const prepareImages = (req, data) => captureImages(data, req.tenantId, req.params.projetoId, allQuery);
 function sendPdf(res, report, disposition) {

@@ -39,6 +39,7 @@ import RDOs from './pages/RDOs';
 import RDODetalhes from './pages/RDODetalhes';
 import RDOForm2 from './pages/RDOForm2';
 import Usuarios from './pages/Usuarios';
+import HSE from './pages/HSE';
 import RNC from './pages/RNC';
 import RNCForm from './pages/RNCForm';
 import RNCDetalhes from './pages/RNCDetalhes';
@@ -233,6 +234,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
               <Usuarios />
             </PrivateRoute>
           } />
+          <Route path="/hse" element={<PrivateRoute allowedPerfis={['Gestor Geral','Gestor da Obra','Gestor Local','Gestor da Qualidade','Gestor de Qualidade','ADM']}><HSE /></PrivateRoute>} />
+          <Route path="/projeto/:projetoId/hse" element={<PrivateRoute allowedPerfis={['Gestor Geral','Gestor da Obra','Gestor Local','Gestor da Qualidade','Gestor de Qualidade','ADM']}><HSE /></PrivateRoute>} />
           <Route path="/projeto/:projetoId/usuarios" element={
             <PrivateRoute allowedPerfis={PERFIS_USUARIOS}>
               <Usuarios />

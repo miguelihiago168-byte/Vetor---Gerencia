@@ -557,7 +557,6 @@ function Usuarios() {
             <span className="usuarios-sidebar-label">Menu</span>
             <nav className="usuarios-nav">
               <button className={`usuarios-nav-link${aba === 'usuarios' ? ' active' : ''}`} onClick={() => setAba('usuarios')} type="button">Usuários do Sistema</button>
-              <button className={`usuarios-nav-link${aba === 'mao-obra-direta' ? ' active' : ''}`} onClick={() => setAba('mao-obra-direta')} type="button">Mão de Obra Direta</button>
             </nav>
           </aside>
 
