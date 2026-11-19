@@ -2,12 +2,13 @@
 const { createWeeklyReportPdf } = require('../services/relatorioSemanalPdf');
 const { buildCutoffCurve } = require('../services/relatorioSemanalCurve');
 const {resolveReportUpload,companyLogos}=require('../services/relatorioSemanalAssets');
+const {createHash} = require('node:crypto');
 const fs = require('fs');
 const path = require('path');
 const { auth } = require('../middleware/auth');
 const { PERMISSIONS, requirePermission, assertProjectAccess, hasPermission } = require('../middleware/rbac');
 const { allQuery, getQuery, runQuery } = require('../config/database');
-const { validPeriod, buildSnapshot, mergeChoices, validateChoices } = require('../services/relatorioSemanalService');
+const { validPeriod, physicalHistory, buildSnapshot, mergeChoices, restoreSavedActivities, validateChoices } = require('../services/relatorioSemanalService');
 const router = express.Router();
 router.use(auth, requirePermission(PERMISSIONS.EAP_VIEW));
 async function projectAccess(req, res) {
@@ -22,7 +23,8 @@ async function projectAccess(req, res) {
 async function source(req, project, inicio, fim) {
   const params = [req.tenantId, project.id, fim];
   const rdos = await allQuery("SELECT id, data_relatorio, mao_obra_detalhada, atividades_avulsas FROM rdos WHERE tenant_id=? AND projeto_id=? AND status='Aprovado' AND data_relatorio>=? AND data_relatorio<=? ORDER BY data_relatorio,id", [req.tenantId, project.id, inicio, fim]);
-  const activities = await allQuery('SELECT id, pai_id, codigo_eap, nome, descricao, quantidade_total, peso_percentual_projeto, percentual_previsto, percentual_executado, status, data_inicio_planejada, data_fim_planejada FROM atividades_eap WHERE tenant_id=? AND projeto_id=? ORDER BY codigo_eap,id', [req.tenantId, project.id]);
+  const activities = await allQuery('SELECT id, pai_id, codigo_eap, nome, descricao, quantidade_total, peso_percentual_projeto, percentual_previsto, percentual_executado, status, criado_em, atualizado_em, data_inicio_planejada, data_fim_planejada FROM atividades_eap WHERE tenant_id=? AND projeto_id=? ORDER BY codigo_eap,id', [req.tenantId, project.id]);
+  const history = await physicalHistory(allQuery, req.tenantId, project.id);
   const entries = await allQuery("SELECT ra.atividade_eap_id, ra.quantidade_executada, ra.percentual_executado, r.data_relatorio FROM rdo_atividades ra JOIN rdos r ON r.id=ra.rdo_id WHERE r.tenant_id=? AND r.projeto_id=? AND r.status='Aprovado' AND r.data_relatorio<=? ORDER BY r.data_relatorio,r.id,ra.id", params);
   const photos = await photoMetadata(req,project.id,inicio,fim);
   const weather = await allQuery("SELECT r.data_relatorio AS data, c.periodo, c.condicao_tempo, c.condicao_trabalho, c.pluviometria_mm FROM rdo_clima c JOIN rdos r ON r.id=c.rdo_id WHERE r.tenant_id=? AND r.projeto_id=? AND r.status='Aprovado' AND r.data_relatorio>=? AND r.data_relatorio<=? ORDER BY r.data_relatorio,c.id", [req.tenantId, project.id, inicio, fim]);
@@ -41,7 +43,10 @@ async function source(req, project, inicio, fim) {
       LEFT JOIN estoque_pendencias_recebimento p ON p.tenant_id=v.tenant_id AND p.referencia_tipo='REQUISICAO_ITEM' AND p.referencia_id=i.id
       WHERE v.tenant_id=? AND m.projeto_id=?`,[req.tenantId,project.id]);
   }
-  const snapshot=buildSnapshot({ project, start: inicio, end: fim, rdos, activities, entries, photos, weather, supplies, supplyLinks, supplyAvailable });
+  const snapshot=buildSnapshot({ project, start: inicio, end: fim, rdos, activities, entries, history, photos, weather, supplies, supplyLinks, supplyAvailable });
+  const items = snapshot.eap.map(({id,codigo,nome,inicio,fim,fisico}) => [id,codigo,nome,inicio,fim,fisico]);
+  snapshot.revisao_atividades = createHash('sha256')
+    .update(JSON.stringify([items,snapshot.atividades,snapshot.proximas])).digest('hex');
   snapshot.curva_s=await cutoffCurve(req,project.id,fim,activities,entries);
   snapshot.logos_empresas=companyLogos(project,req.tenantId);
   return snapshot;
@@ -75,6 +80,11 @@ async function captureImages(req, snapshot) {
   }
 }
 const fail = (res, e) => { console.error('[relatório semanal]', e); if (!res.headersSent) res.status(500).json({ erro: 'Não foi possível processar o relatório semanal.' }); };
+function sourcesChanged(draft, basis, res) {
+  if (!draft.revisao_atividades || draft.revisao_atividades === basis.revisao_atividades) return false;
+  res.status(409).json({erro:'As fontes das atividades mudaram. Prepare o relatório ou atualize as fontes novamente para revisar os valores.'});
+  return true;
+}
 router.get('/projeto/:projetoId', async (req,res) => { try { if (!await projectAccess(req,res)) return; res.json(await allQuery('SELECT id,inicio,fim,criado_em,atualizado_em FROM relatorios_semanais WHERE tenant_id=? AND projeto_id=? ORDER BY inicio DESC,id DESC', [req.tenantId,req.params.projetoId])); } catch(e){ fail(res,e); } });
 router.get('/projeto/:projetoId/fontes', async (req,res) => { try { const project=await projectAccess(req,res); if (!project) return; const {inicio,fim}=req.query; if (!validPeriod(inicio,fim)) return res.status(400).json({erro:'Escolha um período válido de até sete dias.'}); res.json(await source(req,project,inicio,fim)); } catch(e){ fail(res,e); } });
 router.get('/projeto/:projetoId/curva-s', async(req,res)=>{try{const project=await projectAccess(req,res);if(!project)return;const {corte}=req.query;if(!validPeriod(corte,corte))return res.status(400).json({erro:'Informe uma data de corte válida.'});res.json(await cutoffCurve(req,project.id,corte));}catch(e){fail(res,e);}});
@@ -97,6 +107,8 @@ router.post('/projeto/:projetoId/preview', async (req,res) => { try {
   if(!saved && !validPeriod(draft.inicio,draft.fim)) return res.status(400).json({erro:'Período inválido.'});
   const previous=saved ? (typeof saved.conteudo==='string'?JSON.parse(saved.conteudo):saved.conteudo) : null;
   const basis=saved && !draft.atualizar_fontes ? previous : await source(req,project,saved?.inicio || draft.inicio,saved?.fim || draft.fim);
+  if (sourcesChanged(draft,basis,res)) return;
+  if (previous && basis !== previous) restoreSavedActivities(basis, previous);
   if(previous && basis!==previous) for(const photo of basis.fotos) {const old=previous.fotos.find(f=>String(f.id)===String(photo.id));if(old?.imagem){photo.imagem=old.imagem;photo.tipo_imagem=old.tipo_imagem;}}
   if(draft.atualizar_curva)basis.curva_s=await cutoffCurve(req,project.id,basis.fim); const snapshot=mergeChoices(basis,draft);
   const check={...snapshot, atividades:snapshot.atividades.map(a=>a.status==='Concluída'?a:{...a,incluir:a.incluir===true,previsao:a.incluir===true && !a.previsao?'9999-12-31':a.previsao}),problemas:(snapshot.problemas||[]).map(p=>({...p,problema:p.problema||'-',solucao:p.solucao||'-',data:p.data||'2000-01-01'}))};
@@ -106,9 +118,9 @@ router.post('/projeto/:projetoId/preview', async (req,res) => { try {
   const doc=createWeeklyReportPdf(snapshot);res.setHeader('Content-Type','application/pdf');res.setHeader('Content-Disposition','inline; filename="previa-relatorio-semanal.pdf"');doc.pipe(res);doc.end();
 } catch(e){ fail(res,e); } });
 router.get('/projeto/:projetoId/:id', async (req,res) => { try { if (!await projectAccess(req,res)) return; const item=await report(req); if (!item) return res.status(404).json({erro:'Relatório não encontrado.'}); res.json({...item,conteudo:visibleReport(typeof item.conteudo==='string'?JSON.parse(item.conteudo):item.conteudo,req)}); } catch(e){ fail(res,e); } });
-router.post('/projeto/:projetoId', async (req,res) => { try { const project=await projectAccess(req,res); if (!project) return; const data=req.body; const error=validateChoices(data); if(error) return res.status(400).json({erro:error}); const fresh=await source(req,project,data.inicio,data.fim); const snapshot=mergeChoices(fresh,data); const err=validateChoices(snapshot); if(err) return res.status(400).json({erro:err}); await captureImages(req,snapshot); const result=await runQuery('INSERT INTO relatorios_semanais (tenant_id,projeto_id,inicio,fim,conteudo,criado_por) VALUES (?,?,?,?,?,?)',[req.tenantId,project.id,data.inicio,data.fim,JSON.stringify(snapshot),req.usuario.id]); res.status(201).json({id:result.lastID,conteudo:visibleReport(snapshot,req)}); } catch(e){ fail(res,e); } });
-router.put('/projeto/:projetoId/:id', async (req,res) => { try { const project=await projectAccess(req,res); if (!project) return; const item=await report(req); if(!item) return res.status(404).json({erro:'Relatório não encontrado.'}); const original=typeof item.conteudo==='string'?JSON.parse(item.conteudo):item.conteudo; const basis=req.body?.atualizar_fontes ? await source(req,project,item.inicio,item.fim) : original; for (const photo of basis.fotos) { const old=original.fotos.find(f=>String(f.id)===String(photo.id)); if (old?.imagem) { photo.imagem=old.imagem; photo.tipo_imagem=old.tipo_imagem; } } if (!hasPermission(req.usuario,PERMISSIONS.REQUISICAO_VIEW)) basis.suprimentos=original.suprimentos ?? null; if(req.body?.atualizar_curva)basis.curva_s=await cutoffCurve(req,project.id,item.fim); const snapshot=mergeChoices(basis,req.body || {}); const error=validateChoices(snapshot); if(error) return res.status(400).json({erro:error}); await captureImages(req,snapshot); await runQuery('UPDATE relatorios_semanais SET conteudo=?, atualizado_em=NOW() WHERE id=? AND tenant_id=? AND projeto_id=?',[JSON.stringify(snapshot),item.id,req.tenantId,req.params.projetoId]); res.json({id:item.id,conteudo:withoutImages(snapshot)}); } catch(e){ fail(res,e); } });
-router.post('/projeto/:projetoId/:id/atualizar', async (req,res) => { try { const project=await projectAccess(req,res); if(!project) return; const item=await report(req); if(!item) return res.status(404).json({erro:'Relatório não encontrado.'}); const previous=typeof item.conteudo==='string'?JSON.parse(item.conteudo):item.conteudo; const fresh=await source(req,project,item.inicio,item.fim); res.json(visibleReport(mergeChoices(fresh,previous),req)); } catch(e){ fail(res,e); } });
+router.post('/projeto/:projetoId', async (req,res) => { try { const project=await projectAccess(req,res); if (!project) return; const data=req.body; const error=validateChoices({...data, clima:[], efetivo:[]}); if(error) return res.status(400).json({erro:error}); const fresh=await source(req,project,data.inicio,data.fim); if(sourcesChanged(data,fresh,res)) return; const snapshot=mergeChoices(fresh,data); const err=validateChoices(snapshot); if(err) return res.status(400).json({erro:err}); await captureImages(req,snapshot); const result=await runQuery('INSERT INTO relatorios_semanais (tenant_id,projeto_id,inicio,fim,conteudo,criado_por) VALUES (?,?,?,?,?,?)',[req.tenantId,project.id,data.inicio,data.fim,JSON.stringify(snapshot),req.usuario.id]); res.status(201).json({id:result.lastID,conteudo:visibleReport(snapshot,req)}); } catch(e){ fail(res,e); } });
+router.put('/projeto/:projetoId/:id', async (req,res) => { try { const project=await projectAccess(req,res); if (!project) return; const item=await report(req); if(!item) return res.status(404).json({erro:'Relatório não encontrado.'}); const original=typeof item.conteudo==='string'?JSON.parse(item.conteudo):item.conteudo; const basis=req.body?.atualizar_fontes ? await source(req,project,item.inicio,item.fim) : original; if(sourcesChanged(req.body,basis,res)) return; if(basis!==original) restoreSavedActivities(basis,original); for (const photo of basis.fotos) { const old=original.fotos.find(f=>String(f.id)===String(photo.id)); if (old?.imagem) { photo.imagem=old.imagem; photo.tipo_imagem=old.tipo_imagem; } } if (!hasPermission(req.usuario,PERMISSIONS.REQUISICAO_VIEW)) basis.suprimentos=original.suprimentos ?? null; if(req.body?.atualizar_curva)basis.curva_s=await cutoffCurve(req,project.id,item.fim); const snapshot=mergeChoices(basis,req.body || {}); const error=validateChoices(snapshot); if(error) return res.status(400).json({erro:error}); await captureImages(req,snapshot); await runQuery('UPDATE relatorios_semanais SET conteudo=?, atualizado_em=NOW() WHERE id=? AND tenant_id=? AND projeto_id=?',[JSON.stringify(snapshot),item.id,req.tenantId,req.params.projetoId]); res.json({id:item.id,conteudo:visibleReport(snapshot,req)}); } catch(e){ fail(res,e); } });
+router.post('/projeto/:projetoId/:id/atualizar', async (req,res) => { try { const project=await projectAccess(req,res); if(!project) return; const item=await report(req); if(!item) return res.status(404).json({erro:'Relatório não encontrado.'}); const previous=typeof item.conteudo==='string'?JSON.parse(item.conteudo):item.conteudo; const fresh=await source(req,project,item.inicio,item.fim); restoreSavedActivities(fresh,previous); res.json(visibleReport(mergeChoices(fresh,req.body?.atividades ? req.body : previous),req)); } catch(e){ fail(res,e); } });
 router.get('/projeto/:projetoId/:id/foto/:fotoId', async (req,res) => { try { if(!await projectAccess(req,res)) return; const item=await report(req); if(!item) return res.status(404).end(); const data=typeof item.conteudo==='string'?JSON.parse(item.conteudo):item.conteudo; const photo=data.fotos.find(f=>String(f.id)===String(req.params.fotoId) && f.selecionada && f.imagem); if(!photo) return res.status(404).end(); res.setHeader('Content-Type',photo.tipo_imagem || 'image/jpeg'); res.send(Buffer.from(photo.imagem,'base64')); } catch(e){ fail(res,e); } });
 router.get('/projeto/:projetoId/:id/pdf', async (req,res) => { try {
   if(!await projectAccess(req,res)) return;

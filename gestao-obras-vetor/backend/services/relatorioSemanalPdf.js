@@ -1,4 +1,8 @@
 ﻿const PDFDocument = require('pdfkit');
+const { selectedActivities } = require('./relatorioSemanalService');
+const number = value => value.toLocaleString('pt-BR', {maximumFractionDigits:2});
+const percentage = value => value == null ? 'Indisp.' : number(value) + '%';
+const change = value => value == null ? 'Indisp.' : (value > 0 ? '+' : '') + number(value) + ' p.p.';
 const path=require('path');
 const brandLogo=path.resolve(__dirname,'../assets/logo_vetor.png');
 const BR = value => value ? String(value).slice(0,10).split('-').reverse().join('/') : '—';
@@ -29,8 +33,8 @@ function createWeeklyReportPdf(report) {
   function ensure(height){if(cursor+height>bottom)newPage();}
   function section(title,subtitle='',reserve=35){const h=30+(subtitle?18:0);ensure(h+reserve);cursor+=10;text(title,left,cursor,width,13,true);cursor+=21;if(subtitle){text(subtitle,left,cursor,width,8,false,COLORS.muted);cursor+=18;}doc.moveTo(left,cursor).lineTo(left+width,cursor).lineWidth(.6).strokeColor(COLORS.border).stroke();cursor+=10;}
   function paragraph(value){const words=String(value||'—').split(/\s+/);let block='';for(const word of words){const next=block?`${block} ${word}`:word;if(measure(next,width)>180&&block){const h=measure(block,width);ensure(h+8);text(block,left,cursor,width);cursor+=h+8;block=word;}else block=next;}if(block){const h=measure(block,width);ensure(h+8);text(block,left,cursor,width);cursor+=h+8;}}
-  function table(headers,rows,fractions){const widths=fractions.map(n=>n*width);function heading(){doc.rect(left,cursor,width,23).fill(COLORS.soft);let x=left;headers.forEach((h,i)=>{text(h,x+7,cursor+7,widths[i]-14,7.5,true,COLORS.muted);x+=widths[i];});cursor+=23;}
-    ensure(55);heading();rows.forEach((row,index)=>{const height=Math.max(26,...row.map((s,i)=>measure(s,widths[i]-14,8.5)+14));if(height>bottom-85){paragraph(row.join('  |  '));return;}if(cursor+height>bottom){newPage();heading();}if(index%2===1)doc.rect(left,cursor,width,height).fill('#fafbfd');let x=left;row.forEach((s,i)=>{text(s,x+7,cursor+7,widths[i]-14,8.5,i===0);x+=widths[i];});cursor+=height;doc.moveTo(left,cursor).lineTo(left+width,cursor).lineWidth(.4).strokeColor(COLORS.border).stroke();});cursor+=8;}
+  function table(headers,rows,fractions,numeric=[]){const widths=fractions.map(n=>n*width);function heading(){doc.rect(left,cursor,width,23).fill(COLORS.soft);let x=left;headers.forEach((h,i)=>{text(h,x+7,cursor+7,widths[i]-14,7.5,true,COLORS.muted,{align:numeric.includes(i)?'right':'left'});x+=widths[i];});cursor+=23;}
+    ensure(55);heading();rows.forEach((row,index)=>{const height=Math.max(26,...row.map((s,i)=>measure(s,widths[i]-14,8.5,i===0)+14));if(height>bottom-85){paragraph(row.join('  |  '));return;}if(cursor+height>bottom){newPage();heading();}if(index%2===1)doc.rect(left,cursor,width,height).fill('#fafbfd');let x=left;row.forEach((s,i)=>{text(s,x+7,cursor+7,widths[i]-14,8.5,i===0,COLORS.text,{align:numeric.includes(i)?'right':'left'});x+=widths[i];});cursor+=height;doc.moveTo(left,cursor).lineTo(left+width,cursor).lineWidth(.4).strokeColor(COLORS.border).stroke();});cursor+=8;}
   drawLogos();
   const projectHeight=measure(report.projeto,width-30,12,true);
   const bandTop=94, bandHeight=83+projectHeight;
@@ -47,8 +51,9 @@ function createWeeklyReportPdf(report) {
     text(value,metaX+10,cursor+23,metaWidths[i]-24,10,true,COLORS.text);
     metaX+=metaWidths[i];
   });cursor+=57;
-  const activities=report.atividades||[], next=[...activities.filter(a=>a.incluir).map(a=>[a.nome,`Previsão: ${BR(a.previsao)}`]),...(report.proximas||[]).filter(a=>a.incluir).map(a=>[a.nome,`${BR(a.inicio)} a ${BR(a.fim)}`])], photos=(report.fotos||[]).filter(f=>f.selecionada);
-  const metrics=[[activities.filter(a=>a.status==='Concluída').length,'CONCLUÍDAS'],[activities.filter(a=>a.status!=='Concluída').length,'EM ANDAMENTO'],[next.length,'PROGRAMADAS'],[photos.length,'FOTOS']];
+  const {executed:activities, next, summary} = selectedActivities(report);
+  const photos = (report.fotos || []).filter(f => f.selecionada);
+  const metrics=[[activities.filter(a=>(a.status || a.situacao)==='Concluída').length,'CONCLUÍDAS'],[activities.filter(a=>(a.status || a.situacao)==='Em andamento').length,'EM ANDAMENTO'],[next.length,'PROGRAMADAS'],[photos.length,'FOTOS']];
   metrics.forEach(([n,label],i)=>{const x=left+i*width/4;doc.roundedRect(x,cursor,width/4-6,53,5).fill(COLORS.soft);text(n,x+11,cursor+8,width/4-20,18,true,COLORS.blue);text(label,x+11,cursor+34,width/4-20,7,true,COLORS.muted);});cursor+=64;
   section('Problemas e soluções');
   if(!(report.problemas||[]).length)paragraph('Nenhum apontamento registrado.');
@@ -63,9 +68,23 @@ function createWeeklyReportPdf(report) {
     const ticks=[...new Set([0,Math.floor((series.length-1)/3),Math.floor((series.length-1)*2/3),series.length-1])];ticks.forEach(i=>text(BR(series[i].data),Math.max(left,Math.min(left+width-68,px(series[i])-34)),y+h+8,68,7.5,false,COLORS.muted,{align:'center'}));
     const latest=series.at(-1);text(`Planejado: ${Number(latest.planejado).toFixed(2).replace('.',',')}%`,x,y+h+30,w/2,9,true,COLORS.blue);text(`Realizado: ${Number(latest.real).toFixed(2).replace('.',',')}%`,x+w/2,y+h+30,w/2,9,true,COLORS.green);cursor=y+h+55;
   }
-  section('Atividades da semana');if(activities.length)table(['Atividade','Status','Conclusão'],activities.map(a=>[a.nome,a.status,BR(a.data_conclusao)]),[.62,.23,.15]);else paragraph('Nenhuma atividade registrada no período.');
-  section('Programação seguinte');if(next.length)table(['Atividade','Prazo / previsão'],next,[.7,.3]);else paragraph('Nenhuma atividade selecionada.');
-  section('EAP e status das atividades','Situação registrada na preparação do relatório');if(report.eap?.length)table(['Código','Atividade','Status','Avanço'],report.eap.map(a=>[a.codigo||'—',a.nome,a.status,`${Number(a.percentual||0).toFixed(1).replace('.',',')}%`]),[.12,.53,.23,.12]);else paragraph('EAP não disponível neste relatório.');
+  section('Atividades executadas na semana', 'Avanço físico acumulado na abertura e no encerramento do período', 65);
+  if (activities.length) table(['Código','Atividade','Anterior','Atual','Evolução','Situação'], activities.map(a => [
+    a.codigo, a.descricao + (a.data_conclusao ? '\nConclusão em ' + BR(a.data_conclusao) : ''),
+    percentage(a.fisico.anterior), percentage(a.fisico.atual), change(a.fisico.evolucao), a.situacao === 'Indisponível' && !a.manual && a.status ? 'Indisp.\nRDO: '+a.status : a.situacao
+  ]), [.10,.32,.12,.12,.13,.21],[2,3,4]);
+  else paragraph('Nenhuma atividade selecionada no período.');
+  section('Atividades programadas para a próxima semana', '', 65);
+  if (next.length) table(['Código','Atividade','No corte','Situação','Prazo / previsão'],next.map(a => [
+    a.codigo,a.descricao,percentage(a.fisico.atual),a.situacao,
+    a.previsao ? 'Previsão: '+BR(a.previsao) : [a.inicio,a.fim].filter(Boolean).map(BR).join(' a ') || '—'
+  ]),[.10,.32,.13,.19,.26],[2]);
+  else paragraph('Nenhuma atividade selecionada.');
+  section('Resumo do avanço físico', 'Atividades selecionadas • Indisp. = histórico indisponível', 65);
+  if (summary.length) table(['Código','Atividade','Avanço no corte'],summary.map(a => [
+    a.codigo,a.descricao,percentage(a.fisico.atual)
+  ]),[.12,.65,.23],[2]);
+  else paragraph('Nenhuma atividade selecionada.');
   section('Acompanhamento de suprimentos');
   text('VERDE: recebido   •   AMARELO: pendente / conferir   •   VERMELHO: atraso',left,cursor,width,7.5,true,COLORS.muted);cursor+=22;
   if(!report.suprimentos?.length)paragraph('Nenhum suprimento disponível neste relatório.');
