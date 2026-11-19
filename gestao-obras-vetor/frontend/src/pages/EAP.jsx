@@ -17,6 +17,7 @@ import { useDialog } from '../context/DialogContext';
 import { useNotification } from '../context/NotificationContext';
 import { Activity, Plus, ArrowLeft, Download, Upload, X, AlertTriangle, CheckCircle2, MoreHorizontal, FileSpreadsheet, Layers } from 'lucide-react';
 import EapTable from '../components/eap/EapTable';
+import { formatCurrency } from '../components/eap/eapUtils';
 import useEapEditor from '../components/eap/useEapEditor';
 import './EAP.css';
 
@@ -258,7 +259,7 @@ function EAP({ hideNavbar = false }) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', borderBottom: '1px solid var(--gray-200)' }}>
             <div>
               <h2 style={{ margin: 0 }}>Importar EAP por Excel</h2>
-              <p style={{ margin: '4px 0 0', color: 'var(--gray-600)' }}>Valide a planilha antes de salvar a estrutura no projeto.</p>
+              <p style={{ margin: '4px 0 0', color: 'var(--gray-600)' }}>Informe o valor total de cada serviço em reais. Deixe a célula em branco para atividades sem preço e agrupadores.</p>
             </div>
             <IconButton variant="ghost" icon={X} label="Fechar importação" onClick={handleCloseImportModal} />
           </div>
@@ -347,7 +348,7 @@ function EAP({ hideNavbar = false }) {
                       <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '920px' }}>
                         <thead>
                           <tr style={{ background: 'var(--gray-50)' }}>
-                            {['Código', 'Nome', 'Pai', 'Nível', 'Qtd.', 'Un.', 'Início', 'Fim', 'Peso', 'Predecessora'].map((header) => (
+                            {['Código', 'Nome', 'Pai', 'Nível', 'Qtd.', 'Un.', 'Início', 'Fim', 'Peso', 'Predecessora', 'Valor total de medição (R$)'].map((header) => (
                               <th key={header} style={{ textAlign: 'left', padding: '10px', borderBottom: '1px solid var(--gray-200)' }}>{header}</th>
                             ))}
                           </tr>
@@ -365,6 +366,7 @@ function EAP({ hideNavbar = false }) {
                               <td style={{ padding: '9px', borderBottom: '1px solid var(--gray-100)' }}>{formatarDataBr(linha.data_fim_planejada)}</td>
                               <td style={{ padding: '9px', borderBottom: '1px solid var(--gray-100)' }}>{linha.peso_percentual_projeto}%</td>
                               <td style={{ padding: '9px', borderBottom: '1px solid var(--gray-100)' }}>{linha.predecessora_codigo || '-'}</td>
+                              <td style={{ padding: '9px', borderBottom: '1px solid var(--gray-100)', whiteSpace: 'nowrap' }}>{linha.valor_total_medicao == null ? '—' : formatCurrency(linha.valor_total_medicao)}</td>
                             </tr>
                           ))}
                         </tbody>

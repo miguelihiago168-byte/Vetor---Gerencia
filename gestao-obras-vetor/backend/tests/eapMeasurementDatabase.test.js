@@ -1,6 +1,8 @@
 // Integração com PostgreSQL local: todas as tabelas são TEMP, sombreiam as
 // tabelas reais apenas nesta conexão e são descartadas com ROLLBACK.
 const assert = require('node:assert/strict');
+const { PassThrough } = require('node:stream');
+const XLSX = require('xlsx');
 require('dotenv').config({ path: require('node:path').join(__dirname, '..', '.env') });
 if (process.env.DB_HOST && !['localhost', '127.0.0.1', '::1'].includes(process.env.DB_HOST)) throw new Error('Este teste requer PostgreSQL local.');
 const database = require('../config/database');
@@ -35,9 +37,9 @@ const migration = require('../scripts/migrations/000025_eap_valor_medicao');
       );
       CREATE TEMP TABLE rdos (id INTEGER PRIMARY KEY, tenant_id INTEGER, projeto_id INTEGER, status TEXT, data_relatorio DATE);
       CREATE TEMP TABLE rdo_atividades (id SERIAL PRIMARY KEY, rdo_id INTEGER, atividade_eap_id INTEGER, quantidade_executada REAL, percentual_executado REAL);
-      CREATE TEMP TABLE atividades_dependencias (projeto_id INTEGER, atividade_origem_id INTEGER, atividade_destino_id INTEGER, tipo_vinculo TEXT, confirmada_usuario INTEGER, sugerida_por_sistema INTEGER);
+      CREATE TEMP TABLE atividades_dependencias (id SERIAL PRIMARY KEY, projeto_id INTEGER, tenant_id INTEGER, atividade_origem_id INTEGER, atividade_destino_id INTEGER, tipo_vinculo TEXT, confirmada_usuario INTEGER, sugerida_por_sistema INTEGER, criada_em TIMESTAMP, atualizado_em TIMESTAMP, confirmada_em TIMESTAMP, confirmada_por INTEGER);
       CREATE TEMP TABLE historico_atividades (id SERIAL PRIMARY KEY, atividade_eap_id INTEGER, rdo_id INTEGER, percentual_anterior REAL, percentual_executado REAL, percentual_novo REAL, usuario_id INTEGER, data_execucao TIMESTAMP);
-      INSERT INTO projetos VALUES (10, 1), (20, 1), (30, 2);
+      INSERT INTO projetos VALUES (10, 1), (20, 1), (30, 2), (40, 1);
       INSERT INTO atividades_eap (id, tenant_id, projeto_id, codigo_eap, nome, descricao, quantidade_total, percentual_executado)
         VALUES (1, 1, 10, '1', 'Serviço', 'Serviço', 100, 95), (2, 1, 20, '1', 'Outro projeto', '', 100, 0), (3, 2, 30, '1', 'Outra empresa', '', 100, 0);
       SELECT setval(pg_get_serial_sequence('atividades_eap','id'), 3);
@@ -64,16 +66,16 @@ const migration = require('../scripts/migrations/000025_eap_valor_medicao');
     await client.query('DELETE FROM rdos WHERE id=2');
     assert.equal((await measure())[0].medicao.valor_medido, 1000, 'exclusão do RDO elimina sua contribuição');
 
-    mock('../config/database', { ...database, allQuery, getQuery, runQuery });
+    mock('../config/database', { ...database, allQuery, getQuery, runQuery, withClient: (fn) => fn(client) });
     mock('../utils/schemaGuard', { ensureSchemaReady: async () => {} });
     mock('../middleware/auditoria', { registrarAuditoria: async (...event) => audit.push(event) });
     mock('../middleware/auth', { auth: (_req, _res, next) => next(), isGestor: (_req, _res, next) => next() });
     mock('../services/eapActivityEventService', { ORIGINS: {}, markRdosAffectedByEapEdit: async () => { physicalReviews++; return { affectedRDOs: 0, rdos: [] }; } });
     const router = require('../routes/eap');
-    const invoke = async (method, path, { body = {}, params = {}, tenantId = 1 } = {}) => {
+    const invoke = async (method, path, { body = {}, params = {}, tenantId = 1, file } = {}) => {
       const route = router.stack.find((layer) => layer.route?.path === path && layer.route.methods[method]).route;
       const res = { code: 200, status(code) { this.code = code; return this; }, json(data) { this.data = data; return this; } };
-      await route.stack.at(-1).handle({ body, params, tenantId, usuario: { id: 1 } }, res);
+      await route.stack.at(-1).handle({ body, params, file, tenantId, usuario: { id: 1 } }, res);
       return res;
     };
     const rdoBefore = await allQuery('SELECT * FROM rdo_atividades ORDER BY id');
@@ -116,6 +118,7 @@ const migration = require('../scripts/migrations/000025_eap_valor_medicao');
     assert.equal(response.code, 200);
     assert.equal((await getQuery("SELECT valor_total_medicao FROM atividades_eap WHERE projeto_id=20 AND codigo_eap='1' AND id<>2")).valor_total_medicao, '123.45');
     assert.equal((await invoke('post', '/copiar', { body: { sourceProjetoId: 10, targetProjetoId: 30 } })).code, 404);
+    await verificarImportacaoExcel(router, invoke, allQuery);
     console.log('EAP medição PostgreSQL: migration, cálculo por RDO, isolamento, CRUD, auditoria e cópia validados em tabelas temporárias.');
   } finally {
     await client.query('ROLLBACK');
@@ -123,3 +126,46 @@ const migration = require('../scripts/migrations/000025_eap_valor_medicao');
     await database.pool.end();
   }
 })().catch((error) => { console.error(error); process.exitCode = 1; });
+
+async function verificarImportacaoExcel(router, invoke, allQuery) {
+  const download = router.stack.find((layer) => layer.route?.path === '/modelo-excel').route;
+  const stream = new PassThrough();
+  const chunks = [];
+  stream.setHeader = () => {};
+  stream.on('data', (chunk) => chunks.push(chunk));
+  await download.stack.at(-1).handle({}, stream);
+  const modelo = Buffer.concat(chunks);
+  const params = { projetoId: 40 };
+  const preview = async (buffer) => (await invoke('post', '/projeto/:projetoId/importar/preview', { params, file: { buffer } })).data;
+  const confirmar = (linhas) => invoke('post', '/projeto/:projetoId/importar/confirmar', { params, body: { linhas } });
+  const original = await preview(modelo);
+  assert.deepEqual(original.erros, []);
+  assert.equal(original.linhas[1].valor_total_medicao, '10000.50');
+
+  const workbook = XLSX.read(modelo);
+  const sheet = workbook.Sheets.EAP;
+  const arquivo = (bookType = 'xlsx') => XLSX.write(workbook, { type: 'buffer', bookType });
+  sheet.K3 = { t: 's', v: '10.000,55' };
+  sheet.K4 = { t: 'n', v: 0 };
+  const validas = (await preview(arquivo())).linhas;
+  assert.equal((await confirmar(validas)).code, 200);
+  const valores = await allQuery('SELECT valor_total_medicao FROM atividades_eap WHERE projeto_id=? ORDER BY codigo_eap', [params.projetoId]);
+  assert.deepEqual(valores.map((row) => row.valor_total_medicao), [null, '10000.55', '0.00', null, null]);
+
+  sheet.K2 = { t: 'n', v: 0 };
+  sheet.K3 = { t: 'n', v: -1 };
+  sheet.K4 = { t: 's', v: '1,234' };
+  sheet.K6 = { t: 's', v: '10000000000000' };
+  const invalida = await preview(arquivo());
+  assert.equal(invalida.valido, false);
+  assert.deepEqual(invalida.erros.map(({ linha, campo }) => [linha, campo]),
+    [2, 3, 4, 6].map((linha) => [linha, 'Valor total de medição (R$)']));
+  const adulteradas = validas.map((linha, i) => i === 0 ? { ...linha, valor_total_medicao: '0.00' } : linha);
+  assert.equal((await confirmar(adulteradas)).code, 400);
+
+  sheet['!ref'] = 'A1:J6';
+  const antigo = await preview(arquivo('xls'));
+  assert.deepEqual(antigo.erros, []);
+  assert.ok(antigo.linhas.every((linha) => linha.valor_total_medicao === null));
+  console.log('Excel EAP: modelo, prévia, gravação em PostgreSQL e compatibilidade com a planilha antiga validados.');
+}

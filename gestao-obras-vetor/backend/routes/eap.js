@@ -3,7 +3,7 @@ const { body, validationResult } = require('express-validator');
 const multer = require('multer');
 const ExcelJS = require('exceljs');
 const XLSX = require('xlsx');
-const { allQuery, runQuery, getQuery } = require('../config/database');
+const { allQuery, runQuery, getQuery, withClient, getWithClient, execWithClient } = require('../config/database');
 const { auth, isGestor } = require('../middleware/auth');
 const { registrarAuditoria } = require('../middleware/auditoria');
 const ganttService = require('../services/ganttService');
@@ -130,20 +130,8 @@ const uploadExcelEap = multer({
   }
 });
 
+const VALOR_MEDICAO_HEADER = 'Valor total de medição (R$)';
 const EAP_EXCEL_HEADERS = [
-  'Codigo EAP',
-  'Nome da Atividade',
-  'Atividade Pai',
-  'Nivel',
-  'Quantidade',
-  'Unidade',
-  'Data Inicio',
-  'Data Fim',
-  'Peso (%)',
-  'Predecessora'
-];
-
-const EAP_EXCEL_HEADERS_DISPLAY = [
   'Código EAP',
   'Nome da Atividade',
   'Atividade Pai',
@@ -153,7 +141,8 @@ const EAP_EXCEL_HEADERS_DISPLAY = [
   'Data Início',
   'Data Fim',
   'Peso (%)',
-  'Predecessora'
+  'Predecessora',
+  VALOR_MEDICAO_HEADER
 ];
 
 const EAP_UNIDADES_PADRAO = ['un', 'm', 'm²', 'm³', 'kg', 't', 'km', 'ha', 'h', 'dia', 'mês', 'vb'];
@@ -291,10 +280,8 @@ const syncPredecessoraAtividade = async ({
   predecessoraId,
   tipoVinculo = 'FS',
   usuarioId
-}) => {
-  await ensureDependenciasSchema();
-
-  await runQuery(
+}, execute = runQuery) => {
+  await execute(
     'DELETE FROM atividades_dependencias WHERE projeto_id = ? AND atividade_destino_id = ? AND sugerida_por_sistema = 0',
     [projetoId, atividadeId]
   );
@@ -307,7 +294,7 @@ const syncPredecessoraAtividade = async ({
     throw new Error('Uma atividade não pode depender dela mesma.');
   }
 
-  await runQuery(
+  await execute(
     `INSERT INTO atividades_dependencias (
       projeto_id, tenant_id, atividade_origem_id, atividade_destino_id,
       tipo_vinculo, sugerida_por_sistema, confirmada_usuario,
@@ -398,14 +385,31 @@ const getSomaPesosIrmaos = async (projetoId, paiId, excluirId = null) => {
   return Number(row?.total || 0);
 };
 
-const assertProjetoTenant = async (projetoId, tenantId) => {
-  const projeto = await getQuery('SELECT id FROM projetos WHERE id = ? AND tenant_id = ?', [projetoId, tenantId]);
+const assertProjetoTenant = async (projetoId, tenantId, client) => {
+  const sql = 'SELECT id FROM projetos WHERE id = ? AND tenant_id = ?';
+  const params = [projetoId, tenantId];
+  const projeto = client ? await getWithClient(client, sql + ' FOR UPDATE', params) : await getQuery(sql, params);
   if (!projeto) {
     const err = new Error('Projeto nao encontrado ou nao pertence ao seu tenant.');
     err.status = 404;
     throw err;
   }
   return projeto;
+};
+
+const parseValorMedicaoImport = (value) => {
+  if (typeof value === 'string') {
+    let texto = value.trim();
+    if (!texto) return null;
+    if (/^\d{1,3}(\.\d{3})+(,\d{1,2})?$/.test(texto)) texto = texto.replace(/\./g, '');
+    value = texto.replace(',', '.');
+  }
+  try {
+    return normalizeMeasurementValue(value);
+  } catch (error) {
+    if (error.status === 400) return undefined;
+    throw error;
+  }
 };
 
 const normalizarLinhaEapImport = (raw, linha) => {
@@ -423,15 +427,22 @@ const normalizarLinhaEapImport = (raw, linha) => {
     data_inicio_planejada: parseExcelDateOnly(raw.data_inicio_planejada),
     data_fim_planejada: parseExcelDateOnly(raw.data_fim_planejada),
     peso_percentual_projeto: peso,
-    predecessora_codigo: normalizeText(raw.predecessora_codigo)
+    predecessora_codigo: normalizeText(raw.predecessora_codigo),
+    valor_total_medicao: parseValorMedicaoImport(raw.valor_total_medicao)
   };
 };
 
 const validarLinhasEapImport = (linhas) => {
   const erros = [];
   const codigos = new Map();
+  const agrupadores = new Set(linhas.map((linha) => linha.pai_codigo).filter(Boolean));
 
   linhas.forEach((linha) => {
+    if (linha.valor_total_medicao === undefined) {
+      erros.push({ linha: linha.linha, campo: VALOR_MEDICAO_HEADER, mensagem: 'Informe um valor entre zero e R$ 9.999.999.999.999,99, com até duas casas decimais.' });
+    } else if (linha.valor_total_medicao !== null && agrupadores.has(linha.codigo_eap)) {
+      erros.push({ linha: linha.linha, campo: VALOR_MEDICAO_HEADER, mensagem: 'Deixe o valor do agrupador em branco. Ele é calculado pela soma das atividades filhas.' });
+    }
     if (!linha.codigo_eap) erros.push({ linha: linha.linha, campo: 'Codigo EAP', mensagem: 'Codigo EAP e obrigatorio.' });
     if (!linha.nome) erros.push({ linha: linha.linha, campo: 'Nome da Atividade', mensagem: 'Nome da atividade e obrigatorio.' });
     if (!Number.isInteger(linha.nivel) || linha.nivel <= 0) erros.push({ linha: linha.linha, campo: 'Nivel', mensagem: 'Nivel deve ser um inteiro positivo.' });
@@ -496,15 +507,16 @@ const lerPlanilhaEap = async (buffer) => {
 
   const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', raw: true });
   const headerRow = rows[0] || [];
-  const headers = EAP_EXCEL_HEADERS.map((_, index) => normalizeHeader(headerRow[index]));
-  const expected = EAP_EXCEL_HEADERS.map(normalizeHeader);
+  const valorIndex = EAP_EXCEL_HEADERS.indexOf(VALOR_MEDICAO_HEADER);
+  const temColunaValor = rows.some((row) => normalizeText(row[valorIndex]) !== '');
   const erros = [];
-  expected.forEach((header, index) => {
-    if (headers[index] !== header) {
+  EAP_EXCEL_HEADERS.forEach((header, index) => {
+    if (index === valorIndex && !temColunaValor) return;
+    if (normalizeHeader(headerRow[index]) !== normalizeHeader(header)) {
       erros.push({
         linha: 1,
-        campo: EAP_EXCEL_HEADERS_DISPLAY[index],
-        mensagem: `Cabecalho esperado: ${EAP_EXCEL_HEADERS_DISPLAY[index]}.`
+        campo: header,
+        mensagem: `Cabeçalho esperado: ${header}.`
       });
     }
   });
@@ -526,7 +538,9 @@ const lerPlanilhaEap = async (buffer) => {
       data_inicio_planejada: valores[6],
       data_fim_planejada: valores[7],
       peso: valores[8],
-      predecessora_codigo: valores[9]
+      predecessora_codigo: valores[9],
+      valor_total_medicao: worksheet[XLSX.utils.encode_cell({ r: rowNumber - 1, c: valorIndex })]?.t === 'e'
+        ? NaN : valores[valorIndex]
     }, rowNumber));
   });
 
@@ -545,8 +559,8 @@ const getImportResumo = (linhas, erros = []) => ({
   erros: erros.length
 });
 
-const hasEapComRdo = async (projetoId) => {
-  const row = await getQuery(`
+const hasEapComRdo = async (client, projetoId) => {
+  const row = await getWithClient(client, `
     SELECT COUNT(*) AS total
     FROM rdo_atividades ra
     INNER JOIN atividades_eap ae ON ae.id = ra.atividade_eap_id
@@ -577,13 +591,20 @@ router.get('/modelo-excel', auth, async (_req, res) => {
   try {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('EAP');
-    worksheet.addRow(EAP_EXCEL_HEADERS_DISPLAY);
-    worksheet.addRow(['1.0', 'Mobilizacao', '', 1, 1, 'vb', '15/06/2026', '26/06/2026', 100, '']);
-    worksheet.addRow(['1.1', 'Mobilizacao da equipe', '1.0', 2, 1, 'un', '15/06/2026', '16/06/2026', 20, '']);
-    worksheet.addRow(['1.2', 'Instalacao do canteiro', '1.0', 2, 250, 'm²', '17/06/2026', '19/06/2026', 25, '1.1']);
-    worksheet.addRow(['2.0', 'Fundacoes', '', 1, 1, 'vb', '20/06/2026', '25/06/2026', 100, '1.2']);
+    worksheet.addRow(EAP_EXCEL_HEADERS);
+    worksheet.addRow(['1.0', 'Mobilizacao', null, 1, 1, 'vb', '15/06/2026', '26/06/2026', 100]);
+    worksheet.addRow(['1.1', 'Mobilizacao da equipe', '1.0', 2, 1, 'un', '15/06/2026', '16/06/2026', 20, null, 10000.50]);
+    worksheet.addRow(['1.2', 'Instalacao do canteiro', '1.0', 2, 250, 'm²', '17/06/2026', '19/06/2026', 25, '1.1', 25000]);
+    worksheet.addRow(['2.0', 'Fundacoes', null, 1, 1, 'vb', '20/06/2026', '25/06/2026', 100, '1.2']);
     worksheet.addRow(['2.1', 'Escavacao', '2.0', 2, 180, 'm³', '20/06/2026', '25/06/2026', 15, '1.2']);
     worksheet.columns.forEach((column) => { column.width = 22; });
+    worksheet.getColumn('K').width = 32;
+    worksheet.getColumn('K').numFmt = '"R$" #,##0.00';
+    worksheet.dataValidations.add('K2:K1000', {
+      type: 'any', allowBlank: true, showInputMessage: true,
+      promptTitle: 'Valor total do serviço',
+      prompt: 'Informe o total em reais, com até duas casas decimais. Deixe em branco para atividades sem preço e agrupadores.'
+    });
     worksheet.getRow(1).font = { bold: true };
     worksheet.dataValidations.add('F2:F1000', {
       type: 'list',
@@ -630,8 +651,6 @@ router.post('/projeto/:projetoId/importar/confirmar', [auth, isGestor], async (r
     const projetoId = Number(req.params.projetoId);
     const tenantId = req.tenantId;
     if (!tenantId) return res.status(400).json({ erro: 'Tenant nao definido.' });
-    await assertProjetoTenant(projetoId, tenantId);
-
     const linhas = Array.isArray(req.body?.linhas)
       ? req.body.linhas.map((linha, index) => normalizarLinhaEapImport({
         codigo_eap: linha.codigo_eap,
@@ -643,7 +662,8 @@ router.post('/projeto/:projetoId/importar/confirmar', [auth, isGestor], async (r
         data_inicio_planejada: linha.data_inicio_planejada,
         data_fim_planejada: linha.data_fim_planejada,
         peso: linha.peso_percentual_projeto,
-        predecessora_codigo: linha.predecessora_codigo
+        predecessora_codigo: linha.predecessora_codigo,
+        valor_total_medicao: linha.valor_total_medicao
       }, linha.linha || index + 2))
       : [];
     const erros = validarLinhasEapImport(linhas);
@@ -652,36 +672,32 @@ router.post('/projeto/:projetoId/importar/confirmar', [auth, isGestor], async (r
       return res.status(400).json({ erro: 'A importacao possui erros de validacao.', erros, resumo: getImportResumo(linhas, erros) });
     }
 
-    if (await hasEapComRdo(projetoId)) {
-      return res.status(409).json({ erro: 'Este projeto ja possui RDO vinculado a EAP atual. A importacao foi bloqueada para preservar o historico.' });
-    }
-
-    const atividadesAtuais = await allQuery('SELECT id FROM atividades_eap WHERE projeto_id = ?', [projetoId]);
-    const idsAtuais = atividadesAtuais.map((row) => row.id);
-    const codigoParaId = new Map();
-
-    await runQuery('BEGIN TRANSACTION');
-    try {
-      await runQuery('DELETE FROM atividades_dependencias WHERE projeto_id = ?', [projetoId]);
-      if (idsAtuais.length > 0) {
-        const placeholders = idsAtuais.map(() => '?').join(',');
-        await runQuery(`DELETE FROM historico_atividades WHERE atividade_eap_id IN (${placeholders})`, idsAtuais).catch(() => {});
+    await withClient(async (client) => {
+      const execute = (sql, params) => execWithClient(client, sql, params);
+      await assertProjetoTenant(projetoId, tenantId, client);
+      if (await hasEapComRdo(client, projetoId)) {
+        const erro = new Error('Este projeto ja possui RDO vinculado a EAP atual. A importacao foi bloqueada para preservar o historico.');
+        erro.status = 409;
+        throw erro;
       }
-      await runQuery('DELETE FROM atividades_eap WHERE projeto_id = ?', [projetoId]);
+      await execute('DELETE FROM atividades_dependencias WHERE projeto_id = ?', [projetoId]);
+      await execute('DELETE FROM historico_atividades WHERE atividade_eap_id IN (SELECT id FROM atividades_eap WHERE projeto_id = ?)', [projetoId]);
+      await execute('DELETE FROM atividades_eap WHERE projeto_id = ?', [projetoId]);
 
+      const codigoParaId = new Map();
       const ordenadas = [...linhas].sort((a, b) => a.nivel - b.nivel || String(a.codigo_eap).localeCompare(String(b.codigo_eap), 'pt-BR', { numeric: true }));
       for (const linha of ordenadas) {
         const paiId = linha.pai_codigo ? codigoParaId.get(linha.pai_codigo) : null;
         if (linha.pai_codigo && !paiId) {
           throw new Error(`Atividade pai ${linha.pai_codigo} precisa aparecer antes da filha ${linha.codigo_eap}.`);
         }
-        const result = await runQuery(`
+        const result = await execute(`
           INSERT INTO atividades_eap (
             tenant_id, projeto_id, codigo_eap, descricao, percentual_previsto,
             pai_id, ordem, unidade_medida, quantidade_total, criado_por,
             id_atividade, nome, data_inicio_planejada, data_fim_planejada,
-            peso_percentual_projeto, nivel, status
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            peso_percentual_projeto, nivel, status, valor_total_medicao
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           tenantId,
           projetoId,
@@ -699,7 +715,8 @@ router.post('/projeto/:projetoId/importar/confirmar', [auth, isGestor], async (r
           linha.data_fim_planejada,
           linha.peso_percentual_projeto,
           linha.nivel,
-          'Nao iniciada'
+          'Nao iniciada',
+          linha.valor_total_medicao
         ]);
         codigoParaId.set(linha.codigo_eap, result.lastID);
       }
@@ -713,15 +730,10 @@ router.post('/projeto/:projetoId/importar/confirmar', [auth, isGestor], async (r
           predecessoraId: codigoParaId.get(linha.predecessora_codigo),
           tipoVinculo: 'FS',
           usuarioId: req.usuario.id
-        });
+        }, execute);
       }
-
-      await registrarAuditoria('atividades_eap', null, 'IMPORT_EXCEL', null, { projeto_id: projetoId, total: linhas.length }, req.usuario.id);
-      await runQuery('COMMIT');
-    } catch (error) {
-      await runQuery('ROLLBACK');
-      throw error;
-    }
+    });
+    await registrarAuditoria('atividades_eap', null, 'IMPORT_EXCEL', null, { projeto_id: projetoId, total: linhas.length }, req.usuario.id);
 
     res.json({
       mensagem: 'EAP importada com sucesso.',
