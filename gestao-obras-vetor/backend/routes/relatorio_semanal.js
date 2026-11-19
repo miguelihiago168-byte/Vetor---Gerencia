@@ -3,8 +3,7 @@ const { createWeeklyReportPdf } = require('../services/relatorioSemanalPdf');
 const { buildCutoffCurve } = require('../services/relatorioSemanalCurve');
 const {resolveReportUpload,companyLogos}=require('../services/relatorioSemanalAssets');
 const {createHash} = require('node:crypto');
-const fs = require('fs');
-const path = require('path');
+const { photoFields, restorePhotos, compactPhoto, captureImages, validatePhotoLimits, PhotoChoiceError } = require('../services/relatorioSemanalFotos');
 const { auth } = require('../middleware/auth');
 const { PERMISSIONS, requirePermission, assertProjectAccess, hasPermission } = require('../middleware/rbac');
 const { allQuery, getQuery, runQuery } = require('../config/database');
@@ -52,10 +51,10 @@ async function source(req, project, inicio, fim) {
   return snapshot;
 }
 async function photoMetadata(req,projectId,inicio,fim){return allQuery(`SELECT f.id,f.rdo_id,f.descricao,f.atividade_avulsa_descricao,r.data_relatorio,
-  ae.codigo_eap AS atividade_codigo,COALESCE(NULLIF(ae.nome,''),ae.descricao,f.atividade_avulsa_descricao) AS atividade_nome
-  FROM rdo_fotos f JOIN rdos r ON r.id=f.rdo_id
-  LEFT JOIN rdo_atividades ra ON ra.id=f.rdo_atividade_id AND ra.rdo_id=r.id
-  LEFT JOIN atividades_eap ae ON ae.id=ra.atividade_eap_id AND ae.projeto_id=r.projeto_id AND ae.tenant_id=r.tenant_id
+  ae.id AS atividade_eap_id, ae.codigo_eap AS atividade_codigo,COALESCE(NULLIF(ae.nome,''),ae.descricao,f.atividade_avulsa_descricao) AS atividade_nome
+  FROM rdo_fotos f JOIN rdos r ON r.id=f.rdo_id AND (f.tenant_id IS NULL OR f.tenant_id=r.tenant_id)
+  LEFT JOIN rdo_atividades ra ON ra.id=f.rdo_atividade_id AND ra.rdo_id=r.id AND (ra.tenant_id IS NULL OR ra.tenant_id=r.tenant_id)
+  LEFT JOIN atividades_eap ae ON ae.id=COALESCE(ra.atividade_eap_id,(to_jsonb(f)->>'atividade_eap_id')::bigint) AND ae.projeto_id=r.projeto_id AND ae.tenant_id=r.tenant_id
   WHERE r.tenant_id=? AND r.projeto_id=? AND r.status='Aprovado' AND r.data_relatorio>=? AND r.data_relatorio<=? ORDER BY r.data_relatorio,f.ordem,f.id`,[req.tenantId,projectId,inicio,fim]);}
 async function cutoffCurve(req,projectId,cutoff,activities,entries){
   activities=activities || await allQuery('SELECT id,pai_id,quantidade_total,peso_percentual_projeto,percentual_previsto,data_inicio_planejada,data_fim_planejada FROM atividades_eap WHERE tenant_id=? AND projeto_id=?',[req.tenantId,projectId]);
@@ -63,23 +62,52 @@ async function cutoffCurve(req,projectId,cutoff,activities,entries){
   const dependencies=await allQuery('SELECT * FROM atividades_dependencias WHERE projeto_id=? AND confirmada_usuario=1',[projectId]);
   return buildCutoffCurve(activities,entries,cutoff,dependencies);
 }
-async function correctCurve(req,item){if(!item)return item;const content=typeof item.conteudo==='string'?JSON.parse(item.conteudo):item.conteudo;if(content.curva_s?.versao_corte!==1 || content.curva_s.corte!==item.fim)content.curva_s=await cutoffCurve(req,item.projeto_id||req.params.projetoId,item.fim);if(!content.logos_empresas)content.logos_empresas=companyLogos(req.weeklyProject,req.tenantId);if(content.fotos.some(f=>!f.atividade)){const metadata=await photoMetadata(req,item.projeto_id||req.params.projetoId,item.inicio,item.fim);for(const f of content.fotos){const m=metadata.find(p=>String(p.id)===String(f.id));if(m)f.atividade=photoActivity(m);}}item.conteudo=content;return item;}
-const photoActivity=photo=>[photo.atividade_codigo,photo.atividade_nome||photo.atividade_avulsa_descricao].filter(Boolean).join(' — ')||'Atividade não informada';
-async function report(req) { return correctCurve(req,await getQuery('SELECT * FROM relatorios_semanais WHERE id=? AND tenant_id=? AND projeto_id=?', [req.params.id, req.tenantId, req.params.projetoId])); }
-const withoutImages = data => ({ ...data, logos_empresas:(data.logos_empresas||[]).map(({imagem,...logo})=>logo), fotos: data.fotos.map(({ imagem, ...photo }) => photo) });
-const visibleReport = (data,req) => ({ ...withoutImages(data), suprimentos:hasPermission(req.usuario,PERMISSIONS.REQUISICAO_VIEW) ? (data.suprimentos ?? null) : null });
-async function captureImages(req, snapshot) {
-  for (const photo of snapshot.fotos) {
-    if (!photo.selecionada) { delete photo.imagem; continue; }
-    if (photo.imagem) continue;
-    const file = await getQuery('SELECT f.caminho_arquivo, f.tipo FROM rdo_fotos f JOIN rdos r ON r.id=f.rdo_id WHERE f.id=? AND r.id=? AND r.tenant_id=? AND r.projeto_id=?', [photo.id,photo.rdo_id,req.tenantId,req.params.projetoId]);
-    if (!file) throw new Error('Foto selecionada indisponível.');
-    const full=resolveReportUpload(file.caminho_arquivo,req.tenantId);
-    if (!full) throw new Error('Arquivo da foto não encontrado nas pastas de uploads configuradas.');
-    photo.imagem=(await fs.promises.readFile(full)).toString('base64'); photo.tipo_imagem=file.tipo || 'image/jpeg';
+async function readSnapshot(req,item) {
+  if (!item) return item;
+  const content = typeof item.conteudo === 'string' ? JSON.parse(item.conteudo) : item.conteudo;
+  const project = item.projeto_id || req.params.projetoId;
+  if (content.curva_s?.versao_corte !== 1 || content.curva_s.corte !== item.fim) {
+    content.curva_s = await cutoffCurve(req,project,item.fim);
   }
+  if (!content.logos_empresas) content.logos_empresas = companyLogos(req.weeklyProject,req.tenantId);
+  if (content.fotos.some(photo => photo.atividade_eap_id === undefined)) {
+    const rows = await photoMetadata(req,project,item.inicio,item.fim);
+    const metadata = new Map(rows.map(row => [String(row.id),row]));
+    for (const [index,photo] of content.fotos.entries()) {
+      if (photo.atividade_eap_id !== undefined) continue;
+      const row = metadata.get(String(photo.id));
+      const label = photo.atividade;
+      Object.assign(photo, photoFields(row || {}));
+      if (label) photo.atividade = label;
+      if (photo.selecionada) photo.ordem_selecao ??= index + 1;
+    }
+  }
+  item.conteudo=content;
+  return item;
 }
-const fail = (res, e) => { console.error('[relatório semanal]', e); if (!res.headersSent) res.status(500).json({ erro: 'Não foi possível processar o relatório semanal.' }); };
+async function report(req) { return readSnapshot(req,await getQuery('SELECT * FROM relatorios_semanais WHERE id=? AND tenant_id=? AND projeto_id=?', [req.params.id, req.tenantId, req.params.projetoId])); }
+const withoutImages = data => ({ ...data, logos_empresas:(data.logos_empresas||[]).map(({imagem,...logo})=>logo), fotos: data.fotos.map(({ imagem, ...photo }) => ({...photo, tem_imagem: !!imagem})) });
+const visibleReport = (data,req) => ({ ...withoutImages(data), suprimentos:hasPermission(req.usuario,PERMISSIONS.REQUISICAO_VIEW) ? (data.suprimentos ?? null) : null });
+function restoreSavedSources(fresh, saved) {
+  restoreSavedActivities(fresh, saved);
+  restorePhotos(fresh, saved);
+}
+const prepareImages = (req, data) => captureImages(data, req.tenantId, req.params.projetoId, allQuery);
+function sendPdf(res, report, disposition) {
+  const doc = createWeeklyReportPdf(report);
+  const warnings = report.fotos.filter(photo => photo.selecionada && photo.aviso).length;
+  res.setHeader('X-Fotos-Indisponiveis', String(warnings));
+  res.setHeader('Content-Disposition', disposition);
+  res.type('application/pdf');
+  doc.pipe(res);
+  doc.end();
+}
+const fail = (res, error) => {
+  if (res.headersSent) return;
+  if (error instanceof PhotoChoiceError) return res.status(error.status).json({erro:error.message});
+  console.error('[relatório semanal]', error);
+  res.status(500).json({ erro: 'Não foi possível processar o relatório semanal.' });
+};
 function sourcesChanged(draft, basis, res) {
   if (!draft.revisao_atividades || draft.revisao_atividades === basis.revisao_atividades) return false;
   res.status(409).json({erro:'As fontes das atividades mudaram. Prepare o relatório ou atualize as fontes novamente para revisar os valores.'});
@@ -90,10 +118,14 @@ router.get('/projeto/:projetoId/fontes', async (req,res) => { try { const projec
 router.get('/projeto/:projetoId/curva-s', async(req,res)=>{try{const project=await projectAccess(req,res);if(!project)return;const {corte}=req.query;if(!validPeriod(corte,corte))return res.status(400).json({erro:'Informe uma data de corte válida.'});res.json(await cutoffCurve(req,project.id,corte));}catch(e){fail(res,e);}});
 router.get('/projeto/:projetoId/fotos/:fotoId', async (req,res) => { try {
   if (!await projectAccess(req,res)) return;
-  const photo = await getQuery("SELECT f.caminho_arquivo, f.tipo FROM rdo_fotos f JOIN rdos r ON r.id=f.rdo_id WHERE f.id=? AND r.tenant_id=? AND r.projeto_id=? AND r.status='Aprovado'", [req.params.fotoId,req.tenantId,req.params.projetoId]);
+  const photo = await getQuery("SELECT f.caminho_arquivo, f.tipo FROM rdo_fotos f JOIN rdos r ON r.id=f.rdo_id AND (f.tenant_id IS NULL OR f.tenant_id=r.tenant_id) WHERE f.id=? AND r.tenant_id=? AND r.projeto_id=? AND r.status='Aprovado'", [req.params.fotoId,req.tenantId,req.params.projetoId]);
   if (!photo) return res.status(404).json({erro:'Foto não encontrada.'});
   const file=resolveReportUpload(photo.caminho_arquivo,req.tenantId);
   if (!file) return res.status(404).json({erro:'Arquivo da foto não encontrado.'});
+  if (req.query.miniatura === '1') {
+    const bytes = await compactPhoto(file, 400);
+    return res.type('image/jpeg').send(bytes);
+  }
   res.type(photo.tipo || 'application/octet-stream').sendFile(file);
 } catch(e){ fail(res,e); } });
 router.post('/projeto/:projetoId/preview', async (req,res) => { try {
@@ -102,32 +134,89 @@ router.post('/projeto/:projetoId/preview', async (req,res) => { try {
   if(draft.relatorio_id) {
     saved=await getQuery('SELECT * FROM relatorios_semanais WHERE id=? AND tenant_id=? AND projeto_id=?',[draft.relatorio_id,req.tenantId,project.id]);
     if(!saved) return res.status(404).json({erro:'Relatório não encontrado.'});
-    saved=await correctCurve(req,saved);
+    saved=await readSnapshot(req,saved);
   }
   if(!saved && !validPeriod(draft.inicio,draft.fim)) return res.status(400).json({erro:'Período inválido.'});
   const previous=saved ? (typeof saved.conteudo==='string'?JSON.parse(saved.conteudo):saved.conteudo) : null;
   const basis=saved && !draft.atualizar_fontes ? previous : await source(req,project,saved?.inicio || draft.inicio,saved?.fim || draft.fim);
   if (sourcesChanged(draft,basis,res)) return;
-  if (previous && basis !== previous) restoreSavedActivities(basis, previous);
-  if(previous && basis!==previous) for(const photo of basis.fotos) {const old=previous.fotos.find(f=>String(f.id)===String(photo.id));if(old?.imagem){photo.imagem=old.imagem;photo.tipo_imagem=old.tipo_imagem;}}
+  if (previous && basis !== previous) restoreSavedSources(basis, previous);
   if(draft.atualizar_curva)basis.curva_s=await cutoffCurve(req,project.id,basis.fim); const snapshot=mergeChoices(basis,draft);
   const check={...snapshot, atividades:snapshot.atividades.map(a=>a.status==='Concluída'?a:{...a,incluir:a.incluir===true,previsao:a.incluir===true && !a.previsao?'9999-12-31':a.previsao}),problemas:(snapshot.problemas||[]).map(p=>({...p,problema:p.problema||'-',solucao:p.solucao||'-',data:p.data||'2000-01-01'}))};
   const error=validateChoices(check); if(error) return res.status(400).json({erro:error});
-  await captureImages(req,snapshot);
+  await prepareImages(req,snapshot);
   if(!hasPermission(req.usuario,PERMISSIONS.REQUISICAO_VIEW)) snapshot.suprimentos=null;
-  const doc=createWeeklyReportPdf(snapshot);res.setHeader('Content-Type','application/pdf');res.setHeader('Content-Disposition','inline; filename="previa-relatorio-semanal.pdf"');doc.pipe(res);doc.end();
+  sendPdf(res, snapshot, 'inline; filename="previa-relatorio-semanal.pdf"');
 } catch(e){ fail(res,e); } });
 router.get('/projeto/:projetoId/:id', async (req,res) => { try { if (!await projectAccess(req,res)) return; const item=await report(req); if (!item) return res.status(404).json({erro:'Relatório não encontrado.'}); res.json({...item,conteudo:visibleReport(typeof item.conteudo==='string'?JSON.parse(item.conteudo):item.conteudo,req)}); } catch(e){ fail(res,e); } });
-router.post('/projeto/:projetoId', async (req,res) => { try { const project=await projectAccess(req,res); if (!project) return; const data=req.body; const error=validateChoices({...data, clima:[], efetivo:[]}); if(error) return res.status(400).json({erro:error}); const fresh=await source(req,project,data.inicio,data.fim); if(sourcesChanged(data,fresh,res)) return; const snapshot=mergeChoices(fresh,data); const err=validateChoices(snapshot); if(err) return res.status(400).json({erro:err}); await captureImages(req,snapshot); const result=await runQuery('INSERT INTO relatorios_semanais (tenant_id,projeto_id,inicio,fim,conteudo,criado_por) VALUES (?,?,?,?,?,?)',[req.tenantId,project.id,data.inicio,data.fim,JSON.stringify(snapshot),req.usuario.id]); res.status(201).json({id:result.lastID,conteudo:visibleReport(snapshot,req)}); } catch(e){ fail(res,e); } });
-router.put('/projeto/:projetoId/:id', async (req,res) => { try { const project=await projectAccess(req,res); if (!project) return; const item=await report(req); if(!item) return res.status(404).json({erro:'Relatório não encontrado.'}); const original=typeof item.conteudo==='string'?JSON.parse(item.conteudo):item.conteudo; const basis=req.body?.atualizar_fontes ? await source(req,project,item.inicio,item.fim) : original; if(sourcesChanged(req.body,basis,res)) return; if(basis!==original) restoreSavedActivities(basis,original); for (const photo of basis.fotos) { const old=original.fotos.find(f=>String(f.id)===String(photo.id)); if (old?.imagem) { photo.imagem=old.imagem; photo.tipo_imagem=old.tipo_imagem; } } if (!hasPermission(req.usuario,PERMISSIONS.REQUISICAO_VIEW)) basis.suprimentos=original.suprimentos ?? null; if(req.body?.atualizar_curva)basis.curva_s=await cutoffCurve(req,project.id,item.fim); const snapshot=mergeChoices(basis,req.body || {}); const error=validateChoices(snapshot); if(error) return res.status(400).json({erro:error}); await captureImages(req,snapshot); await runQuery('UPDATE relatorios_semanais SET conteudo=?, atualizado_em=NOW() WHERE id=? AND tenant_id=? AND projeto_id=?',[JSON.stringify(snapshot),item.id,req.tenantId,req.params.projetoId]); res.json({id:item.id,conteudo:visibleReport(snapshot,req)}); } catch(e){ fail(res,e); } });
-router.post('/projeto/:projetoId/:id/atualizar', async (req,res) => { try { const project=await projectAccess(req,res); if(!project) return; const item=await report(req); if(!item) return res.status(404).json({erro:'Relatório não encontrado.'}); const previous=typeof item.conteudo==='string'?JSON.parse(item.conteudo):item.conteudo; const fresh=await source(req,project,item.inicio,item.fim); restoreSavedActivities(fresh,previous); res.json(visibleReport(mergeChoices(fresh,req.body?.atividades ? req.body : previous),req)); } catch(e){ fail(res,e); } });
-router.get('/projeto/:projetoId/:id/foto/:fotoId', async (req,res) => { try { if(!await projectAccess(req,res)) return; const item=await report(req); if(!item) return res.status(404).end(); const data=typeof item.conteudo==='string'?JSON.parse(item.conteudo):item.conteudo; const photo=data.fotos.find(f=>String(f.id)===String(req.params.fotoId) && f.selecionada && f.imagem); if(!photo) return res.status(404).end(); res.setHeader('Content-Type',photo.tipo_imagem || 'image/jpeg'); res.send(Buffer.from(photo.imagem,'base64')); } catch(e){ fail(res,e); } });
+router.post('/projeto/:projetoId', async (req,res) => { try {
+  const project = await projectAccess(req,res);
+  if (!project) return;
+  const draft = req.body;
+  if (!Array.isArray(draft?.fotos)) return res.status(400).json({erro:'Seleção de fotografias inválida.'});
+  // Group membership is only available after loading the approved sources.
+  const invalidDraft = validateChoices({...draft,fotos:[],clima:[],efetivo:[]});
+  if (invalidDraft) return res.status(400).json({erro:invalidDraft});
+  const fresh = await source(req,project,draft.inicio,draft.fim);
+  if (sourcesChanged(draft,fresh,res)) return;
+  const snapshot = mergeChoices(fresh,draft);
+  const error = validateChoices(snapshot);
+  if (error) return res.status(400).json({erro:error});
+  await prepareImages(req,snapshot);
+  const result = await runQuery('INSERT INTO relatorios_semanais (tenant_id,projeto_id,inicio,fim,conteudo,criado_por) VALUES (?,?,?,?,?,?)',
+    [req.tenantId,project.id,draft.inicio,draft.fim,JSON.stringify(snapshot),req.usuario.id]);
+  res.status(201).json({id:result.lastID,conteudo:visibleReport(snapshot,req)});
+} catch(e){ fail(res,e); } });
+router.put('/projeto/:projetoId/:id', async (req,res) => { try {
+  const project = await projectAccess(req,res);
+  if (!project) return;
+  const item = await report(req);
+  if (!item) return res.status(404).json({erro:'Relatório não encontrado.'});
+  const draft = req.body || {};
+  const original = item.conteudo;
+  const basis = draft.atualizar_fontes ? await source(req,project,item.inicio,item.fim) : original;
+  if (sourcesChanged(draft,basis,res)) return;
+  if (basis !== original) restoreSavedSources(basis,original);
+  if (!hasPermission(req.usuario,PERMISSIONS.REQUISICAO_VIEW)) basis.suprimentos=original.suprimentos ?? null;
+  if (draft.atualizar_curva) basis.curva_s=await cutoffCurve(req,project.id,item.fim);
+  const snapshot = mergeChoices(basis,draft);
+  const error = validateChoices(snapshot);
+  if (error) return res.status(400).json({erro:error});
+  await prepareImages(req,snapshot);
+  await runQuery('UPDATE relatorios_semanais SET conteudo=?, atualizado_em=NOW() WHERE id=? AND tenant_id=? AND projeto_id=?',
+    [JSON.stringify(snapshot),item.id,req.tenantId,project.id]);
+  res.json({id:item.id,conteudo:visibleReport(snapshot,req)});
+} catch(e){ fail(res,e); } });
+router.post('/projeto/:projetoId/:id/atualizar', async (req,res) => { try {
+  const project = await projectAccess(req,res);
+  if (!project) return;
+  const item = await report(req);
+  if (!item) return res.status(404).json({erro:'Relatório não encontrado.'});
+  const fresh = await source(req,project,item.inicio,item.fim);
+  restoreSavedSources(fresh,item.conteudo);
+  const snapshot = mergeChoices(fresh,req.body?.atividades ? req.body : item.conteudo);
+  const error = validatePhotoLimits(snapshot.fotos);
+  if (error) return res.status(400).json({erro:error});
+  res.json(visibleReport(snapshot,req));
+} catch(e){ fail(res,e); } });
+router.get('/projeto/:projetoId/:id/foto/:fotoId', async (req,res) => { try {
+  if (!await projectAccess(req,res)) return;
+  const photo = await getQuery(`SELECT foto->>'imagem' AS imagem, foto->>'tipo_imagem' AS tipo_imagem
+    FROM relatorios_semanais rs CROSS JOIN LATERAL jsonb_array_elements(rs.conteudo->'fotos') foto
+    WHERE rs.id=? AND rs.tenant_id=? AND rs.projeto_id=?
+      AND foto->>'id'=? AND foto->>'selecionada'='true' LIMIT 1`,
+    [req.params.id,req.tenantId,req.params.projetoId,req.params.fotoId]);
+  if (!photo?.imagem) return res.status(404).end();
+  const bytes = Buffer.from(photo.imagem,'base64');
+  if (req.query.miniatura === '1') return res.type('image/jpeg').send(await compactPhoto(bytes,400));
+  res.type(photo.tipo_imagem || 'image/jpeg').send(bytes);
+} catch(e){ fail(res,e); } });
 router.get('/projeto/:projetoId/:id/pdf', async (req,res) => { try {
   if(!await projectAccess(req,res)) return;
   const item=await report(req); if(!item) return res.status(404).json({erro:'Relatorio nao encontrado.'});
   const data=typeof item.conteudo==='string'?JSON.parse(item.conteudo):item.conteudo;
-  if (!hasPermission(req.usuario,PERMISSIONS.REQUISICAO_VIEW)) data.suprimentos=null; const doc=createWeeklyReportPdf(data);
-  res.setHeader('Content-Type','application/pdf'); res.setHeader('Content-Disposition',`attachment; filename="relatorio-semanal-${item.id}.pdf"`);
-  doc.pipe(res); doc.end();
+  if (!hasPermission(req.usuario,PERMISSIONS.REQUISICAO_VIEW)) data.suprimentos=null;
+  await prepareImages(req,data);
+  sendPdf(res, data, `attachment; filename="relatorio-semanal-${item.id}.pdf"`);
 } catch(e){ fail(res,e); } });
 module.exports=router;

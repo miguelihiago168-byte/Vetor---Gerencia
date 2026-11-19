@@ -3,6 +3,7 @@ WORKDIR /app
 
 RUN apk add --no-cache \
 	chromium \
+	imagemagick imagemagick-jpeg imagemagick-webp imagemagick-heic imagemagick-tiff \
 	nss \
 	freetype \
 	harfbuzz \

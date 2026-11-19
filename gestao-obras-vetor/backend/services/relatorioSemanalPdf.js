@@ -1,4 +1,5 @@
-﻿const PDFDocument = require('pdfkit');
+﻿const { groupSelectedPhotos, warnPhoto } = require('./relatorioSemanalFotos');
+const PDFDocument = require('pdfkit');
 const { selectedActivities } = require('./relatorioSemanalService');
 const number = value => value.toLocaleString('pt-BR', {maximumFractionDigits:2});
 const percentage = value => value == null ? 'Indisp.' : number(value) + '%';
@@ -94,8 +95,62 @@ function createWeeklyReportPdf(report) {
   if(!workforce.length)paragraph('Sem presença registrada.');
   for(const date of dates){const rows=workforce.filter(r=>r.data===date);for(let offset=0;offset<rows.length;offset+=7){const group=rows.slice(offset,offset+7);if(cursor+210>bottom){newPage();text('Presença por função • continuação',left,cursor,width,10,true);cursor+=22;}text(BR(date),left,cursor,width,9,true);cursor+=24;const x=left+26,y=cursor,h=105,w=width-36,max=Math.max(1,...group.map(r=>Number(r.quantidade)||0));const ceiling=Math.max(1,Math.ceil(max*1.15));const tickStep=Math.max(1,Math.ceil(ceiling/4));for(let value=0;value<=ceiling;value+=tickStep){const yy=y+h-h*value/ceiling;doc.moveTo(x,yy).lineTo(x+w,yy).lineWidth(.5).strokeColor(COLORS.border).stroke();text(value,left,yy-4,18,7,false,COLORS.muted,{align:'right'});}const slot=w/group.length;group.forEach((r,i)=>{const n=Number(r.quantidade)||0,bh=n/ceiling*h,bw=Math.min(43,slot*.48),bx=x+i*slot+(slot-bw)/2;doc.rect(bx,y+h-bh,bw,Math.max(1,bh)).fill(palette[i%palette.length]);text(n,bx-8,y+h-bh-17,bw+16,9,true,COLORS.text,{align:'center'});text(r.funcao,x+i*slot+3,y+h+8,slot-6,7.5,true,COLORS.text,{align:'center',height:32,ellipsis:true});text(`${n} pessoa(s)`,x+i*slot+3,y+h+43,slot-6,7,false,COLORS.muted,{align:'center'});});cursor=y+h+67;}}
   section('Condições climáticas');if(report.clima?.length)table(['Data / período','Condição','Chuva'],report.clima.map(c=>[`${BR(c.data)} • ${c.periodo}`,`${c.condicao_tempo||'—'}${c.condicao_trabalho?' / '+c.condicao_trabalho:''}`,`${Number(c.pluviometria_mm||0)} mm`]),[.32,.53,.15]);else paragraph('Sem condições climáticas registradas.');
-  section('Registro fotográfico','Imagens selecionadas para representar a semana',photos.length?285:25);
-  if(!photos.length)paragraph('Nenhuma foto selecionada.');for(const photo of photos){const caption=`${photo.atividade||'Atividade não informada'} \n${BR(photo.data)} • ${photo.descricao||'Sem descrição'}`,ch=measure(caption,width,9);ensure(245+Math.min(ch,160));if(photo.imagem){try{doc.image(Buffer.from(photo.imagem,'base64'),left,cursor,{fit:[width,225],align:'center',valign:'center'});}catch{text('Imagem indisponível',left,cursor+80,width,10,false,COLORS.muted);}}else text('Imagem indisponível',left,cursor+80,width,10,false,COLORS.muted);cursor+=236;paragraph(caption);cursor+=5;}
+  const groups = groupSelectedPhotos(photos);
+  section('Registro fotográfico', '', groups.length ? 235 : 25);
+  if (!groups.length) paragraph('Nenhuma foto selecionada.');
+
+  // Split exceptionally long captions across pages without truncating their content.
+  function fitCaption(value, w, available) {
+    if (!value || measure(value,w,9) <= available) return [value, ''];
+    let low = 0, high = value.length;
+    while (low < high) {
+      const mid = Math.ceil((low + high) / 2);
+      if (measure(value.slice(0,mid),w,9) <= available) low = mid;
+      else high = mid - 1;
+    }
+    const word = value.lastIndexOf(' ',low);
+    const end = word > 0 ? word : Math.max(low,1);
+    return [value.slice(0,end),value.slice(end).trimStart()];
+  }
+  for (const group of groups) {
+    const gap = 14;
+    for (let offset = 0; offset < group.photos.length; offset += 2) {
+      const row = group.photos.slice(offset,offset+2);
+      const cell = (width-gap*(row.length-1))/row.length;
+      const imageHeight = row.length === 2 ? 153 : 180;
+      let captions = row.map(photo => [
+        [photo.rdo_id && 'RDO #' + photo.rdo_id, BR(photo.data), photo.id && 'Foto #' + photo.id].filter(Boolean).join(' · '),
+        photo.atividade_eap_id == null && photo.atividade !== group.title ? photo.atividade : '',
+        photo.descricao
+      ].filter(Boolean).join('\n'));
+      const captionHeight = Math.max(...captions.map(c => measure(c,cell,9)));
+      const titleHeight = measure(group.title,width,11,true);
+      ensure(Math.min(titleHeight,80)+imageHeight+Math.min(captionHeight,110)+38);
+      if (titleHeight > 80) paragraph(group.title);
+      else { text(group.title,left,cursor,width,11,true,COLORS.blue); cursor+=titleHeight+7; }
+      ensure(imageHeight+36);
+      for (const [index,photo] of row.entries()) {
+        const x = left+index*(cell+gap);
+        doc.roundedRect(x,cursor,cell,imageHeight,4).fill(COLORS.soft);
+        if (photo.imagem && !photo.aviso) {
+          try {
+            doc.image(Buffer.from(photo.imagem,'base64'),x+3,cursor+3,
+              {fit:[cell-6,imageHeight-6],align:'center',valign:'center'});
+          } catch(error) { warnPhoto(photo,error); }
+        }
+        if (photo.aviso || !photo.imagem) text('Imagem indisponível',x,cursor+imageHeight/2-6,cell,10,false,COLORS.muted,{align:'center'});
+      }
+      cursor += imageHeight+7;
+      while (captions.some(Boolean)) {
+        const chunks = captions.map(value => fitCaption(value,cell,bottom-cursor-5));
+        chunks.forEach(([chunk],index) => { if (chunk) text(chunk,left+index*(cell+gap),cursor,cell,9); });
+        cursor += Math.max(...chunks.map(([chunk]) => chunk ? measure(chunk,cell,9) : 0))+5;
+        captions = chunks.map(([,rest]) => rest);
+        if (captions.some(Boolean)) { newPage(); paragraph(group.title+' · continuação'); }
+      }
+      cursor += 12;
+    }
+  }
   // Footer text must never participate in PDFKit's automatic page flow.
   const pages=doc.bufferedPageRange();for(let i=pages.start;i<pages.start+pages.count;i++){doc.switchToPage(i);const old=doc.page.margins.bottom;doc.page.margins.bottom=0;doc.moveTo(left,doc.page.height-38).lineTo(left+width,doc.page.height-38).lineWidth(.5).strokeColor(COLORS.border).stroke();text(`${BR(report.inicio)} a ${BR(report.fim)} • VETOR`,left,doc.page.height-28,width-65,7.5,false,COLORS.muted,{lineBreak:false});text(`${i+1} / ${pages.count}`,left+width-60,doc.page.height-28,60,7.5,false,COLORS.muted,{align:'right',lineBreak:false});doc.page.margins.bottom=old;}
   return doc;
