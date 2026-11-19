@@ -53,3 +53,7 @@
 @media(max-width:700px) { .rs-weekly-row { padding:13px; } .rs-weekly-metrics { gap:10px 16px; } .rs-weekly-metrics div { min-width:76px; } .rs-weekly-actions { width:100%; } }
 .rs-execution-kind { flex-shrink:0; color:var(--plan-muted); font-size:11px; font-weight:600; }
 @media(max-width:700px) { .rs-page .rs-execution-option { padding-left:calc(10px + var(--activity-depth) * 12px); align-items:flex-start; } .rs-execution-kind { font-size:10px; } }
+.rs-photo-group { min-width:0; margin:18px 0 0; padding:12px 0; border:0; border-top:1px solid var(--plan-border); }
+.rs-photo-group legend { max-width:100%; padding-right:10px; font-weight:650; overflow-wrap:anywhere; }
+.rs-photo-group .rs-count { margin-left:6px; white-space:nowrap; }
+.rs-photo-group .rs-photo img { object-fit:contain; }

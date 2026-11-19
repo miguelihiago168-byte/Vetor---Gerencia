@@ -1,3 +1,4 @@
+const {photoFields, applyPhotoChoices, validatePhotoLimits} = require('./relatorioSemanalFotos');
 ﻿const validDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || '') && !Number.isNaN(Date.parse(`${s}T00:00:00Z`)) && new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s;
 const validPeriod = (start, end) => validDate(start) && validDate(end) && end >= start && (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) <= 6 * 86400000;
 const parseArray = (value) => { try { const result = typeof value === 'string' ? JSON.parse(value) : value; return Array.isArray(result) ? result : []; } catch { return []; } };
@@ -157,7 +158,7 @@ function buildSnapshot({ project, start, end, rdos, activities, entries, history
       if (status !== 'Concluída') item.data_conclusao = null;
     }
   }
-  return { projeto: project.nome, inicio: start, fim: end, problemas:[], eap:estrutura, suprimentos:supplyAvailable?supplySnapshot(supplies,supplyLinks,end):null, atividades: items, proximas, fotos: photos.map(p => ({ id: p.id, rdo_id: p.rdo_id, data: p.data_relatorio, atividade:[p.atividade_codigo,p.atividade_nome||p.atividade_avulsa_descricao].filter(Boolean).join(' — ')||'Atividade não informada', descricao: p.descricao || '', selecionada: false })), clima: weather, efetivo, rdo_count: rdos.length };
+  return { projeto: project.nome, inicio: start, fim: end, problemas:[], eap:estrutura, suprimentos:supplyAvailable?supplySnapshot(supplies,supplyLinks,end):null, atividades: items, proximas, fotos: photos.map(p => ({ id: p.id, rdo_id: p.rdo_id, data: p.data_relatorio, ...photoFields(p), ordem_selecao: null, descricao: p.descricao || '', selecionada: false })), clima: weather, efetivo, rdo_count: rdos.length };
 }
 function restoreSavedActivities(fresh, saved) {
   // Only a server-loaded snapshot may supply metadata for an item that disappeared.
@@ -222,13 +223,13 @@ function mergeChoices(fresh, previous) {
       }
     }
   }
-  const oldPhotos = new Map((previous.fotos || []).map(x => [String(x.id), x]));
-  for (const photo of fresh.fotos) { const saved = oldPhotos.get(String(photo.id)); if (saved) { photo.selecionada = !!saved.selecionada; photo.descricao = saved.descricao; } }
+  if (previous.fotos !== undefined) applyPhotoChoices(fresh.fotos, previous.fotos);
   return fresh;
 }
 function validateChoices(data) {
   if (!data || !validPeriod(data.inicio, data.fim) || !Array.isArray(data.atividades) || !Array.isArray(data.proximas) || !Array.isArray(data.fotos) || !Array.isArray(data.clima) || !Array.isArray(data.efetivo)) return 'Dados do relatório inválidos.';
-  if (data.fotos.filter(p => p.selecionada).length > 2) return 'Selecione no máximo duas fotos.';
+  const photoError = validatePhotoLimits(data.fotos);
+  if (photoError) return photoError;
   if (data.problemas && (!Array.isArray(data.problemas) || data.problemas.length>50 || data.problemas.some(p=>!p || !String(p.problema||'').trim() || !String(p.solucao||'').trim() || !validDate(p.data) || String(p.problema).length>2000 || String(p.solucao).length>2000))) return 'Preencha problema, solução e data válida em cada apontamento.';
   if (data.curva_s != null && (!data.curva_s || !Array.isArray(data.curva_s.serie) || data.curva_s.serie.length>250 || data.curva_s.serie.some(p=>!p || !validDate(p.data) || !Number.isFinite(Number(p.planejado)) || Number(p.planejado)<0 || Number(p.planejado)>100 || !Number.isFinite(Number(p.real)) || Number(p.real)<0 || Number(p.real)>100))) return 'Dados da Curva S inválidos.';
   const catalog = new Map((data.eap || []).map(a => [`eap:${a.id}`,a]));
