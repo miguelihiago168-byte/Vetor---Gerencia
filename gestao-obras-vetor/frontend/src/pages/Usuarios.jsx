@@ -18,7 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { useDialog } from '../context/DialogContext';
 import { useNotification } from '../context/NotificationContext';
 import { hasForbiddenPasswordSequence } from '../utils/passwordPolicy';
-import { UserPlus, Trash2, RotateCcw, Search, X, Users, UserCheck, Eye, EyeOff } from 'lucide-react';
+import { UserPlus, Trash2, RotateCcw, Search, X, Users, UserCheck, UserX, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 import './Usuarios.css';
 
 const PERFIS = ['ADM', 'Financeiro', 'Gestor Geral', 'Gestor Local', 'Gestor de Qualidade', 'Almoxarife', 'Fiscal'];
@@ -157,11 +157,10 @@ function Usuarios() {
     setShowModal(true);
   };
 
-  const carregarDados = async (setor = filtroSetor) => {
+  const carregarDados = async () => {
     setLoading(true);
     try {
       const paramsUsuarios = {};
-      if (setor) paramsUsuarios.setor = setor;
       if (projetoId) paramsUsuarios.projeto_id = Number(projetoId);
 
       const paramsMaoObra = { ativos: 0 };
@@ -448,6 +447,15 @@ function Usuarios() {
   }, [usuarios, filtroStatus, filtroTexto, filtroPerfil, filtroSetor, filtroObra]);
 
   const filtrosAtivos = filtroTexto || filtroSetor || filtroPerfil || filtroStatus !== 'ativos' || filtroObra;
+  const totalAtivos = usuarios.filter((u) => Number(u.ativo) === 1).length;
+  const totalDesativados = usuarios.filter((u) => Number(u.ativo) === 0).length;
+
+  // Evita aplicar ações em lote a usuários que ficaram ocultos após filtrar.
+  useEffect(() => {
+    setSelecionados([]);
+    setBulkAcao('');
+    setBulkValor('');
+  }, [filtroTexto, filtroSetor, filtroPerfil, filtroStatus, filtroObra]);
 
   const limparFiltros = () => {
     setFiltroTexto('');
@@ -547,69 +555,70 @@ function Usuarios() {
       <div className="container usuarios-page">
         <div className="usuarios-page-header">
           <div>
-            <p>Administração</p>
+            <p className="usuarios-eyebrow">Administração <span>/</span> Acessos</p>
             <h1>Usuários</h1>
+            <p className="usuarios-page-description">Gerencie as pessoas e seus acessos ao sistema.</p>
           </div>
+          {aba === 'usuarios' && <button className="btn btn-primary usuarios-primary-action" onClick={abrirNovoUsuario} type="button"><UserPlus size={17} /> Novo usuário</button>}
         </div>
 
         <div className="usuarios-layout">
-          <aside className="usuarios-sidebar">
-            <span className="usuarios-sidebar-label">Menu</span>
-            <nav className="usuarios-nav">
-              <button className={`usuarios-nav-link${aba === 'usuarios' ? ' active' : ''}`} onClick={() => setAba('usuarios')} type="button">Usuários do Sistema</button>
-            </nav>
-          </aside>
-
           <main className="usuarios-content">
             {aba === 'usuarios' && (
               <>
-                <div className="usuarios-toolbar">
-                  <button className="btn btn-primary usuarios-primary-action" onClick={abrirNovoUsuario}>
-                    <UserPlus size={16} /> Novo usuário
+                <div className="usuarios-overview" aria-label="Resumo de usuários">
+                  <button type="button" className={`usuarios-stat${filtroStatus === 'todos' ? ' is-selected' : ''}`} onClick={() => setFiltroStatus('todos')} aria-pressed={filtroStatus === 'todos'}>
+                    <span className="usuarios-stat-icon"><Users size={19} /></span><span><span className="usuarios-stat-label">Total de usuários</span><strong>{loading ? '—' : usuarios.length}</strong><span className="usuarios-stat-hint">Pessoas cadastradas</span></span>
                   </button>
-                  {filtrosAtivos && (
-                    <button className="btn btn-outline usuarios-clear-filter" onClick={limparFiltros}>
-                      <X size={16} /> Limpar filtros
-                    </button>
-                  )}
-                  <span className="usuarios-count">
-                    {usuariosFiltrados.length} usuário(s)
-                  </span>
+                  <button type="button" className={`usuarios-stat${filtroStatus === 'ativos' ? ' is-selected' : ''}`} onClick={() => setFiltroStatus('ativos')} aria-pressed={filtroStatus === 'ativos'}>
+                    <span className="usuarios-stat-icon is-green"><UserCheck size={19} /></span><span><span className="usuarios-stat-label">Ativos</span><strong>{loading ? '—' : totalAtivos}</strong><span className="usuarios-stat-hint">Com acesso ao sistema</span></span>
+                  </button>
+                  <button type="button" className={`usuarios-stat${filtroStatus === 'desativados' ? ' is-selected' : ''}`} onClick={() => setFiltroStatus('desativados')} aria-pressed={filtroStatus === 'desativados'}>
+                    <span className="usuarios-stat-icon is-muted"><UserX size={19} /></span><span><span className="usuarios-stat-label">Desativados</span><strong>{loading ? '—' : totalDesativados}</strong><span className="usuarios-stat-hint">Sem acesso ao sistema</span></span>
+                  </button>
                 </div>
 
+                <section className="usuarios-directory" aria-labelledby="usuarios-list-title">
+                <div className="usuarios-directory-header">
+                  <div><h2 id="usuarios-list-title">Pessoas cadastradas</h2><p>Encontre usuários e gerencie permissões e vínculos.</p></div>
+                  <span className="usuarios-count" aria-live="polite">{loading ? 'Carregando...' : `${usuariosFiltrados.length} ${usuariosFiltrados.length === 1 ? 'usuário encontrado' : 'usuários encontrados'}`}</span>
+                </div>
                 <div className="usuarios-filter-panel">
                   <div className="usuarios-filter-grid">
-                    <div className="usuarios-search-field">
-                      <Search size={15} />
+                    <label className="usuarios-filter-label usuarios-search-field">
+                      <span>Buscar</span>
+                      <div className="usuarios-search-control"><Search size={17} />
                       <input
                         className="form-input"
                         placeholder="Buscar por nome, e-mail ou login"
                         value={filtroTexto}
                         onChange={(e) => setFiltroTexto(e.target.value)}
                       />
-                    </div>
+                      </div>
+                    </label>
 
-                    <select className="form-select" value={filtroStatus} onChange={(e) => setFiltroStatus(e.target.value)}>
+                    <label className="usuarios-filter-label"><span>Status</span><select className="form-select" value={filtroStatus} onChange={(e) => setFiltroStatus(e.target.value)}>
                       <option value="ativos">Ativos</option>
                       <option value="desativados">Desativados</option>
                       <option value="todos">Todos os status</option>
-                    </select>
+                    </select></label>
 
-                    <select className="form-select" value={filtroPerfil} onChange={(e) => setFiltroPerfil(e.target.value)}>
+                    <label className="usuarios-filter-label"><span>Perfil</span><select className="form-select" value={filtroPerfil} onChange={(e) => setFiltroPerfil(e.target.value)}>
                       <option value="">Todos os perfis</option>
                       {PERFIS.map((p) => <option key={p} value={p}>{p}</option>)}
-                    </select>
+                    </select></label>
 
-                    <select className="form-select" value={filtroSetor} onChange={(e) => setFiltroSetor(e.target.value)}>
+                    <label className="usuarios-filter-label"><span>Setor</span><select className="form-select" value={filtroSetor} onChange={(e) => setFiltroSetor(e.target.value)}>
                       <option value="">Todos os setores</option>
                       {SETORES.map((s) => <option key={s} value={s}>{s}</option>)}
-                    </select>
+                    </select></label>
 
-                    <select className="form-select" value={filtroObra} onChange={(e) => setFiltroObra(e.target.value)}>
+                    <label className="usuarios-filter-label"><span>Obra</span><select className="form-select" value={filtroObra} onChange={(e) => setFiltroObra(e.target.value)}>
                       <option value="">Todas as obras</option>
                       {projetos.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                    </select>
+                    </select></label>
                   </div>
+                  {filtrosAtivos && <button className="usuarios-reset" type="button" onClick={limparFiltros}><X size={14} /> Limpar filtros</button>}
                 </div>
 
                 {/* Barra de ações em lote */}
@@ -679,20 +688,19 @@ function Usuarios() {
                   <div className="loading"><div className="spinner"></div></div>
                 ) : (
                   <div className="usuarios-table-wrap">
+                    {usuariosFiltrados.length > 0 && <label className="usuarios-mobile-select"><input type="checkbox" checked={selecionados.length === usuariosFiltrados.length} onChange={toggleSelecionarTodos} /> Selecionar todos os usuários exibidos</label>}
                     <table className="table usuarios-table">
                       <thead>
                         <tr>
                           <th style={{ width: 36 }}>
                             <input
                               type="checkbox"
-                              title="Selecionar todos"
+                              aria-label="Selecionar todos os usuários exibidos"
                               checked={selecionados.length === usuariosFiltrados.length && usuariosFiltrados.length > 0}
                               onChange={toggleSelecionarTodos}
                             />
                           </th>
-                          <th>Nome</th>
-                          <th>Login</th>
-                          <th>E-mail</th>
+                          <th>Usuário</th>
                           <th>Perfil</th>
                           <th>Setor</th>
                           <th>Obra(s)</th>
@@ -712,35 +720,34 @@ function Usuarios() {
                               <td>
                                 <input
                                   type="checkbox"
+                                  aria-label={`Selecionar ${u.nome}`}
                                   checked={selecionados.includes(u.id)}
                                   onChange={() => toggleSelecionado(u.id)}
                                 />
                               </td>
-                              <td className="usuarios-name-cell">{u.nome}</td>
-                              <td className="usuarios-login-cell">{u.login}</td>
-                              <td className="usuarios-muted-cell">{u.email || <span>—</span>}</td>
-                              <td>
+                              <td data-label="Usuário"><div className="usuarios-identity"><span className="usuarios-avatar" aria-hidden="true">{(u.nome || '?').trim().split(/\s+/).slice(0, 2).map((parte) => parte[0]).join('').toUpperCase()}</span><span className="usuarios-identity-text"><strong>{u.nome}</strong><span>@{u.login}{u.email ? ` · ${u.email}` : ''}</span></span></div></td>
+                              <td data-label="Perfil">
                                 <span className="usuarios-chip usuarios-chip-blue">
                                   {normalizarPerfilTela(u.perfil)}
                                 </span>
                               </td>
-                              <td className="usuarios-compact-cell">
+                              <td className="usuarios-compact-cell" data-label="Setor">
                                 {u.setor}{u.setor === 'Outro' && u.setor_outro ? ` (${u.setor_outro})` : ''}
                               </td>
-                              <td className="usuarios-work-cell" title={obrasTitulos}>
+                              <td className="usuarios-work-cell" data-label="Obras" title={obrasTitulos}>
                                 {obrasTitulos || <span>—</span>}
                               </td>
-                              <td>
+                              <td data-label="Status">
                                 <span className={`usuarios-chip ${isAtivo ? 'usuarios-chip-green' : 'usuarios-chip-red'}`}>
                                   {isAtivo ? 'Ativo' : 'Desativado'}
                                 </span>
                               </td>
-                              <td>
+                              <td data-label="Ações">
                                 <div className="usuarios-row-actions">
                                   {isAtivo ? (
                                     <>
                                       <button className="btn btn-secondary" onClick={() => abrirEdicao(u)}>Editar</button>
-                                      <button className="btn btn-danger" onClick={() => desativar(u.id)} title="Desativar">
+                                      <button className="btn btn-danger" onClick={() => desativar(u.id)} title="Desativar" aria-label={`Desativar ${u.nome}`}>
                                         <Trash2 size={14} />
                                       </button>
                                     </>
@@ -760,12 +767,13 @@ function Usuarios() {
                           );
                         })}
                         {usuariosFiltrados.length === 0 && (
-                          <tr><td colSpan={9} style={{ textAlign: 'center', color: 'var(--gray-400)', padding: '24px 0' }}>Nenhum usuário encontrado com os filtros aplicados.</td></tr>
+                          <tr><td colSpan={7} className="usuarios-empty"><span className="usuarios-empty-icon"><Search size={22} /></span><strong>Nenhum usuário encontrado</strong><span>Experimente ajustar os filtros ou fazer uma nova busca.</span>{filtrosAtivos && <button type="button" className="usuarios-reset" onClick={limparFiltros}>Limpar filtros</button>}</td></tr>
                         )}
                       </tbody>
                     </table>
                   </div>
                 )}
+                </section>
               </>
             )}
 
@@ -828,11 +836,11 @@ function Usuarios() {
       </div>
 
       {showModal && (
-        <div className="modal-overlay fade-in" role="dialog" aria-modal="true" onClick={fecharModalUsuario}>
-          <div className="modal-card" style={{ maxWidth: '640px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="flex-between mb-2">
-              <h2>{editingUserId ? 'Editar usuário' : 'Novo usuário'}</h2>
-              <button className="btn btn-secondary" onClick={fecharModalUsuario}>Fechar</button>
+        <div className="modal-overlay fade-in" role="dialog" aria-modal="true" aria-labelledby="usuario-modal-title" onClick={fecharModalUsuario}>
+          <div className="modal-card usuarios-modal" style={{ maxWidth: '640px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="usuarios-modal-header">
+              <div><span className="usuarios-modal-kicker"><ShieldCheck size={15} /> Gestão de acesso</span><h2 id="usuario-modal-title">{editingUserId ? 'Editar usuário' : 'Novo usuário'}</h2><p>Preencha os dados e defina o acesso desta pessoa.</p></div>
+              <button type="button" className="usuarios-modal-close" aria-label="Fechar" onClick={fecharModalUsuario}><X size={19} /></button>
             </div>
 
 
@@ -889,6 +897,7 @@ function Usuarios() {
                   />
                   <button
                     type="button"
+                    aria-label={showSenha ? 'Ocultar senha' : 'Mostrar senha'}
                     onClick={() => setShowSenha((v) => !v)}
                     style={{
                       position: 'absolute',
