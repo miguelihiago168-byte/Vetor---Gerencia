@@ -1,7 +1,8 @@
 ﻿const assert = require('assert/strict');
 const {validPeriod, buildSnapshot, mergeChoices, validateChoices}=require('../services/relatorioSemanalService');
 assert.equal(validPeriod('2026-02-23','2026-03-01'),true);
-assert.equal(validPeriod('2026-02-23','2026-03-02'),false);
+assert.equal(validPeriod('2026-02-23','2026-03-02'),true);
+assert.equal(validPeriod('2026-02-23','2026-03-26'),false);
 assert.equal(validPeriod('2026-02-30','2026-03-01'),false);
 const source={project:{nome:'Obra'},start:'2026-03-02',end:'2026-03-08',rdos:[{id:7,data_relatorio:'2026-03-03',mao_obra_detalhada:JSON.stringify([{nome:'Ana',funcao:'Eletricista'},{nome:'Bia',funcao:'Eletricista'}]),atividades_avulsas:JSON.stringify([{descricao:'Avulsa',quantidade_prevista:2,quantidade_executada:1}])}],activities:[{id:1,pai_id:null,nome:'Grupo'},{id:2,pai_id:1,nome:'Fundação',quantidade_total:10},{id:3,pai_id:1,nome:'Cabo',quantidade_total:5},{id:4,pai_id:1,nome:'Futura',quantidade_total:3}],entries:[{atividade_eap_id:2,data_relatorio:'2026-02-28',quantidade_executada:6},{atividade_eap_id:2,data_relatorio:'2026-03-03',quantidade_executada:4},{atividade_eap_id:3,data_relatorio:'2026-03-03',quantidade_executada:2}],photos:[{id:11,rdo_id:7,descricao:'Original',data_relatorio:'2026-03-03'}],weather:[{data:'2026-03-03',periodo:'Manhã',condicao_tempo:'Claro',pluviometria_mm:0}]};
 const report=buildSnapshot(source); assert.equal(report.atividades.find(a=>a.key==='eap:2').data_conclusao,'2026-03-03'); assert.equal(report.atividades.find(a=>a.key==='eap:3').status,'Em andamento'); assert.equal(report.atividades.find(a=>a.key.startsWith('avulsa')).status,'Em andamento'); assert.deepEqual(report.proximas.map(a=>a.key),['eap:1','eap:4']); assert.equal(report.efetivo[0].quantidade,2); assert.ok(validateChoices(report));

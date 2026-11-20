@@ -4,14 +4,26 @@ require('dotenv').config({path:path.join(__dirname,'../.env')});
 if (!['localhost','127.0.0.1','::1'].includes(process.env.DB_HOST || 'localhost')) {
   throw new Error('Este teste requer PostgreSQL local.');
 }
-const {pool,translateQuery} = require('../config/database');
+const {pool,translateQuery,withClient} = require('../config/database');
 const {physicalHistory,buildSnapshot} = require('../services/relatorioSemanalService');
 
 async function run() {
+  await withClient(async client => {
+    const isolation = await client.query('SHOW transaction_isolation');
+    const readOnly = await client.query('SHOW transaction_read_only');
+    assert.equal(isolation.rows[0].transaction_isolation, 'repeatable read');
+    assert.equal(readOnly.rows[0].transaction_read_only, 'on');
+  }, undefined, undefined, {readOnlySnapshot:true});
   const client = await pool.connect();
   const query = (sql,params) => client.query(sql,params);
   try {
     await query('BEGIN');
+    await query('CREATE TEMP TABLE relatorios_semanais (inicio date NOT NULL, fim date NOT NULL, CONSTRAINT relatorios_semanais_check CHECK (fim >= inicio AND fim <= inicio + 6))');
+    await require('../scripts/migrations/000038_relatorio_semanal_periodo').up({run:sql=>query(sql)});
+    await query("INSERT INTO relatorios_semanais VALUES ('2026-03-01','2026-03-31')");
+    await query('SAVEPOINT invalid_period');
+    await assert.rejects(query("INSERT INTO relatorios_semanais VALUES ('2026-03-01','2026-04-01')"));
+    await query('ROLLBACK TO SAVEPOINT invalid_period');
     // Use the installed column types, with no writes to application tables.
     for (const table of ['atividades_eap','rdos','atividade_eap_eventos','historico_atividades','auditoria']) {
       await query(`CREATE TEMP TABLE ${table} AS SELECT * FROM public.${table} WITH NO DATA`);

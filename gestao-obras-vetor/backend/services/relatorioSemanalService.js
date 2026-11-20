@@ -1,10 +1,17 @@
 const {photoFields, applyPhotoChoices, validatePhotoLimits} = require('./relatorioSemanalFotos');
 ﻿const validDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || '') && !Number.isNaN(Date.parse(`${s}T00:00:00Z`)) && new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s;
-const validPeriod = (start, end) => validDate(start) && validDate(end) && end >= start && (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) <= 6 * 86400000;
+const validPeriod = (start, end) => validDate(start) && validDate(end) && end >= start && (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) <= 30 * 86400000;
 const parseArray = (value) => { try { const result = typeof value === 'string' ? JSON.parse(value) : value; return Array.isArray(result) ? result : []; } catch { return []; } };
 function supplySnapshot(items, links, cutoff) {
+  const linksByItem = new Map();
+  for (const link of links) {
+    if (['Cancelado','Reprovado'].includes(link.status_item)) continue;
+    const key = String(link.necessidade_id);
+    if (!linksByItem.has(key)) linksByItem.set(key, []);
+    linksByItem.get(key).push(link);
+  }
   return items.map(item => {
-    const live = links.filter(link => String(link.necessidade_id) === String(item.id) && !['Cancelado','Reprovado'].includes(link.status_item));
+    const live = linksByItem.get(String(item.id)) || [];
     const ambiguous = live.some(link => !link.requisicao_item_id || Number(link.quantidade_item) !== Number(link.total_vinculado) || Number(link.vinculos_item) !== 1 || link.quantidade_recebida == null);
     const received = ambiguous ? null : live.reduce((sum,link) => sum + Number(link.quantidade_recebida || 0),0);
     const needed=Number(item.quantidade || 0);

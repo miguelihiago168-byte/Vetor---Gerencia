@@ -70,13 +70,13 @@ const setRlsContext = async (client, context) => {
 
 // Every compatibility query receives a short transaction, so SET LOCAL context
 // never leaks to another request through the pool.
-const withClient = async (schemaOrFn, maybeFn, explicitContext) => {
+const withClient = async (schemaOrFn, maybeFn, explicitContext, options = {}) => {
   const fn = typeof schemaOrFn === 'function' ? schemaOrFn : maybeFn;
   if (typeof fn !== 'function') throw new Error('withClient requer uma função de execução.');
   const context = normalizeContext(explicitContext || getRequestContext());
   const client = await pool.connect();
   try {
-    await client.query('BEGIN');
+    await client.query(options.readOnlySnapshot ? 'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY' : 'BEGIN');
     await setRlsContext(client, context);
     const result = await fn(client);
     await client.query('COMMIT');

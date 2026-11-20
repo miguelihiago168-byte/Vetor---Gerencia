@@ -30,7 +30,7 @@ async function main() {
   let server;
   try {
     await client.query('BEGIN');
-    for (const name of ['projetos','atividades_eap','rdos','rdo_atividades','rdo_fotos','rdo_clima','atividades_dependencias',
+    for (const name of ['projetos','atividades_eap','rdos','rdo_atividades','rdo_fotos','rdo_clima','rdo_ocorrencias','atividades_dependencias',
       'atividade_eap_eventos','historico_atividades','auditoria','mapa_suprimentos','mapa_suprimentos_requisicoes',
       'requisicao_itens','estoque_pendencias_recebimento','relatorios_semanais']) {
       await client.query(`CREATE TEMP TABLE ${name} AS SELECT * FROM public.${name} WITH NO DATA`);
@@ -89,6 +89,7 @@ async function main() {
       if (parent?.filename.endsWith('relatorio_semanal.js')) {
         if (request==='../config/database') return {
           allQuery:(...args)=>serialize(db.allWithClient,...args),getQuery:(...args)=>serialize(db.getWithClient,...args),
+          withClient:fn=>fn(client), allWithClient:(_client,...args)=>serialize(db.allWithClient,...args), getWithClient:(_client,...args)=>serialize(db.getWithClient,...args),
           runQuery:(...args)=>serialize(db.execWithClient,...args)};
         if (request==='../middleware/auth') return {auth:(req,res,next)=>{req.usuario={id:1};req.tenantId=Number(req.headers['x-tenant']||1);next();}};
         if (request==='../middleware/rbac') return {PERMISSIONS:{},requirePermission:()=> (req,res,next)=>next(),hasPermission:()=>true,
@@ -173,7 +174,7 @@ async function main() {
     const legacyView=(await json(item)).conteudo;
     assert.equal(legacyView.fotos.find(p=>Number(p.id)===2).atividade_eap_id,null);
     await pdf(item+'/pdf',null,2); assert.deepEqual(await stored(),legacy);
-    const long=choices([3,4]);long.fotos.find(p=>Number(p.id)===4).descricao='Inspeção das estruturas. '.repeat(800)+'Fim da legenda.';
+    const long=choices([3,4],await json('/fontes?inicio=2026-03-02&fim=2026-03-08'));long.fotos.find(p=>Number(p.id)===4).descricao='Inspeção das estruturas. '.repeat(800)+'Fim da legenda.';
     const longPdf=await pdf('/preview',long,2);
     if (process.env.WEEKLY_PDF_LONG_SAMPLE) await fs.writeFile(process.env.WEEKLY_PDF_LONG_SAMPLE,longPdf);
     if (process.env.WEEKLY_UI_CHECK === '1') {

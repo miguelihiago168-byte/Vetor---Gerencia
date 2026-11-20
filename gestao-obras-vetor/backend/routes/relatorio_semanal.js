@@ -6,9 +6,10 @@ const {createHash} = require('node:crypto');
 const { photoFields, restorePhotos, compactPhoto, captureImages, validatePhotoLimits, PhotoChoiceError } = require('../services/relatorioSemanalFotos');
 const { auth } = require('../middleware/auth');
 const { PERMISSIONS, requirePermission, assertProjectAccess, hasPermission } = require('../middleware/rbac');
-const { allQuery, getQuery, runQuery } = require('../config/database');
+const { allQuery, getQuery, runQuery, withClient, allWithClient, getWithClient } = require('../config/database');
 const { validPeriod, physicalHistory, buildSnapshot, mergeChoices, restoreSavedActivities, validateChoices } = require('../services/relatorioSemanalService');
 const { compararMaoObra } = require('../services/hseComparativo');
+const { consolidateWeather } = require('../services/relatorioSemanalClima');
 const router = express.Router();
 router.use(auth, requirePermission(PERMISSIONS.EAP_VIEW));
 async function projectAccess(req, res) {
@@ -21,13 +22,17 @@ async function projectAccess(req, res) {
   return project;
 }
 async function source(req, project, inicio, fim) {
+  return withClient(async client => {
+  const allQuery = (sql, params) => allWithClient(client, sql, params);
+  const getQuery = (sql, params) => getWithClient(client, sql, params);
   const params = [req.tenantId, project.id, fim];
   const rdos = await allQuery("SELECT id, data_relatorio, mao_obra_detalhada, atividades_avulsas FROM rdos WHERE tenant_id=? AND projeto_id=? AND status='Aprovado' AND data_relatorio>=? AND data_relatorio<=? ORDER BY data_relatorio,id", [req.tenantId, project.id, inicio, fim]);
   const activities = await allQuery('SELECT id, pai_id, codigo_eap, nome, descricao, quantidade_total, peso_percentual_projeto, percentual_previsto, percentual_executado, status, criado_em, atualizado_em, data_inicio_planejada, data_fim_planejada FROM atividades_eap WHERE tenant_id=? AND projeto_id=? ORDER BY codigo_eap,id', [req.tenantId, project.id]);
   const history = await physicalHistory(allQuery, req.tenantId, project.id);
   const entries = await allQuery("SELECT ra.atividade_eap_id, ra.quantidade_executada, ra.percentual_executado, r.data_relatorio FROM rdo_atividades ra JOIN rdos r ON r.id=ra.rdo_id WHERE r.tenant_id=? AND r.projeto_id=? AND r.status='Aprovado' AND r.data_relatorio<=? ORDER BY r.data_relatorio,r.id,ra.id", params);
-  const photos = await photoMetadata(req,project.id,inicio,fim);
+  const photos = await photoMetadata(req,project.id,inicio,fim,allQuery);
   const weather = await allQuery("SELECT r.data_relatorio AS data, c.periodo, c.condicao_tempo, c.condicao_trabalho, c.pluviometria_mm FROM rdo_clima c JOIN rdos r ON r.id=c.rdo_id WHERE r.tenant_id=? AND r.projeto_id=? AND r.status='Aprovado' AND r.data_relatorio>=? AND r.data_relatorio<=? ORDER BY r.data_relatorio,c.id", [req.tenantId, project.id, inicio, fim]);
+  const weatherOccurrences = await allQuery("SELECT r.data_relatorio AS data, o.data_ocorrencia, o.hora_inicio, o.hora_fim, o.em_andamento FROM rdo_ocorrencias o JOIN rdos r ON r.id=o.rdo_id WHERE r.tenant_id=? AND r.projeto_id=? AND r.status='Aprovado' AND r.data_relatorio>=? AND r.data_relatorio<=? AND o.categoria='Clima' AND o.paralisacao=1 ORDER BY r.data_relatorio,o.id", [req.tenantId, project.id, inicio, fim]);
   const supplyAvailable = hasPermission(req.usuario, PERMISSIONS.REQUISICAO_VIEW);
   let supplies=[], supplyLinks=[];
   if (supplyAvailable) {
@@ -44,27 +49,27 @@ async function source(req, project, inicio, fim) {
       WHERE v.tenant_id=? AND m.projeto_id=?`,[req.tenantId,project.id]);
   }
   const snapshot=buildSnapshot({ project, start: inicio, end: fim, rdos, activities, entries, history, photos, weather, supplies, supplyLinks, supplyAvailable });
-  const calendario = await getQuery('SELECT dias,excecoes FROM hse_calendarios WHERE tenant_id=? AND projeto_id=?',[req.tenantId,project.id]);
-  const previsoes = await allQuery('SELECT id,funcao,quantidade,inicio,fim FROM hse_previsoes WHERE tenant_id=? AND projeto_id=? AND ativa AND inicio<=? AND fim>=?',[req.tenantId,project.id,fim,inicio]);
+  const calendario = await getQuery('SELECT dias,excecoes FROM hse_calendarios WHERE tenant_id=? AND projeto_id=? AND atualizado_em < ((?::date + 1)::timestamp AT TIME ZONE ?)',[req.tenantId,project.id,fim,process.env.APP_TIME_ZONE || 'America/Sao_Paulo']);
+  const previsoes = await allQuery("SELECT id,funcao,quantidade,inicio,fim FROM hse_previsoes WHERE tenant_id=? AND projeto_id=? AND ativa AND inicio<=? AND fim>=? AND criado_em < ((?::date + 1)::timestamp AT TIME ZONE ?)",[req.tenantId,project.id,fim,inicio,fim,process.env.APP_TIME_ZONE || 'America/Sao_Paulo']);
   const rdosPresenca = await allQuery('SELECT id,data_relatorio,status,mao_obra_detalhada FROM rdos WHERE tenant_id=? AND projeto_id=? AND data_relatorio>=? AND data_relatorio<=? ORDER BY data_relatorio,id',[req.tenantId,project.id,inicio,fim]);
+  snapshot.clima_consolidado = consolidateWeather({ inicio, fim, rdos, allRdos: rdosPresenca, weather, occurrences: weatherOccurrences, calendario });
   snapshot.comparativo_mao_obra = compararMaoObra({inicio,fim,calendario,previsoes,rdos:rdosPresenca});
-  const items = snapshot.eap.map(({id,codigo,nome,inicio,fim,fisico}) => [id,codigo,nome,inicio,fim,fisico]);
-  snapshot.revisao_atividades = createHash('sha256')
-    .update(JSON.stringify([items,snapshot.atividades,snapshot.proximas,snapshot.comparativo_mao_obra])).digest('hex');
-  snapshot.curva_s=await cutoffCurve(req,project.id,fim,activities,entries);
+  snapshot.curva_s=await cutoffCurve(req,project.id,fim,activities,entries,allQuery);
   snapshot.logos_empresas=companyLogos(project,req.tenantId);
+  snapshot.revisao_atividades = createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');
   return snapshot;
+  }, undefined, undefined, { readOnlySnapshot:true });
 }
-async function photoMetadata(req,projectId,inicio,fim){return allQuery(`SELECT f.id,f.rdo_id,f.descricao,f.atividade_avulsa_descricao,r.data_relatorio,
+async function photoMetadata(req,projectId,inicio,fim,query=allQuery){return query(`SELECT f.id,f.rdo_id,f.descricao,f.atividade_avulsa_descricao,r.data_relatorio,
   ae.id AS atividade_eap_id, ae.codigo_eap AS atividade_codigo,COALESCE(NULLIF(ae.nome,''),ae.descricao,f.atividade_avulsa_descricao) AS atividade_nome
   FROM rdo_fotos f JOIN rdos r ON r.id=f.rdo_id AND (f.tenant_id IS NULL OR f.tenant_id=r.tenant_id)
   LEFT JOIN rdo_atividades ra ON ra.id=f.rdo_atividade_id AND ra.rdo_id=r.id AND (ra.tenant_id IS NULL OR ra.tenant_id=r.tenant_id)
   LEFT JOIN atividades_eap ae ON ae.id=COALESCE(ra.atividade_eap_id,(to_jsonb(f)->>'atividade_eap_id')::bigint) AND ae.projeto_id=r.projeto_id AND ae.tenant_id=r.tenant_id
   WHERE r.tenant_id=? AND r.projeto_id=? AND r.status='Aprovado' AND r.data_relatorio>=? AND r.data_relatorio<=? ORDER BY r.data_relatorio,f.ordem,f.id`,[req.tenantId,projectId,inicio,fim]);}
-async function cutoffCurve(req,projectId,cutoff,activities,entries){
-  activities=activities || await allQuery('SELECT id,pai_id,quantidade_total,peso_percentual_projeto,percentual_previsto,data_inicio_planejada,data_fim_planejada FROM atividades_eap WHERE tenant_id=? AND projeto_id=?',[req.tenantId,projectId]);
-  entries=entries || await allQuery("SELECT ra.atividade_eap_id,ra.quantidade_executada,ra.percentual_executado,r.data_relatorio FROM rdo_atividades ra JOIN rdos r ON r.id=ra.rdo_id WHERE r.tenant_id=? AND r.projeto_id=? AND r.status='Aprovado' AND r.data_relatorio<=? ORDER BY r.data_relatorio,r.id,ra.id",[req.tenantId,projectId,cutoff]);
-  const dependencies=await allQuery('SELECT * FROM atividades_dependencias WHERE projeto_id=? AND confirmada_usuario=1',[projectId]);
+async function cutoffCurve(req,projectId,cutoff,activities,entries,query=allQuery){
+  activities=activities || await query('SELECT id,pai_id,quantidade_total,peso_percentual_projeto,percentual_previsto,data_inicio_planejada,data_fim_planejada FROM atividades_eap WHERE tenant_id=? AND projeto_id=?',[req.tenantId,projectId]);
+  entries=entries || await query("SELECT ra.atividade_eap_id,ra.quantidade_executada,ra.percentual_executado,r.data_relatorio FROM rdo_atividades ra JOIN rdos r ON r.id=ra.rdo_id WHERE r.tenant_id=? AND r.projeto_id=? AND r.status='Aprovado' AND r.data_relatorio<=? ORDER BY r.data_relatorio,r.id,ra.id",[req.tenantId,projectId,cutoff]);
+  const dependencies=await query('SELECT * FROM atividades_dependencias WHERE projeto_id=? AND confirmada_usuario=1',[projectId]);
   return buildCutoffCurve(activities,entries,cutoff,dependencies);
 }
 async function readSnapshot(req,item) {
@@ -72,7 +77,7 @@ async function readSnapshot(req,item) {
   const content = typeof item.conteudo === 'string' ? JSON.parse(item.conteudo) : item.conteudo;
   const project = item.projeto_id || req.params.projetoId;
   if (content.curva_s?.versao_corte !== 1 || content.curva_s.corte !== item.fim) {
-    content.curva_s = await cutoffCurve(req,project,item.fim);
+    content.curva_s_historica_indisponivel = true;
   }
   if (!content.logos_empresas) content.logos_empresas = companyLogos(req.weeklyProject,req.tenantId);
   if (content.fotos.some(photo => photo.atividade_eap_id === undefined)) {
@@ -117,11 +122,11 @@ const fail = (res, error) => {
 };
 function sourcesChanged(draft, basis, res) {
   if (!draft.revisao_atividades || draft.revisao_atividades === basis.revisao_atividades) return false;
-  res.status(409).json({erro:'As fontes das atividades mudaram. Prepare o relatório ou atualize as fontes novamente para revisar os valores.'});
+  res.status(409).json({erro:'As fontes do relatório mudaram. Prepare o relatório ou atualize as fontes novamente para revisar os valores.'});
   return true;
 }
 router.get('/projeto/:projetoId', async (req,res) => { try { if (!await projectAccess(req,res)) return; res.json(await allQuery('SELECT id,inicio,fim,criado_em,atualizado_em FROM relatorios_semanais WHERE tenant_id=? AND projeto_id=? ORDER BY inicio DESC,id DESC', [req.tenantId,req.params.projetoId])); } catch(e){ fail(res,e); } });
-router.get('/projeto/:projetoId/fontes', async (req,res) => { try { const project=await projectAccess(req,res); if (!project) return; const {inicio,fim}=req.query; if (!validPeriod(inicio,fim)) return res.status(400).json({erro:'Escolha um período válido de até sete dias.'}); res.json(await source(req,project,inicio,fim)); } catch(e){ fail(res,e); } });
+router.get('/projeto/:projetoId/fontes', async (req,res) => { try { const project=await projectAccess(req,res); if (!project) return; const {inicio,fim}=req.query; if (!validPeriod(inicio,fim)) return res.status(400).json({erro:'Escolha um período válido de até 31 dias.'}); res.json(await source(req,project,inicio,fim)); } catch(e){ fail(res,e); } });
 router.get('/projeto/:projetoId/curva-s', async(req,res)=>{try{const project=await projectAccess(req,res);if(!project)return;const {corte}=req.query;if(!validPeriod(corte,corte))return res.status(400).json({erro:'Informe uma data de corte válida.'});res.json(await cutoffCurve(req,project.id,corte));}catch(e){fail(res,e);}});
 router.get('/projeto/:projetoId/fotos/:fotoId', async (req,res) => { try {
   if (!await projectAccess(req,res)) return;
@@ -148,7 +153,7 @@ router.post('/projeto/:projetoId/preview', async (req,res) => { try {
   const basis=saved && !draft.atualizar_fontes ? previous : await source(req,project,saved?.inicio || draft.inicio,saved?.fim || draft.fim);
   if (sourcesChanged(draft,basis,res)) return;
   if (previous && basis !== previous) restoreSavedSources(basis, previous);
-  if(draft.atualizar_curva)basis.curva_s=await cutoffCurve(req,project.id,basis.fim); const snapshot=mergeChoices(basis,draft);
+  if(draft.atualizar_curva){basis.curva_s=await cutoffCurve(req,project.id,basis.fim);basis.curva_s_historica_indisponivel=false;} const snapshot=mergeChoices(basis,draft);
   const check={...snapshot, atividades:snapshot.atividades.map(a=>a.status==='Concluída'?a:{...a,incluir:a.incluir===true,previsao:a.incluir===true && !a.previsao?'9999-12-31':a.previsao}),problemas:(snapshot.problemas||[]).map(p=>({...p,problema:p.problema||'-',solucao:p.solucao||'-',data:p.data||'2000-01-01'}))};
   const error=validateChoices(check); if(error) return res.status(400).json({erro:error});
   await prepareImages(req,snapshot);
@@ -185,7 +190,7 @@ router.put('/projeto/:projetoId/:id', async (req,res) => { try {
   if (sourcesChanged(draft,basis,res)) return;
   if (basis !== original) restoreSavedSources(basis,original);
   if (!hasPermission(req.usuario,PERMISSIONS.REQUISICAO_VIEW)) basis.suprimentos=original.suprimentos ?? null;
-  if (draft.atualizar_curva) basis.curva_s=await cutoffCurve(req,project.id,item.fim);
+  if (draft.atualizar_curva) { basis.curva_s=await cutoffCurve(req,project.id,item.fim); basis.curva_s_historica_indisponivel=false; }
   const snapshot = mergeChoices(basis,draft);
   const error = validateChoices(snapshot);
   if (error) return res.status(400).json({erro:error});

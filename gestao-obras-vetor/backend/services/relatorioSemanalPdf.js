@@ -7,8 +7,7 @@ const change = value => value == null ? 'Indisp.' : (value > 0 ? '+' : '') + num
 const path=require('path');
 const brandLogo=path.resolve(__dirname,'../assets/logo_vetor.png');
 const BR = value => value ? String(value).slice(0,10).split('-').reverse().join('/') : '—';
-const COLORS={text:'#193049',muted:'#63758b',blue:'#245fa9',green:'#168168',red:'#bc4141',gold:'#a57319',border:'#dfe7f0',soft:'#f3f6fa'};
-const palette=['#2864af','#168b77','#d09b32','#855bc0','#d66c55','#458ea7','#777f40','#bb5791'];
+const COLORS={text:'#203b50',muted:'#617786',blue:'#125479',green:'#008c98',red:'#ae4848',gold:'#63758b',border:'#d9e5e9',soft:'#f0f6f6',navy:'#102d42'};
 function createWeeklyReportPdf(report) {
   const doc=new PDFDocument({size:'A4',margins:{top:42,left:42,right:42,bottom:48},bufferPages:true,info:{Title:`Relatório semanal - ${report.projeto}`}});
   const left=42, width=doc.page.width-84, bottom=doc.page.height-52;
@@ -30,45 +29,37 @@ function createWeeklyReportPdf(report) {
       if(!compact)text(logo.papel,x+3,64,cardWidth-6,6.5,true,COLORS.muted,{align:'center',lineBreak:false});
     });
   }
-  function newPage(){doc.addPage();drawLogos(true);text('RELATÓRIO SEMANAL',left+31,17,width-195,8,true,COLORS.blue);text(`${BR(report.inicio)} a ${BR(report.fim)}`,left+31,30,width-195,7,false,COLORS.muted);doc.moveTo(left,46).lineTo(left+width,46).lineWidth(.6).strokeColor(COLORS.border).stroke();cursor=57;}
+  function newPage(){doc.addPage();drawLogos(true);text('RELATÓRIO SEMANAL',left+31,17,width-195,8,true,COLORS.navy);text(`${BR(report.inicio)} a ${BR(report.fim)}`,left+31,30,width-195,7,false,COLORS.muted);doc.moveTo(left,46).lineTo(left+width,46).lineWidth(.6).strokeColor(COLORS.border).stroke();cursor=60;}
   function ensure(height){if(cursor+height>bottom)newPage();}
-  function section(title,subtitle='',reserve=35){const h=30+(subtitle?18:0);ensure(h+reserve);cursor+=10;text(title,left,cursor,width,13,true);cursor+=21;if(subtitle){text(subtitle,left,cursor,width,8,false,COLORS.muted);cursor+=18;}doc.moveTo(left,cursor).lineTo(left+width,cursor).lineWidth(.6).strokeColor(COLORS.border).stroke();cursor+=10;}
+  let sectionNumber=0;
+  function section(title,subtitle='',reserve=35){const h=40+(subtitle?16:0);ensure(h+reserve);cursor+=14;sectionNumber++;text(String(sectionNumber).padStart(2,'0'),left,cursor+2,27,9,true,COLORS.green);text(title,left+34,cursor,width-34,13,true,COLORS.navy);cursor+=22;if(subtitle){text(subtitle,left+34,cursor,width-34,8.5,false,COLORS.muted);cursor+=16;}doc.moveTo(left+34,cursor).lineTo(left+width,cursor).lineWidth(.7).strokeColor(COLORS.border).stroke();cursor+=10;}
   function paragraph(value){const words=String(value||'—').split(/\s+/);let block='';for(const word of words){const next=block?`${block} ${word}`:word;if(measure(next,width)>180&&block){const h=measure(block,width);ensure(h+8);text(block,left,cursor,width);cursor+=h+8;block=word;}else block=next;}if(block){const h=measure(block,width);ensure(h+8);text(block,left,cursor,width);cursor+=h+8;}}
-  function table(headers,rows,fractions,numeric=[]){const widths=fractions.map(n=>n*width);function heading(){doc.rect(left,cursor,width,23).fill(COLORS.soft);let x=left;headers.forEach((h,i)=>{text(h,x+7,cursor+7,widths[i]-14,7.5,true,COLORS.muted,{align:numeric.includes(i)?'right':'left'});x+=widths[i];});cursor+=23;}
-    ensure(55);heading();rows.forEach((row,index)=>{const height=Math.max(26,...row.map((s,i)=>measure(s,widths[i]-14,8.5,i===0)+14));if(height>bottom-85){paragraph(row.join('  |  '));return;}if(cursor+height>bottom){newPage();heading();}if(index%2===1)doc.rect(left,cursor,width,height).fill('#fafbfd');let x=left;row.forEach((s,i)=>{text(s,x+7,cursor+7,widths[i]-14,8.5,i===0,COLORS.text,{align:numeric.includes(i)?'right':'left'});x+=widths[i];});cursor+=height;doc.moveTo(left,cursor).lineTo(left+width,cursor).lineWidth(.4).strokeColor(COLORS.border).stroke();});cursor+=8;}
+  function table(headers,rows,fractions,numeric=[]){const widths=fractions.map(n=>n*width);function heading(){doc.roundedRect(left,cursor,width,27,3).fill(COLORS.soft);let x=left;headers.forEach((h,i)=>{text(h,x+8,cursor+9,widths[i]-16,8,true,COLORS.blue,{align:numeric.includes(i)?'right':'left'});x+=widths[i];});cursor+=27;}
+    ensure(62);heading();rows.forEach((row,index)=>{const height=Math.max(31,...row.map((s,i)=>measure(s,widths[i]-16,9,i===0)+18));if(height>bottom-85){paragraph(row.join('  |  '));return;}if(cursor+height>bottom){newPage();heading();}let x=left;row.forEach((s,i)=>{text(s,x+8,cursor+9,widths[i]-16,9,i===0,i===0?COLORS.blue:COLORS.text,{align:numeric.includes(i)?'right':'left'});x+=widths[i];});cursor+=height;doc.moveTo(left,cursor).lineTo(left+width,cursor).lineWidth(.4).strokeColor(COLORS.border).stroke();});cursor+=10;}
   drawLogos();
-  const projectHeight=measure(report.projeto,width-30,12,true);
-  const bandTop=94, bandHeight=83+projectHeight;
-  doc.rect(0,bandTop,doc.page.width,bandHeight).fill('#142d4b');
-  doc.rect(left,bandTop+19,27,3).fill('#38bdc8');
-  text('PLANEJAMENTO  /  ACOMPANHAMENTO DA OBRA',left+37,bandTop+17,width-37,7.5,true,'#9edce5');
-  text('Relatório semanal',left,bandTop+36,width,25,true,'#ffffff');
-  text(report.projeto,left,bandTop+70,width-30,12,true,'#e2edf8');
-  cursor=bandTop+bandHeight+12;
-  const metaWidths=[width*.49,width*.29,width*.22];let metaX=left;
-  [['PERÍODO DO RELATÓRIO',`${BR(report.inicio)} a ${BR(report.fim)}`],['DATA DE CORTE',BR(report.fim)],['RDOs APROVADOS',String(report.rdo_count||0)]].forEach(([label,value],i)=>{
-    doc.roundedRect(metaX,cursor,metaWidths[i]-6,44,5).fill(COLORS.soft);
-    text(label,metaX+10,cursor+8,metaWidths[i]-24,6.5,true,COLORS.muted);
-    text(value,metaX+10,cursor+23,metaWidths[i]-24,10,true,COLORS.text);
-    metaX+=metaWidths[i];
-  });cursor+=57;
+  const contentWidth=width*.63-34;
+  const projectHeight=measure(report.projeto,contentWidth,13,true);
+  const bandTop=94, bandHeight=Math.max(158,122+projectHeight);
+  const divider=left+width*.64;
+  doc.roundedRect(left,bandTop,width,bandHeight,5).fill(COLORS.navy);
+  doc.rect(left,bandTop,5,bandHeight).fill('#13b6bd');
+  text('ACOMPANHAMENTO DE OBRA',left+23,bandTop+21,contentWidth,8,true,'#86d8da',{characterSpacing:1});
+  text('Relatório\nsemanal',left+23,bandTop+42,contentWidth,25,true,'#ffffff',{lineGap:-1});
+  text(report.projeto,left+23,bandTop+105,contentWidth,13,true,'#d9eef0');
+  doc.moveTo(divider,bandTop+20).lineTo(divider,bandTop+bandHeight-20).lineWidth(.6).strokeColor('#426474').stroke();
+  const detailsX=divider+19, detailsWidth=left+width-detailsX-14;
+  text('PERÍODO',detailsX,bandTop+23,detailsWidth,7.5,true,'#8ab8c1',{characterSpacing:.5});
+  text(BR(report.inicio),detailsX,bandTop+40,detailsWidth,13,true,'#ffffff');
+  text('a '+BR(report.fim),detailsX,bandTop+59,detailsWidth,13,true,'#ffffff');
+  text('RDOs APROVADOS',detailsX,bandTop+100,detailsWidth,7.5,true,'#8ab8c1',{characterSpacing:.3});
+  text(String(report.rdo_count||0),detailsX,bandTop+116,detailsWidth,14,true,'#ffffff');
+  cursor=bandTop+bandHeight+19;
   const {executed:activities, next, summary} = selectedActivities(report);
   const photos = (report.fotos || []).filter(f => f.selecionada);
-  const metrics=[[activities.filter(a=>(a.status || a.situacao)==='Concluída').length,'CONCLUÍDAS'],[activities.filter(a=>(a.status || a.situacao)==='Em andamento').length,'EM ANDAMENTO'],[next.length,'PROGRAMADAS'],[photos.length,'FOTOS']];
-  metrics.forEach(([n,label],i)=>{const x=left+i*width/4;doc.roundedRect(x,cursor,width/4-6,53,5).fill(COLORS.soft);text(n,x+11,cursor+8,width/4-20,18,true,COLORS.blue);text(label,x+11,cursor+34,width/4-20,7,true,COLORS.muted);});cursor+=64;
-  section('Problemas e soluções');
-  if(!(report.problemas||[]).length)paragraph('Nenhum apontamento registrado.');
-  for(const p of report.problemas||[]){const col=(width-26)/2;const h=Math.max(measure(p.problema,col),measure(p.solucao,col));if(h>500){paragraph(`Problema: ${p.problema}`);paragraph(`Solução: ${p.solucao}`);}else{ensure(h+58);doc.roundedRect(left,cursor,width,h+48,5).fill(COLORS.soft);text('PROBLEMA',left+9,cursor+9,col,7.5,true,COLORS.red);text('SOLUÇÃO',left+col+17,cursor+9,col,7.5,true,COLORS.blue);text(p.problema,left+9,cursor+24,col);text(p.solucao,left+col+17,cursor+24,col);cursor+=h+36;}ensure(20);text(`Regularização prevista: ${BR(p.data)}`,left+9,cursor,width-18,8,true,COLORS.muted);cursor+=24;}
-  const series=(report.curva_s?.serie||[]).filter(p=>p.data && p.data<=report.fim).slice().sort((a,b)=>a.data.localeCompare(b.data));
-  section('Curva S',`Avanço acumulado até ${BR(report.fim)} • planejado e realizado`,series.length?260:30);
-  if(!series.length)paragraph('Curva S não disponível neste relatório.');else{
-    const x=left+37,y=cursor+10,w=width-53,h=175;const maxValue=Math.max(...series.flatMap(p=>[Number(p.real)||0,Number(p.planejado)||0]));const ceiling=Math.min(100,Math.max(10,Math.ceil(maxValue/10)*10));
-    for(let i=0;i<=4;i++){const value=ceiling*i/4,yy=y+h-h*i/4;doc.moveTo(x,yy).lineTo(x+w,yy).lineWidth(.5).strokeColor(COLORS.border).stroke();text(`${Math.round(value)}%`,left,yy-4,29,8,false,COLORS.muted,{align:'right'});}
-    const first=Date.parse(series[0].data),last=Date.parse(series.at(-1).data);const px=p=>x+(last===first ? 0.5 :(Date.parse(p.data)-first)/(last-first))*w;
-    for(const [key,color,dashed] of [['planejado',COLORS.blue,true],['real',COLORS.green,false]]){doc.save().lineWidth(2.2).strokeColor(color);if(dashed)doc.dash(5,{space:3});series.forEach((p,i)=>{const py=y+h-(Number(p[key])||0)/ceiling*h;if(i===0)doc.moveTo(px(p),py);else doc.lineTo(px(p),py);});doc.stroke().restore();const p=series.at(-1);doc.circle(px(p),y+h-(Number(p[key])||0)/ceiling*h,3).fill(color);}
-    const ticks=[...new Set([0,Math.floor((series.length-1)/3),Math.floor((series.length-1)*2/3),series.length-1])];ticks.forEach(i=>text(BR(series[i].data),Math.max(left,Math.min(left+width-68,px(series[i])-34)),y+h+8,68,7.5,false,COLORS.muted,{align:'center'}));
-    const latest=series.at(-1);text(`Planejado: ${Number(latest.planejado).toFixed(2).replace('.',',')}%`,x,y+h+30,w/2,9,true,COLORS.blue);text(`Realizado: ${Number(latest.real).toFixed(2).replace('.',',')}%`,x+w/2,y+h+30,w/2,9,true,COLORS.green);cursor=y+h+55;
-  }
+  const metrics=[[activities.length,'ATIVIDADES','executadas'],[next.length,'ATIVIDADES','programadas'],[percentage(report.comparativo_mao_obra?.atendimento_global),'MÃO DE OBRA','atendimento'],[report.clima_consolidado?.resumo?.dias_com_impacto ?? 'Indisp.','CLIMA','dias com impacto']];
+  text('PANORAMA DA SEMANA',left,cursor,width,9,true,COLORS.navy,{characterSpacing:.6});cursor+=18;
+  doc.roundedRect(left,cursor,width,70,4).fill(COLORS.soft);
+  metrics.forEach(([n,label,detail],i)=>{const x=left+i*width/4;if(i)doc.moveTo(x,cursor+13).lineTo(x,cursor+57).lineWidth(.6).strokeColor(COLORS.border).stroke();text(label,x+12,cursor+10,width/4-24,7,true,COLORS.muted);text(n,x+12,cursor+23,width/4-24,19,true,COLORS.navy);text(detail,x+12,cursor+51,width/4-24,8,false,COLORS.muted);});cursor+=83;
   section('Atividades executadas na semana', 'Avanço físico acumulado na abertura e no encerramento do período', 65);
   if (activities.length) table(['Código','Atividade','Anterior','Atual','Evolução','Situação'], activities.map(a => [
     a.codigo, a.descricao + (a.data_conclusao ? '\nConclusão em ' + BR(a.data_conclusao) : ''),
@@ -86,9 +77,22 @@ function createWeeklyReportPdf(report) {
     a.codigo,a.descricao,percentage(a.fisico.atual)
   ]),[.12,.65,.23],[2]);
   else paragraph('Nenhuma atividade selecionada.');
+  section('Problemas e soluções');
+  if(!(report.problemas||[]).length)paragraph('Nenhum apontamento registrado.');
+  for(const p of report.problemas||[]){const col=(width-26)/2;const h=Math.max(measure(p.problema,col),measure(p.solucao,col));if(h>500){paragraph(`Problema: ${p.problema}`);paragraph(`Solução: ${p.solucao}`);}else{ensure(h+58);doc.roundedRect(left,cursor,width,h+48,5).fill(COLORS.soft);text('PROBLEMA',left+9,cursor+9,col,7.5,true,COLORS.red);text('SOLUÇÃO',left+col+17,cursor+9,col,7.5,true,COLORS.blue);text(p.problema,left+9,cursor+24,col);text(p.solucao,left+col+17,cursor+24,col);cursor+=h+36;}ensure(20);text(`Regularização prevista: ${BR(p.data)}`,left+9,cursor,width-18,8,true,COLORS.muted);cursor+=24;}
+  const series=(report.curva_s_historica_indisponivel ? [] : report.curva_s?.serie||[]).filter(p=>p.data && p.data<=report.fim).slice().sort((a,b)=>a.data.localeCompare(b.data));
+  section('Curva S',`Avanço acumulado até ${BR(report.fim)} • planejado e realizado`,series.length?260:30);
+  if(!series.length)paragraph('Curva S histórica não disponível neste relatório.');else{
+    const x=left+37,y=cursor+10,w=width-53,h=175;const maxValue=Math.max(...series.flatMap(p=>[Number(p.real)||0,Number(p.planejado)||0]));const ceiling=Math.min(100,Math.max(10,Math.ceil(maxValue/10)*10));
+    for(let i=0;i<=4;i++){const value=ceiling*i/4,yy=y+h-h*i/4;doc.moveTo(x,yy).lineTo(x+w,yy).lineWidth(.5).strokeColor(COLORS.border).stroke();text(`${Math.round(value)}%`,left,yy-4,29,8,false,COLORS.muted,{align:'right'});}
+    const first=Date.parse(series[0].data),last=Date.parse(series.at(-1).data);const px=p=>x+(last===first ? 0.5 :(Date.parse(p.data)-first)/(last-first))*w;
+    for(const [key,color,dashed] of [['planejado',COLORS.blue,true],['real',COLORS.green,false]]){doc.save().lineWidth(2.2).strokeColor(color);if(dashed)doc.dash(5,{space:3});series.forEach((p,i)=>{const py=y+h-(Number(p[key])||0)/ceiling*h;if(i===0)doc.moveTo(px(p),py);else doc.lineTo(px(p),py);});doc.stroke().restore();const p=series.at(-1);doc.circle(px(p),y+h-(Number(p[key])||0)/ceiling*h,3).fill(color);}
+    const ticks=[...new Set([0,Math.floor((series.length-1)/3),Math.floor((series.length-1)*2/3),series.length-1])];ticks.forEach(i=>text(BR(series[i].data),Math.max(left,Math.min(left+width-68,px(series[i])-34)),y+h+8,68,7.5,false,COLORS.muted,{align:'center'}));
+    const latest=series.at(-1);text(`Planejado: ${Number(latest.planejado).toFixed(2).replace('.',',')}%`,x,y+h+30,w/2,9,true,COLORS.blue);text(`Realizado: ${Number(latest.real).toFixed(2).replace('.',',')}%`,x+w/2,y+h+30,w/2,9,true,COLORS.green);cursor=y+h+55;
+  }
   section('Acompanhamento de suprimentos');
-  text('VERDE: recebido   •   AMARELO: pendente / conferir   •   VERMELHO: atraso',left,cursor,width,7.5,true,COLORS.muted);cursor+=22;
-  if(!report.suprimentos?.length)paragraph('Nenhum suprimento disponível neste relatório.');
+  if(report.suprimentos == null)paragraph('Informações de suprimentos indisponíveis para este relatório ou perfil.');
+  else if(!report.suprimentos.length)paragraph('Nenhum suprimento disponível neste relatório.');
   for(const s of report.suprimentos||[]){const color=s.cor==='verde'?COLORS.green:s.cor==='vermelho'?COLORS.red:COLORS.gold;const h=measure(s.descricao,width-20,10,true);ensure(h+75);doc.rect(left,cursor,3,h+65).fill(color);text(s.situacao,left+12,cursor,width-20,8,true,color);text(s.descricao,left+12,cursor+15,width-24,10,true);cursor+=h+22;text(`Necessário: ${s.quantidade} ${s.unidade}  |  Recebido: ${s.recebida??'a conferir'}  |  Falta: ${s.restante??'a conferir'}`,left+12,cursor,width-24,8);cursor+=17;text(`Necessidade: ${BR(s.necessidade)}  •  Entrega prevista: ${BR(s.previsao)}`,left+12,cursor,width-24,8,false,COLORS.muted);cursor+=29;}
   const comparison = report.comparativo_mao_obra;
   section('Histograma de Mão de Obra — Previsto × Realizado','Médias diárias dos dias comparáveis no intervalo', 60);
@@ -119,18 +123,30 @@ function createWeeklyReportPdf(report) {
         text(row.funcao,chartX+i*slot+2,chartY+height+6,slot-4,7,false,COLORS.text,{align:'center',height:27,ellipsis:true});
       });
       cursor=chartY+height+39;
-      text('Azul: previsto médio   •   Verde: real médio',left,cursor,width,8,false,COLORS.muted); cursor+=18;
+      text('Azul: previsto médio   •   Ciano: real médio',left,cursor,width,8,false,COLORS.muted); cursor+=18;
     }
     if (rows.length) table(['Função','Previsto','Real','Diferença','Atendimento','Dias'], rows.map(row=>[
       row.funcao,row.previsto==null?'—':number(row.previsto),row.real==null?'—':number(row.real),row.diferenca==null?'—':number(row.diferenca),percentage(row.atendimento),`${row.dias_comparaveis}/${row.dias_considerados}`
     ]),[.25,.14,.13,.15,.19,.14],[1,2,3,4,5]);
     paragraph(`Atendimento global: ${percentage(comparison.atendimento_global)}.`);
   }
-  const workforce=report.efetivo||[], dates=[...new Set(workforce.map(r=>r.data))].sort();
-  section('Presença por função','Quantidades informadas nos RDOs aprovados por dia',workforce.length?215:25);
-  if(!workforce.length)paragraph('Sem presença registrada.');
-  for(const date of dates){const rows=workforce.filter(r=>r.data===date);for(let offset=0;offset<rows.length;offset+=7){const group=rows.slice(offset,offset+7);if(cursor+210>bottom){newPage();text('Presença por função • continuação',left,cursor,width,10,true);cursor+=22;}text(BR(date),left,cursor,width,9,true);cursor+=24;const x=left+26,y=cursor,h=105,w=width-36,max=Math.max(1,...group.map(r=>Number(r.quantidade)||0));const ceiling=Math.max(1,Math.ceil(max*1.15));const tickStep=Math.max(1,Math.ceil(ceiling/4));for(let value=0;value<=ceiling;value+=tickStep){const yy=y+h-h*value/ceiling;doc.moveTo(x,yy).lineTo(x+w,yy).lineWidth(.5).strokeColor(COLORS.border).stroke();text(value,left,yy-4,18,7,false,COLORS.muted,{align:'right'});}const slot=w/group.length;group.forEach((r,i)=>{const n=Number(r.quantidade)||0,bh=n/ceiling*h,bw=Math.min(43,slot*.48),bx=x+i*slot+(slot-bw)/2;doc.rect(bx,y+h-bh,bw,Math.max(1,bh)).fill(palette[i%palette.length]);text(n,bx-8,y+h-bh-17,bw+16,9,true,COLORS.text,{align:'center'});text(r.funcao,x+i*slot+3,y+h+8,slot-6,7.5,true,COLORS.text,{align:'center',height:32,ellipsis:true});text(`${n} pessoa(s)`,x+i*slot+3,y+h+43,slot-6,7,false,COLORS.muted,{align:'center'});});cursor=y+h+67;}}
-  section('Condições climáticas');if(report.clima?.length)table(['Data / período','Condição','Chuva'],report.clima.map(c=>[`${BR(c.data)} • ${c.periodo}`,`${c.condicao_tempo||'—'}${c.condicao_trabalho?' / '+c.condicao_trabalho:''}`,`${Number(c.pluviometria_mm||0)} mm`]),[.32,.53,.15]);else paragraph('Sem condições climáticas registradas.');
+  if (!comparison) {
+  const workforce=report.efetivo||[];
+  section('Presença por função','Quantidades informadas nos RDOs aprovados por dia', 65);
+  if(workforce.length) table(['Data','Função','Presença'],workforce.map(row=>[BR(row.data),row.funcao,number(Number(row.quantidade))]),[.24,.51,.25],[2]);
+  else paragraph('Sem presença registrada.');
+  }
+  section('Condições climáticas', `Período analisado: ${BR(report.inicio)} a ${BR(report.fim)}`, 130);
+  const climate = report.clima_consolidado;
+  if (climate) {
+    const s = climate.resumo;
+    paragraph(`Operação prevista: ${s.dias_operacao_prevista ?? 'Indisp.'} dias  •  Dias com clima: ${s.dias_com_clima}  •  Dias com impacto: ${s.dias_com_impacto}  •  Sem informação: ${s.dias_sem_informacao}  •  Paralisação registrada: ${s.horas_paralisacao == null ? 'Indisponível' : number(s.horas_paralisacao)+' h'+(s.horas_incompletas?' (parcial)':'')}`);
+    table(['Dia / data','Condições por período','Situação','Paralisação'], climate.dias.map(d => [
+      `${d.dia_semana || ''}\n${BR(d.data)}`, d.periodos.length ? d.periodos.map(p => `${p.periodo || 'Período não informado'}: ${p.condicao_tempo || 'clima não informado'}${p.condicao_trabalho ? ' / '+p.condicao_trabalho : ''}`).join('\n') : d.presenca === 'sem_operacao' ? 'Sem operação prevista.' : d.presenca === 'sem_rdo' ? 'Sem RDO no período.' : d.presenca === 'sem_rdo_aprovado' ? 'Sem RDO aprovado no período.' : 'Clima não informado.',
+      d.situacao, d.horas_paralisacao == null ? 'Indisp.' : number(d.horas_paralisacao)+' h'+(d.horas_incompletas?' (parcial)':'')
+    ]), [.18,.40,.25,.17]);
+  } else if(report.clima?.length) { paragraph('Relatório histórico: consolidação diária e lacunas indisponíveis.'); table(['Data / período','Condição','Chuva'],report.clima.map(c=>[`${BR(c.data)} • ${c.periodo}`,`${c.condicao_tempo||'—'}${c.condicao_trabalho?' / '+c.condicao_trabalho:''}`,c.pluviometria_mm == null ? 'Indisp.' : `${number(Number(c.pluviometria_mm))} mm`]),[.32,.53,.15]); }
+  else paragraph('Relatório histórico: informações climáticas indisponíveis.');
   const groups = groupSelectedPhotos(photos);
   section('Registro fotográfico', '', groups.length ? 235 : 25);
   if (!groups.length) paragraph('Nenhuma foto selecionada.');
@@ -152,8 +168,8 @@ function createWeeklyReportPdf(report) {
     const gap = 14;
     for (let offset = 0; offset < group.photos.length; offset += 2) {
       const row = group.photos.slice(offset,offset+2);
-      const cell = (width-gap*(row.length-1))/row.length;
-      const imageHeight = row.length === 2 ? 153 : 180;
+      const cell = (width-gap)/2;
+      const imageHeight = 153;
       let captions = row.map(photo => [
         [photo.rdo_id && 'RDO #' + photo.rdo_id, BR(photo.data), photo.id && 'Foto #' + photo.id].filter(Boolean).join(' · '),
         photo.atividade_eap_id == null && photo.atividade !== group.title ? photo.atividade : '',
